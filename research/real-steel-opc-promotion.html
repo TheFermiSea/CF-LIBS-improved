@@ -1,0 +1,341 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Promoting the real-steel OPC config into the shipped CF-LIBS pipeline &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Promoting the real-steel OPC config into the shipped CF-LIBS pipeline</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/research/real-steel-opc-promotion.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="promoting-the-real-steel-opc-config-into-the-shipped-cf-libs-pipeline">
+<h1>Promoting the real-steel OPC config into the shipped CF-LIBS pipeline<a class="headerlink" href="#promoting-the-real-steel-opc-config-into-the-shipped-cf-libs-pipeline" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> plan (2026-06-27). Companion to <code class="docutils literal notranslate"><span class="pre">docs/research/real-steel-accuracy-levers.md</span></code>.
+<strong>Goal:</strong> promote the winning real-steel lever combination — neutral-anchor line selection +
+fixed/optimal-<code class="docutils literal notranslate"><span class="pre">T</span></code> + matrix-matched One-Point-Calibration (OPC) <code class="docutils literal notranslate"><span class="pre">F</span></code> — from the benchmark layer
+(<code class="docutils literal notranslate"><span class="pre">tests/benchmarks/real_steel/</span></code>) into the shipped <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> pipeline as an opt-in <strong>known-matrix /
+OPC mode</strong>. The DED real goal <em>is</em> a known matrix (Ti-6Al-4V, steel), so this is the deployment
+sweet spot, not a corner case.</p>
+<section id="why-the-measured-result">
+<h2>Why (the measured result)<a class="headerlink" href="#why-the-measured-result" title="Link to this heading"></a></h2>
+<p>Honest held-out RMSEP on the 36-sample real-steel gate (<code class="docutils literal notranslate"><span class="pre">data/real_steel/steel_266.parquet</span></code>):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Config</p></th>
+<th class="head"><p>overall</p></th>
+<th class="head"><p>Fe</p></th>
+<th class="head"><p>Cr</p></th>
+<th class="head"><p>Ni</p></th>
+<th class="head"><p>Si</p></th>
+<th class="head"><p>Mn</p></th>
+<th class="head"><p>Mo</p></th>
+<th class="head"><p>Cu</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>baseline (no levers)</p></td>
+<td><p>39.04</p></td>
+<td><p>79.8</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>L2 (neutral-anchor lines)</p></td>
+<td><p>30.43</p></td>
+<td><p>64.5</p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>L1 (L2 + fixed optimal-<code class="docutils literal notranslate"><span class="pre">T</span></code>)</p></td>
+<td><p>29.98</p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>L4 (L2 + self-absorption) standalone</p></td>
+<td><p>20.78</p></td>
+<td><p>42.7</p></td>
+<td><p>12.7</p></td>
+<td><p>13.7</p></td>
+<td><p>2.7</p></td>
+<td><p>13.4</p></td>
+<td><p>4.1</p></td>
+<td><p>25.4</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>v1</strong> (L2+L1+single-standard OPC)</p></td>
+<td><p><strong>16.48</strong></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>v2</strong> (L2+L1+<strong>robust</strong> OPC, L4 off)</p></td>
+<td><p><strong>10.12</strong></p></td>
+<td><p>20.66</p></td>
+<td><p>2.56</p></td>
+<td><p>3.43</p></td>
+<td><p>7.20</p></td>
+<td><p>1.50</p></td>
+<td><p>10.81</p></td>
+<td><p>10.07</p></td>
+</tr>
+<tr class="row-even"><td><p>v2 + L4 (regression)</p></td>
+<td><p>11.35</p></td>
+<td><p>23.43</p></td>
+<td><p>3.24</p></td>
+<td><p>3.10</p></td>
+<td><p>6.45</p></td>
+<td><p>7.25</p></td>
+<td><p>11.43</p></td>
+<td><p>10.38</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Winning config = v2</strong> (<code class="docutils literal notranslate"><span class="pre">tests/benchmarks/real_steel/best_config_v2.py</span></code>, <code class="docutils literal notranslate"><span class="pre">run_v2</span></code>, <code class="docutils literal notranslate"><span class="pre">use_l4=False</span></code>):
+baseline 39.04 → v1 16.48 → <strong>v2 10.12 wt% held-out</strong>, a 4x reduction. Three honesty rules are
+baked in and must survive promotion:</p>
+<ol class="arabic simple">
+<li><p>Standard <strong>selection</strong> uses only each candidate standard’s own data + own certified truth (a
+conditioning gate at fixed <code class="docutils literal notranslate"><span class="pre">T</span></code>), never the held-out samples.</p></li>
+<li><p>The OPC <code class="docutils literal notranslate"><span class="pre">F</span></code> is a <strong>geometric mean over all well-conditioned standards</strong> (robust to one
+keystone-collapsed standard), with clamp-saturated per-element factors filtered out.</p></li>
+<li><p><strong>Leave-one-out</strong>: a standard that is itself scored never sees its own <code class="docutils literal notranslate"><span class="pre">F</span></code>.</p></li>
+</ol>
+<p><strong>L4 self-absorption is intentionally dropped from v2.</strong> It helps standalone (Fe 64.5 → 42.7) but
+<em>regresses</em> once OPC is present (overall 10.12 → 11.35, Fe 20.66 → 23.43), because the OPC <code class="docutils literal notranslate"><span class="pre">F</span></code> —
+derived on the same pipeline from a matrix-matched standard — already absorbs the systematic
+matrix self-absorption bias as part of the relative-sensitivity factor. A second per-spectrum
+self-absorption boost over-corrects. L4 stays an opt-in lever for the <strong>OPC-free</strong> regime only.</p>
+</section>
+<section id="what-to-promote-modules-api">
+<h2>What to promote (modules + API)<a class="headerlink" href="#what-to-promote-modules-api" title="Link to this heading"></a></h2>
+<p>The benchmark already isolates the three primitives; promotion lifts them behind a clean,
+physics-only, opt-in API. Nothing changes the default calibration-free path.</p>
+<section id="line-selection-cflibs-inversion-physics-line-selection-py">
+<h3>1. Line selection — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code><a class="headerlink" href="#line-selection-cflibs-inversion-physics-line-selection-py" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Promote the <strong>neutral-anchor wide-<code class="docutils literal notranslate"><span class="pre">E_k</span></code></strong> policy from <code class="docutils literal notranslate"><span class="pre">lever_l2_lines.select_l2_lines</span></code>
+(require a neutral anchor per element, spread <code class="docutils literal notranslate"><span class="pre">E_k</span></code>, drop ion-only-observed trace minors,
+avoid resonance/self-absorbed lines).</p></li>
+<li><p>API: extend the existing line-selection entry point with a <code class="docutils literal notranslate"><span class="pre">policy=&quot;neutral_anchor&quot;</span></code> option (the
+current behavior stays the default). Pure DB + window inputs, no new deps.</p></li>
+</ul>
+</section>
+<section id="fixed-optimal-temperature-cflibs-inversion-solve-iterative-solver">
+<h3>2. Fixed / optimal temperature — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/</span></code> (iterative solver)<a class="headerlink" href="#fixed-optimal-temperature-cflibs-inversion-solve-iterative-solver" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Already shipped:</strong> <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code> accepts <code class="docutils literal notranslate"><span class="pre">fixed_temperature_K</span></code> (threaded through
+<code class="docutils literal notranslate"><span class="pre">run_constrained_solver</span></code>). The lever uses it directly — no new code, only documentation that the
+known-matrix mode supplies a calibrated <code class="docutils literal notranslate"><span class="pre">T*</span></code>.</p></li>
+<li><p>Promote <code class="docutils literal notranslate"><span class="pre">choose_optimal_T</span></code> (scan <code class="docutils literal notranslate"><span class="pre">T</span></code> to minimize a matrix-matched standard’s composition error,
+Zhao 2018) as a <strong>calibration-time</strong> helper, e.g. <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/opc.py:choose_optimal_temperature(standard)</span></code>.</p></li>
+</ul>
+</section>
+<section id="new-opc-correction-step-cflibs-inversion-physics-opc-py">
+<h3>3. NEW OPC correction step — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/opc.py</span></code><a class="headerlink" href="#new-opc-correction-step-cflibs-inversion-physics-opc-py" title="Link to this heading"></a></h3>
+<p>A new physics module (the only genuinely new shipped code). Two phases:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># --- calibration phase (offline, from certified standards) ---</span>
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OPCCalibration</span><span class="p">:</span>
+    <span class="n">robust_T_K</span><span class="p">:</span> <span class="nb">float</span>                 <span class="c1"># mean of selected standards&#39; optimal T*</span>
+    <span class="n">F</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span>               <span class="c1"># per-element relative-sensitivity factor (geomean)</span>
+    <span class="n">selected_standards</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>     <span class="c1"># provenance</span>
+    <span class="n">conditioning_rule</span><span class="p">:</span> <span class="nb">str</span>            <span class="c1"># the exact a-priori gate used</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">calibrate_opc</span><span class="p">(</span>
+    <span class="n">standards</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Standard</span><span class="p">],</span>    <span class="c1"># (spectrum, certified_composition) pairs</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">cond_T_K</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">9000.0</span><span class="p">,</span>
+    <span class="n">t_grid</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="o">...</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OPCCalibration</span><span class="p">:</span> <span class="o">...</span>
+    <span class="c1"># 1. conditioning gate (in-sample only): converged, not degenerate,</span>
+    <span class="c1">#    in-sample uncorrected RMSEP &lt; threshold, no non-matrix element soaks closure</span>
+    <span class="c1"># 2. robust_T = mean(optimal T* over selected)</span>
+    <span class="c1"># 3. F = geomean_e( C_true_e / C_rec_e ) over selected, clamp-saturated values filtered</span>
+
+<span class="c1"># --- inference phase (online, on unknowns) ---</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">apply_opc</span><span class="p">(</span><span class="n">observations</span><span class="p">,</span> <span class="n">calibration</span><span class="p">:</span> <span class="n">OPCCalibration</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="c1"># multiply each observation&#39;s intensity by F[element] in place, then solve at robust_T_K</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Wire <code class="docutils literal notranslate"><span class="pre">apply_opc</span></code> as an <strong>optional pre-solve step</strong> in the inversion pipeline
+(<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py</span></code>): when an <code class="docutils literal notranslate"><span class="pre">OPCCalibration</span></code> is supplied, rescale the
+Boltzmann-plot intensities by <code class="docutils literal notranslate"><span class="pre">F</span></code> and pass <code class="docutils literal notranslate"><span class="pre">fixed_temperature_K=calibration.robust_T_K</span></code> to the
+solver. When absent, the pipeline is byte-for-byte the current calibration-free path.</p></li>
+<li><p>Persist <code class="docutils literal notranslate"><span class="pre">OPCCalibration</span></code> as JSON (it is tiny: one <code class="docutils literal notranslate"><span class="pre">T</span></code>, ~7 floats, provenance) via
+<code class="docutils literal notranslate"><span class="pre">cflibs/io/</span></code> so a matrix calibration is reusable across a DED build.</p></li>
+</ul>
+</section>
+<section id="cli-config-surface">
+<h3>4. CLI / config surface<a class="headerlink" href="#cli-config-surface" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">calibrate-opc</span> <span class="pre">&lt;standards.yaml&gt;</span> <span class="pre">--output</span> <span class="pre">steel_opc.json</span></code> — run the calibration phase.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">invert</span> <span class="pre">spectrum.csv</span> <span class="pre">--opc</span> <span class="pre">steel_opc.json</span></code> — inference with a known-matrix calibration.</p></li>
+<li><p>Config: an <code class="docutils literal notranslate"><span class="pre">opc:</span></code> block (<code class="docutils literal notranslate"><span class="pre">calibration_path</span></code>, or inline <code class="docutils literal notranslate"><span class="pre">robust_T_K</span></code> + <code class="docutils literal notranslate"><span class="pre">F</span></code>) in the inversion YAML.</p></li>
+</ul>
+</section>
+</section>
+<section id="physics-only-gating-plan">
+<h2>Physics-only + gating plan<a class="headerlink" href="#physics-only-gating-plan" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Physics-only constraint:</strong> all of the above is pure NumPy + the existing Saha-Boltzmann solver
+— no <code class="docutils literal notranslate"><span class="pre">sklearn</span></code>/<code class="docutils literal notranslate"><span class="pre">torch</span></code>/<code class="docutils literal notranslate"><span class="pre">tensorflow</span></code>/<code class="docutils literal notranslate"><span class="pre">keras</span></code>/<code class="docutils literal notranslate"><span class="pre">flax</span></code>/<code class="docutils literal notranslate"><span class="pre">equinox</span></code>/<code class="docutils literal notranslate"><span class="pre">transformers</span></code>/<code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>. The
+geometric mean, clamp, and conditioning gate are arithmetic. Ruff TID251 + the AST blocklist
+scanner already enforce this; the new <code class="docutils literal notranslate"><span class="pre">opc.py</span></code> adds no banned API.</p></li>
+<li><p><strong>Honesty is structural, not procedural:</strong> <code class="docutils literal notranslate"><span class="pre">calibrate_opc</span></code> takes <em>only</em> standards; it cannot see
+unknowns, so held-out peeking is impossible by construction. Document and unit-test that
+<code class="docutils literal notranslate"><span class="pre">apply_opc</span></code> never reads a recovered composition (no positive feedback — the failure the
+2026-06-09 audit condemned).</p></li>
+<li><p><strong>Gates (in order) for the shipped change:</strong></p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">check</span></code> + <code class="docutils literal notranslate"><span class="pre">black</span> <span class="pre">--check</span></code> + <code class="docutils literal notranslate"><span class="pre">mypy</span></code> on the new/changed <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> files.</p></li>
+<li><p><strong>DED no-regression</strong> (the real goal): <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/benchmarks/ded_precision</span> <span class="pre">-q</span></code> must stay
+green — OPC mode is opt-in, so the default DED path is unchanged; additionally verify a
+known-matrix Ti-6Al-4V OPC calibration does not regress the synthetic DED precision floor.</p></li>
+<li><p><strong>NIST parity</strong> unchanged (OPC touches intensities post-extraction, not atomic data).</p></li>
+<li><p><strong>Real-steel gate</strong> (<code class="docutils literal notranslate"><span class="pre">tests/benchmarks/real_steel/test_real_steel_gate.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">RMSEP_GUARD=11.0</span></code>): the promoted code, exercised through the shipped API, must reproduce the
+v2 held-out ≤ 11.0 wt% with the same a-priori conditioning rule (no held-out selection).</p></li>
+</ol>
+</li>
+<li><p><strong>Roll-out:</strong> land the benchmark v2 + this plan first (done here); then ship <code class="docutils literal notranslate"><span class="pre">opc.py</span></code> +
+pipeline wiring behind the opt-in flag in a follow-up PR gated on (1)-(4).</p></li>
+</ul>
+</section>
+<section id="open-items-next-levers">
+<h2>Open items / next levers<a class="headerlink" href="#open-items-next-levers" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>v2 Fe (20.66) and Mo/Cu (~10) are the next targets. Fe is OPC-corrected but still the largest
+residual; a CD-SB columnar-density treatment of the Fe major <em>inside</em> the OPC-calibrated solve
+(rather than the standalone L4 boost that double-corrects) is the principled next step.</p></li>
+<li><p>Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code> (L7) is independent of OPC and feeds Saha — combine once on-device Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code> lands.</p></li>
+<li><p>Multi-window / multi-standard <code class="docutils literal notranslate"><span class="pre">F(λ)</span></code> (wavelength-resolved OPC) for instruments with strong
+response curvature; the per-line <code class="docutils literal notranslate"><span class="pre">F</span></code> scaffold already exists (<code class="docutils literal notranslate"><span class="pre">per_line=True</span></code>).</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

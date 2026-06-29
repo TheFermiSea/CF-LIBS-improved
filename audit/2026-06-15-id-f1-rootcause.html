@@ -1,0 +1,273 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Why identification F1 is stuck below 0.5 — root-cause investigation &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Why identification F1 is stuck below 0.5 — root-cause investigation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/audit/2026-06-15-id-f1-rootcause.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="why-identification-f1-is-stuck-below-0-5-root-cause-investigation">
+<h1>Why identification F1 is stuck below 0.5 — root-cause investigation<a class="headerlink" href="#why-identification-f1-is-stuck-below-0-5-root-cause-investigation" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p><strong>Partially superseded (2026-06-16):</strong> this investigation concluded the low F1 was “not the
+identification algorithms” and “not a stale corpus.” The next-day ALIAS-faithful audit
+(<code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-16-alias-faithful-fix.md</span></code>) reversed <strong>both</strong> of those: the identifiers
+<em>were</em> deviating from their source papers (Comb median gate, ALIAS CL-decision/k_sim deflators)
+<strong>and</strong> the corpus <em>was</em> violating the papers’ assumptions (the 224–265 nm Fe-forest window /
+injected shift / out-of-range T,RP). The “structural — information-starved window” finding (TL;DR
+item 1) was correct and is the through-line; read this doc with the 2026-06-16 conclusion as the
+current state.</p>
+</div></blockquote>
+<p><strong>Date:</strong> 2026-06-15 · <strong>Trigger:</strong> “F1&lt;0.5 is still terrible, something must be wrong.”
+<strong>Method:</strong> 12-agent adversarial workflow (<code class="docutils literal notranslate"><span class="pre">libs-id-rootcause</span></code>, run <code class="docutils literal notranslate"><span class="pre">wf_bca77300-cb0</span></code>): 6 parallel
+finders → ranking synthesis → 6 adversarial verifiers that ran live counterfactuals. Plus an
+independent line-aliasing DB query (this author). All read-only, CPU-only.</p>
+<section id="tl-dr">
+<h2>TL;DR<a class="headerlink" href="#tl-dr" title="Link to this heading"></a></h2>
+<p>The low F1 is <strong>real</strong>, but it is <strong>not</strong> in the identification algorithms (Comb / ALIAS /
+Correlation / forward_fit), <strong>not</strong> a stale corpus, <strong>not</strong> a metric bug, <strong>not</strong> trace-label
+inflation, and <strong>not</strong> the atomic DB. Three genuine problems, in leverage order:</p>
+<ol class="arabic simple">
+<li><p><strong>[STRUCTURAL — highest leverage] The benchmark window is information-starved.</strong> The corpus
+spectra cover only <strong>224–265 nm</strong>, a deep-UV iron-group line forest. At this window an <strong>ideal
+detector caps at F1 ≈ 0.31</strong> (verified counterfactual) because absent elements are spectrally
+<em>aliased onto Fe</em>. No algorithm can beat this ceiling. <strong>Fix = regenerate the ID corpus with a
+diagnostic window (add ~285–450 nm) and/or balance the panel.</strong> Expected ceiling 0.31 → 0.65–0.80.</p></li>
+<li><p><strong>[CODE BUG — medium leverage] The shared noise/baseline estimator over-estimates noise ~1200–1600×</strong>
+on these line-dense spectra, collapsing peak detection from ~100–700 real peaks to ~4–12. This
+crushes <em>recall</em>. But it is identifier-specific (Comb’s core matching is provably invariant to it)
+and the naive fix backfires — needs careful re-tuning. <strong>Code-only</strong>, +0.05–0.15 for detection-gated
+identifiers; does <strong>not</strong> break the window ceiling alone.</p></li>
+<li><p><strong>[MEASUREMENT HYGIENE — no F1 gain, but we were blind] <code class="docutils literal notranslate"><span class="pre">--max-spectra</span> <span class="pre">40</span></code> silently tests one recipe.</strong>
+Sorted-then-truncated selection makes the first 40 (and 120) spectra <strong>100% <code class="docutils literal notranslate"><span class="pre">binary_Fe_Ni</span></code></strong>
+<code class="docutils literal notranslate"><span class="pre">{Fe:0.7,</span> <span class="pre">Ni:0.3}</span></code>. And <strong>7 of 11 candidate elements never appear in any recipe</strong> (Co is a
+1014-line FP magnet). Stratify/shuffle and trim/balance the panel.</p></li>
+</ol>
+<p><strong>Implication for recent work:</strong> the entire diag-weights / IEF / BIC tuning effort (J10/o3be) was
+polishing identifiers against a benchmark with a <strong>~0.31 absolute ceiling</strong>. The diag-weights
+“+0.045 vs Comb” is a <em>real relative</em> gain on this window, but no identifier change can lift the
+absolute number much past ~0.5 here. Stop tuning identifiers for absolute F1 on <code class="docutils literal notranslate"><span class="pre">ak3.1.3</span></code>; fix the
+corpus window + preprocessing first.</p>
+</section>
+<section id="what-was-refuted-do-not-spend-effort-here">
+<h2>What was REFUTED (do not spend effort here)<a class="headerlink" href="#what-was-refuted-do-not-spend-effort-here" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Hypothesis</p></th>
+<th class="head"><p>Verdict</p></th>
+<th class="head"><p>Decisive evidence</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>zfy2: corpus built with old/buggy forward model</strong></p></td>
+<td><p><strong>REFUTED</strong></p></td>
+<td><p>Full deterministic seed-42 replay with the <em>current</em> <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code> + current DB reproduces every recipe: Pearson r = 0.997–1.000, recovered T_eV matches stored to 5 dp. Corpus <code class="docutils literal notranslate"><span class="pre">w2_fixedforward_v1</span></code>, created 2026-06-10 (= forward-model overhaul day). <strong>Do not rebuild for staleness.</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Trace/ppm labels inflate FN</strong></p></td>
+<td><p><strong>REFUTED</strong></p></td>
+<td><p>min <code class="docutils literal notranslate"><span class="pre">true_composition</span></code> value = <strong>0.02</strong>; truth set identical at thresholds 1e-4 … 0.02. <code class="docutils literal notranslate"><span class="pre">presence_threshold</span></code> is irrelevant.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Eval-harness counting/matching bug</strong></p></td>
+<td><p><strong>REFUTED</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">confusion_counts</span></code> recomputed byte-for-byte from true/pred lists on a live run (<code class="docutils literal notranslate"><span class="pre">all_ok=True</span></code>). Symbol-exact matching, no ion-state drift, correct micro-pooling.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Atomic DB integrity (λ / gA / U(T))</strong></p></td>
+<td><p><strong>REFUTED</strong></p></td>
+<td><p>All 11 candidates have in-band lines with aki/gk/ek populated; 14 strong lines match NIST AIR to &lt;0.5 pm; partition functions sane/monotone.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Wavelength-axis shift</strong></p></td>
+<td><p><strong>REFUTED</strong></p></td>
+<td><p>Detected peaks align to current-DB line positions to median 0.006 nm (95% within 0.05 nm).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="the-structural-ceiling-independent-confirmation">
+<h2>The structural ceiling — independent confirmation<a class="headerlink" href="#the-structural-ceiling-independent-confirmation" title="Link to this heading"></a></h2>
+<p>Direct DB query: fraction of each absent element’s strongest 40 lines (by aki·gk) within 0.05 nm
+of <em>any</em> Fe line, per window:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Window</p></th>
+<th class="head"><p>Diagnostic elements (&lt;70% Fe-aliased)</p></th>
+<th class="head"><p>Typical aliasing</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>224–265 nm (corpus)</strong></p></td>
+<td><p><strong>0 of 10</strong></p></td>
+<td><p>97–100%</p></td>
+</tr>
+<tr class="row-odd"><td><p>285–450 nm</p></td>
+<td><p>2 of 10 (Ni 65%, Cu 67%)</p></td>
+<td><p>65–85%</p></td>
+</tr>
+<tr class="row-even"><td><p>200–900 nm</p></td>
+<td><p>0–3 (tolerance saturates at high Fe density)</p></td>
+<td><p>mixed</p></td>
+</tr>
+</tbody>
+</table>
+<p>In 224–265 nm there are <strong>2045 Fe lines / ~40 nm ≈ one Fe line every 0.02 nm</strong>, vs a <strong>0.35 nm
+resolution element at RP≈700</strong> → ~17 Fe lines per resolved bin. There is <strong>no Fe-free spectral
+region</strong>; any absent element’s strong line is co-located with an Fe line, so no line-coincidence
+identifier can separate present from absent. This is the precise mechanism behind the
+“all four algorithms fail identically” signature.</p>
+<p><strong>Ideal-detector counterfactual (verifier, ran live):</strong> feed perfect peaks + present-if-≥2-of-top-40-DB-lines-coincide
+→ recall 0.96–1.00 but <strong>precision 0.18, F1 = 0.31–0.32</strong> over the first 40 spectra. A perfect
+detector does not cross 0.5 in this window.</p>
+</section>
+<section id="the-preprocessing-bug-real-but-not-the-master-lever">
+<h2>The preprocessing bug (real, but not the master lever)<a class="headerlink" href="#the-preprocessing-bug-real-but-not-the-master-lever" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/preprocessing.py</span></code> <code class="docutils literal notranslate"><span class="pre">estimate_baseline</span></code> (10 nm median) + <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code>:
+on <code class="docutils literal notranslate"><span class="pre">pure_Fe_0000</span></code> (Imax 2.42e10) the 10 nm median baseline tracks the <strong>line-forest envelope</strong>
+(~2.2e9, 12% of max) instead of the true zero floor (the raw spectrum has 13.8–15.7% exactly-zero
+pixels). <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code> then returns <strong>2.13e9 vs true detector noise 1.79e6 → ~1190×</strong>. Detection
+threshold (noise×3–4) lands at 26–43% of max, surviving only ~4–12 of ~100–700 real peaks.</p>
+<ul class="simple">
+<li><p><strong>It starves recall</strong> (true Fe/Ni missed 50–78% of the time).</p></li>
+<li><p><strong>But it is NOT the shared cause:</strong> Comb’s core matching uses <code class="docutils literal notranslate"><span class="pre">_estimate_baseline_threshold</span></code>
+(percentile of positive residuals), <em>not</em> <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code>; monkeypatching <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code> left
+Comb’s decisions <strong>identical</strong>. It mainly hurts ALIAS/Correlation.</p></li>
+<li><p><strong>The naive fix backfires:</strong> raw-q20 MAD floor / cap&#64;2% made ALIAS <em>worse</em> (F1 0.19→0.07–0.08);
+only a <em>higher</em> cap helped (cap&#64;10% → 0.348). Needs SNIP/ALS baseline + a tuned noise floor.</p></li>
+</ul>
+</section>
+<section id="recommended-fix-plan-priority-order">
+<h2>Recommended fix plan (priority order)<a class="headerlink" href="#recommended-fix-plan-priority-order" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Regenerate the ID benchmark corpus</strong> with a diagnostic spectral window (extend into ~285–450 nm
+where Ni I 341/352, Cr 425, Mn 403, Al 396, Mg 285 have Fe-separable lines) and/or <strong>balance the
+candidate panel</strong> to elements actually exercised by the recipes (add Co/Al/Cu/Mg/Si/Ti/V recipes,
+or trim the panel). Highest leverage: ceiling 0.31 → 0.65–0.80. (Serves epic <code class="docutils literal notranslate"><span class="pre">a1xz</span></code> goal-first re-baseline.)</p></li>
+<li><p><strong>Fix the preprocessing estimator</strong>: replace the 10 nm median baseline with SNIP/ALS; estimate
+detector noise from the raw low-intensity quantile (not the median-corrected signal); re-tune the
+ALIAS noise cap. Code-only, +0.05–0.15 recall-side.</p></li>
+<li><p><strong>Measurement hygiene</strong> (bead <code class="docutils literal notranslate"><span class="pre">jtov</span></code> scoreboard): seeded shuffle before truncation OR run all 288;
+report <strong>stratified by recipe</strong> (pure_Fe / pure_Ni / binary_Fe_Ni / steel_like) and by cardinality;
+report <strong>per-element FP</strong> so the Co confounder is visible; companion metric on the restricted panel.</p></li>
+</ol>
+</section>
+<section id="caveats">
+<h2>Caveats<a class="headerlink" href="#caveats" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>The 0.05 nm aliasing tolerance is finer than the 0.35 nm resolution element, so at high Fe line
+density the “% aliased” metric saturates — but this <em>reinforces</em> the conclusion (no resolvable
+Fe-free bins). The load-bearing number is the verifier’s empirical ideal-detector F1 ≈ 0.31.</p></li>
+<li><p>Gains in the fix plan are estimates; the corpus-regen ceiling (0.65–0.80) assumes the diagnostic
+window is actually added and should itself be re-measured.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

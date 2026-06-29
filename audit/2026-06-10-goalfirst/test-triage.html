@@ -1,0 +1,195 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test-Suite Triage — 2026-06-10 (goal-first program, Phase B) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Test-Suite Triage — 2026-06-10 (goal-first program, Phase B)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-10-goalfirst/test-triage.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="test-suite-triage-2026-06-10-goal-first-program-phase-b">
+<h1>Test-Suite Triage — 2026-06-10 (goal-first program, Phase B)<a class="headerlink" href="#test-suite-triage-2026-06-10-goal-first-program-phase-b" title="Link to this heading"></a></h1>
+<p>Classification of all 211 test files against the project goal (accurate autonomous
+identification + efficient composition analysis; zero users, no back-compat owed).</p>
+<p>Counts: {‘mixed’: 44, ‘physics-truth’: 72, ‘implementation-pin’: 12, ‘unit-utility’: 60, ‘goal-metric’: 23}</p>
+<p>Judgment rule: would this assertion failing ever indicate the GOAL got worse,
+or only that the implementation changed? Pins protect the latter.</p>
+<section id="purge-list-pure-implementation-pin-files">
+<h2>Purge list (pure implementation-pin files)<a class="headerlink" href="#purge-list-pure-implementation-pin-files" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_alias_sweep_workflows_registered.py</span></code> — Pins exact kwargs dicts, cell ordering, and r2-gate of the historical 8-cell alias-fix sweep (jaunty-weaving-mist Phase C campaign). Constant==literal tautologies preserving a finished experiment’s configuration; measures no accuracy. Experiment archaeology.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_jax_workflows_xfail_check.py</span></code> — Meta-test asserting a stale &#64;xfail marker string still exists in another test file’s source; self-described as delete-when-fixed housekeeping for bead 359q. Pure archaeology, protects nothing.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_back_compat.py</span></code> — Pure back-compat shim suite: legacy flat-path names must resolve after the bayesian.py-&gt;package split. With zero users no back-compat is owed; test_flat_and_package_paths_agree imports the same module twice and asserts identity (tautological). Any real consumer test covers the imports that matter. PURGE.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_samplers.py</span></code> — Entirely back-compat surface pins: alias identity (NumPyroNUTSSampler is MCMCSampler), legacy run() keyword-set preservation, Protocol duck-typing tautologies, frozen-dataclass shape. No assertion failing here would ever mean identification/composition accuracy or runtime got worse — only that the API was renamed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_boltzmann_outlier_tuning.py</span></code> — Pins tuned fitter defaults as exact values (outlier_sigma==2.5, max_iterations==10, huber_epsilon==1.2); remaining asserts are constructor-assignment tautologies and weak smoke already covered by test_boltzmann.py.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_comb_precision.py</span></code> — Pins tuned Tier-2 detection thresholds (Mn/Na/K) and exact CombIdentifier defaults (0.12, 2.0) on contrived inputs. Whether these thresholds help F1 is a benchmark question, not a unit invariant.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_comb_recall.py</span></code> — Pins the capped-denominator scoring formula (score 2/10 vs old 2/50) under hand-tuned parameters; explicit old-vs-new behavior archaeology. A benchmark-better scoring change would fail it without any recall regression.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_daq_interface.py</span></code> — process_spectrum is an explicit placeholder; tests pin its hardcoded dummy plasma parameters (T==12000 K, ne==1e17) — asserting a stub returns its stub values. Nothing goal- or physics-protecting.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_jax_import_hygiene.py</span></code> — AST lint enforcing that only a hardcoded carve-out list may use literal ‘try: import jax’ and kernels.py must not import host.py. Pure architectural-conformance pin (ADR-0001/T1-1 archaeology); failing never indicates the goal got worse.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_kernel_module_layout.py</span></code> — Asserts kernels.py module layout exists per ADR and that host modules re-export private kernel symbols ‘for back-compat with existing callers’. Module-layout and shim re-export pins; no physics or goal protection.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_repo_health.py</span></code> — Enforces an 800-LOC-per-file ceiling on bayesian/*.py (ADR/spec acceptance criterion). Pure code-organization policing; failing can never indicate identification/composition accuracy or runtime got worse.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_vrabel2020_cdsb.py</span></code> — Empty tombstone: docstring-only module documenting that the legacy CDSBPlotter tests were removed with the class; coverage now lives in test_self_absorption.py. Zero assertions, pure deleted-feature remnant — delete the file.</p></li>
+</ul>
+</section>
+<section id="mixed-files-surgical-pin-removal-pinned-tests-named">
+<h2>Mixed files (surgical pin removal; pinned tests named)<a class="headerlink" href="#mixed-files-surgical-pin-removal-pinned-tests-named" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/bandit/test_parameter_sweep_bandit_integration.py</span></code>: test_bandit_zero_produces_no_arm_fields_in_manifest</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_alias_high_recall_workflow.py</span></code>: test_strict_alias_still_registered_unchanged</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_bayesian_config.py</span></code>: test_bayesian_pipeline_config_applied</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/cli/test_analyze_invert_no_drift.py</span></code>: test_helper_and_analyze_default_floor_agree, test_helper_exclude_resonance_tied_to_self_absorption, test_analyze_and_invert_select_identical_lines</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/cli/test_pipeline_defaults.py</span></code>: TestPresetResolution::test_default_preset_is_geological_best_validated, TestPresetResolution::test_metallic_preset, TestPresetResolution::test_raw_preset_is_legacy_defaults, TestPresetResolution::test_preset_registry_contents, TestPresetResolution::test_axis_alignment_knobs_default_fixed_raw_keeps_legacy, TestBatchAnalyzeParity::test_default_pipeline_is_measured_best</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/cli/test_response_curve_plumbing.py</span></code>: test_run_pipeline_identity_is_bit_identical</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/evolution/test_prompts.py</span></code>: test_render_preamble_states_the_hard_constraint, test_render_preamble_clarifies_ml_is_ok_in_optimization</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_alias_jax_boltzmann.py</span></code>: TestALIASIdentifierFlag::test_constructor_accepts_flag</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_alias_jax_nnls.py</span></code>: TestALIASIdentifierJaxFlags::test_all_flags_accepted, TestALIASIdentifierJaxFlags::test_default_is_cpu</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_alias_presets.py</span></code>: test_all_expected_presets_registered, test_strict_preset_uses_fixed_gate, test_v2_preset_uses_adaptive_gates, test_high_recall_v2_is_v2_plus_high_recall, test_consensus_voter_matches_v2_physics</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_candidate_count_invariance.py</span></code>: TestStandaloneNNLSCountInvariance::test_sum_normalized_floor_mechanism_is_count_scaling</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_comb_wavelength_tolerance.py</span></code>: test_comb_legacy_defaults_unchanged_without_resolving_power</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_residual_gates.py</span></code>: TestEdgeRidingScanRegression::test_legacy_mop_up_scan_rides_edge_and_admits_contaminated_match, TestPerPeakOwnership::test_legacy_path_still_double_counts</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/physics/test_boltzmann_jax_composition.py</span></code>: TestBehaviorContracts::test_default_use_jax_is_false</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/solve/bayesian/test_vmap_chain_method.py</span></code>: test_mcmcsampler_uses_vectorized_chain_method, test_mcmcsampler_max_tree_depth_default_is_8</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_forward_model_kernel_migration.py</span></code>: test_forward_py_body_does_not_call_adapter, test_mcmc_sampler_default_chain_method_is_vectorized</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_priors.py</span></code>: test_prior_config_defaults, test_noise_parameters_defaults</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/test_candidate_prefilter_falsy_zero.py</span></code>: TestFalsyZeroEstimate::test_zero_estimated_T_is_used_not_fallback, TestFalsyZeroEstimate::test_zero_estimated_ne_is_used_not_fallback</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/test_comb_fp_reduction.py</span></code>: test_tier2_defaults_are_strict, test_tier2_strict_disabled_matches_baseline</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/test_response_correction.py</span></code>: TestSpectralResponseCorrection::test_identity_none_is_bit_identical, test_argon_branching_ratio_stub_raises_with_citation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/manifold/test_generator_physics_w3.py</span></code>: TestDopplerSigmaParity::test_voigt_path_doppler_sigma_matches_profiles</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/manifold/test_sampling_guard.py</span></code>: TestNyquistGuard::test_default_pixels_is_18432, TestNyquistGuard::test_yaml_default_pixels_is_18432</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_forward_model_parity.py</span></code>: test_bayesian_forward_kernel_parity_deferred</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_kernel_saha_three_stage.py</span></code>: TestBackCompat::test_two_stage_alias_points_at_three_stage, TestBackCompat::test_legacy_snapshot_runs_and_has_no_stage_three</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_stark_t_factor_toggle.py</span></code>: test_toggle_on_disables_t_factor, test_toggle_value_must_be_exactly_1</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/scripts/test_measure_bhvo2_harness.py</span></code>: test_default_knobs_are_cli_defaults, test_maintainer_gate_flags_resolve_to_defaults, test_preset_flag_resolves_bundle, test_script_does_not_hand_build_pipeline</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_alias.py</span></code>: test_default_detection_threshold, test_max_lines_per_element_parameter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_alias_unit.py</span></code>: test_alias_default_is_strict, test_alias_high_recall_lowers_thresholds, test_per_ion_stage_default_off_byte_identical, test_temperature_estimator_legacy_byte_identical, test_r2_gate_fixed_mode_byte_identical, test_default_r2_gate_mode_is_adaptive_t</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_closure_strategy.py</span></code>: TestSoftmaxClosureParity::test_bit_identical_1d, TestSoftmaxClosureParity::test_bit_identical_batched, TestSoftmaxClosureParity::test_bit_identical_extreme_values, TestILRClosureParity::test_matches_apply_ilr, TestPWLRClosureParity::test_matches_apply_pwlr</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_comb.py</span></code>: test_default_min_correlation_remains_benchmark_gated, test_max_lines_per_element_parameter, test_coverage_penalty_reduces_score</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_correlation_identifier.py</span></code>: test_instrument_fwhm_parameter, test_max_lines_per_element_parameter, test_default_min_confidence_lowered</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_dirichlet_prior.py</span></code>: TestStickBreakingTransform::test_stick_breaking_produces_valid_simplex, TestStickBreakingTransform::test_stick_breaking_with_sparse_alpha, TestStickBreakingTransform::test_stick_breaking_uniform_alpha_is_uniform_on_simplex, TestStickBreakingTransform::test_stick_breaking_peaked_alpha_concentrates_mass, TestDirichletProperties::test_dirichlet_sum_to_one, TestDirichletProperties::test_dirichlet_all_positive, TestDirichletProperties::test_dirichlet_mean_equals_normalized_alpha, TestDirichletProperties::test_asymmetric_alpha_encodes_prior_knowledge</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_distributed_mcmc.py</span></code>: TestDistributedMCMCConfig::test_default_values, TestDistributedMCMCResult::test_creation, TestGPUConfig::test_gpu_info_dataclass</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_element_id.py</span></code>: test_identified_line_creation, test_identified_line_defaults, test_element_identification_creation, test_element_identification_result_creation, test_element_identification_result_consistency</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_hybrid_consensus_2of3.py</span></code>: TestHybridIdentifierDefaultPreservation::test_require_both_default_is_true, TestHybridIdentifierDefaultPreservation::test_new_consensus_class_does_not_replace_hybrid_identifier</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_line_selection.py</span></code>: TestLineSelectorInit::test_default_parameters, TestIsolationFactor::test_isolation_formula, TestScoringFormula::test_score_formula, TestScoringFormula::test_score_with_default_uncertainty, TestLineScore::test_dataclass_creation, TestLineSelectionResult::test_dataclass_creation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_matrix_effects.py</span></code>: TestPsRegimeGating::test_ns_defaults_unchanged, TestPsRegimeGating::test_ns_correction_alters_carbon</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_no_hidden_x64_enablement.py</span></code>: test_jax_identifier_flags_for_does_not_mutate_x64</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_partition_function_provider.py</span></code>: test_spec_is_cached_compute_once, test_derive_partition_spec_does_not_refit</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_preprocessing_low_snr.py</span></code>: test_default_baseline_method_is_median_not_als</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_quality.py</span></code>: TestQualityAssessorInit::test_default_thresholds, TestQualityMetrics::test_dataclass_creation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_spectral_nnls.py</span></code>: TestHybridUnionRecallFloor::test_standalone_default_is_count_invariant, TestHybridUnionRecallFloor::test_hybrid_union_arm_defaults_to_recall_favoring_floor, TestSpectralNNLSIdentifier::test_estimated_params_stored</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_spectrum_model.py</span></code>: test_spectrum_model_legacy_mode_unchanged</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_two_region_fit.py</span></code>: test_solver_two_region_flag</p></li>
+</ul>
+<p>Full per-file table: test-triage.json (machine-readable).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

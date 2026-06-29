@@ -1,0 +1,981 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML-Driven Algorithm-Search Program for CF-LIBS — Design &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ML-Driven Algorithm-Search Program for CF-LIBS — Design</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-10-goalfirst/optimization-program-design.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ml-driven-algorithm-search-program-for-cf-libs-design">
+<h1>ML-Driven Algorithm-Search Program for CF-LIBS — Design<a class="headerlink" href="#ml-driven-algorithm-search-program-for-cf-libs-design" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-10
+<strong>Status:</strong> Design (pre-implementation)
+<strong>Scope:</strong> The optimization <em>process</em> may use any ML/LLM tooling. The <em>shipped</em> algorithm stays
+physics-only (ruff TID251 + <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/evaluator.py</span></code> AST blocklist; bead CF-LIBS-improved-3fy3).
+<strong>Fitness function:</strong> the goal-metric scoreboard (<code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/scoreboard.py</span></code> +
+<code class="docutils literal notranslate"><span class="pre">scoreboard_registry.py</span></code>, branch <code class="docutils literal notranslate"><span class="pre">overhaul/w4-scoreboard</span></code>; baseline committed at
+<code class="docutils literal notranslate"><span class="pre">docs/benchmarks/SCOREBOARD-2026-06-10-baseline.md</span></code>).</p>
+<p><strong>Where we are (measured, 2026-06-10 baseline, geological preset):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head"><p>P</p></th>
+<th class="head"><p>R</p></th>
+<th class="head"><p>F1</p></th>
+<th class="head"><p>RMSE wt% (med)</p></th>
+<th class="head"><p>s/spectrum (med)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>bhvo2_chemcam (4 real ChemCam)</p></td>
+<td><p>1.000</p></td>
+<td><p>0.575</p></td>
+<td><p>0.730</p></td>
+<td><p>2.52</p></td>
+<td><p>2.7</p></td>
+</tr>
+<tr class="row-odd"><td><p>aalto (74 real)</p></td>
+<td><p>0.937</p></td>
+<td><p>0.471</p></td>
+<td><p>0.627</p></td>
+<td><p>— (presence-only)</p></td>
+<td><p>0.8</p></td>
+</tr>
+<tr class="row-even"><td><p>synthetic_fixedforward (74/288 sampled)</p></td>
+<td><p>0.583</p></td>
+<td><p>0.148</p></td>
+<td><p>0.236</p></td>
+<td><p>43.9 (basis-mismatch by design)</p></td>
+<td><p>0.5</p></td>
+</tr>
+</tbody>
+</table>
+<p>The weak link is <strong>recall</strong> (0.47–0.58 real, 0.15 synthetic) at near-perfect precision, plus
+hard failures (“No usable spectral lines detected”: 11/74 aalto, 46/74 synthetic). Identification
+is where the search program should spend its budget. Precision (zero FP on BHVO-2) is the
+asset every adoption gate must protect.</p>
+<p><strong>Prior art in this repo (do not rediscover):</strong> CodeEvolve Wave 1
+(<code class="docutils literal notranslate"><span class="pre">docs/CODEEVOLVE_WAVE2_PLAN.md</span></code>) ran GPU Sep-CMA-ES over a 101-parameter ensemble combiner on
+<em>cached</em> algorithm outputs for 74 Aalto spectra: F_beta(0.5) 0.654 → 0.914 at 35,300 evals/s.
+Its known limitation — frozen caches, no end-to-end pipeline in the loop — is exactly what the
+scoreboard now fixes. Also institutional memory: the “paper-faithful ALIAS” change (PR #229)
+<em>regressed</em> F1 by 0.041 — every identifier-scoring change must be benchmark-gated.</p>
+<hr class="docutils" />
+<section id="resource-survey">
+<h2>1. Resource Survey<a class="headerlink" href="#resource-survey" title="Link to this heading"></a></h2>
+<p>All resources were fetched and read 2026-06-10 (WebFetch summaries; MDPI paper identified via
+web search after a 403).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Resource</p></th>
+<th class="head"><p>What it is</p></th>
+<th class="head"><p>Maintained / installable</p></th>
+<th class="head"><p>Verdict</p></th>
+<th class="head"><p>Use here</p></th>
+<th class="head"><p>Integration cost</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/html/2602.12259v2">arXiv 2602.12259v2</a> — “Think like a Scientist: Physics-guided LLM Agent for Equation Discovery” (KeplerAgent; Yang, Venkatachalam, Kianezhad, Vadgama, Yu)</p></td>
+<td><p>LLM agent that first discovers structure (symmetries, functional patterns) from data, then <em>configures</em> PySR/PySINDy with those constraints; iterates via workspace + experience log. 42.3% symbolic accuracy on LSR-Transform vs 37.8% PySR alone.</p></td>
+<td><p>Paper; no code release mentioned in the HTML.</p></td>
+<td><p><strong>Imitate</strong></p></td>
+<td><p>Campaign 2 pattern: a Claude session inspects the scoreboard feature tables, proposes physics-motivated features/operator sets/constraints, <em>then</em> launches PySR — instead of throwing raw features at PySR.</p></td>
+<td><p>Low (it’s a workflow pattern, not a dependency).</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><a class="reference external" href="https://github.com/merlresearch/llmphy">merlresearch/llmphy</a></p></td>
+<td><p>GPT-4 + MuJoCo loop estimating physical parameters of tray-stack scenes; reconstruction error fed back to the LLM. AISTATS 2026 artifact.</p></td>
+<td><p>2 commits, v1.0.0 (2026-04), AGPL-3.0, Python 3.7 + MuJoCo 2.1.</p></td>
+<td><p><strong>Skip</strong></p></td>
+<td><p>Domain mismatch (rigid-body scene reconstruction); its one transferable idea — LLM proposes parameters, simulator scores, error feeds back — is already the core of Campaigns 1/3. AGPL is also incompatible with adopting code into MIT-adjacent tooling.</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><a class="reference external" href="https://github.com/K-Dense-AI/scientific-agent-skills">K-Dense-AI/scientific-agent-skills</a></p></td>
+<td><p>144 agent skills (Agent Skills standard; works in Claude Code/Cursor/Codex). Bio/chem/clinical heavy; 78+ database lookups. MIT, 27.8k stars, v2.47.0 (2026-06).</p></td>
+<td><p>Yes, very active (<code class="docutils literal notranslate"><span class="pre">npx</span> <span class="pre">skills</span> <span class="pre">add</span></code>).</p></td>
+<td><p><strong>Skip</strong></p></td>
+<td><p>Nothing LIBS/plasma/spectroscopy-specific; no algorithm-search machinery. Zero role in the fitness loop. (Optionally installable for interactive research sessions, but that is outside this program.)</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><a class="reference external" href="https://github.com/InternScience/Awesome-Scientific-Skills">InternScience/Awesome-Scientific-Skills</a></p></td>
+<td><p>Curated <em>link list</em> of scientific agent skills (“Phase 1: the reading list before the library”), 423 stars.</p></td>
+<td><p>List only; no installable code.</p></td>
+<td><p><strong>Skip</strong></p></td>
+<td><p>Duplicates #3’s discovery function; nothing executable.</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><a class="reference external" href="https://github.com/InternScience/MLEvolve">InternScience/MLEvolve</a></p></td>
+<td><p>Autonomous ML-engineering system: Monte Carlo Graph Search + multi-agent codegen (single-pass / stepwise / SEARCH-REPLACE patching) + experience memory (BM25 + FAISS over past plans/code/metrics) + stagnation detection + cross-branch fusion. #1 on MLE-bench (65.3% medal rate). 323 stars, 24 commits (2026-02).</p></td>
+<td><p>Runnable but built around mle-bench Kaggle tasks; <strong>no license specified</strong> — code cannot be legally adopted.</p></td>
+<td><p><strong>Imitate</strong></p></td>
+<td><p>Campaign 3 driver patterns: experience-driven memory of (diff, per-dataset deltas, verdict) retrieved into prompts; adaptive codegen mode selection; stagnation detection triggering structural mutations (our <code class="docutils literal notranslate"><span class="pre">structural_mutation_cadence</span></code> already anticipates this).</p></td>
+<td><p>Low-medium (re-implement 3 mechanisms; our <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> scaffolding + beads already hold half the state).</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><a class="reference external" href="https://github.com/mims-harvard/ToolUniverse">mims-harvard/ToolUniverse</a></p></td>
+<td><p>1000+ biomedical tools/models/APIs behind one agent protocol (drug discovery, oncology, pharmacovigilance). Apache-2.0, active (v1.2.6, 2026-06).</p></td>
+<td><p>Yes (<code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">pip</span> <span class="pre">install</span> <span class="pre">tooluniverse</span></code>).</p></td>
+<td><p><strong>Skip</strong></p></td>
+<td><p>Entirely biomedical; our agents need exactly two “tools” (run scoreboard, query atomic DB) and both are internal CLIs.</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><a class="reference external" href="https://github.com/MITIBM-FastCoder/LessonL">MITIBM-FastCoder/LessonL</a></p></td>
+<td><p>NeurIPS 2025: multi-LLM code optimization where agents extract <strong>lessons</strong> from each attempt (solicitation → banking → selection) and share them; beats larger single models on ParEval/PolyBench. MIT, 4 commits.</p></td>
+<td><p>Paper artifact (C++/CUDA benchmarks baked in); reproducible, not a maintained framework.</p></td>
+<td><p><strong>Imitate</strong></p></td>
+<td><p>Campaign 3 prompt protocol: after each candidate eval, solicit a 2–3 sentence lesson tied to the per-dataset deltas; bank in run dir (and <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">remember</span></code>); select top-k relevant lessons into the next batch’s prompt. The mechanism is ~200 lines; adopting their C++ harness buys nothing.</p></td>
+<td><p>Low.</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p><a class="reference external" href="https://github.com/DEAP/deap">DEAP/deap</a></p></td>
+<td><p>Classic evolutionary-computation framework: GA/GP, CMA-ES, NSGA-II/III, SPEA2, MO-CMA-ES. LGPL-3.0, 6.4k stars; mature/slow-moving but stable; <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">deap</span></code>.</p></td>
+<td><p>Yes.</p></td>
+<td><p><strong>Adopt (secondary)</strong></p></td>
+<td><p>Campaign 1 phase B (CMA-ES restricted to the continuous knobs) and the multi-objective alternative (NSGA-II over F1/RMSE/runtime). Never ships — optimization layer only.</p></td>
+<td><p>Low (pip; ask-tell loop wraps our SLURM evaluator).</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p><a class="reference external" href="https://github.com/MilesCranmer/PySR">MilesCranmer/PySR</a></p></td>
+<td><p>Symbolic regression on a Julia backend (SymbolicRegression.jl): custom operators, custom losses, complexity constraints, accuracy-vs-complexity Pareto front, exports to SymPy/NumPy/JAX. Apache-2.0, v1.5.10 (2026-03), very active.</p></td>
+<td><p>Yes (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">pysr</span></code>; Julia auto-installed on first import).</p></td>
+<td><p><strong>Adopt</strong></p></td>
+<td><p>The engine of Campaign 2: discovered expressions export to SymPy/NumPy and are transcribed into physics-legal shipped code with provenance. Custom loss lets us fit presence-decision scores with class-weighted margin loss.</p></td>
+<td><p>Medium (Julia on vasp nodes; first-run precompilation — do it once per node image; runs only in the optimization layer).</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p><a class="reference external" href="https://github.com/adaptive-intelligent-robotics/QDax">adaptive-intelligent-robotics/QDax</a></p></td>
+<td><p>Quality-Diversity in JAX: MAP-Elites, CVT-MAP-Elites, CMA-ME/CMA-MEGA, MOME, NSGA2 baselines; GPU-vectorized evaluation. MIT, v0.5.0 (2025-05), Python ≥3.11.</p></td>
+<td><p>Yes (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">QDax</span></code>).</p></td>
+<td><p><strong>Adopt for cached-output mode; imitate for end-to-end</strong></p></td>
+<td><p>Behavior-descriptor search over (recall, precision): in the Wave-1-style <em>cached-outputs</em> regime the evaluation is JAX-vectorizable and QDax’s GPU MAP-Elites/CMA-ME is the right tool on the V100S nodes. For <em>end-to-end</em> scoreboard evaluation the bottleneck is the CPU pipeline (seconds/spectrum, not jittable), so QDax’s GPU speedup is void — there a 2-D archive grid (~60 lines, imitated) over SLURM-evaluated candidates suffices.</p></td>
+<td><p>Medium (GPU mode needs the cache generator refreshed à la <code class="docutils literal notranslate"><span class="pre">generate_evolve_cache_v2.py</span></code>); trivial for the imitated archive.</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p><a class="reference external" href="https://www.mdpi.com/2673-4591/59/1/238">MDPI engproc 59(1):238</a> — Tomar, Bansal &amp; Singh 2023, “Metaheuristic Algorithms for Optimization: A Brief Review”</p></td>
+<td><p>Short conference review of GA/PSO/ACO-class metaheuristics (page 403’d; identified via search).</p></td>
+<td><p>Review only; no code.</p></td>
+<td><p><strong>Skip</strong></p></td>
+<td><p>Adds nothing beyond DEAP/Optuna documentation; no LIBS content.</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Not on the list but load-bearing:</strong> <strong>Optuna</strong> (TPE + <code class="docutils literal notranslate"><span class="pre">CmaEsSampler</span></code> + storage/dashboards,
+actively maintained, never ships) is the recommended Campaign 1 phase-A driver because the knob
+space is mixed continuous/integer/categorical/conditional, which TPE handles natively and
+CMA-ES does not.</p>
+</section>
+<hr class="docutils" />
+<section id="fitness-protocol">
+<h2>2. Fitness Protocol<a class="headerlink" href="#fitness-protocol" title="Link to this heading"></a></h2>
+<section id="dataset-split-optimization-vs-holdout-vs-vault">
+<h3>2.1 Dataset split (optimization vs holdout vs vault)<a class="headerlink" href="#dataset-split-optimization-vs-holdout-vs-vault" title="Link to this heading"></a></h3>
+<p>Datasets = <code class="docutils literal notranslate"><span class="pre">w4-scoreboard</span></code> core registry + <code class="docutils literal notranslate"><span class="pre">w4-datasets</span></code> extended adapters
+(<code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/adapters_extended.py</span></code>: CSA planetary ~99 spectra element-wt, ChemCam
+calibration ~250 element-wt, EMSLIBS-2019 100 presence-only, Silva-2022 soils 102 presence-only,
+Gibbons-2024 ~175 N-doped MGS-1). Splits are <strong>by sample/target identity, never by spectrum</strong>
+(multiple spectra of one target are correlated; splitting by spectrum leaks truth).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tier</p></th>
+<th class="head"><p>Datasets</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Optimization set</strong> (the fitness function; queried freely)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">aalto</span></code> (74), <code class="docutils literal notranslate"><span class="pre">synthetic_fixedforward</span></code> (seeded 74/288 sample per the baseline), <code class="docutils literal notranslate"><span class="pre">chemcam_calib</span></code>-train (~60% of targets), <code class="docutils literal notranslate"><span class="pre">csa_planetary</span></code>-train (~60% of targets), <code class="docutils literal notranslate"><span class="pre">silva2022</span></code>-train (~60% of samples)</p></td>
+<td><p>Computes fitness every evaluation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Holdout</strong> (adoption gate only; each query logged)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bhvo2_chemcam</span></code> (all 4 — the headline number stays out of the loop), <code class="docutils literal notranslate"><span class="pre">emslibs2019</span></code>, the held-out 40% target splits of <code class="docutils literal notranslate"><span class="pre">chemcam_calib</span></code> / <code class="docutils literal notranslate"><span class="pre">csa_planetary</span></code> / <code class="docutils literal notranslate"><span class="pre">silva2022</span></code></p></td>
+<td><p>Run only when a candidate passes the optimization-set gate. Budget: ≤1 holdout run per campaign phase per week, count tracked in the run ledger.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Vault</strong> (end-of-program only)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gibbons2024</span></code> (never yet measured by any tuning loop)</p></td>
+<td><p>Final report figure; one run, ever, per campaign.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Split manifests (lists of <code class="docutils literal notranslate"><span class="pre">spectrum_id</span></code> + file sha256) are generated once, committed under
+<code class="docutils literal notranslate"><span class="pre">docs/benchmarks/manifests/</span></code>, and hashed into every run record. <code class="docutils literal notranslate"><span class="pre">synthetic_fixedforward</span></code> is
+tracked for <strong>relative</strong> movement only (it shares physics with the inversion — its absolute
+numbers are never adoption evidence; see baseline doc).</p>
+</section>
+<section id="composite-fitness-single-objective-form">
+<h3>2.2 Composite fitness (single-objective form)<a class="headerlink" href="#composite-fitness-single-objective-form" title="Link to this heading"></a></h3>
+<p>Per dataset <em>d</em> in the optimization set, from <code class="docutils literal notranslate"><span class="pre">_aggregate_dataset</span></code> output:
+micro-F1 <code class="docutils literal notranslate"><span class="pre">F1_d</span></code>, median composition RMSE <code class="docutils literal notranslate"><span class="pre">R_d</span></code> (element-wt datasets only), median wall
+<code class="docutils literal notranslate"><span class="pre">t_d</span></code> (s/spectrum), and FP count <code class="docutils literal notranslate"><span class="pre">FP_d</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">score_d</span>  <span class="o">=</span> <span class="mf">0.6</span> <span class="o">*</span> <span class="n">F1_d</span>  <span class="o">+</span>  <span class="mf">0.4</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="nb">min</span><span class="p">(</span><span class="n">R_d</span><span class="p">,</span> <span class="n">R_cap</span><span class="p">)</span><span class="o">/</span><span class="n">R_cap</span><span class="p">)</span>        <span class="n">R_cap</span> <span class="o">=</span> <span class="mi">10</span> <span class="n">wt</span><span class="o">%</span>
+           <span class="p">(</span><span class="n">presence</span><span class="o">-</span><span class="n">only</span> <span class="n">datasets</span><span class="p">:</span> <span class="n">score_d</span> <span class="o">=</span> <span class="n">F1_d</span><span class="p">)</span>
+
+<span class="n">Fitness</span>  <span class="o">=</span> <span class="n">Σ_d</span> <span class="n">w_d</span> <span class="o">*</span> <span class="n">score_d</span> <span class="o">/</span> <span class="n">Σ_d</span> <span class="n">w_d</span>
+           <span class="o">-</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">Var_d</span><span class="p">(</span><span class="n">score_d</span><span class="p">)</span>                                   <span class="c1"># cross-matrix overfitting penalty</span>
+           <span class="o">-</span> <span class="mf">0.2</span> <span class="o">*</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">t_med</span><span class="o">/</span><span class="n">t_budget</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>                       <span class="c1"># runtime: free under budget,</span>
+                                                                    <span class="c1"># linear penalty beyond t_budget = 5 s/spectrum</span>
+<span class="n">DEATH</span> <span class="n">PENALTIES</span> <span class="p">(</span><span class="n">fitness</span> <span class="o">=</span> <span class="o">-</span><span class="n">inf</span><span class="p">):</span>
+  <span class="o">-</span> <span class="n">blocklist</span> <span class="n">violation</span> <span class="p">(</span><span class="n">Campaign</span> <span class="mi">2</span><span class="o">/</span><span class="mi">3</span> <span class="n">candidates</span><span class="p">)</span>                   <span class="c1"># existing evaluator behaviour</span>
+  <span class="o">-</span> <span class="nb">any</span> <span class="n">real</span><span class="o">-</span><span class="n">dataset</span> <span class="n">FP_d</span> <span class="o">&gt;</span> <span class="n">FP_d</span><span class="p">(</span><span class="n">baseline</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>                      <span class="c1"># precision is the asset</span>
+  <span class="o">-</span> <span class="nb">any</span> <span class="n">dataset</span> <span class="k">with</span> <span class="n">n_failed</span> <span class="o">&gt;</span> <span class="mf">1.25</span> <span class="o">*</span> <span class="n">baseline</span> <span class="n">failures</span>            <span class="c1"># no trading failures for F1</span>
+</pre></div>
+</div>
+<p>Weights <code class="docutils literal notranslate"><span class="pre">w_d</span></code>: real element-wt datasets 1.0, real presence-only 0.7, synthetic 0.5 — extends the
+existing <code class="docutils literal notranslate"><span class="pre">EvolutionDriverConfig.fitness_weights</span></code> mapping (<code class="docutils literal notranslate"><span class="pre">cflibs/evolution/config.py</span></code>), and the
+variance term reuses its <code class="docutils literal notranslate"><span class="pre">overfitting_penalty</span> <span class="pre">=</span> <span class="pre">0.5</span></code>. The 0.6/0.4 split reflects the program’s
+stated priority (ID is the weak link) while keeping RMSE in every gradient.</p>
+</section>
+<section id="multi-objective-alternative">
+<h3>2.3 Multi-objective alternative<a class="headerlink" href="#multi-objective-alternative" title="Link to this heading"></a></h3>
+<p>NSGA-II (DEAP) — or MOME (QDax) in cached-output mode — over the 3-vector
+<code class="docutils literal notranslate"><span class="pre">(micro-F1</span> <span class="pre">↑,</span> <span class="pre">mean</span> <span class="pre">RMSE</span> <span class="pre">↓,</span> <span class="pre">median</span> <span class="pre">s/spectrum</span> <span class="pre">↓)</span></code> with the same death penalties as constraints.
+Adoption then selects from the Pareto front by: max F1 subject to RMSE ≤ baseline + 0.2 wt%
+and runtime ≤ 1.5× baseline. Use this when the scalar weights start visibly distorting search
+(e.g. candidates trading 0.05 F1 for 1 wt% RMSE); the scalar form is the default because the
+adoption gate, not the optimizer, is the real arbiter.</p>
+</section>
+<section id="statistical-guards">
+<h3>2.4 Statistical guards<a class="headerlink" href="#statistical-guards" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Paired per-spectrum bootstrap.</strong> For candidate vs incumbent, resample spectra within each
+dataset (B = 2000, seeded), compute Δ(micro-F1) and Δ(median RMSE) per replicate. “Improved”
+means the 95% CI of the paired Δ excludes 0. BHVO-2 (n=4) can never pass a bootstrap alone —
+it is gated on “no regression on any of the 4 + no FP” instead.</p></li>
+<li><p><strong>Minimum-improvement thresholds</strong> (anti-noise-mining): ΔF1 ≥ +0.02 (micro, optimization set
+pooled) or ΔRMSE ≤ −0.2 wt%. Below threshold = not adoptable regardless of CI.</p></li>
+<li><p><strong>Frozen sampling:</strong> <code class="docutils literal notranslate"><span class="pre">seed=20260610</span></code> (<code class="docutils literal notranslate"><span class="pre">DEFAULT_SEED</span></code> in scoreboard.py), <code class="docutils literal notranslate"><span class="pre">max_spectra=74</span></code>,
+identical sampled ids per generation; the per-generation synthetic subsample may rotate seed
+<em>per generation</em> (same for all candidates within a generation) to prevent memorizing one draw.</p></li>
+<li><p><strong>Incumbent re-evaluation</strong> each generation (detects environment drift / nondeterminism).</p></li>
+<li><p><strong>Scoring constants are out of bounds:</strong> <code class="docutils literal notranslate"><span class="pre">PRESENCE_EPS_MASSFRAC</span> <span class="pre">=</span> <span class="pre">5e-3</span></code>, the confounder set
+(Ag/Sn/W/Bi/Th), and the candidate-set policy live in the scoreboard, not in the search space.</p></li>
+</ul>
+</section>
+<section id="adoption-gate-all-campaigns">
+<h3>2.5 Adoption gate (all campaigns)<a class="headerlink" href="#adoption-gate-all-campaigns" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Optimization-set gate: bootstrap-significant improvement ≥ minimum threshold, no death penalty.</p></li>
+<li><p>Holdout gate: no holdout dataset regresses beyond its bootstrap noise; <strong>zero new FP on
+bhvo2_chemcam and no new failures on real datasets</strong>.</p></li>
+<li><p>Legality gate (code-producing campaigns): AST blocklist + ruff TID251 + black + mypy + the
+targeted unit-test subset; <code class="docutils literal notranslate"><span class="pre">assert_benchmark_relevance</span></code> (already in <code class="docutils literal notranslate"><span class="pre">evaluator.py</span></code>) confirms
+the diff touches exercised files.</p></li>
+<li><p>Runtime gate: median s/spectrum ≤ 1.5× baseline on the holdout run.</p></li>
+<li><p>Human review PR (base <code class="docutils literal notranslate"><span class="pre">dev</span></code>), body containing: candidate lineage/provenance, optimization +
+holdout scoreboard tables, bootstrap CIs, dataset-manifest and DB hashes. CI runs the full
+pytest suite (never inside sub-agents — CLAUDE.md watchdog rule).</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="campaign-1-parameter-space-first-cheapest">
+<h2>3. Campaign 1 — Parameter Space (first; cheapest)<a class="headerlink" href="#campaign-1-parameter-space-first-cheapest" title="Link to this heading"></a></h2>
+<section id="search-space-enumerated-from-code-on-overhaul-w4-scoreboard">
+<h3>3.1 Search space (enumerated from code on <code class="docutils literal notranslate"><span class="pre">overhaul/w4-scoreboard</span></code>)<a class="headerlink" href="#search-space-enumerated-from-code-on-overhaul-w4-scoreboard" title="Link to this heading"></a></h3>
+<p><strong>A. <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py</span></code>, lines ~90–155).</strong> Current values
+are the <code class="docutils literal notranslate"><span class="pre">geological</span></code> preset / dataclass defaults.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Knob</p></th>
+<th class="head"><p>Current</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Search range</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>float?</p></td>
+<td><p>{None} ∪ [1e-4, 0.05] log</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">top_k_per_element</span></code></p></td>
+<td><p>60</p></td>
+<td><p>int</p></td>
+<td><p>15–200</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wavelength_tolerance_nm</span></code></p></td>
+<td><p>0.1 (adaptive if None+R)</p></td>
+<td><p>float</p></td>
+<td><p>0.02–0.3 (+ “adaptive” categorical)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">min_peak_height</span></code></p></td>
+<td><p>0.01</p></td>
+<td><p>float</p></td>
+<td><p>0.001–0.05 log</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">peak_width_nm</span></code></p></td>
+<td><p>0.2 (adaptive if None+R)</p></td>
+<td><p>float</p></td>
+<td><p>0.05–0.5 (+ “adaptive”)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;off&quot;</span></code></p></td>
+<td><p>cat</p></td>
+<td><p>{off, observable}</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_resonance</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code>→False</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">min_snr</span></code></p></td>
+<td><p>10.0</p></td>
+<td><p>float</p></td>
+<td><p>2–20</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">min_energy_spread_ev</span></code></p></td>
+<td><p>2.0</p></td>
+<td><p>float</p></td>
+<td><p>0.5–4.0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code></p></td>
+<td><p>3</p></td>
+<td><p>int</p></td>
+<td><p>1–5</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">isolation_wavelength_nm</span></code></p></td>
+<td><p>0.1</p></td>
+<td><p>float</p></td>
+<td><p>0.02–0.3</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">max_lines_per_element</span></code></p></td>
+<td><p>20</p></td>
+<td><p>int</p></td>
+<td><p>5–60</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wavelength_calibration</span></code></p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True} (frozen — turning it off is a known catastrophic axis)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">shift_coherence_veto</span></code></p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">residual_shift_scan_nm</span></code> (ye6t)</p></td>
+<td><p>0.0</p></td>
+<td><p>float</p></td>
+<td><p>0.0–0.1 (expect optimum at 0; the 0.05 legacy measurably rode its window edge)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">affine_coverage_gate</span></code> (ye6t)</p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">line_residual_gate</span></code> (ye6t)</p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">max_iterations</span></code></p></td>
+<td><p>20</p></td>
+<td><p>int</p></td>
+<td><p>5–50</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t_tolerance_k</span></code></p></td>
+<td><p>100.0</p></td>
+<td><p>float</p></td>
+<td><p>10–500 log</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ne_tolerance_frac</span></code></p></td>
+<td><p>0.1</p></td>
+<td><p>float</p></td>
+<td><p>0.01–0.5 log</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap</span></code></p></td>
+<td><p>5.0</p></td>
+<td><p>float</p></td>
+<td><p>1–20</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">min_boltzmann_r2</span></code></p></td>
+<td><p>0.3</p></td>
+<td><p>float</p></td>
+<td><p>0.0–0.8</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph</span></code></p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">closure_mode</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;oxide&quot;</span></code></p></td>
+<td><p>cat</p></td>
+<td><p>{standard, matrix, oxide, ilr, pwlr, dirichlet_residual} — per-preset, not global</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stark_ne</span></code></p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>B. <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> gates (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:1099</span></code>)</strong> —
+the recall-controlling layer the pipeline config does not yet surface (plumbing these into
+<code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code> is the first implementation task of the campaign):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Knob</p></th>
+<th class="head"><p>Current</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Search range</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ground_state_threshold_ev</span></code></p></td>
+<td><p>0.1</p></td>
+<td><p>float</p></td>
+<td><p>0.05–0.5</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">shift_scan_nm</span></code> (global scan when calibration fails/skipped)</p></td>
+<td><p>0.5</p></td>
+<td><p>float</p></td>
+<td><p>0.1–1.0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">comb_max_lines_per_element</span></code></p></td>
+<td><p>30</p></td>
+<td><p>int</p></td>
+<td><p>10–100</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">comb_min_matches</span></code></p></td>
+<td><p>3</p></td>
+<td><p>int</p></td>
+<td><p>2–6</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">comb_min_precision</span></code></p></td>
+<td><p>0.02</p></td>
+<td><p>float</p></td>
+<td><p>0.005–0.2 log</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">comb_min_recall</span></code></p></td>
+<td><p>0.1</p></td>
+<td><p>float</p></td>
+<td><p>0.02–0.5 log</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">comb_max_missing_fraction</span></code></p></td>
+<td><p>0.85</p></td>
+<td><p>float</p></td>
+<td><p>0.5–0.95</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">comb_fallback_to_nearest</span></code></p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">comb_fallback_max_elements</span></code></p></td>
+<td><p>5</p></td>
+<td><p>int</p></td>
+<td><p>1–10</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kdet_enabled</span></code></p></td>
+<td><p>True</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kdet_min_score</span></code></p></td>
+<td><p>0.05</p></td>
+<td><p>float</p></td>
+<td><p>0.005–0.3 log</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kdet_min_candidates</span></code></p></td>
+<td><p>2</p></td>
+<td><p>int</p></td>
+<td><p>1–5</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kdet_rarity_power</span></code></p></td>
+<td><p>0.5</p></td>
+<td><p>float</p></td>
+<td><p>0.0–2.0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kdet_weight_clip</span></code></p></td>
+<td><p>(0.25, 4.0)</p></td>
+<td><p>(float, float)</p></td>
+<td><p>lo 0.05–1.0, hi 1.0–10.0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">coherence_min_lines</span></code></p></td>
+<td><p>2</p></td>
+<td><p>int</p></td>
+<td><p>2–5</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">coherence_min_fraction</span></code></p></td>
+<td><p>0.5</p></td>
+<td><p>float</p></td>
+<td><p>0.2–0.9</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">residual_gate_min_kept_lines</span></code> (ye6t)</p></td>
+<td><p>3</p></td>
+<td><p>int</p></td>
+<td><p>1–6</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">poisson_floor_scale</span></code></p></td>
+<td><p>1.0</p></td>
+<td><p>float</p></td>
+<td><p>0.3–3.0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">use_deconvolution</span></code></p></td>
+<td><p>False</p></td>
+<td><p>bool</p></td>
+<td><p>{True, False}</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>C. <code class="docutils literal notranslate"><span class="pre">LineSelector</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py:138</span></code>)</strong> — its six knobs
+(<code class="docutils literal notranslate"><span class="pre">min_snr</span></code> 10.0, <code class="docutils literal notranslate"><span class="pre">min_energy_spread_ev</span></code> 2.0, <code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code> 3, <code class="docutils literal notranslate"><span class="pre">exclude_resonance</span></code>
+False, <code class="docutils literal notranslate"><span class="pre">isolation_wavelength_nm</span></code> 0.1, <code class="docutils literal notranslate"><span class="pre">max_lines_per_element</span></code> 20) are already mirrored by the
+pipeline-config rows above; they are one set of parameters, not two.</p>
+<p>Total: <strong>~45 knobs</strong> (≈28 continuous/int, ≈10 boolean, 2 categorical, 2 conditional). Failure
+hypothesis to encode as a prior: the “No usable spectral lines” failures point at
+<code class="docutils literal notranslate"><span class="pre">min_snr</span></code>/<code class="docutils literal notranslate"><span class="pre">min_peak_height</span></code>/<code class="docutils literal notranslate"><span class="pre">comb_min_matches</span></code>/<code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code> being too strict for
+low-SNR and pure-element spectra — seed Optuna with hand-picked “looser-gates” trials.</p>
+</section>
+<section id="optimizer">
+<h3>3.2 Optimizer<a class="headerlink" href="#optimizer" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Phase A — Optuna TPE</strong> (multivariate, with conditional parameters), 800 trials. TPE is the
+right first pass because the space is mixed-type and conditional; CMA-ES is not. Optuna never
+ships, so its presence in the optimization layer is unconstrained. Storage: SQLite journal in
+the run dir (driver-local; SLURM workers report results back via files, avoiding NFS-locking
+issues).</p></li>
+<li><p><strong>Phase B — CMA-ES</strong> (DEAP <code class="docutils literal notranslate"><span class="pre">cma.Strategy</span></code>, or Optuna <code class="docutils literal notranslate"><span class="pre">CmaEsSampler</span></code>) over the ~28 continuous
+knobs, categoricals frozen at the phase-A incumbent. λ = 4 + 3·ln(28) ≈ 14 → use 16,
+~60 generations ≈ 960 evals.</p></li>
+<li><p><strong>Phase C (optional) — MAP-Elites archive</strong> over behavior descriptors
+(micro-recall, micro-precision) binned 20×20, fitness = composite score. End-to-end mode uses
+the imitated ~60-line archive over SLURM evaluations; if a Wave-1-style cached-output
+evaluation layer is refreshed, run QDax CMA-ME on a V100S instead (the Wave-1 result — F_beta
+0.914 at 35k evals/s — shows the cached regime saturates quickly; treat its output as
+<em>candidate generators</em> for end-to-end confirmation, never as adoptable evidence).</p></li>
+<li><p>Per-preset runs: <code class="docutils literal notranslate"><span class="pre">geological</span></code> first (the production default); a separate shorter run may tune
+<code class="docutils literal notranslate"><span class="pre">metallic</span></code> for the synthetic/steel band later. Do <strong>not</strong> let one run mix closure bases across
+datasets — that is preset selection, not parameter tuning.</p></li>
+</ul>
+</section>
+<section id="slurm-evaluation-topology-and-budget">
+<h3>3.3 SLURM evaluation topology and budget<a class="headerlink" href="#slurm-evaluation-topology-and-budget" title="Link to this heading"></a></h3>
+<p>Measured cost (committed baseline): 2.7 s/spectrum ChemCam-sized, 0.8 aalto, 0.5 synthetic, CPU.
+Optimization set ≈ 330–350 spectra ⇒ <strong>~8–15 core-minutes per candidate evaluation</strong>
+(conservative envelope if the extended datasets are heavier: ≤45 core-min; per-spectrum
+timeout 120 s, timeout counts as failure). The pipeline is CPU-bound — Campaign 1 does not
+touch the V100S GPUs.</p>
+<ul class="simple">
+<li><p><strong>Driver:</strong> 1 long-running 2-core CPU job (or tmux on a login node): runs Optuna/DEAP
+ask-tell, writes candidate configs, submits eval arrays, ingests results, checkpoints every
+generation.</p></li>
+<li><p><strong>Workers:</strong> <code class="docutils literal notranslate"><span class="pre">sbatch</span> <span class="pre">--array=0-15%16</span> <span class="pre">--cpus-per-task=8</span> <span class="pre">--mem=16G</span> <span class="pre">--time=00:45:00</span></code> — one task
+per candidate; inside, spectra fan out over a <code class="docutils literal notranslate"><span class="pre">multiprocessing</span></code> pool (8 procs,
+<code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS=1</span></code>, <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span></code>). One generation ≈ 2–6 min wall.
+<strong>No <code class="docutils literal notranslate"><span class="pre">--nodelist</span></code></strong> (let SLURM schedule); <strong>private JAX compilation cache</strong>
+(<code class="docutils literal notranslate"><span class="pre">JAX_COMPILATION_CACHE_DIR=$SLURM_TMPDIR/jax-cache</span></code> or <code class="docutils literal notranslate"><span class="pre">$HOME/.cache/jax-cflibs-evolve</span></code>),
+never the shared one. Reuse <code class="docutils literal notranslate"><span class="pre">cflibs/hpc/slurm.py</span></code> (<code class="docutils literal notranslate"><span class="pre">SlurmJobManager</span></code>, <code class="docutils literal notranslate"><span class="pre">ArrayJobConfig</span></code>).</p></li>
+<li><p><strong>Budget:</strong> Phase A 800 evals ≈ 110–220 core-hours; Phase B 960 evals ≈ similar.
+<strong>Total cap: 600 core-hours</strong>, ledger-enforced (Section 5). Wall-clock: phase A finishes
+overnight on a fraction of the 3-node cluster.</p></li>
+</ul>
+</section>
+<section id="adoption-gate">
+<h3>3.4 Adoption gate<a class="headerlink" href="#adoption-gate" title="Link to this heading"></a></h3>
+<p>Section 2.5 with one addition: the winning configuration ships as <strong>updated
+<code class="docutils literal notranslate"><span class="pre">ANALYSIS_PRESETS</span></code> values / dataclass defaults in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py</span></code></strong> — plain
+numbers in physics code, trivially legal — plus a provenance comment citing the run id and this
+document, mirroring how the ye6t knobs are documented today. Top-5 candidates (not just the
+best) go through the holdout gate; pick the one with the best worst-dataset score.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="campaign-2-formula-space-pysr-symbolic-regression">
+<h2>4. Campaign 2 — Formula Space (PySR symbolic regression)<a class="headerlink" href="#campaign-2-formula-space-pysr-symbolic-regression" title="Link to this heading"></a></h2>
+<p>Three hand-tuned scoring formulas are candidates for replacement by discovered expressions.
+Feature tables come from one instrumented scoreboard pass (<code class="docutils literal notranslate"><span class="pre">return_diagnostics=True</span></code> exists on
+<code class="docutils literal notranslate"><span class="pre">detect_and_select_lines</span></code>; extend the per-spectrum record dump in <code class="docutils literal notranslate"><span class="pre">_score_spectrum</span></code>).</p>
+<section id="target-1-element-presence-decision-score-highest-value">
+<h3>4.1 Target 1 — element-presence decision score (highest value)<a class="headerlink" href="#target-1-element-presence-decision-score-highest-value" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Replaces:</strong> the ALIAS multi-metric composite in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py</span></code>
+(<code class="docutils literal notranslate"><span class="pre">_evaluate_candidate_with_multi_metric_gate</span></code>: hand-weighted <code class="docutils literal notranslate"><span class="pre">0.30·physics_validity(R²)</span> <span class="pre">+</span> <span class="pre">0.15·interpretability(R_rat)</span> <span class="pre">+</span> <span class="pre">…</span></code>, hard threshold 0.5) and/or the comb fingerprint
+threshold/median-floor logic in <code class="docutils literal notranslate"><span class="pre">comb.py</span></code> (<code class="docutils literal notranslate"><span class="pre">_apply_relative_threshold</span></code>).</p></li>
+<li><p><strong>Training pairs:</strong> one row per (spectrum, candidate element) over the optimization set —
+≈350 spectra × ~10–15 candidates ≈ 4–5k rows. Features (all physics-legal observables already
+computed in the pipeline): n matched lines, matched fraction of expected lines, comb
+fingerprint correlation, NNLS coefficient, kdet score, coherent-line fraction, median |Δλ|
+residual vs consensus, Boltzmann R², energy spread (eV), median line SNR, rarity-weighted
+match count, n expected lines in band. Target: element ∈ <code class="docutils literal notranslate"><span class="pre">truth.elements_present</span></code> (binary).</p></li>
+<li><p><strong>PySR config:</strong> binary operators <code class="docutils literal notranslate"><span class="pre">+</span> <span class="pre">−</span> <span class="pre">×</span> <span class="pre">/</span></code>, unary <code class="docutils literal notranslate"><span class="pre">log</span> <span class="pre">exp</span> <span class="pre">sqrt</span> <span class="pre">abs</span></code>, complexity ≤ 25,
+custom class-weighted margin loss (FP cost &gt; FN cost ≈ 3:1 to protect precision),
+<code class="docutils literal notranslate"><span class="pre">parsimony</span></code> tuned so the Pareto front spans complexity 5–25.</p></li>
+<li><p><strong>Validation:</strong> the discovered score replaces the decision rule and the full pipeline re-runs
+on the optimization set (formula quality is measured by scoreboard F1, never by row-level AUC
+alone), then the standard adoption gate.</p></li>
+</ul>
+</section>
+<section id="target-2-per-line-match-quality">
+<h3>4.2 Target 2 — per-line match quality<a class="headerlink" href="#target-2-per-line-match-quality" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Replaces/augments:</strong> the per-line accept logic inside <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>
+(tolerance window + <code class="docutils literal notranslate"><span class="pre">line_residual_gate</span></code> consensus coherence) — a continuous quality score
+instead of binary gates.</p></li>
+<li><p><strong>Training pairs:</strong> <strong>synthetic corpus only</strong> for labels — the generation recipe knows exactly
+which catalog lines are truly present, giving per-line truth that real datasets cannot
+(element-level truth is too weak). One row per (peak, catalog-line) match candidate:
+|Δλ| (units of tolerance), residual-vs-consensus z, line SNR, observed/expected intensity
+ratio (gA-scaled), isolation distance, blend count in window, NIST accuracy grade (as the
+existing <code class="docutils literal notranslate"><span class="pre">ATOMIC_UNCERTAINTIES</span></code> numeric map in <code class="docutils literal notranslate"><span class="pre">line_selection.py</span></code>), E_upper. Target: match
+is correct (binary). ~10⁴–10⁵ rows from the 288-spectrum corpus.</p></li>
+<li><p><strong>Risk control:</strong> train-on-synthetic/validate-on-real — adoption requires real-dataset
+scoreboard improvement, not synthetic row accuracy (the corpus shares physics with the
+inversion; baseline doc’s warning applies doubly here).</p></li>
+</ul>
+</section>
+<section id="target-3-boltzmann-fit-line-weighting">
+<h3>4.3 Target 3 — Boltzmann-fit line weighting<a class="headerlink" href="#target-3-boltzmann-fit-line-weighting" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Replaces:</strong> the inverse-variance weighting + <code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap=5.0</span></code> clamp +
+<code class="docutils literal notranslate"><span class="pre">aki_uncertainty_weighting</span></code> quadrature in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann.py</span></code>.</p></li>
+<li><p><strong>Training pairs:</strong> indirect target, so build it explicitly: on synthetic spectra (known T),
+compute each line’s leave-one-out influence on |T_fit − T_true|; regress
+w(SNR, A_ki grade, E_k, multiplet flag, self-absorption observable) against ideal influence
+weights. Smaller expected payoff than Targets 1–2 (solve stage is ~10 ms and already decent);
+schedule last, drop if Campaign 1 has already moved <code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap</span></code>.</p></li>
+<li><p><strong>KeplerAgent pattern (imitated):</strong> before each PySR run, a Claude session examines the
+feature table (correlations, partial dependence, symmetry/scale checks) and fixes the
+operator set, feature subset, and dimensional constraints — structure first, regression second.</p></li>
+</ul>
+</section>
+<section id="budget-and-adoption">
+<h3>4.4 Budget and adoption<a class="headerlink" href="#budget-and-adoption" title="Link to this heading"></a></h3>
+<p>PySR runs are cheap: one 16–32-core CPU job, 1–4 h per target (Julia multithreading); GPU
+unnecessary. Total ≪ 100 core-hours including reruns. <strong>Adoption path:</strong> export best-Pareto
+expression via SymPy → transcribe as a pure NumPy function in the owning <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/</span></code>
+module with a provenance docstring (PySR version, run id, dataset-manifest + DB hashes,
+complexity/loss Pareto table, holdout result) → unit tests pinning the formula’s I/O →
+blocklist scan (trivially passes — it is arithmetic) → standard adoption gate → PR. The
+discovered formula is physics-<em>legal</em> by construction; whether it is physics-<em>sensible</em> is a
+human-review question — reviewer must be able to gloss every term (e.g. “residual coherence
+discounts the match count”) or the PR is rejected.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="campaign-3-code-space-evolutionary-code-search">
+<h2>5. Campaign 3 — Code Space (evolutionary code search)<a class="headerlink" href="#campaign-3-code-space-evolutionary-code-search" title="Link to this heading"></a></h2>
+<section id="what-exists-vs-what-is-missing">
+<h3>5.1 What exists vs what is missing<a class="headerlink" href="#what-exists-vs-what-is-missing" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> today is scaffolding: the AST blocklist scanner + <code class="docutils literal notranslate"><span class="pre">assert_benchmark_relevance</span></code>
+(evaluator.py), driver runtime config with fitness weights/overfitting penalty/wallclock cap
+(config.py), and the physics-grounding prompt preamble (prompts.py). <strong>There is no driver
+loop.</strong> Build it as <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/driver.py</span></code> (+ <code class="docutils literal notranslate"><span class="pre">lessons.py</span></code>, <code class="docutils literal notranslate"><span class="pre">archive.py</span></code>) rather than
+adopting MLEvolve (unlicensed, Kaggle-shaped) or LessonL (paper artifact) — but imitate both:</p>
+<ul class="simple">
+<li><p><strong>From MLEvolve:</strong> experience memory — every candidate record (diff, prompt, per-dataset
+deltas, verdict) is retrievable (BM25 over diff+lesson text is enough; no FAISS needed at our
+scale); stagnation detection (no archive improvement for N batches → trigger a structural
+mutation, wired to the existing <code class="docutils literal notranslate"><span class="pre">structural_mutation_cadence=10</span></code>); cross-branch fusion (ask
+the LLM to merge the diffs of two elite candidates from different archive cells).</p></li>
+<li><p><strong>From LessonL:</strong> after each evaluation, solicit a ≤3-sentence lesson conditioned on the
+per-dataset deltas (“loosening comb_min_matches recovered aalto pure-element recall but added
+a Sn FP on csa”); bank lessons in the run dir; select top-k by relevance into the next batch
+prompt. Persist durable ones via <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">remember</span></code>.</p></li>
+</ul>
+</section>
+<section id="scope-sandboxing-provenance">
+<h3>5.2 Scope, sandboxing, provenance<a class="headerlink" href="#scope-sandboxing-provenance" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Evolvable scope (write-allowlist):</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code> and
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code> — the identification stage only. The scoreboard,
+<code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code>, dataset adapters, truth files, and <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> itself are
+<strong>read-only to candidates</strong>; the driver rejects any diff outside the allowlist <em>before</em> the
+AST scan, and <code class="docutils literal notranslate"><span class="pre">assert_benchmark_relevance</span></code> rejects diffs that touch nothing exercised.</p></li>
+<li><p><strong>Candidate = a diff</strong> against a pinned base SHA, applied in a disposable git worktree.
+Gate sequence per candidate: path allowlist → AST blocklist (<code class="docutils literal notranslate"><span class="pre">assert_physics_only</span></code>) → ruff
+TID251 + black + mypy → targeted unit subset (<code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/inversion/identify</span> <span class="pre">-q</span> <span class="pre">--timeout=120</span></code>) → scoreboard evaluation. Any gate failure ⇒ fitness −inf with the failure
+banked as a lesson.</p></li>
+<li><p><strong>Sandboxing:</strong> evaluation runs as a SLURM job in the worktree with: subprocess isolation,
+no network expectation (atomic DB is a local read-only file; open it read-only), no
+credentials in env, <code class="docutils literal notranslate"><span class="pre">--time</span></code> hard limit, per-spectrum timeout, output confined to the job
+dir. The AST scan + dynamic-import ban (already in evaluator.py) blocks import smuggling;
+SLURM cgroups bound CPU/mem.</p></li>
+<li><p><strong>Provenance:</strong> candidate id = sha256(diff); record {parent id(s), batch, prompt hash, model
+id, diff, gate results, full scoreboard JSON, lesson} under
+<code class="docutils literal notranslate"><span class="pre">output/evolution/c3/&lt;run-id&gt;/candidates/&lt;id&gt;.json</span></code>. Elites archived in the (recall,
+precision) MAP-Elites grid; the archive is the unit of checkpointing.</p></li>
+<li><p><strong>LLM:</strong> Claude (pin workflow agents to the latest Opus per project memory) generating 16
+perturbations/batch (<code class="docutils literal notranslate"><span class="pre">perturbations_per_batch</span></code>), prompts composed from
+<code class="docutils literal notranslate"><span class="pre">prompts.render_preamble()</span></code> + target-function source + top lessons + archive summary.</p></li>
+</ul>
+</section>
+<section id="budget-and-review-gates">
+<h3>5.3 Budget and review gates<a class="headerlink" href="#budget-and-review-gates" title="Link to this heading"></a></h3>
+<p>Per candidate ≈ gate suite (~2 min) + scoreboard eval (~10–15 core-min) ⇒ a 16-candidate batch
+≈ 4 core-hours; ~10 batches/day sustainable. <strong>Run cap: <code class="docutils literal notranslate"><span class="pre">max_wallclock_hours=72</span></code> per run
+(existing config), program cap 1,000 core-hours.</strong> Campaign 3 starts only after Campaigns 1–2
+plateau — code search must beat the <em>tuned</em> baseline, otherwise it rediscovers parameter
+changes expensively.</p>
+<p><strong>Review gate before any merge (hard):</strong> the standard adoption gate (Section 2.5) <strong>plus</strong>
+human code review of the diff for physics sense, <strong>plus</strong> the PR must restate candidate lineage
+and link the run artifacts. No auto-merge under any circumstance; the PR #229 regression
+(−0.041 F1 from a plausible-looking “paper-faithful” change) is the standing reminder that
+plausible diffs lose to the benchmark.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="infrastructure">
+<h2>6. Infrastructure<a class="headerlink" href="#infrastructure" title="Link to this heading"></a></h2>
+<section id="slurm-templates-reuse-cflibs-hpc-slurm-py">
+<h3>6.1 SLURM templates (reuse <code class="docutils literal notranslate"><span class="pre">cflibs/hpc/slurm.py</span></code>)<a class="headerlink" href="#slurm-templates-reuse-cflibs-hpc-slurm-py" title="Link to this heading"></a></h3>
+<p>Driver (one per campaign run):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+<span class="c1">#SBATCH --job-name=cflibs-evolve-driver-&lt;run-id&gt;</span>
+<span class="c1">#SBATCH --cpus-per-task=2 --mem=8G --time=72:00:00</span>
+<span class="c1"># NO --nodelist — let SLURM schedule (cluster is shared with other agents)</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu
+<span class="nb">export</span><span class="w"> </span><span class="nv">JAX_COMPILATION_CACHE_DIR</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$HOME</span><span class="s2">/.cache/jax-cflibs-evolve&quot;</span><span class="w">   </span><span class="c1"># PRIVATE cache</span>
+python<span class="w"> </span>-m<span class="w"> </span>cflibs.evolution.driver<span class="w"> </span>--campaign<span class="w"> </span>c1<span class="w"> </span>--run-dir<span class="w"> </span>output/evolution/c1/&lt;run-id&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--manifest<span class="w"> </span>docs/benchmarks/manifests/optset-v1.json<span class="w"> </span>--budget-core-hours<span class="w"> </span><span class="m">600</span>
+</pre></div>
+</div>
+<p>Eval worker array (submitted by the driver each generation):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+<span class="c1">#SBATCH --job-name=cflibs-evolve-eval-&lt;run-id&gt;</span>
+<span class="c1">#SBATCH --array=0-15%16 --cpus-per-task=8 --mem=16G --time=00:45:00</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span><span class="nv">OMP_NUM_THREADS</span><span class="o">=</span><span class="m">1</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">JAX_COMPILATION_CACHE_DIR</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$SLURM_TMPDIR</span><span class="s2">/jax-cache&quot;</span><span class="w">          </span><span class="c1"># job-private</span>
+python<span class="w"> </span>-m<span class="w"> </span>cflibs.evolution.eval_worker<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--candidate<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUN_DIR</span><span class="s2">/gen</span><span class="nv">$GEN</span><span class="s2">/cand_</span><span class="nv">$SLURM_ARRAY_TASK_ID</span><span class="s2">.json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--manifest<span class="w"> </span>docs/benchmarks/manifests/optset-v1.json<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--db<span class="w"> </span>ASD_da/libs_production.db<span class="w"> </span>--out<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUN_DIR</span><span class="s2">/gen</span><span class="nv">$GEN</span><span class="s2">/result_</span><span class="nv">$SLURM_ARRAY_TASK_ID</span><span class="s2">.json&quot;</span>
+</pre></div>
+</div>
+<p>Campaign 1 workers run the pinned-code scoreboard with a candidate <em>config</em>; Campaign 3 workers
+first materialize the candidate worktree, run the gate suite, then the scoreboard. The optional
+QDax cached-output mode is a single-GPU job (<code class="docutils literal notranslate"><span class="pre">--gres=gpu:1</span></code>, no node pinning).</p>
+</section>
+<section id="result-store">
+<h3>6.2 Result store<a class="headerlink" href="#result-store" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">output/evolution/&lt;campaign&gt;/&lt;run-id&gt;/</span></code> (the repo’s existing JSON-artifact convention):
+<code class="docutils literal notranslate"><span class="pre">run.json</span></code> (manifest: git SHA, <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> sha256, dataset-manifest hashes,
+seed, optimizer config, env lock hash), <code class="docutils literal notranslate"><span class="pre">ledger.json</span></code> (core-hours, holdout-query count),
+<code class="docutils literal notranslate"><span class="pre">gen*/cand_*.json</span></code> + <code class="docutils literal notranslate"><span class="pre">result_*.json</span></code> (full scoreboard output via the existing
+<code class="docutils literal notranslate"><span class="pre">write_artifacts</span></code>), <code class="docutils literal notranslate"><span class="pre">archive.json</span></code>, <code class="docutils literal notranslate"><span class="pre">lessons.jsonl</span></code>, <code class="docutils literal notranslate"><span class="pre">incumbent.json</span></code>. Adoption-relevant
+summaries get committed to <code class="docutils literal notranslate"><span class="pre">docs/benchmarks/</span></code> next to the baseline; raw run dirs stay
+uncommitted.</p>
+</section>
+<section id="reproducibility">
+<h3>6.3 Reproducibility<a class="headerlink" href="#reproducibility" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Frozen dataset manifests</strong> (spectrum ids + file sha256 per split) committed under
+<code class="docutils literal notranslate"><span class="pre">docs/benchmarks/manifests/</span></code>; the eval worker verifies hashes before running.</p></li>
+<li><p><strong>Frozen DB:</strong> record and verify the sqlite file sha256 every run; any DB regeneration
+obsoletes all in-flight runs (datagen is hours-long and changes line lists).</p></li>
+<li><p><strong>Seeds:</strong> scoreboard sampling seed fixed (20260610); optimizer seeds recorded; per-generation
+synthetic-subsample seed derived as <code class="docutils literal notranslate"><span class="pre">seed</span> <span class="pre">+</span> <span class="pre">generation</span></code>.</p></li>
+<li><p><strong>Environment:</strong> <code class="docutils literal notranslate"><span class="pre">uv</span></code> lockfile hash in <code class="docutils literal notranslate"><span class="pre">run.json</span></code>; JAX x64 CPU (deterministic); per-spectrum
+independence means worker scheduling cannot change scores.</p></li>
+<li><p><strong>Re-derivability:</strong> <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">cflibs.evolution.replay</span> <span class="pre">&lt;run-id&gt;</span> <span class="pre">&lt;candidate-id&gt;</span></code> re-runs one
+candidate end-to-end from the manifest.</p></li>
+</ul>
+</section>
+<section id="kill-switch-and-budget-controls">
+<h3>6.4 Kill-switch and budget controls<a class="headerlink" href="#kill-switch-and-budget-controls" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">touch</span> <span class="pre">$RUN_DIR/STOP</span></code> — driver checks between generations, cancels its arrays
+(<code class="docutils literal notranslate"><span class="pre">scancel</span> <span class="pre">--name=cflibs-evolve-*-&lt;run-id&gt;</span></code>), checkpoints, exits 0.</p></li>
+<li><p>Ledger enforcement: driver refuses to submit a generation that would exceed
+<code class="docutils literal notranslate"><span class="pre">--budget-core-hours</span></code>; <code class="docutils literal notranslate"><span class="pre">max_wallclock_hours</span></code> (config.py) bounds the driver job itself.</p></li>
+<li><p>Array throttling (<code class="docutils literal notranslate"><span class="pre">%16</span></code>) keeps the program from monopolizing the shared vasp-01/02/03 nodes;
+generation-level checkpointing makes preemption lossless.</p></li>
+<li><p>Holdout-query counter in the ledger; exceeding the per-phase quota locks the holdout gate
+until a human resets it (this is the overfitting kill-switch, not just a courtesy).</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="risks-and-mitigations">
+<h2>7. Risks and Mitigations<a class="headerlink" href="#risks-and-mitigations" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Risk</p></th>
+<th class="head"><p>Concrete failure mode</p></th>
+<th class="head"><p>Mitigation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Overfitting to small real datasets</strong></p></td>
+<td><p>BHVO-2 has 4 spectra; aalto 74. A 45-knob search can memorize them; CodeEvolve Wave 1’s 0.914 was exactly such a strong-local-fit on 74 spectra.</p></td>
+<td><p>BHVO-2 entirely in holdout; target-identity splits; paired bootstrap + minimum-improvement thresholds; cross-dataset variance penalty (0.5, already in config.py); holdout-query quota with ledger lock; vault dataset (gibbons2024) untouched until final report.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Fitness gaming — presence threshold</strong></p></td>
+<td><p>Candidates push elements just over <code class="docutils literal notranslate"><span class="pre">PRESENCE_EPS_MASSFRAC=5e-3</span></code> (or call almost nothing to keep precision 1.0).</p></td>
+<td><p>Scoring constants and confounder set live in scoreboard code that candidates cannot touch (path allowlist); micro-F1 punishes recall collapse; FP death penalty punishes spray; diagnostics log the solved-fraction histogram near 5e-3 — a pile-up at the threshold flags gaming for human review.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Fitness gaming — window-edge riding</strong></p></td>
+<td><p>ye6t showed match-count-maximizing objectives ride tolerance-window edges (Al I 892.356 admitted at exactly +0.05 nm).</p></td>
+<td><p>Per-line residual-distribution diagnostics (fraction of matches in the outer 10% of the tolerance window) recorded per candidate; adoption review rejects edge-riders; <code class="docutils literal notranslate"><span class="pre">line_residual_gate</span></code> stays in the search space so the optimizer can tighten, not only loosen.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Gaming the failure rule</strong></p></td>
+<td><p>“Failed spectra call nothing present” — a candidate that <em>fails</em> on hard spectra avoids FPs on them.</p></td>
+<td><p>Death penalty on failure-count increase (Section 2.2); failures already count all truth elements as FN, so failing is recall-expensive too.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Synthetic-real gap</strong></p></td>
+<td><p>Synthetic corpus shares the forward model; F1 gains there may be inversion-flattering artifacts.</p></td>
+<td><p>Synthetic weight 0.5 and relative-tracking-only policy (already stated in the baseline doc); adoption evidence must include real-dataset improvement; Campaign 2 Target 2 trains on synthetic but is validated on real scoreboard deltas.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Eval nondeterminism</strong></p></td>
+<td><p>Wall-time noise on shared nodes; JAX cache cold-starts; rng drift.</p></td>
+<td><p>Fixed seeds + frozen manifests; runtime uses medians and only penalizes beyond budget (and the adoption runtime gate uses a dedicated quiet re-run); incumbent re-evaluated each generation — if its fitness moves beyond bootstrap noise, the generation is voided and the environment inspected; <code class="docutils literal notranslate"><span class="pre">OMP_NUM_THREADS=1</span></code>, x64 CPU JAX.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Cluster etiquette</strong></p></td>
+<td><p>Starving the shared vasp cluster or other agents’ jobs; shared-cache corruption.</p></td>
+<td><p>No <code class="docutils literal notranslate"><span class="pre">--nodelist</span></code>; array throttling <code class="docutils literal notranslate"><span class="pre">%16</span></code>; CPU-only requests for Campaigns 1–3 (GPUs only for the optional QDax cached mode); private JAX compilation caches per job/user; budget ledger; STOP-file kill-switch; generation checkpoints make preemption free.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>LLM candidate quality / cost (C3)</strong></p></td>
+<td><p>Wasted batches on syntactically broken or irrelevant diffs.</p></td>
+<td><p>Cheap gates first (path allowlist → AST → lint → unit subset) so broken candidates cost seconds; lesson bank (LessonL) recycles failure information; relevance gate (<code class="docutils literal notranslate"><span class="pre">assert_benchmark_relevance</span></code>) blocks zero-effect diffs; perturbation batching with <code class="docutils literal notranslate"><span class="pre">perturbation_timeout_s</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Plausible-but-worse code merges (C3)</strong></p></td>
+<td><p>PR #229: a justified, paper-faithful change regressed F1 −0.041.</p></td>
+<td><p>Benchmark-gated adoption is mandatory for every identifier change (institutional memory); no auto-merge; human physics review with the lineage + scoreboard tables in the PR body.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Scoreboard branch churn</strong></p></td>
+<td><p>The fitness function is being built on <code class="docutils literal notranslate"><span class="pre">overhaul/w4-scoreboard</span></code> right now; datasets land on <code class="docutils literal notranslate"><span class="pre">overhaul/w4-datasets</span></code>.</p></td>
+<td><p>The program pins a base SHA per run (in <code class="docutils literal notranslate"><span class="pre">run.json</span></code>); campaigns start only after w4-scoreboard + w4-datasets merge to <code class="docutils literal notranslate"><span class="pre">dev</span></code>; the committed baseline doc is regenerated at that SHA before generation 0.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="recommended-execution-order">
+<h2>8. Recommended Execution Order<a class="headerlink" href="#recommended-execution-order" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Now (blocked only on w4 merge):</strong> freeze split manifests; plumb the Section 3.1-B
+<code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> knobs into <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code>; implement the composite
+fitness + bootstrap as a thin wrapper over <code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code>.</p></li>
+<li><p><strong>Campaign 1 phase A (first run, highest expected value):</strong> Optuna TPE, 800 trials over the
+~45 knobs, optimization set, 16-way SLURM arrays — the recall-vs-precision gates have never
+been jointly tuned end-to-end, the failures cluster on detection gates, and Wave 1 showed
+threshold tuning alone is worth tens of F1 points in a weaker setting. Then phase B CMA-ES
+refinement; holdout-gate the top-5; ship as preset values.</p></li>
+<li><p><strong>Campaign 2:</strong> instrument diagnostics → feature tables; PySR Target 1
+(presence score), then Target 2 (line quality); Target 3 only if Campaign 1 left T-error on
+the table.</p></li>
+<li><p><strong>Campaign 3:</strong> build <code class="docutils literal notranslate"><span class="pre">driver.py</span></code>/<code class="docutils literal notranslate"><span class="pre">lessons.py</span></code>/<code class="docutils literal notranslate"><span class="pre">archive.py</span></code> on the existing scaffolding;
+evolve <code class="docutils literal notranslate"><span class="pre">identify/</span></code> against the post-C1/C2 incumbent; 72 h runs, human-reviewed PRs only.</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

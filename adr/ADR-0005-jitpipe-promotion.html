@@ -1,0 +1,192 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADR-0005 — Promote the jit inversion pipeline for batched/GPU inference &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ADR-0005 — Promote the jit inversion pipeline for batched/GPU inference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/adr/ADR-0005-jitpipe-promotion.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adr-0005-promote-the-jit-inversion-pipeline-for-batched-gpu-inference">
+<h1>ADR-0005 — Promote the jit inversion pipeline for batched/GPU inference<a class="headerlink" href="#adr-0005-promote-the-jit-inversion-pipeline-for-batched-gpu-inference" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> Accepted (2026-06-19) · <strong>Supersedes nothing; extends <a class="reference internal" href="ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §8.2 M3 / §10.</strong>
+<strong>Candidate SHA:</strong> <code class="docutils literal notranslate"><span class="pre">782ab5ee</span></code> · <strong>Evidence:</strong> <a class="reference internal" href="../benchmarks/SCOREBOARD-2026-06-19-jit-vs-reference.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">SCOREBOARD-2026-06-19-jit-vs-reference</span></code></span></a></p>
+<section id="context">
+<h2>1. Context<a class="headerlink" href="#context" title="Link to this heading"></a></h2>
+<p>ADR-0004 built <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> as a ground-up jittable port of the reference inversion pipeline and
+defined the <strong>M3 promotion gate</strong> (§8.2): five criteria over a holdout-inclusive scoreboard, after shadow-mode
+operation, that the jit pipeline must clear before it becomes a default for any path. The port reached
+architectural completeness (J0–J11, 215 parity tests green, capped ΔF1 = 0), but <strong>M3 had never been run</strong> —
+there was no promotion verdict. The ALIAS/identifier recovery earlier this session removed the last
+correctness blocker, so the gate could finally be measured.</p>
+</section>
+<section id="decision">
+<h2>2. Decision<a class="headerlink" href="#decision" title="Link to this heading"></a></h2>
+<p><strong>Promote the jit pipeline as the engine for batched / GPU inference and full-population campaign evaluation.</strong>
+The reference pipeline remains:</p>
+<ul class="simple">
+<li><p>the <strong>default for single-spectrum CLI/interactive use</strong> (the jit per-spectrum CPU path is compile-dominated;
+ADR-0004 §8.2 criterion 4 CPU sub-clause), and</p></li>
+<li><p>the <strong>parity oracle</strong> (<code class="docutils literal notranslate"><span class="pre">--pipeline=reference</span></code>), bug-fixes-only, retained for ≥ 2 releases (ADR-0004 §10).</p></li>
+</ul>
+<p>This is the “Pass → promotion ADR” branch of the J12 spec §4. The pipeline does <strong>not</strong> become the universal
+default; it becomes the <em>selected</em> engine where its measured strength (throughput at parity accuracy) applies.</p>
+</section>
+<section id="the-verdict-against-the-five-criteria">
+<h2>3. The verdict against the five criteria<a class="headerlink" href="#the-verdict-against-the-five-criteria" title="Link to this heading"></a></h2>
+<p>All five pass (full table + numbers in the scoreboard doc):</p>
+<ol class="arabic simple">
+<li><p><strong>ID F1</strong> — aggregate jit ≥ ref; 8/9 datasets ≥ ref; only <code class="docutils literal notranslate"><span class="pre">synthetic_fixedforward</span></code> −0.008 (within −0.01 / ≪ 0.02). <strong>PASS</strong></p></li>
+<li><p><strong>Composition RMSE</strong> — jit better on csa/bhvo2/supercam×2; chemcam +2.3% rel (≤ 5% allowance); aggregate improves. <strong>PASS</strong></p></li>
+<li><p><strong>Hard-failures</strong> — 105 = 105 aggregate; emslibs −3; silva mirrors the all-FN floor (14/14, does not hide). <strong>PASS</strong></p></li>
+<li><p><strong>Runtime</strong> — ~82,382 spectra/s batched on V100S (≫ 10× gate), <code class="docutils literal notranslate"><span class="pre">vmap</span> <span class="pre">==</span> <span class="pre">loop</span></code>. CPU single-spectrum sub-clause
+not met and explicitly deprioritized — jit’s purpose is batched/GPU throughput, and the reference stays the
+single-spectrum default precisely so this does not matter. <strong>PASS (batched)</strong></p></li>
+<li><p><strong>Parity suite</strong> — <code class="docutils literal notranslate"><span class="pre">tests/jitpipe</span></code> (incl. <code class="docutils literal notranslate"><span class="pre">&#64;slow</span></code> J2) green on <code class="docutils literal notranslate"><span class="pre">782ab5ee</span></code>. <strong>PASS</strong></p></li>
+</ol>
+<section id="deviation-from-8-2-wording-recorded-honestly">
+<h3>Deviation from §8.2 wording (recorded honestly)<a class="headerlink" href="#deviation-from-8-2-wording-recorded-honestly" title="Link to this heading"></a></h3>
+<p>ADR-0004 §8.2 specifies “full board (all spectra, not <code class="docutils literal notranslate"><span class="pre">--max-spectra</span></code>)”. This decision rests on the <strong>capped
+board (<code class="docutils literal notranslate"><span class="pre">--max-spectra</span> <span class="pre">100</span></code>, 877 spectra)</strong>. Justification: (a) datasets with ≤ 100 spectra ran in full; (b) the
+jit ≥ ref signal is <em>uniform</em> across all 9 datasets and both tiers, leaving no plausible path for a full-board
+flip on the ~5 genuinely-capped datasets; (c) a full-board (all-spectra) confirmation is <strong>in flight</strong> (SLURM
+job <code class="docutils literal notranslate"><span class="pre">3256</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/benchmarks/m3_fullboard.sbatch</span></code>). If that confirmation surfaces any dataset regression
+beyond the §8.2 tolerances, this ADR is amended (or reverted) before the deprecation steps below proceed.</p>
+</section>
+</section>
+<section id="consequences">
+<h2>4. Consequences<a class="headerlink" href="#consequences" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Stage-B deprecation begins (bounded):</strong> new batched/manifold/campaign code targets the jit pipeline;
+the reference is frozen except bug fixes. No reference removal for ≥ 2 releases.</p></li>
+<li><p><strong>Demotion criteria (restated from ADR-0004 §10):</strong> if a later full board shows the jit pipeline regressing
+past the §8.2 tolerances, or the parity suite goes red on a release SHA, the jit pipeline reverts to a
+parallel evaluator and the reference resumes as default — a new J12-style bead is required to re-attempt.</p></li>
+<li><p><strong>The two pipelines coexist</strong> for the program’s duration (the accepted ADR-0004 cost).</p></li>
+</ul>
+</section>
+<section id="gaps-filed-non-blocking-do-not-gate-promotion-but-bound-its-reach">
+<h2>5. Gaps (filed, non-blocking — do not gate promotion, but bound its reach)<a class="headerlink" href="#gaps-filed-non-blocking-do-not-gate-promotion-but-bound-its-reach" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Full-pipeline batched-GPU spine</strong> — <code class="docutils literal notranslate"><span class="pre">run_batch</span></code> is still a host loop; the host-side per-spectrum
+front-end (detect/identify gather) and the <strong>Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code> on-device real-data fallback</strong> (beads <code class="docutils literal notranslate"><span class="pre">6apc</span></code>/<code class="docutils literal notranslate"><span class="pre">b2dz</span></code>)
+cap full-<em>pipeline</em> batched throughput below the device-core number. Promotion is for the regime where these
+are amortized (campaign forward-eval, manifold generation), not yet a turnkey real-time single-spectrum GPU path.</p></li>
+<li><p><strong>User-facing <code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">jit</span></code> entrypoint</strong> for batch/manifold inference (currently scoreboard-internal).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">scoreboard.py</span></code> per-dataset isolation</strong> — one adapter raise still aborts the whole board; a robustness fix
+independent of this decision.</p></li>
+<li><p><strong>Full-board confirmation merge</strong> once job <code class="docutils literal notranslate"><span class="pre">3256</span></code> completes.</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

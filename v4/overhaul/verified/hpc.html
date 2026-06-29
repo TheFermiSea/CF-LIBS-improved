@@ -1,0 +1,323 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HPC Package — Adversarial Verification Report &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">HPC Package — Adversarial Verification Report</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/hpc.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="hpc-package-adversarial-verification-report">
+<h1>HPC Package — Adversarial Verification Report<a class="headerlink" href="#hpc-package-adversarial-verification-report" title="Link to this heading"></a></h1>
+<p><strong>Files verified:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/hpc/distributed_mcmc.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/hpc/gpu_config.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/hpc/slurm.py</span></code><br />
+<strong>Tests verified:</strong> <code class="docutils literal notranslate"><span class="pre">tests/test_distributed_mcmc.py</span></code><br />
+<strong>Literature:</strong> <code class="docutils literal notranslate"><span class="pre">bayesian-oe.md</span></code></p>
+<hr class="docutils" />
+<section id="finding-1-nuts-uses-init-to-uniform-when-literature-mandates-warm-start-from-map">
+<h2>Finding 1 — NUTS uses <code class="docutils literal notranslate"><span class="pre">init_to_uniform</span></code> when literature mandates warm-start from MAP<a class="headerlink" href="#finding-1-nuts-uses-init-to-uniform-when-literature-mandates-warm-start-from-map" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: HIGH</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:187,205</span></code>: <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">numpyro.infer</span> <span class="pre">import</span> <span class="pre">MCMC,</span> <span class="pre">NUTS,</span> <span class="pre">init_to_uniform</span></code> and <code class="docutils literal notranslate"><span class="pre">init_strategy=init_to_uniform(radius=0.5)</span></code>. Cross-checked against <code class="docutils literal notranslate"><span class="pre">bayesian-oe.md</span> <span class="pre">§NUTS</span> <span class="pre">/</span> <span class="pre">HMC</span> <span class="pre">Configuration</span></code>: “use <code class="docutils literal notranslate"><span class="pre">init_to_value</span></code> with MAP estimate (from classical CF-LIBS solver or OE iterate) as starting point to speed up warm-up convergence.” The same pattern appears in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/samplers.py:init_to_uniform(radius=0.5)</span></code> and <code class="docutils literal notranslate"><span class="pre">two_zone.py:init_to_uniform(radius=0.5)</span></code> — this is a systemic gap across all three MCMC call sites. The CF-LIBS posterior is exponential in T (Boltzmann factor), strongly non-Gaussian; <code class="docutils literal notranslate"><span class="pre">init_to_uniform</span></code> with radius=0.5 on the unconstrained-space uniform distribution can place the chain far from posterior mass. The census finding is correct and the severity is warranted.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-global-rank-used-as-gpu-device-index-breaks-multi-node-multi-gpu-topology">
+<h2>Finding 2 — Global rank used as GPU device index, breaks multi-node multi-GPU topology<a class="headerlink" href="#finding-2-global-rank-used-as-gpu-device-index-breaks-multi-node-multi-gpu-topology" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: HIGH</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:182–183</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">local_rank</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">Get_rank</span><span class="p">())</span>
+<span class="n">configure_gpu</span><span class="p">(</span><span class="n">device_id</span><span class="o">=</span><span class="n">local_rank</span><span class="p">,</span> <span class="n">enable_x64</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">self.comm.Get_rank()</span></code> is <code class="docutils literal notranslate"><span class="pre">MPI.COMM_WORLD.Get_rank()</span></code> — this returns the <strong>global</strong> rank, not the local (per-node) rank. The variable is misleadingly named <code class="docutils literal notranslate"><span class="pre">local_rank</span></code>. On a 2-node × 4-GPU cluster, global ranks 4–7 would pass <code class="docutils literal notranslate"><span class="pre">device_id=4..7</span></code> to <code class="docutils literal notranslate"><span class="pre">configure_gpu</span></code>, which sets <code class="docutils literal notranslate"><span class="pre">CUDA_VISIBLE_DEVICES=4..7</span></code> — indices that do not exist on the local node (0–3 only). <code class="docutils literal notranslate"><span class="pre">pin_to_device()</span></code> at <code class="docutils literal notranslate"><span class="pre">gpu_config.py:125–155</span></code> is the correct function that already reads <code class="docutils literal notranslate"><span class="pre">SLURM_GPUS_ON_NODE</span></code> and does <code class="docutils literal notranslate"><span class="pre">device_id</span> <span class="pre">=</span> <span class="pre">local_rank</span> <span class="pre">%</span> <span class="pre">int(gpus_on_node)</span></code>, but <code class="docutils literal notranslate"><span class="pre">run()</span></code> bypasses it by importing and calling <code class="docutils literal notranslate"><span class="pre">configure_gpu</span></code> directly. The fix is one line: replace <code class="docutils literal notranslate"><span class="pre">configure_gpu(device_id=local_rank,</span> <span class="pre">enable_x64=True)</span></code> with <code class="docutils literal notranslate"><span class="pre">pin_to_device(local_rank)</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-3-r-hat-ess-convergence-never-flagged-or-gated">
+<h2>Finding 3 — R-hat / ESS convergence never flagged or gated<a class="headerlink" href="#finding-3-r-hat-ess-convergence-never-flagged-or-gated" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:247–263</span></code>: <code class="docutils literal notranslate"><span class="pre">r_hat,</span> <span class="pre">ess</span> <span class="pre">=</span> <span class="pre">self._compute_cross_chain_diagnostics(...)</span></code> followed immediately by constructing <code class="docutils literal notranslate"><span class="pre">DistributedMCMCResult(r_hat=r_hat,</span> <span class="pre">ess=ess,</span> <span class="pre">...)</span></code> with no threshold check and no <code class="docutils literal notranslate"><span class="pre">converged</span></code> flag. <code class="docutils literal notranslate"><span class="pre">bayesian-oe.md</span> <span class="pre">§2.7</span></code> specifies: “R̂ &gt; 1.05 or ESS &lt; 50 → convergence failure; do NOT report posteriors from unconverged chains.” The computed diagnostics are stored in the result but callers have no machine-readable way to detect convergence failure — they must manually inspect <code class="docutils literal notranslate"><span class="pre">result.r_hat</span></code> values. The severity is MEDIUM (not HIGH) since the data is present; it just isn’t gated.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-4-inline-python-heredoc-in-sbatch-script-is-a-fragile-dual-code-path">
+<h2>Finding 4 — Inline Python heredoc in SBATCH script is a fragile dual code path<a class="headerlink" href="#finding-4-inline-python-heredoc-in-sbatch-script-is-a-fragile-dual-code-path" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE (with one correction)</strong><br />
+<strong>Corrected severity: HIGH</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">slurm.py:652–672</span></code>: The <code class="docutils literal notranslate"><span class="pre">generate_distributed_mcmc_script</span></code> function produces a multi-line <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-c</span> <span class="pre">&quot;...&quot;</span></code> block by joining list entries with <code class="docutils literal notranslate"><span class="pre">&quot;\n&quot;</span></code>. The census claimed the <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-c</span> <span class="pre">&quot;...&quot;</span></code> syntax is “not how <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-c</span></code> works” — <strong>this claim is partially wrong</strong>: bash supports multi-line double-quoted strings, so the generated script is syntactically valid bash. However, the core finding is correct and the severity is warranted for these reasons: (1) The import path <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.bayesian</span> <span class="pre">import</span> <span class="pre">BayesianForwardModel,</span> <span class="pre">bayesian_model</span></code> is hardcoded as a string literal — any refactor (which already happened per CLAUDE.md: “old flat module paths are gone”) silently breaks generated scripts that have already been written to disk. (2) The module docstring (<code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:13–14</span></code>) advertises <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">cflibs.hpc.distributed_mcmc</span> <span class="pre">--db-path</span> <span class="pre">...</span></code> as the usage pattern, but there is no <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">__name__</span> <span class="pre">==</span> <span class="pre">&quot;__main__&quot;:</span></code> block and no argparse in that file — running it as <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span></code> would silently succeed without doing anything. (3) The <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code> constructor signature is embedded as <code class="docutils literal notranslate"><span class="pre">f&quot;model</span> <span class="pre">=</span> <span class="pre">BayesianForwardModel({db_path_repr},</span> <span class="pre">{elements!r},</span> <span class="pre">({wl_min},</span> <span class="pre">{wl_max}))&quot;</span></code> — this 3-positional-arg call may break if the constructor gains keyword-only arguments. The census severity HIGH is confirmed for the dual code path / brittleness reasons.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-mutable-default-argument-distributedmcmcconfig-in-init">
+<h2>Finding 5 — Mutable default argument <code class="docutils literal notranslate"><span class="pre">DistributedMCMCConfig()</span></code> in <code class="docutils literal notranslate"><span class="pre">__init__</span></code><a class="headerlink" href="#finding-5-mutable-default-argument-distributedmcmcconfig-in-init" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:141</span></code>: <code class="docutils literal notranslate"><span class="pre">config:</span> <span class="pre">DistributedMCMCConfig</span> <span class="pre">=</span> <span class="pre">DistributedMCMCConfig()</span></code>. The <code class="docutils literal notranslate"><span class="pre">DistributedMCMCConfig</span></code> dataclass at lines 58–86 is a plain <code class="docutils literal notranslate"><span class="pre">&#64;dataclass</span></code> (not <code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>), so it is mutable. All callers who pass no <code class="docutils literal notranslate"><span class="pre">config</span></code> argument share the same object. If any caller mutates <code class="docutils literal notranslate"><span class="pre">config</span></code> fields (e.g. <code class="docutils literal notranslate"><span class="pre">sampler.config.num_samples</span> <span class="pre">=</span> <span class="pre">500</span></code>), subsequent default-arg callers see the mutated state. The census finding is correct.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-6-generate-distributed-mcmc-script-duplicates-sbatch-header-logic">
+<h2>Finding 6 — <code class="docutils literal notranslate"><span class="pre">generate_distributed_mcmc_script</span></code> duplicates SBATCH header logic<a class="headerlink" href="#finding-6-generate-distributed-mcmc-script-duplicates-sbatch-header-logic" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">slurm.py:601–616</span></code> vs <code class="docutils literal notranslate"><span class="pre">slurm.py:174–228</span></code>. Both independently build <code class="docutils literal notranslate"><span class="pre">#!/bin/bash</span></code>, <code class="docutils literal notranslate"><span class="pre">#SBATCH</span> <span class="pre">--job-name</span></code>, <code class="docutils literal notranslate"><span class="pre">--partition</span></code>, <code class="docutils literal notranslate"><span class="pre">--ntasks</span></code>, <code class="docutils literal notranslate"><span class="pre">--mem</span></code>, <code class="docutils literal notranslate"><span class="pre">--time</span></code>, <code class="docutils literal notranslate"><span class="pre">--output</span></code>, <code class="docutils literal notranslate"><span class="pre">--error</span></code>, <code class="docutils literal notranslate"><span class="pre">--account</span></code>, <code class="docutils literal notranslate"><span class="pre">--gpus-per-task</span></code>. The standalone <code class="docutils literal notranslate"><span class="pre">generate_distributed_mcmc_script</span></code> omits key features present in <code class="docutils literal notranslate"><span class="pre">SlurmJobManager.generate_sbatch_script</span></code>: <code class="docutils literal notranslate"><span class="pre">--nodes</span></code>, env-var value sanitization via <code class="docutils literal notranslate"><span class="pre">shlex.quote</span></code> (the standalone function does use <code class="docutils literal notranslate"><span class="pre">shlex.quote</span></code> for module names but not for SBATCH values), <code class="docutils literal notranslate"><span class="pre">_validate_sbatch_key</span></code>/<code class="docutils literal notranslate"><span class="pre">_validate_env_key</span></code> checks, and array-job support. The finding is accurate and the severity is correct.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-7-comm-gather-of-dict-of-arrays-o-total-samples-pickle-on-rank-0">
+<h2>Finding 7 — <code class="docutils literal notranslate"><span class="pre">comm.gather</span></code> of dict-of-arrays: O(total samples) pickle on rank 0<a class="headerlink" href="#finding-7-comm-gather-of-dict-of-arrays-o-total-samples-pickle-on-rank-0" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:228</span></code>: <code class="docutils literal notranslate"><span class="pre">all_samples_list</span> <span class="pre">=</span> <span class="pre">self.comm.gather(local_samples,</span> <span class="pre">root=0)</span></code>. <code class="docutils literal notranslate"><span class="pre">local_samples</span></code> is a <code class="docutils literal notranslate"><span class="pre">dict[str,</span> <span class="pre">np.ndarray]</span></code> — <code class="docutils literal notranslate"><span class="pre">mpi4py.gather</span></code> on a Python object uses pickle serialization, not the zero-copy Gatherv path. For 8 ranks × 1 chain × 1000 samples × 15 elements × 8 bytes ≈ 960 KB total, this is not a problem in practice. However at scale (15+ elements, 10000 samples per chain, 32 ranks), pickle overhead and rank-0 peak memory become real constraints. The census assessment is correct as a MEDIUM perf issue but not a correctness bug.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-8-sequential-integer-prng-seeds-should-use-random-split">
+<h2>Finding 8 — Sequential integer PRNG seeds — should use <code class="docutils literal notranslate"><span class="pre">random.split</span></code><a class="headerlink" href="#finding-8-sequential-integer-prng-seeds-should-use-random-split" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:194,218</span></code>: <code class="docutils literal notranslate"><span class="pre">rank_seed</span> <span class="pre">=</span> <span class="pre">cfg.seed_offset</span> <span class="pre">+</span> <span class="pre">self.rank</span></code> followed by <code class="docutils literal notranslate"><span class="pre">rng_key</span> <span class="pre">=</span> <span class="pre">random.PRNGKey(rank_seed)</span></code>. JAX’s Threefry2x32 counter-based PRNG means <code class="docutils literal notranslate"><span class="pre">PRNGKey(0)</span></code> and <code class="docutils literal notranslate"><span class="pre">PRNGKey(1)</span></code> produce very different streams in practice — they are not “correlated” in any statistical sense that matters for MCMC convergence. The JAX PRNG design explicitly allows independent integer seeds for independent jobs. However, the canonical NumPyro/JAX idiom for multi-chain independence is <code class="docutils literal notranslate"><span class="pre">random.split(base_key,</span> <span class="pre">n_ranks)</span></code> — this guarantees cryptographic independence by construction and is the recommended pattern. The finding is real but arguably LOW in practice for typical CF-LIBS usage (≤16 ranks). Confirm MEDIUM as the census states, acknowledging this is a best-practice gap not a correctness failure.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-9-hardcoded-xla-python-client-mem-fraction-0-9-in-generated-script">
+<h2>Finding 9 — Hardcoded <code class="docutils literal notranslate"><span class="pre">XLA_PYTHON_CLIENT_MEM_FRACTION=0.9</span></code> in generated script<a class="headerlink" href="#finding-9-hardcoded-xla-python-client-mem-fraction-0-9-in-generated-script" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: LOW</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">slurm.py:636</span></code>: <code class="docutils literal notranslate"><span class="pre">&quot;export</span> <span class="pre">XLA_PYTHON_CLIENT_MEM_FRACTION=0.9&quot;</span></code> hardcoded. <code class="docutils literal notranslate"><span class="pre">DistributedMCMCConfig</span></code> has no <code class="docutils literal notranslate"><span class="pre">gpu_memory_fraction</span></code> field (confirmed at <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:58–86</span></code>), though <code class="docutils literal notranslate"><span class="pre">configure_gpu()</span></code> at <code class="docutils literal notranslate"><span class="pre">gpu_config.py:44</span></code> accepts <code class="docutils literal notranslate"><span class="pre">memory_fraction:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.9</span></code>. When multiple ranks share a GPU node (e.g., 4 ranks × 1 GPU each with <code class="docutils literal notranslate"><span class="pre">gpus_per_task=0</span></code>), each process requesting 90% of DRAM causes OOM. The census finding and LOW severity are correct.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-10-no-test-for-pin-to-device-modulo-wrap-on-multi-node-topology">
+<h2>Finding 10 — No test for <code class="docutils literal notranslate"><span class="pre">pin_to_device</span></code> modulo-wrap on multi-node topology<a class="headerlink" href="#finding-10-no-test-for-pin-to-device-modulo-wrap-on-multi-node-topology" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: HIGH</strong></p>
+<p>Verified in <code class="docutils literal notranslate"><span class="pre">tests/test_distributed_mcmc.py</span></code>: <code class="docutils literal notranslate"><span class="pre">TestGPUConfig</span></code> only tests <code class="docutils literal notranslate"><span class="pre">configure_gpu</span></code> directly (lines 17–37); no test for <code class="docutils literal notranslate"><span class="pre">pin_to_device</span></code> with any <code class="docutils literal notranslate"><span class="pre">SLURM_GPUS_ON_NODE</span></code> env var, no multi-node topology test. The critical bug in Finding 2 (<code class="docutils literal notranslate"><span class="pre">run()</span></code> calls <code class="docutils literal notranslate"><span class="pre">configure_gpu</span></code> directly instead of <code class="docutils literal notranslate"><span class="pre">pin_to_device</span></code>) would pass all existing tests — confirmed by searching for “pin_to_device” in the test file (zero hits). The census severity HIGH is correct: the test gap directly enables Finding 2 to silently ship.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-11-no-test-for-r-hat-convergence-failure-path">
+<h2>Finding 11 — No test for R-hat convergence failure path<a class="headerlink" href="#finding-11-no-test-for-r-hat-convergence-failure-path" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong></p>
+<p>Verified in <code class="docutils literal notranslate"><span class="pre">tests/test_distributed_mcmc.py::TestDistributedMCMCSamplerMocked.test_merge_results</span></code> (lines 69–110): it checks <code class="docutils literal notranslate"><span class="pre">result.total_chains</span> <span class="pre">==</span> <span class="pre">2</span></code> and sample shape but never checks <code class="docutils literal notranslate"><span class="pre">result.r_hat</span></code> values nor any warning. ArviZ is optional so <code class="docutils literal notranslate"><span class="pre">_compute_cross_chain_diagnostics</span></code> silently returns empty dicts when <code class="docutils literal notranslate"><span class="pre">HAS_ARVIZ=False</span></code>. No test injects deliberately non-converged chains and checks for a warning or failure flag. The census finding is accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="additional-findings-discovered-during-verification">
+<h2>Additional Findings Discovered During Verification<a class="headerlink" href="#additional-findings-discovered-during-verification" title="Link to this heading"></a></h2>
+<section id="new-finding-a-critical-module-docstring-claims-python-m-cflibs-hpc-distributed-mcmc-is-a-working-cli-entry-point-but-no-main-block-exists">
+<h3>NEW Finding A — CRITICAL: Module docstring claims <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">cflibs.hpc.distributed_mcmc</span></code> is a working CLI entry-point, but no <code class="docutils literal notranslate"><span class="pre">__main__</span></code> block exists<a class="headerlink" href="#new-finding-a-critical-module-docstring-claims-python-m-cflibs-hpc-distributed-mcmc-is-a-working-cli-entry-point-but-no-main-block-exists" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:11–14</span></code></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">Usage</span> <span class="p">(</span><span class="n">SLURM</span><span class="p">)::</span>
+
+    <span class="n">srun</span> <span class="o">--</span><span class="n">ntasks</span><span class="o">=</span><span class="mi">4</span> <span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">cflibs</span><span class="o">.</span><span class="n">hpc</span><span class="o">.</span><span class="n">distributed_mcmc</span> \\
+        <span class="o">--</span><span class="n">db</span><span class="o">-</span><span class="n">path</span> <span class="n">atomic</span><span class="o">.</span><span class="n">db</span> <span class="o">--</span><span class="n">elements</span> <span class="n">Fe</span> <span class="n">Cu</span> <span class="o">--</span><span class="n">wl</span><span class="o">-</span><span class="nb">range</span> <span class="mi">200</span> <span class="mi">600</span>
+</pre></div>
+</div>
+<p>The module has <strong>no <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">__name__</span> <span class="pre">==</span> <span class="pre">&quot;__main__&quot;:</span></code> block and no argparse</strong>, confirmed by <code class="docutils literal notranslate"><span class="pre">grep</span> <span class="pre">-n</span> <span class="pre">&quot;__main__\|argparse\|ArgumentParser&quot;</span> <span class="pre">distributed_mcmc.py</span></code> returning zero results. Running <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">cflibs.hpc.distributed_mcmc</span> <span class="pre">--db-path</span> <span class="pre">...</span></code> would silently succeed (importing the module) then exit with code 0, doing nothing. Any user following the documented usage would run a SLURM job that completes immediately with 0 output — this is silent data loss. <strong>Severity: HIGH</strong> (documented, plausible user path leads to silent no-op on a cluster job).</p>
+</section>
+<section id="new-finding-b-medium-model-closure-in-run-captures-model-kwargs-by-value-at-definition-time-but-self-model-kwargs-could-be-mutated-between-init-and-run">
+<h3>NEW Finding B — MEDIUM: <code class="docutils literal notranslate"><span class="pre">model</span></code> closure in <code class="docutils literal notranslate"><span class="pre">run()</span></code> captures <code class="docutils literal notranslate"><span class="pre">model_kwargs</span></code> by value at definition time but <code class="docutils literal notranslate"><span class="pre">self.model_kwargs</span></code> could be mutated between <code class="docutils literal notranslate"><span class="pre">__init__</span></code> and <code class="docutils literal notranslate"><span class="pre">run()</span></code><a class="headerlink" href="#new-finding-b-medium-model-closure-in-run-captures-model-kwargs-by-value-at-definition-time-but-self-model-kwargs-could-be-mutated-between-init-and-run" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:196–200</span></code></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model_kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_kwargs</span>  <span class="c1"># reference copy, not deep copy</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">model</span><span class="p">(</span><span class="n">obs</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">model_fn</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">forward_model</span><span class="p">,</span> <span class="n">obs</span><span class="p">,</span> <span class="o">**</span><span class="n">model_kwargs</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">self.model_kwargs</span></code> is a dict passed as <code class="docutils literal notranslate"><span class="pre">**kwargs</span></code> in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>, stored as <code class="docutils literal notranslate"><span class="pre">self.model_kwargs</span> <span class="pre">=</span> <span class="pre">model_kwargs</span></code> (reference). The closure <code class="docutils literal notranslate"><span class="pre">model_kwargs</span> <span class="pre">=</span> <span class="pre">self.model_kwargs</span></code> takes a reference to the same dict. If the caller modifies <code class="docutils literal notranslate"><span class="pre">sampler.model_kwargs</span></code> between construction and <code class="docutils literal notranslate"><span class="pre">run()</span></code>, the closure sees the mutations. This is a minor aliasing issue — <strong>Severity: LOW</strong> in practice since <code class="docutils literal notranslate"><span class="pre">model_kwargs</span></code> is passed once at construction and the typical usage is immediate <code class="docutils literal notranslate"><span class="pre">.run()</span></code>.</p>
+</section>
+<section id="new-finding-c-medium-partial-bayesianforwardmodel-import-path-is-hardcoded-in-generate-distributed-mcmc-script-references-cflibs-inversion-solve-bayesian-but-the-census-note-in-claude-md-says-old-flat-module-paths-are-gone">
+<h3>NEW Finding C — MEDIUM: Partial BayesianForwardModel import path is hardcoded in <code class="docutils literal notranslate"><span class="pre">generate_distributed_mcmc_script</span></code>, references <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve.bayesian</span></code> but the census note in CLAUDE.md says “old flat module paths are gone”<a class="headerlink" href="#new-finding-c-medium-partial-bayesianforwardmodel-import-path-is-hardcoded-in-generate-distributed-mcmc-script-references-cflibs-inversion-solve-bayesian-but-the-census-note-in-claude-md-says-old-flat-module-paths-are-gone" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">slurm.py:655</span></code></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="s2">&quot;from cflibs.inversion.solve.bayesian import BayesianForwardModel, bayesian_model&quot;</span><span class="p">,</span>
+</pre></div>
+</div>
+<p>Verified that <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/__init__.py</span></code> does export these symbols (they exist). The import path itself is currently valid. However, the deeper concern in Finding 4 — that this string is embedded in a shell script and never validated at generation time — remains correct. The census overstated the “old flat paths are gone” issue for this specific import (it is the canonical sub-package path), but the fragility is still real for future refactors. This subsumes into Finding 4.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary-table">
+<h2>Summary Table<a class="headerlink" href="#summary-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Title</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Corrected Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>NUTS cold-start <code class="docutils literal notranslate"><span class="pre">init_to_uniform</span></code> — wrong for exponential posterior</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Global MPI rank used as GPU device ID — breaks multi-node topology</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>R-hat / ESS convergence never flagged or gated</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Inline Python heredoc in SBATCH script = fragile dual code path (census overstated bash syntax issue; core finding valid)</p></td>
+<td><p>TRUE (partial)</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Mutable default arg <code class="docutils literal notranslate"><span class="pre">DistributedMCMCConfig()</span></code> in <code class="docutils literal notranslate"><span class="pre">__init__</span></code></p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Duplicate SBATCH header logic in <code class="docutils literal notranslate"><span class="pre">generate_distributed_mcmc_script</span></code></p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">comm.gather</span></code> pickle on rank 0 — O(total samples) memory</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Sequential integer PRNG seeds — should use <code class="docutils literal notranslate"><span class="pre">random.split</span></code></p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Hardcoded <code class="docutils literal notranslate"><span class="pre">XLA_PYTHON_CLIENT_MEM_FRACTION=0.9</span></code></p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>No test for <code class="docutils literal notranslate"><span class="pre">pin_to_device</span></code> modulo-wrap</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>No test for R-hat convergence failure path</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>A</p></td>
+<td><p>(NEW) <code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py</span></code> docstring advertises <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span></code> CLI that doesn’t exist</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-even"><td><p>B</p></td>
+<td><p>(NEW) <code class="docutils literal notranslate"><span class="pre">model_kwargs</span></code> captured by reference in closure</p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>No false positives found. All 11 census findings are confirmed true. One new HIGH finding added (Finding A).</strong></p>
+<p><strong>Highest confirmed severity: HIGH</strong> (Findings 1, 2, 4, 10, A)</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

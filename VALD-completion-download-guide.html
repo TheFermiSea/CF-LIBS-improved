@@ -1,0 +1,422 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Completing the VALD Atomic Database: Remaining Downloads &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Completing the VALD Atomic Database: Remaining Downloads</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/VALD-completion-download-guide.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="completing-the-vald-atomic-database-remaining-downloads">
+<h1>Completing the VALD Atomic Database: Remaining Downloads<a class="headerlink" href="#completing-the-vald-atomic-database-remaining-downloads" title="Link to this heading"></a></h1>
+<p>This guide takes the CF-LIBS VALD line database from its current 6 partial slices to <strong>complete, contiguous 100–1000 nm coverage</strong>. It tells you exactly what to request from VALD3, with what settings, how to name the files, and how to ingest the result.</p>
+<hr class="docutils" />
+<section id="status">
+<h2>1. Status<a class="headerlink" href="#status" title="Link to this heading"></a></h2>
+<p><strong>Already downloaded</strong> (6 slices in <code class="docutils literal notranslate"><span class="pre">data/vald/</span></code>, keep them all):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Raw transitions</p></th>
+<th class="head"><p>WL range (nm)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vald3_extract-all_100-154nm</span></code></p></td>
+<td><p>116,551</p></td>
+<td><p>100.00–154.42</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">vald3_extract-all_154-210nm</span></code></p></td>
+<td><p>125,437</p></td>
+<td><p>154.40–209.89</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vald3_extract-all_220-270nm</span></code></p></td>
+<td><p>137,609</p></td>
+<td><p>220.00–269.56</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">vald3_extract-all_300-308nm</span></code></p></td>
+<td><p>15,743</p></td>
+<td><p>300.00–307.67</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vald3_extract-all_400-402nm</span></code></p></td>
+<td><p>4,149</p></td>
+<td><p>399.99–402.15</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">vald3_extract-all_500-502nm</span></code></p></td>
+<td><p>2,741</p></td>
+<td><p>500.00–501.55</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Exact gaps to fill</strong> (everything not covered above): <code class="docutils literal notranslate"><span class="pre">210–220</span></code>, <code class="docutils literal notranslate"><span class="pre">270–300</span></code>, <code class="docutils literal notranslate"><span class="pre">308–400</span></code>, <code class="docutils literal notranslate"><span class="pre">402–500</span></code>, and the entire <strong><code class="docutils literal notranslate"><span class="pre">502–1000</span> <span class="pre">nm</span></code></strong> region.</p>
+<blockquote>
+<div><p><strong>Density reality check (load-bearing):</strong> VALD line density does <strong>not</strong> collapse above 300 nm. Complete raw-file slices measure <strong>2,051 lines/nm at 300–308</strong>, <strong>1,932/nm at 400–402</strong>, and <strong>1,767/nm at 500–502</strong> — density stays above ~1,750/nm across the whole 100–500 nm range and only tapers slowly into the IR. The earlier “density falls off a cliff above 300 nm” idea was a partial-bin measurement artifact. <strong>Consequence:</strong> the high-wavelength gaps need ~40–50 nm chunking just like the UV — <code class="docutils literal notranslate"><span class="pre">502–1000</span> <span class="pre">nm</span></code> alone is ~575k lines and needs <strong>8 requests</strong>, not 1.</p>
+</div></blockquote>
+<p>The densest existing request (220–270 nm) holds 137,609 lines in 49.56 nm — that sits right at VALD’s practical per-request ceiling. <strong>Treat the cap as ~137k hard / ~110k safe</strong>, which is why every chunk below is sized to stay under ~110k.</p>
+</section>
+<hr class="docutils" />
+<section id="the-request-table">
+<h2>2. The Request Table<a class="headerlink" href="#the-request-table" title="Link to this heading"></a></h2>
+<p>Submit these <strong>14 requests</strong> in order. All are estimated <strong>under 110k lines</strong>. Type the <strong>Angstrom</strong> range into the VALD form (= nm × 10). Each chunk overlaps ~1 nm into its neighbor; the ingest dedups by <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">ion,</span> <span class="pre">wl,</span> <span class="pre">E_low,</span> <span class="pre">E_up)</span></code>, so overlaps lose <strong>zero boundary lines</strong> and create <strong>zero duplicates</strong>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>R#</p></th>
+<th class="head"><p>nm range</p></th>
+<th class="head"><p><strong>Angstrom (type this)</strong></p></th>
+<th class="head"><p>Est. lines</p></th>
+<th class="head"><p>Fills gap</p></th>
+<th class="head"><p>Overlaps into</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>R1</p></td>
+<td><p>209–221</p></td>
+<td><p><strong>2090–2210</strong></p></td>
+<td><p>~23,600</p></td>
+<td><p>210–220</p></td>
+<td><p>154–210 &amp; 220–270 (done)</p></td>
+</tr>
+<tr class="row-odd"><td><p>R2</p></td>
+<td><p>269–301</p></td>
+<td><p><strong>2690–3010</strong></p></td>
+<td><p>~65,800</p></td>
+<td><p>270–300</p></td>
+<td><p>220–270 &amp; 300–308 (done)</p></td>
+</tr>
+<tr class="row-even"><td><p>R3</p></td>
+<td><p>307–355</p></td>
+<td><p><strong>3070–3550</strong></p></td>
+<td><p>~96,800</p></td>
+<td><p>308–400 (1/2)</p></td>
+<td><p>300–308 (done)</p></td>
+</tr>
+<tr class="row-odd"><td><p>R4</p></td>
+<td><p>354–401</p></td>
+<td><p><strong>3540–4010</strong></p></td>
+<td><p>~92,100</p></td>
+<td><p>308–400 (2/2)</p></td>
+<td><p>R3 &amp; 400–402 (done)</p></td>
+</tr>
+<tr class="row-even"><td><p>R5</p></td>
+<td><p>401–451</p></td>
+<td><p><strong>4010–4510</strong></p></td>
+<td><p>~94,500</p></td>
+<td><p>402–500 (1/2)</p></td>
+<td><p>400–402 (done)</p></td>
+</tr>
+<tr class="row-odd"><td><p>R6</p></td>
+<td><p>450–501</p></td>
+<td><p><strong>4500–5010</strong></p></td>
+<td><p>~92,200</p></td>
+<td><p>402–500 (2/2)</p></td>
+<td><p>R5 &amp; 500–502 (done)</p></td>
+</tr>
+<tr class="row-even"><td><p>R7</p></td>
+<td><p>501–556</p></td>
+<td><p><strong>5010–5560</strong></p></td>
+<td><p>~95,700</p></td>
+<td><p>502–1000 (1/8)</p></td>
+<td><p>500–502 (done)</p></td>
+</tr>
+<tr class="row-odd"><td><p>R8</p></td>
+<td><p>555–610</p></td>
+<td><p><strong>5550–6100</strong></p></td>
+<td><p>~82,400</p></td>
+<td><p>502–1000 (2/8)</p></td>
+<td><p>R7</p></td>
+</tr>
+<tr class="row-even"><td><p>R9</p></td>
+<td><p>609–665</p></td>
+<td><p><strong>6090–6650</strong></p></td>
+<td><p>~78,800</p></td>
+<td><p>502–1000 (3/8)</p></td>
+<td><p>R8</p></td>
+</tr>
+<tr class="row-odd"><td><p>R10</p></td>
+<td><p>664–724</p></td>
+<td><p><strong>6640–7240</strong></p></td>
+<td><p>~79,700</p></td>
+<td><p>502–1000 (4/8)</p></td>
+<td><p>R9</p></td>
+</tr>
+<tr class="row-even"><td><p>R11</p></td>
+<td><p>723–787</p></td>
+<td><p><strong>7230–7870</strong></p></td>
+<td><p>~78,600</p></td>
+<td><p>502–1000 (5/8)</p></td>
+<td><p>R10</p></td>
+</tr>
+<tr class="row-odd"><td><p>R12</p></td>
+<td><p>786–855</p></td>
+<td><p><strong>7860–8550</strong></p></td>
+<td><p>~84,400</p></td>
+<td><p>502–1000 (6/8)</p></td>
+<td><p>R11</p></td>
+</tr>
+<tr class="row-even"><td><p>R13</p></td>
+<td><p>854–930</p></td>
+<td><p><strong>8540–9300</strong></p></td>
+<td><p>~79,000</p></td>
+<td><p>502–1000 (7/8)</p></td>
+<td><p>R12 — <em>900–930 extrapolated</em></p></td>
+</tr>
+<tr class="row-odd"><td><p>R14</p></td>
+<td><p>929–1000</p></td>
+<td><p><strong>9290–10000</strong></p></td>
+<td><p>~64,300</p></td>
+<td><p>502–1000 (8/8)</p></td>
+<td><p>R13 — <em>930–1000 extrapolated</em></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Per-gap summary:</strong> <code class="docutils literal notranslate"><span class="pre">210–220</span></code> = 1 req · <code class="docutils literal notranslate"><span class="pre">270–300</span></code> = 1 req · <code class="docutils literal notranslate"><span class="pre">308–400</span></code> = 2 reqs · <code class="docutils literal notranslate"><span class="pre">402–500</span></code> = 2 reqs · <strong><code class="docutils literal notranslate"><span class="pre">502–1000</span></code> = 8 reqs</strong>. Total: <strong>14 requests, ~1.11M new transitions.</strong> The union of done + new is a single contiguous 100–1000 nm block with zero holes.</p>
+</section>
+<hr class="docutils" />
+<section id="exact-vald-form-settings">
+<h2>3. Exact VALD Form Settings<a class="headerlink" href="#exact-vald-form-settings" title="Link to this heading"></a></h2>
+<p>Use VALD3 at <strong>http://vald.astro.uu.se/</strong> with a <strong>registered account</strong> (free, but login required; results return by email/FTP, not in-browser). Apply this <strong>identical</strong> parameter block to <strong>every</strong> request so each new slice is byte-format-identical to the existing files (whose header reads <code class="docutils literal notranslate"><span class="pre">Elm</span> <span class="pre">Ion</span> <span class="pre">WL_air(A)</span> <span class="pre">log</span> <span class="pre">gf*</span> <span class="pre">E_low(eV)</span> <span class="pre">J</span> <span class="pre">lo</span> <span class="pre">E_up(eV)</span> <span class="pre">J</span> <span class="pre">up</span> <span class="pre">…</span></code>).</p>
+<p><strong>Mode: <code class="docutils literal notranslate"><span class="pre">Extract</span> <span class="pre">All</span></code></strong> — returns <em>every</em> transition in the window with no abundance/depth/stellar cut. Do <strong>not</strong> use <em>Extract Stellar</em> (filters out weak/trace lines by line-depth model) or <em>Extract Element</em> (one species per request). The existing files are named <code class="docutils literal notranslate"><span class="pre">vald3_extract-all_*</span></code>, confirming this is the correct, already-used mode.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Form field</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Why</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Output format</strong></p></td>
+<td><p><strong>Long format</strong></p></td>
+<td><p>Emits the multi-line record (config + term + Landé + damping + reference) the ingest expects. Short format omits fields and breaks parsing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Wavelength units</strong></p></td>
+<td><p><strong>Angstrom (Å)</strong></p></td>
+<td><p>Ingest does <code class="docutils literal notranslate"><span class="pre">wl_nm</span> <span class="pre">=</span> <span class="pre">wl_a</span> <span class="pre">/</span> <span class="pre">10.0</span></code>; existing column is <code class="docutils literal notranslate"><span class="pre">WL_air(A)</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Energy units</strong></p></td>
+<td><p><strong>eV</strong></p></td>
+<td><p>Ingest reads <code class="docutils literal notranslate"><span class="pre">E_low(eV)</span></code>/<code class="docutils literal notranslate"><span class="pre">E_up(eV)</span></code> directly.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Wavelength medium</strong></p></td>
+<td><p><strong>air</strong></p></td>
+<td><p>Existing column is <code class="docutils literal notranslate"><span class="pre">WL_air(A)</span></code>. Ingest consumes air directly above 200 nm; mixing in a vacuum request would corrupt the &gt;200 nm path.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Wavelength range</strong></p></td>
+<td><p><strong>Angstrom per the table above</strong> (the only field that changes per request)</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Hyperfine structure (HFS)</strong></p></td>
+<td><p><strong>on</strong></p></td>
+<td><p>Keeps HFS-split components; matches existing data, maximizes completeness.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Isotopic scaling / isotopes</strong></p></td>
+<td><p><strong>default</strong></p></td>
+<td><p>Existing files used the default; changing it diverges the format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>“Require known terms” / Landé / damping (γ) toggles</strong></p></td>
+<td><p><strong>OFF (require nothing)</strong></p></td>
+<td><p>Requiring these would <em>drop</em> lines lacking that metadata. Completeness first.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Configuration / level-info</strong></p></td>
+<td><p><strong>default</strong></p></td>
+<td><p>Matches existing format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Retrieval / delivery</strong></p></td>
+<td><p><strong>FTP</strong></p></td>
+<td><p>VALD emails a gzipped-result FTP link (how the existing <code class="docutils literal notranslate"><span class="pre">.gz</span></code> files were obtained).</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Microturbulence / Vmicro</strong></p></td>
+<td><p>leave default</p></td>
+<td><p>Only used by Extract Stellar; irrelevant here.</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p>Field labels can vary slightly by VALD interface version. The load-bearing intent: <strong>Extract All · Long · Å · eV · air · HFS on · drop nothing</strong>.</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="per-request-walkthrough">
+<h2>4. Per-Request Walkthrough<a class="headerlink" href="#per-request-walkthrough" title="Link to this heading"></a></h2>
+<p>For each row R1…R14, in order:</p>
+<ol class="arabic">
+<li><p><strong>Log in</strong> at http://vald.astro.uu.se/ (main VALD3 interface). All extractions are tied to your registered email.</p></li>
+<li><p><strong>Select <code class="docutils literal notranslate"><span class="pre">Extract</span> <span class="pre">All</span></code></strong> and set the full parameter block from §3.</p></li>
+<li><p><strong>Enter the Angstrom range</strong> for that row (e.g. R2 → <code class="docutils literal notranslate"><span class="pre">2690</span></code> to <code class="docutils literal notranslate"><span class="pre">3010</span></code>). Submit.</p></li>
+<li><p><strong>Wait for the FTP email</strong> — minutes to a few hours depending on queue and range size (dense slices take longer). Be patient; <strong>do not resubmit</strong> the same request while waiting.</p></li>
+<li><p><strong>Download</strong> the two gzipped files from the FTP link: a <strong>line list</strong> (VALD-named like <code class="docutils literal notranslate"><span class="pre">vald_&lt;jobid&gt;.gz</span></code>) and a <strong>bibliography</strong> (<code class="docutils literal notranslate"><span class="pre">.bib.gz</span></code>).</p></li>
+<li><p><strong>Rename into <code class="docutils literal notranslate"><span class="pre">data/vald/</span></code></strong> using the exact convention so the ingest glob <code class="docutils literal notranslate"><span class="pre">data/vald/*.linelist.gz</span></code> picks them up:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mv<span class="w"> </span>vald_&lt;jobid&gt;.gz<span class="w">      </span>data/vald/vald3_extract-all_&lt;lo&gt;-&lt;hi&gt;nm.linelist.gz
+mv<span class="w"> </span>vald_&lt;jobid&gt;.bib.gz<span class="w">  </span>data/vald/vald3_extract-all_&lt;lo&gt;-&lt;hi&gt;nm.bib.gz
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">&lt;lo&gt;-&lt;hi&gt;</span></code> are the <strong>nm</strong> bounds (Angstrom ÷ 10). Example for R2 (270–300 nm):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mv<span class="w"> </span>vald_12345.gz<span class="w">      </span>data/vald/vald3_extract-all_270-300nm.linelist.gz
+mv<span class="w"> </span>vald_12345.bib.gz<span class="w">  </span>data/vald/vald3_extract-all_270-300nm.bib.gz
+</pre></div>
+</div>
+<p><strong>Keep files gzipped</strong> — the ingest reads <code class="docutils literal notranslate"><span class="pre">.gz</span></code> directly. Do <strong>not</strong> gunzip.</p>
+</li>
+</ol>
+<p><strong>Etiquette:</strong> VALD allows only a few requests in flight at once (~3–5 per user). Submit one slice, wait for its email, then submit the next — don’t fire all 14 simultaneously. VALD is a free academic service; keep volume reasonable and cite VALD in any publication (use the per-slice <code class="docutils literal notranslate"><span class="pre">.bib.gz</span></code>).</p>
+</section>
+<hr class="docutils" />
+<section id="if-a-request-is-rejected-for-too-many-lines">
+<h2>5. If a Request Is Rejected for Too Many Lines<a class="headerlink" href="#if-a-request-is-rejected-for-too-many-lines" title="Link to this heading"></a></h2>
+<p>VALD does <strong>not</strong> silently truncate. If a range exceeds the per-request cap (~125–140k), the extraction <strong>fails</strong> and you get an <strong>email saying the request returned too many lines</strong> — no usable line list attached.</p>
+<p><strong>To fix:</strong> <strong>narrow the wavelength range and resubmit.</strong> Halve the chunk and request the two halves separately with a ~1 nm overlap (dedup makes the overlap free). Example — if R3 (<code class="docutils literal notranslate"><span class="pre">3070–3550</span></code>) is rejected, split into <code class="docutils literal notranslate"><span class="pre">3070–3320</span></code> and <code class="docutils literal notranslate"><span class="pre">3310–3550</span></code>. The estimates above all sit under ~110k with 25–45k of headroom, so rejections are unlikely; the extrapolated IR chunks (R13/R14) are the most uncertain — if either errors, split it further (low risk, both estimated well under cap).</p>
+</section>
+<hr class="docutils" />
+<section id="final-ingest-verify">
+<h2>6. Final Ingest + Verify<a class="headerlink" href="#final-ingest-verify" title="Link to this heading"></a></h2>
+<p>Once <strong>all 14 new slices</strong> are in <code class="docutils literal notranslate"><span class="pre">data/vald/</span></code> (alongside the original 6), build the complete database:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. Ingest every VALD slice into the complete DB (dedups across overlaps)</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>scripts/ingest_vald_atomic.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--vald<span class="w"> </span>data/vald/*.linelist.gz<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--db<span class="w"> </span>output/vald_complete.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--wl-min<span class="w"> </span><span class="m">100</span><span class="w"> </span>--wl-max<span class="w"> </span><span class="m">1000</span>
+
+<span class="c1"># 2. Backfill partition functions / species physics into the DB</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>scripts/complete_atomic_db.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--db<span class="w"> </span>output/vald_complete.db
+
+<span class="c1"># 3. Coverage check — confirm contiguous 100-1000 nm with no holes</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">import sqlite3</span>
+<span class="s2">c = sqlite3.connect(&#39;output/vald_complete.db&#39;)</span>
+<span class="s2">n, lo, hi = c.execute(&#39;SELECT COUNT(*), MIN(wavelength_nm), MAX(wavelength_nm) FROM lines&#39;).fetchone()</span>
+<span class="s2">print(f&#39;transitions={n:,}  wl_min={lo:.2f} nm  wl_max={hi:.2f} nm&#39;)</span>
+<span class="s2"># histogram of line counts per 50 nm bin — every bin in [100,1000) should be populated</span>
+<span class="s2">for b in range(100, 1000, 50):</span>
+<span class="s2">    k = c.execute(&#39;SELECT COUNT(*) FROM lines WHERE wavelength_nm&gt;=? AND wavelength_nm&lt;?&#39;, (b, b+50)).fetchone()[0]</span>
+<span class="s2">    print(f&#39;  {b:4d}-{b+50:4d} nm: {k:&gt;8,}&#39;)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Expect <strong>~1.2M+ total transitions</strong> and <strong>every 50 nm bin from 100 to 1000 nm populated</strong> (no zero bins). If a bin is empty, a slice is missing or misnamed — re-check that its file landed in <code class="docutils literal notranslate"><span class="pre">data/vald/</span></code> as <code class="docutils literal notranslate"><span class="pre">vald3_extract-all_&lt;lo&gt;-&lt;hi&gt;nm.linelist.gz</span></code>.</p>
+<blockquote>
+<div><p>Adjust <code class="docutils literal notranslate"><span class="pre">.venv/bin/python</span></code> to your interpreter path, and confirm the table/column names (<code class="docutils literal notranslate"><span class="pre">lines</span></code>, <code class="docutils literal notranslate"><span class="pre">wl</span></code>) against <code class="docutils literal notranslate"><span class="pre">scripts/ingest_vald_atomic.py</span></code> if the coverage snippet errors — schema names there are authoritative.</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="caveats">
+<h2>7. Caveats<a class="headerlink" href="#caveats" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>IR extrapolation (R13 tail + R14, ~900–1000 nm):</strong> line-count estimates here are <strong>extrapolated beyond Kurucz’s 200–900 nm reference coverage</strong> (850 nm value decayed 0.90 per 50 nm). Actual VALD counts may differ; if R13 or R14 errors as too-large, split further (low risk — both are estimated well under the cap).</p></li>
+<li><p><strong>Above-500 nm absolute scale</strong> is anchored to the single measured 500–502 nm slice (1,767 lines/nm), using Kurucz only for the <em>relative</em> falloff shape. VALD and Kurucz absolute densities differ ~13×, so a different real ratio would shift the high-region estimates proportionally — but every high chunk carries 25–45k of headroom under the cap, so the plan absorbs that.</p></li>
+<li><p><strong>Per-request cap (~125–140k)</strong> is user-reported and corroborated by the existing dense-UV slices succeeding (116k–138k lines each); it was not re-scraped live from VALD during this work. Behavior on overflow (error email vs. truncation) follows documented VALD3 behavior.</p></li>
+<li><p><strong>Air-medium consistency is mandatory:</strong> all existing and new slices are requested in <strong>air</strong>. The ingest only vacuum→air-converts <em>below</em> 200 nm and assumes air above; <strong>never</strong> mix a vacuum-wavelength request into <code class="docutils literal notranslate"><span class="pre">data/vald/</span></code>, or the &gt;200 nm path will be wrong.</p></li>
+<li><p><strong>Overlaps are free insurance:</strong> every ~1 nm overlap is zero-cost because ingest dedups by <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">ion,</span> <span class="pre">wl,</span> <span class="pre">E_low,</span> <span class="pre">E_up)</span></code>. Re-requesting any already-downloaded range is harmless — use this freely to guarantee seamless boundaries.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,333 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unified Plan: From Magic Numbers to a Principled, Adaptive, Optimizable CF-LIBS Pipeline (M5) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Unified Plan: From Magic Numbers to a Principled, Adaptive, Optimizable CF-LIBS Pipeline (M5)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/M5-parameter-optimization-plan.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <p>I’ll synthesize the three designs into a unified plan. The designs are self-contained and consistent, so I’ll produce the markdown directly.</p>
+<section id="unified-plan-from-magic-numbers-to-a-principled-adaptive-optimizable-cf-libs-pipeline-m5">
+<h1>Unified Plan: From Magic Numbers to a Principled, Adaptive, Optimizable CF-LIBS Pipeline (M5)<a class="headerlink" href="#unified-plan-from-magic-numbers-to-a-principled-adaptive-optimizable-cf-libs-pipeline-m5" title="Link to this heading"></a></h1>
+<p>The three designs converge on one architecture, not three competing ones. The first-principles derivation tells us <em>which</em> knobs are physically determined; the adaptive-parameterization design tells us <em>which</em> should track a runtime feature; the joint-optimizer design tells us <em>how</em> to safely tune what’s genuinely left over — and the framework for all of it (<code class="docutils literal notranslate"><span class="pre">scripts/campaign1/</span></code> Optuna + scoreboard + tier splits) already exists. The unifying move is a <strong>three-tier routing of every parameter</strong>, then a small offline optimizer over only the residual free coefficients.</p>
+<hr class="docutils" />
+<section id="three-tier-routing-of-every-parameter">
+<h2>1. Three-Tier Routing of Every Parameter<a class="headerlink" href="#three-tier-routing-of-every-parameter" title="Link to this heading"></a></h2>
+<p>Each parameter is classified as exactly one of: <strong>DERIVE</strong> (fixed by a physics formula), <strong>ADAPT</strong> (<code class="docutils literal notranslate"><span class="pre">param</span> <span class="pre">=</span> <span class="pre">f(runtime</span> <span class="pre">feature)</span></code>, a bounded interpretable rule), <strong>JOINTLY OPTIMIZE</strong> (genuinely free, tuned offline), or <strong>DROP</strong> (study-confirmed inert — pin at default, remove from the search space).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Routing</p></th>
+<th class="head"><p>Formula / Feature / Rule</p></th>
+<th class="head"><p>Range or coeff</p></th>
+<th class="head"><p>Source of truth</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>min_lines_per_element</strong></p></td>
+<td><p>3</p></td>
+<td><p><strong>DERIVE</strong> → acceptance criterion</p></td>
+<td><p>Replace integer floor with master formula: accept element iff achieved <code class="docutils literal notranslate"><span class="pre">σ_T/T</span> <span class="pre">=</span> <span class="pre">(T·k_B)/(SNR·s_E·√(N−1))</span> <span class="pre">≤</span> <span class="pre">target</span></code>. Hard statistical floor <code class="docutils literal notranslate"><span class="pre">N≥3</span></code> (slope+intercept = 2 DoF + 1 residual).</p></td>
+<td><p>target σ_T/T ≈ 5%; floor N≥3, cap N≤5 (cliff past 5)</p></td>
+<td><p>master formula; <code class="docutils literal notranslate"><span class="pre">boltzmann.py:1291</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>min_energy_spread_ev</strong></p></td>
+<td><p>2.0</p></td>
+<td><p><strong>DROP</strong> (subsumed by DERIVE)</p></td>
+<td><p>Falls out of the same σ_T/T criterion (<code class="docutils literal notranslate"><span class="pre">s_E</span> <span class="pre">≥</span> <span class="pre">(T·k_B)/((σ_T/T)·SNR·√(N−1))</span></code>). Study-confirmed inert; do not tune separately.</p></td>
+<td><p>pinned / removed</p></td>
+<td><p>master formula</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>min_snr</strong></p></td>
+<td><p>10</p></td>
+<td><p><strong>DROP</strong> (subsumed by DERIVE)</p></td>
+<td><p>Same criterion; enters linearly so N dominates. Study-confirmed inert on this corpus. Keep only as a fixed detection-FPR guard (<code class="docutils literal notranslate"><span class="pre">SNR</span> <span class="pre">≳</span> <span class="pre">Φ⁻¹(1−α/N_pix)</span></code>).</p></td>
+<td><p>pinned ~10</p></td>
+<td><p>master formula</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>wavelength_tolerance_nm</strong></p></td>
+<td><p>0.1</p></td>
+<td><p><strong>ADAPT</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">clip(k_tol·λ_mid/R,</span> <span class="pre">2·Δλ,</span> <span class="pre">tol_max)</span></code>; better form <code class="docutils literal notranslate"><span class="pre">sqrt((λ/R)²</span> <span class="pre">+</span> <span class="pre">σ_cal²)</span></code> using <code class="docutils literal notranslate"><span class="pre">cal.rmse_nm</span></code>. Recovers the confirmed supercam 0.1→0.2 retune “for free” as 1 FWHM.</p></td>
+<td><p>k_tol≈1.0, tol_max≈0.3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:594</span></code> <code class="docutils literal notranslate"><span class="pre">_resolve_adaptive_tolerances</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>peak_width_nm</strong></p></td>
+<td><p>0.2</p></td>
+<td><p><strong>ADAPT</strong></p></td>
+<td><p>Same FWHM rule: <code class="docutils literal notranslate"><span class="pre">clip(k_w·λ_mid/R,</span> <span class="pre">2·Δλ,</span> <span class="pre">...)</span></code>; integration half-width ~2–3× FWHM. Already R-aware.</p></td>
+<td><p>shared k_w≈2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:613</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>isolation_wavelength_nm</strong></p></td>
+<td><p>0.1</p></td>
+<td><p><strong>ADAPT</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">k_iso·FWHM</span> <span class="pre">=</span> <span class="pre">k_iso·λ_mid/R</span></code>. Makes the blend kernel <code class="docutils literal notranslate"><span class="pre">1−exp(−Δλ/λ_iso)</span></code> measure separation in FWHM units.</p></td>
+<td><p>k_iso≈1.0</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_selection.py:261/504</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>min_peak_height</strong></p></td>
+<td><p>0.01</p></td>
+<td><p><strong>ADAPT</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">max(h_floor,</span> <span class="pre">k_h·σ_noise/I_max)</span></code> using the per-spectrum MAD σ from <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code>. Floored at 0.01 → cannot regress the clean-spectrum optimum; rises on noisy field spectra.</p></td>
+<td><p>k_h≈3–5, h_floor=0.01</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">preprocess/preprocessing.py:321</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>residual_shift_scan_nm</strong></p></td>
+<td><p>0.0</p></td>
+<td><p><strong>ADAPT</strong> (drift-gated)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cal.rmse_nm</span> <span class="pre">&gt;</span> <span class="pre">τ_drift</span> <span class="pre">?</span> <span class="pre">k_s·cal.rmse_nm</span> <span class="pre">:</span> <span class="pre">0</span></code>. Directly resolves the documented supercam(+)/bhvo2(−) shift-scan confound.</p></td>
+<td><p>τ_drift, k_s</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline.py:620</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>max_lines_per_element</strong></p></td>
+<td><p>20</p></td>
+<td><p><strong>JOINTLY OPTIMIZE</strong></p></td>
+<td><p>No physics floor — robustness/compute cap; saturated plateau. Implicitly <code class="docutils literal notranslate"><span class="pre">min(K,</span> <span class="pre">n_avail)</span></code>.</p></td>
+<td><p>12–40</p></td>
+<td><p>knob_space</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>min_relative_intensity</strong></p></td>
+<td><p>None</p></td>
+<td><p><strong>JOINTLY OPTIMIZE</strong> (likely keep None)</p></td>
+<td><p>Catalog-strength floor, not a spectrum statistic. Any nonzero value is a one-sided cliff.</p></td>
+<td><p>None / explore</p></td>
+<td><p>knob_space</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>shift_coherence_veto / line_residual_gate / stark_ne / exclude_resonance</strong> (gates)</p></td>
+<td><p>bool</p></td>
+<td><p><strong>JOINTLY OPTIMIZE</strong> (booleans, default-locked)</p></td>
+<td><p>On/off policy switches; all-default is at/near Pareto-optimal. Their <em>internal</em> cutoffs are the real DERIVE-able knobs (not yet config-exposed — future work).</p></td>
+<td><p>keep default</p></td>
+<td><p>study §5</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>affine_coverage_gate / grade_aware_selection / peak_width_mode</strong></p></td>
+<td><p>bool/enum</p></td>
+<td><p><strong>DROP</strong></p></td>
+<td><p>Bit-identically inert on this corpus. Pin at default; remove from search space.</p></td>
+<td><p>pinned</p></td>
+<td><p>study (5 inert knobs)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>wavelength_calibration</strong> (gate)</p></td>
+<td><p>True</p></td>
+<td><p><strong>N/A — always-on input-quality lever</strong></p></td>
+<td><p>Not a tunable number.</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Net effect:</strong> ~5 magic numbers (<code class="docutils literal notranslate"><span class="pre">min_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">min_energy_spread</span></code>, <code class="docutils literal notranslate"><span class="pre">min_snr</span></code>, plus the 3 inert gates) collapse into <strong>one physics target</strong> (σ_T/T) and a set of <strong>DROP</strong> pins; 4 detection thresholds become <strong>ADAPT</strong> rules with ~6 shared coefficients; only <strong>~3–5 genuinely free knobs</strong> remain for the offline optimizer.</p>
+</section>
+<hr class="docutils" />
+<section id="optimizer-tier-based-protocol">
+<h2>2. Optimizer + Tier-Based Protocol<a class="headerlink" href="#optimizer-tier-based-protocol" title="Link to this heading"></a></h2>
+<p><strong>Optimizer — Optuna TPE (multivariate, <code class="docutils literal notranslate"><span class="pre">group=True</span></code>) as phase A; CMA-ES as phase B.</strong></p>
+<ul class="simple">
+<li><p>TPE natively handles the mixed continuous + int + categorical + <strong>conditional</strong> residual space, is sample-efficient for multi-minute evals, and is <strong>verified import-clean of sklearn</strong> (lives only in <code class="docutils literal notranslate"><span class="pre">scripts/</span></code>, never under <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>, so TID251 is untouched). The M5 landscape is <em>saturated plateaus with one-sided cliffs</em> — TPE tolerates this far better than CMA-ES, which wastes covariance adaptation on a flat plateau.</p></li>
+<li><p><strong>CMA-ES (numpy <code class="docutils literal notranslate"><span class="pre">cma</span></code> or Optuna <code class="docutils literal notranslate"><span class="pre">CmaEsSampler</span></code>)</strong> is phase B only, restricted to the continuous coefficient subspace (<code class="docutils literal notranslate"><span class="pre">k_tol</span></code>, <code class="docutils literal notranslate"><span class="pre">k_iso</span></code>, <code class="docutils literal notranslate"><span class="pre">k_h</span></code>, <code class="docutils literal notranslate"><span class="pre">k_s</span></code>, <code class="docutils literal notranslate"><span class="pre">τ_drift</span></code>, <code class="docutils literal notranslate"><span class="pre">tol_max</span></code>) after TPE has frozen the discrete choices. This is the natural fit once everything is reduced to bounded continuous coefficients.</p></li>
+<li><p><strong>Rejected:</strong> scikit-optimize (pulls sklearn — banned); Nevergrad (viable but redundant with the wired Optuna); <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> (mutates <em>code source</em>, not a typed numeric vector — wrong tool for threshold tuning).</p></li>
+</ul>
+<p><strong>Objective — single composite scalar with a cross-dataset variance penalty (not full Pareto).</strong> Reuse <code class="docutils literal notranslate"><span class="pre">objective.compute_fitness</span></code>, re-weighted for M5:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>score_d  = 0.2·F1_d + 0.8·(1 − min(RMSE_d,10)/10)     # RMSE-first; F1 as death-penalty guard
+fitness  = Σ w_d·score_d / Σ w_d                        # weighted mean across datasets
+           − 0.5·Var_d(score_d)                         # anti-tug-of-war (supercam vs bhvo2)
+           − 0.2·max(0, t_med/5 − 1)                    # runtime budget
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Flip <code class="docutils literal notranslate"><span class="pre">F1_WEIGHT/RMSE_WEIGHT</span></code> from 0.6/0.4 → <strong>0.2/0.8</strong> (module constants in <code class="docutils literal notranslate"><span class="pre">objective.py</span></code>; recorded in the frozen manifest).</p></li>
+<li><p><strong>Keep the <code class="docutils literal notranslate"><span class="pre">−0.5·Var_d</span></code> penalty</strong> — it is the principled answer to the supercam/bhvo2 tug-of-war (a candidate that wins on one by wrecking the other is punished automatically, e.g. it kills <code class="docutils literal notranslate"><span class="pre">residual_shift_scan=0.1</span></code>).</p></li>
+<li><p><strong>Single scalar, not NSGA-II Pareto</strong> — overkill for 2 datasets; the mean−λ·variance already encodes “improve the worst dataset,” and the adoption tiebreak uses <strong>best worst-dataset score</strong> (the Pareto-min you actually want). Reserve Pareto only if a third pulling dataset appears.</p></li>
+<li><p>Use <strong>median</strong> RMSE per dataset (robust to one blown spectrum).</p></li>
+</ul>
+<p><strong>Tier protocol (optimization / holdout / vault = train / val / test), structurally enforced:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Tune on the optimization tier only.</strong> <code class="docutils literal notranslate"><span class="pre">objective.evaluate_overrides(section=&quot;optimization&quot;)</span></code> raises <code class="docutils literal notranslate"><span class="pre">HoldoutViolation</span></code> if any holdout/vault id leaks in. Tune on element-wt optimization datasets (<code class="docutils literal notranslate"><span class="pre">chemcam_calib</span></code>/<code class="docutils literal notranslate"><span class="pre">silva2022</span></code> train splits + <code class="docutils literal notranslate"><span class="pre">synthetic_fixedforward</span></code>).</p></li>
+<li><p><strong>Validate on holdout — quota 1/week</strong> (<code class="docutils literal notranslate"><span class="pre">enforce_holdout_quota</span></code>, human <code class="docutils literal notranslate"><span class="pre">--force</span></code> to exceed). This is the anti-overfit kill-switch: you cannot iterate against holdout, so it stays a true validation set. bhvo2/supercam-class spectra are the <strong>holdout adoption gate</strong>, <em>not</em> a tuning target.</p></li>
+<li><p><strong>Final number on vault (gibbons2024) — one human run, end of program.</strong> The honest generalization estimate.</p></li>
+<li><p><strong>Report the train–test RMSE gap</strong> (<code class="docutils literal notranslate"><span class="pre">optimization_RMSE</span> <span class="pre">−</span> <span class="pre">holdout_RMSE</span></code>) in <code class="docutils literal notranslate"><span class="pre">holdout_verdict.md</span></code>; a large positive gap is the overfit alarm.</p></li>
+</ol>
+<p><strong>How many free params are safely fittable.</strong> With ~4 spectra/dataset (~8–12 effective), the defensible budget is <strong>≤ 3–5 free continuous params</strong>. The routing above achieves exactly this: DROP removes 5 inert knobs; DERIVE collapses 3 into one target; ADAPT moves 4 thresholds into ~6 coefficients that are <strong>fit per-instrument</strong> (frozen, not per-spectrum DoF). The residual <strong>JOINTLY OPTIMIZE</strong> set is ~3–5 knobs — small enough that 150–300 TPE trials genuinely saturate it, and 2D interaction sweeps (<code class="docutils literal notranslate"><span class="pre">min_lines</span> <span class="pre">×</span> <span class="pre">max_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">tolerance</span> <span class="pre">×</span> <span class="pre">residual_shift</span></code>) fall out for free.</p>
+<p><strong>Missing piece to build first:</strong> <code class="docutils literal notranslate"><span class="pre">objective.paired_bootstrap_delta_f1</span></code> is F1-only. Add <code class="docutils literal notranslate"><span class="pre">paired_bootstrap_delta_rmse</span></code> (~30 lines, mirrors the F1 version, 2000 resamples, adopt only if the 95% CI excludes 0). Set the adoption ΔRMSE threshold above the per-spectrum bootstrap noise floor (mirror <code class="docutils literal notranslate"><span class="pre">MIN_DELTA_F1=0.02</span></code>). <strong>No sub-0.1-RMSE-unit win is trustworthy.</strong></p>
+</section>
+<hr class="docutils" />
+<section id="physics-only-compliance-interpretability">
+<h2>3. Physics-Only Compliance + Interpretability<a class="headerlink" href="#physics-only-compliance-interpretability" title="Link to this heading"></a></h2>
+<p>Both the optimizer and the shipped adaptive rules stay strictly inside the hard constraint:</p>
+<ul class="simple">
+<li><p><strong>Offline tuning never touches <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>.</strong> Optuna/CMA-ES live in <code class="docutils literal notranslate"><span class="pre">scripts/campaign1/</span></code>; they pass numbers through the top-precedence <code class="docutils literal notranslate"><span class="pre">config_overrides</span></code> tier of <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code>. The shipped pipeline imports no optimizer. (<code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> remains the <em>only</em> ML-permitted zone and is reserved for code-structure search, a separate layer with the same scoreboard backend and the same AST blocklist guarantee — not used for this numeric HPO.)</p></li>
+<li><p><strong>The adaptive rules are interpretable scaling laws, not learned models.</strong> Every ADAPT rule has the shape <code class="docutils literal notranslate"><span class="pre">param</span> <span class="pre">=</span> <span class="pre">clip(k·feature,</span> <span class="pre">lo,</span> <span class="pre">hi)</span></code> — closed-form numpy, the same idiom as the existing <code class="docutils literal notranslate"><span class="pre">_resolve_adaptive_tolerances</span></code>. No <code class="docutils literal notranslate"><span class="pre">sklearn</span></code>/<code class="docutils literal notranslate"><span class="pre">torch</span></code>/<code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>. The coefficients <code class="docutils literal notranslate"><span class="pre">k</span></code> are dimensionless physics multiples (FWHM-multiples, sigma-multiples); <code class="docutils literal notranslate"><span class="pre">lo</span></code>/<code class="docutils literal notranslate"><span class="pre">hi</span></code> are safety rails (Nyquist floor, legacy-constant fallback).</p></li>
+<li><p><strong>The winning vector ships as plain preset numbers</strong> in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py</span></code> with a provenance comment (study dir, trial #, frozen-manifest sha256) — no learned weights, no optuna import in the shipped path.</p></li>
+<li><p><strong>The <code class="docutils literal notranslate"><span class="pre">None</span></code> sentinel is the wiring mechanism</strong> (<code class="docutils literal notranslate"><span class="pre">pipeline.py:203</span></code>): <code class="docutils literal notranslate"><span class="pre">None</span></code> → adaptive rule fires; a float → user pin overrides (preserves reproducibility and the existing <code class="docutils literal notranslate"><span class="pre">_OVERRIDABLE_FIELDS</span></code> precedence).</p></li>
+<li><p><strong>DERIVE keeps the same property:</strong> replacing <code class="docutils literal notranslate"><span class="pre">min_lines</span></code> with a σ_T/T acceptance test is <em>more</em> physics-interpretable than an integer magic number — it ties directly to the exact-propagation <code class="docutils literal notranslate"><span class="pre">σ_T</span> <span class="pre">=</span> <span class="pre">T²·k_B·σ_m</span></code> already in <code class="docutils literal notranslate"><span class="pre">boltzmann.py</span></code>.</p></li>
+</ul>
+<p>This satisfies “shipped inference + adaptive rules stay physics-interpretable (rules, not learned black-box)” by construction at every layer.</p>
+</section>
+<hr class="docutils" />
+<section id="concrete-first-prototype-smallest-end-to-end-step">
+<h2>4. Concrete First Prototype (smallest end-to-end step)<a class="headerlink" href="#concrete-first-prototype-smallest-end-to-end-step" title="Link to this heading"></a></h2>
+<p>Goal: prove the loop and recover the confirmed manual retune <strong>without</strong> touching <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> physics yet.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># 0. One-time setup (scripts/ only):
+#    - Reduce knob_space to the M5 sub-set; pin the 5 inert knobs at default (DROP).
+#    - Flip F1_WEIGHT/RMSE_WEIGHT 0.6/0.4 -&gt; 0.2/0.8 in objective.py.
+#    - Add paired_bootstrap_delta_rmse + RMSE columns/gap line in holdout_verdict.md.
+
+# 1. Init study; seed baseline + the confirmed retune (min_lines=2, wavelength_tolerance=0.2)
+#    + looser-gates hypothesis as enqueue_trial seeds (NOT discovered by tuning on bhvo2).
+JAX_PLATFORMS=cpu PYTHONPATH=$PWD python scripts/campaign1/driver.py init \
+    --study-dir output/campaign1/m5-rmse --db ASD_da/libs_production.db \
+    --datasets chemcam_calib,silva2022,synthetic_fixedforward \
+    --target-trials 300 --fitness-version 2 --enqueue-from m5_seeds.json
+
+# 2. Jointly optimize the ~5 load-bearing knobs (phase A TPE; CMA-ES phase B on the
+#    continuous coefficient subspace) on the OPTIMIZATION tier only.
+sbatch --array=0-15%16 --cpus-per-task=8 scripts/campaign1/slurm/worker_array.sbatch
+
+# 3. Validate top-K + baseline on holdout (bhvo2/supercam-class), quota 1/week:
+#    adoption gate G1-G4 + NEW RMSE bootstrap CI; pick best worst-dataset score;
+#    report optimization_RMSE - holdout_RMSE gap.
+sbatch scripts/campaign1/slurm/holdout_eval.sbatch  # TOP_K=5
+
+# 4. Vault (gibbons2024): one human run at end-of-program.
+# 5. Adopt: ship the winning override dict as plain preset numbers in pipeline.py.
+</pre></div>
+</div>
+<p><strong>First ADAPT rule to land (phase 2):</strong> make the existing R-derived FWHM tolerance the <em>default</em> (not opt-in) for <code class="docutils literal notranslate"><span class="pre">wavelength_tolerance_nm</span></code>/<code class="docutils literal notranslate"><span class="pre">peak_width_nm</span></code>/<code class="docutils literal notranslate"><span class="pre">isolation_wavelength_nm</span></code>. This <strong>provably recovers the confirmed supercam 0.1→0.2 nm (−12% RMSE) retune</strong> as “tolerance = 1 instrumental FWHM,” generalizing to instruments the OAT sweep never saw — and it adds <strong>zero</strong> new optimizer DoF on the static path (coefficients <code class="docutils literal notranslate"><span class="pre">k≈1</span></code>, floored at the legacy constant).</p>
+<p><strong>Expected gain vs the confirmed manual retune:</strong></p>
+<ul class="simple">
+<li><p>The static joint optimization should <strong>match or modestly beat</strong> the manual supercam −12% RMSE by finding the <code class="docutils literal notranslate"><span class="pre">min_lines</span> <span class="pre">×</span> <span class="pre">tolerance</span></code> interaction the OAT sweep couldn’t see — but treat any gain beyond the manual retune that’s &lt; the ΔRMSE bootstrap floor as <strong>noise, not signal</strong>.</p></li>
+<li><p>The larger, defensible gain is from <strong>ADAPT</strong>: the R-derived tolerance recovers the −12% <em>per-instrument automatically</em>, and the drift-gated shift-scan resolves the supercam(+15%)/bhvo2(−48%) confound into a single rule — landing <em>each</em> dataset near its own optimum without a per-dataset compromise. That is the real win the static retune cannot capture.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="honest-caveats">
+<h2>5. Honest Caveats<a class="headerlink" href="#honest-caveats" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Small-N overfit is the dominant risk.</strong> ~4 spectra/dataset cannot support 12–46 free params; the −0.056 bhvo2 “gain” in the study is within plausible small-N noise. <strong>Mitigations:</strong> the routing’s ≤3–5-free-param budget, per-instrument (not per-spectrum) coefficients, the bootstrap-CI adoption gate, the one-shot vault, and a <strong>zero-regression rule</strong> (reject any candidate/coefficient set that regresses <em>any</em> optimization dataset vs the legacy constants). Nested CV is <em>not</em> worth it at n=4/dataset (inner folds n=2–3) — revisit only on a larger corpus.</p></li>
+<li><p><strong>Tier misclassification trap.</strong> The M5 sensitivity datasets bhvo2_chemcam/supercam are <strong>holdout-only</strong> in <code class="docutils literal notranslate"><span class="pre">splits.py</span></code>. Tuning RMSE directly on them is tuning against the validation set (forbidden). Tune on optimization-tier element-wt datasets; enter the confirmed <code class="docutils literal notranslate"><span class="pre">(min_lines=2,</span> <span class="pre">tol=0.2)</span></code> retune as a <strong>seed trial validated through the gate</strong>, never as a tuning target.</p></li>
+<li><p><strong>Dataset tradeoff is real; a single global static config is a compromise.</strong> The variance penalty handles the tug-of-war, but the remaining gains genuinely live in <strong>per-calibration-quality adaptivity</strong> — which is why the ADAPT tier (drift-gated shift-scan keyed on <code class="docutils literal notranslate"><span class="pre">cal.rmse_nm</span></code>, FWHM-keyed tolerance/isolation) matters more than squeezing the static vector. <strong>Verify τ_drift cleanly separates bhvo2 (low rmse) from supercam (high rmse)</strong> with a 2-point check before trusting it; if <code class="docutils literal notranslate"><span class="pre">cal.rmse_nm</span></code> doesn’t separate them, fall back to scan=0.0 globally (the study’s safe default).</p></li>
+<li><p><strong>DERIVE rests on assumptions that can break.</strong> The master formula assumes single-temperature LTE and <code class="docutils literal notranslate"><span class="pre">σ_y≈1/SNR</span></code> (Poisson-dominated). Self-absorption, non-LTE, or correlated calibration errors break the σ_y model, so a σ_T/T gate could spuriously reject good elements or admit biased ones. <strong>Validate the target-σ_T gate against the bhvo2/supercam corpus before replacing the integer floor.</strong> Note <code class="docutils literal notranslate"><span class="pre">s_E</span></code> must use the actual std-dev/Var(E_k) from the slope variance, not the current max−min range check (<code class="docutils literal notranslate"><span class="pre">line_selection.py:344</span></code>) — or apply a √12 uniform-fill correction.</p></li>
+<li><p><strong>When adaptivity helps vs. adds noise.</strong></p>
+<ul class="simple">
+<li><p><strong>Helps:</strong> when the optimum <em>provably tracks a measurable condition</em> — R/FWHM (tolerance, isolation, width), per-spectrum noise σ (peak height), calibration residual (shift-scan). Floored at the legacy constant, the adaptive path <em>cannot</em> regress the validated clean-spectrum optimum and degrades to byte-identical legacy behavior when the feature is unavailable (R=None, calibration failed).</p></li>
+<li><p><strong>Adds noise:</strong> per-<em>spectrum</em> coefficients can inject between-spectrum variance into a composition map. Keep <strong>coefficients per-instrument/per-campaign, only the feature per-spectrum</strong>, and clip every rule. <strong>Do NOT make <code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code> adaptive</strong> — it is the #1 fragility (RMSE up to 12.7; tightening past 5 catastrophic), and a per-element adaptive floor that raises it on line-rich elements would re-trigger Boltzmann-fit starvation. Keep it a constant floor (2–3); the max-cap self-adapts via <code class="docutils literal notranslate"><span class="pre">min(K,</span> <span class="pre">n_avail)</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong>The scheme reduces, but does not eliminate, tuning.</strong> σ_T/T target, k_h, and the R/σ_cal blend constants are themselves new free parameters — ~5 magic numbers become ~2–3 physically-interpretable ones plus ~6 bounded coefficients. Every one must be <strong>benchmark-gated via <code class="docutils literal notranslate"><span class="pre">run_scoreboard(config_overrides=...)</span></code></strong> on the optimization tier with holdout/vault validation before landing, and confirmed on a larger corpus before becoming a shipped default (the study’s standing small-N caveat).</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

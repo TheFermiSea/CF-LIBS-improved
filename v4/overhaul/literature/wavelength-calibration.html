@@ -1,0 +1,382 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wavelength Calibration: Literature Reference &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Wavelength Calibration: Literature Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/literature/wavelength-calibration.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="wavelength-calibration-literature-reference">
+<h1>Wavelength Calibration: Literature Reference<a class="headerlink" href="#wavelength-calibration-literature-reference" title="Link to this heading"></a></h1>
+<p><strong>Topic:</strong> Automated spectrograph wavelength calibration — RANSAC line matching, Hough-transform (RASCAL), cross-correlation comb, differentiable/joint dispersion fitting; when pre-calibrated data needs no recalibration.</p>
+<hr class="docutils" />
+<section id="canonical-formulation-and-governing-equations">
+<h2>1. Canonical Formulation and Governing Equations<a class="headerlink" href="#canonical-formulation-and-governing-equations" title="Link to this heading"></a></h2>
+<section id="dispersion-model-pixel-wavelength">
+<h3>1.1 Dispersion Model (Pixel → Wavelength)<a class="headerlink" href="#dispersion-model-pixel-wavelength" title="Link to this heading"></a></h3>
+<p>The fundamental mapping from detector pixel position <code class="docutils literal notranslate"><span class="pre">p</span></code> (0-indexed or 1-indexed, must be consistent) to wavelength <code class="docutils literal notranslate"><span class="pre">λ</span></code> is expressed as a polynomial:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>λ(p) = Σ_{k=0}^{N} c_k · P_k(p̃)
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">p̃</span> <span class="pre">=</span> <span class="pre">2(p</span> <span class="pre">−</span> <span class="pre">p_min)/(p_max</span> <span class="pre">−</span> <span class="pre">p_min)</span> <span class="pre">−</span> <span class="pre">1</span></code>  is the <strong>normalized pixel coordinate</strong>, mapped to [−1, +1]</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">P_k</span></code> is either a <strong>monomial basis</strong> (<code class="docutils literal notranslate"><span class="pre">p̃^k</span></code>), <strong>Legendre polynomial</strong> <code class="docutils literal notranslate"><span class="pre">L_k(p̃)</span></code>, or <strong>Chebyshev polynomial</strong> <code class="docutils literal notranslate"><span class="pre">T_k(p̃)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">c_k</span></code> are the polynomial coefficients determined by fitting</p></li>
+<li><p>Typical order: N = 3–6 for long-slit spectrographs; N = 4–7 for echelle orders</p></li>
+</ul>
+<p><strong>Normalization is mandatory</strong>: fitting raw pixel numbers (e.g., 0–2048) in a monomial basis produces a wildly ill-conditioned Vandermonde matrix. Always normalize to [−1, +1] or use Legendre/Chebyshev basis.</p>
+<p>For echelle spectrographs a 2D dispersion model is used:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>λ(p, m) = Σ_{i,j} c_{ij} · L_i(p̃) · L_j(m̃)
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">m</span></code> is the diffraction order number, normalized similarly. Polynomial degree is typically <code class="docutils literal notranslate"><span class="pre">(N_i,</span> <span class="pre">N_x)</span> <span class="pre">≈</span> <span class="pre">(5,</span> <span class="pre">4)</span></code> in the order and cross-dispersion directions.</p>
+</section>
+<section id="line-identification-the-correspondence-problem">
+<h3>1.2 Line Identification: The Correspondence Problem<a class="headerlink" href="#line-identification-the-correspondence-problem" title="Link to this heading"></a></h3>
+<p>Given:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">{p_k}</span></code> — detected peak positions in the observed spectrum (in pixels)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{λ_j}</span></code> — known arc-lamp or emission-line wavelengths from an atlas</p></li>
+</ul>
+<p>The goal is to find the bijection <code class="docutils literal notranslate"><span class="pre">σ:</span> <span class="pre">p_k</span> <span class="pre">→</span> <span class="pre">λ_j</span></code> that satisfies the dispersion model. The difficulty is the combinatorial explosion: for M peaks and N atlas lines, there are O(N^M) candidate assignments.</p>
+<section id="ransac-based-approach-rascal-veitch-michaelis-lam-2019">
+<h4>RANSAC-Based Approach (RASCAL / Veitch-Michaelis &amp; Lam 2019)<a class="headerlink" href="#ransac-based-approach-rascal-veitch-michaelis-lam-2019" title="Link to this heading"></a></h4>
+<p><strong>Phase 1 — Hough Transform pre-filter:</strong></p>
+<p>Each (pixel, wavelength) pair <code class="docutils literal notranslate"><span class="pre">(p_i,</span> <span class="pre">λ_j)</span></code> defines a family of lines in <code class="docutils literal notranslate"><span class="pre">(m,</span> <span class="pre">b)</span></code> space (slope, intercept of a linear approximation <code class="docutils literal notranslate"><span class="pre">λ</span> <span class="pre">≈</span> <span class="pre">m·p</span> <span class="pre">+</span> <span class="pre">b</span></code>). The Hough accumulator votes for each <code class="docutils literal notranslate"><span class="pre">(m,</span> <span class="pre">b)</span></code> bin:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>For each candidate pair (p_i, λ_j):
+    for each m in [m_min, m_max] with step δm:
+        b = λ_j − m·p_i
+        accumulator[m_bin, b_bin] += 1
+</pre></div>
+</div>
+<p>The accumulator peak identifies the approximate linear dispersion <code class="docutils literal notranslate"><span class="pre">(m*,</span> <span class="pre">b*)</span></code>. Gradient bounds are:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>m_max ≈ (λ_max + Δλ_tol − λ_min + Δλ_tol) / (N_pix / 3)
+m_min ≈ (λ_max − Δλ_tol − λ_min − Δλ_tol) / (N_pix × 3)
+</pre></div>
+</div>
+<p>Default <code class="docutils literal notranslate"><span class="pre">Δλ_tol</span> <span class="pre">≈</span> <span class="pre">500</span> <span class="pre">Å</span></code>, <code class="docutils literal notranslate"><span class="pre">num_slopes</span> <span class="pre">≈</span> <span class="pre">1000</span></code> bins.</p>
+<p><strong>Phase 2 — RANSAC polynomial fit:</strong></p>
+<p>From the Hough-filtered candidate pairs, RANSAC iteratively:</p>
+<ol class="arabic simple">
+<li><p>Draw a minimal random sample (size = polynomial order + 1, e.g. 5 for a 4th-order polynomial)</p></li>
+<li><p>Fit the polynomial via least squares to the sample</p></li>
+<li><p>Count inliers: <code class="docutils literal notranslate"><span class="pre">|λ_j</span> <span class="pre">−</span> <span class="pre">λ(p_k)|</span> <span class="pre">&lt;</span> <span class="pre">ε</span></code> (residual tolerance, e.g. ε = 1–2 Å)</p></li>
+<li><p>After <code class="docutils literal notranslate"><span class="pre">T</span></code> iterations, refit on all inliers and report the polynomial with the most inliers</p></li>
+</ol>
+<p><strong>RANSAC number of iterations</strong> (Fischler &amp; Bolles 1981):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>T = log(1 − p_success) / log(1 − w^s)
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">p_success</span></code> = desired probability of finding an outlier-free sample (typical: 0.99)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">w</span></code> = expected fraction of inliers (typical: 0.5–0.8 for spectral calibration)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">s</span></code> = minimum sample size (= poly order + 1)</p></li>
+</ul>
+<p>Final solution: least-squares refit on all RANSAC inliers, yielding polynomial coefficients <code class="docutils literal notranslate"><span class="pre">{c_k}</span></code>.</p>
+</section>
+</section>
+<section id="cross-correlation-shift-estimation">
+<h3>1.3 Cross-Correlation Shift Estimation<a class="headerlink" href="#cross-correlation-shift-estimation" title="Link to this heading"></a></h3>
+<p>For tracking small <strong>wavelength drift</strong> of a pre-calibrated spectrometer against a reference spectrum:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δp = argmax_{τ} [ Σ_i  f(i) · g(i − τ) ]
+</pre></div>
+</div>
+<p>in the Fourier domain (O(N log N) via FFT):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δp = IFFT( FFT(f)* · FFT(g) )   → peak location gives integer shift
+</pre></div>
+</div>
+<p>For <strong>sub-pixel accuracy</strong>, fit a Gaussian or parabola to the CCF peak:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δp_subpixel ≈ (CCF[k−1] − CCF[k+1]) / (2·CCF[k−1] − 4·CCF[k] + 2·CCF[k+1])
+</pre></div>
+</div>
+<p>For instruments with <strong>nonlinear dispersion</strong>, the pixel shift is wavelength-dependent. The wavelength correction at position <code class="docutils literal notranslate"><span class="pre">p</span></code> is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ(p) = Δp(p) · (dλ/dp)|_p
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">dλ/dp</span></code> is the local dispersion (derivative of the polynomial) evaluated at <code class="docutils literal notranslate"><span class="pre">p</span></code>. A single global shift is only valid when the dispersion is nearly linear over the shift range.</p>
+<p>After finding <code class="docutils literal notranslate"><span class="pre">Δp</span></code>, the wavelength axis is corrected by interpolation (linear or cubic spline) of the spectrum onto the shifted pixel grid, NOT by shifting the wavelength array directly.</p>
+</section>
+<section id="laser-frequency-comb-lfc-calibration">
+<h3>1.4 Laser Frequency Comb (LFC) Calibration<a class="headerlink" href="#laser-frequency-comb-lfc-calibration" title="Link to this heading"></a></h3>
+<p>LFC lines are uniformly spaced in frequency:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>f_n = f_0 + n · f_rep
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">f_rep</span></code> is the repetition rate (typically 10–25 GHz), <code class="docutils literal notranslate"><span class="pre">f_0</span></code> the offset frequency, and <code class="docutils literal notranslate"><span class="pre">n</span></code> is an integer mode number. Converting to vacuum wavelength:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">λ_n</span> <span class="o">=</span> <span class="n">c</span> <span class="o">/</span> <span class="n">f_n</span>  <span class="p">(</span><span class="n">vacuum</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The extremely dense, precisely known line positions permit a <strong>nonparametric</strong> (non-polynomial) dispersion solution (Excalibur/Zhao et al. 2021): the model is simply a smoothly varying function evaluated on the dense LFC grid, rather than a fixed polynomial.</p>
+</section>
+<section id="dynamic-time-warping-dtw-approach">
+<h3>1.5 Dynamic Time Warping (DTW) Approach<a class="headerlink" href="#dynamic-time-warping-dtw-approach" title="Link to this heading"></a></h3>
+<p>DTW aligns an observed spectrum <code class="docutils literal notranslate"><span class="pre">O</span></code> to a template <code class="docutils literal notranslate"><span class="pre">T</span></code> by finding the optimal nonlinear warping path <code class="docutils literal notranslate"><span class="pre">W</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>W = argmin_{W} Σ_{(i,j)∈W} d(O_i, T_j)
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">d(·,·)</span></code> is a local distance (e.g., squared difference of intensities). The path satisfies monotonicity and continuity constraints. The result is a pixel-to-pixel correspondence from which emission line matches are extracted, followed by a polynomial/spline fit as in the standard pipeline.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="common-implementation-pitfalls-and-correct-treatments">
+<h2>2. Common Implementation Pitfalls and Correct Treatments<a class="headerlink" href="#common-implementation-pitfalls-and-correct-treatments" title="Link to this heading"></a></h2>
+<section id="pixel-indexing-convention">
+<h3>2.1 Pixel Indexing Convention<a class="headerlink" href="#pixel-indexing-convention" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> mixing 0-indexed and 1-indexed pixel coordinates when computing the normalized coordinate <code class="docutils literal notranslate"><span class="pre">p̃</span></code>. Off-by-one errors shift the entire wavelength solution.</p></li>
+<li><p><strong>Correct:</strong> fix the convention at the start (0-indexed in Python); apply the same convention throughout arc extraction, peak finding, and dispersion fitting.</p></li>
+</ul>
+</section>
+<section id="polynomial-basis-normalization">
+<h3>2.2 Polynomial Basis / Normalization<a class="headerlink" href="#polynomial-basis-normalization" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> fitting raw pixel numbers (0–4096) in a monomial basis. The Vandermonde matrix condition number grows as <code class="docutils literal notranslate"><span class="pre">~(N_pix/2)^N</span></code> — for N=5 and 2048 pixels this is ~10^17, numerically singular.</p></li>
+<li><p><strong>Correct:</strong> always normalize pixels to [−1, +1] before fitting, or use <code class="docutils literal notranslate"><span class="pre">numpy.polynomial.legendre.legfit</span></code> / <code class="docutils literal notranslate"><span class="pre">chebyshev.chebfit</span></code> which handle this implicitly. Store the normalization bounds (p_min, p_max) with the solution.</p></li>
+</ul>
+</section>
+<section id="polynomial-order-selection">
+<h3>2.3 Polynomial Order Selection<a class="headerlink" href="#polynomial-order-selection" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> too-high order overfits noise (wavy dispersion); too-low order leaves systematic residuals.</p></li>
+<li><p><strong>Correct:</strong> use N = 3–5 for single-order spectrographs; inspect residual plots; use cross-validation or Bayesian information criterion (BIC) if automated. The RMS residual should match the expected centroiding precision (~0.05–0.2 px). A residual significantly above the centroiding floor indicates too-low order; significant wavy structure in residuals indicates too-high order.</p></li>
+</ul>
+</section>
+<section id="line-centroiding">
+<h3>2.4 Line Centroiding<a class="headerlink" href="#line-centroiding" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> using the raw peak pixel index instead of a sub-pixel centroid. This introduces ~0.5 pixel systematic error.</p></li>
+<li><p><strong>Correct:</strong> fit a Gaussian (or Lorentzian for Voigt-broadened lines) to each arc peak to obtain a sub-pixel center. Centroid precision is typically 1/20–1/40 pixel for well-exposed arcs.</p></li>
+</ul>
+</section>
+<section id="atlas-line-selection">
+<h3>2.5 Atlas Line Selection<a class="headerlink" href="#atlas-line-selection" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> including blended or self-absorbed atlas lines as calibration anchors. These have systematically offset centroids.</p></li>
+<li><p><strong>Correct:</strong> filter the atlas to unblended, unsaturated lines; verify centroids against their expected positions; reject outliers with iterative sigma-clipping (3–5σ).</p></li>
+</ul>
+</section>
+<section id="ransac-inlier-tolerance">
+<h3>2.6 RANSAC Inlier Tolerance<a class="headerlink" href="#ransac-inlier-tolerance" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> using too tight a tolerance (ε) causes the algorithm to find no inlier set; too loose includes many wrong correspondences.</p></li>
+<li><p><strong>Correct:</strong> set ε ≈ 2–5 × (expected centroid precision in wavelength units). For a 0.1 nm/pixel spectrometer and 0.1 pixel centroid precision, ε ≈ 0.05–0.25 nm is appropriate.</p></li>
+</ul>
+</section>
+<section id="cross-correlation-shift-on-nonlinear-dispersions">
+<h3>2.7 Cross-Correlation Shift on Nonlinear Dispersions<a class="headerlink" href="#cross-correlation-shift-on-nonlinear-dispersions" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> applying a single global pixel shift (or wavelength shift) to a nonlinear spectrometer, then calling the spectrum “calibrated.” This is wrong for instruments with significant second-order dispersion curvature.</p></li>
+<li><p><strong>Correct:</strong> for nonlinear dispersions, cross-correlation gives only a local shift estimate. Either (a) re-run the full polynomial fit with updated anchors, or (b) apply the shift in linearized pixel space and multiply by the local <code class="docutils literal notranslate"><span class="pre">dλ/dp</span></code> at each wavelength.</p></li>
+</ul>
+</section>
+<section id="pre-calibrated-spectrometers-when-no-recalibration-is-needed">
+<h3>2.8 Pre-Calibrated Spectrometers — When No Recalibration Is Needed<a class="headerlink" href="#pre-calibrated-spectrometers-when-no-recalibration-is-needed" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Fixed-optics, no-moving-parts fiber spectrometers (e.g., Ocean Optics, Avantes) are stable at room temperature; factory polynomial coefficients remain valid for months to years.</p></li>
+<li><p>Recalibration <strong>is</strong> needed when: (a) temperature deviates significantly from calibration temperature (thermal expansion shifts pixel-λ relation); (b) the physical bench is subjected to mechanical shock; (c) optical components (slits, filters) are changed; (d) sub-nm accuracy is required for a LIBS measurement where line identification depends on precise position.</p></li>
+<li><p><strong>LIBS-specific guidance:</strong> for CF-LIBS, the relevant precision is ~0.05–0.2 nm (sufficient to distinguish closely-spaced elemental lines). A factory calibration good to ~1 nm is marginal; drift of 0.5–1 nm can swap line identities. Monitor with at least one strong known emission line per session.</p></li>
+</ul>
+</section>
+<section id="hough-accumulator-resolution">
+<h3>2.9 Hough Accumulator Resolution<a class="headerlink" href="#hough-accumulator-resolution" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Pitfall:</strong> too-coarse a slope grid causes the Hough peak to be smeared across multiple bins, producing multiple candidate solutions.</p></li>
+<li><p><strong>Correct:</strong> <code class="docutils literal notranslate"><span class="pre">num_slopes</span> <span class="pre">≈</span> <span class="pre">1000</span></code> is the empirically validated default in RASCAL; the intercept bin count is typically half that. Increasing resolution helps but costs memory quadratically.</p></li>
+</ul>
+</section>
+<section id="vacuum-vs-air-wavelengths">
+<h3>2.10 Vacuum vs. Air Wavelengths<a class="headerlink" href="#vacuum-vs-air-wavelengths" title="Link to this heading"></a></h3>
+<ul>
+<li><p><strong>Pitfall:</strong> mixing vacuum and air wavelengths. NIST arc-lamp databases list wavelengths in air (for λ &gt; 200 nm), while laser frequency comb values are in vacuum.</p></li>
+<li><p><strong>Correct:</strong> convert air→vacuum using the Edlén (1953/1966) formula:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_air(λ_air) = 1 + 6432.8×10⁻⁸ + 2949810/(146×10⁸ − 1/λ_air²) + 25540/(41×10⁸ − 1/λ_air²)
+λ_vac = n_air · λ_air
+</pre></div>
+</div>
+<p>Use a consistent convention throughout (NIST LIBS lines are typically in air).</p>
+</li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-references">
+<h2>3. Key References<a class="headerlink" href="#key-references" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Fischler, M. A. &amp; Bolles, R. C. (1981).</strong> “Random sample consensus: a paradigm for model fitting with applications to image analysis and automated cartography.” <em>Communications of the ACM</em>, 24(6), 381–395. DOI: 10.1145/358669.358692
+— Foundational RANSAC algorithm. Canonical reference for the inlier/outlier model, iteration count formula, and minimum-sample-size argument.</p></li>
+<li><p><strong>Veitch-Michaelis, J. &amp; Lam, M. C. W. (2019/2020).</strong> “RASCAL: Towards automated spectral wavelength calibration.” <em>ADASS 2019</em>, arXiv:1912.05883.
+— Introduces RASCAL (RANSAC-Assisted Spectral CALibration): combines Hough transform pre-filter in (slope, intercept) space with RANSAC polynomial fitting. Python library: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">rascal</span></code>. Key RASCAL parameters: <code class="docutils literal notranslate"><span class="pre">num_slopes=1000</span></code>, <code class="docutils literal notranslate"><span class="pre">range_tolerance=500</span> <span class="pre">Å</span></code>, residual tolerance ε.</p></li>
+<li><p><strong>Lam, M. C. W., &amp; Veitch-Michaelis, J. (2021).</strong> “Automated SpectroPhotometric Image REDuction (ASPIRED).” <em>arXiv:2111.02127</em> (JOSS submission).
+— Integrates RASCAL into a full spectral reduction pipeline; provides worked examples, parameter guidance, and shows Hough→RANSAC two-stage workflow.</p></li>
+<li><p><strong>Brandt, G. M., et al. (2020).</strong> “Automatic Echelle Spectrograph Wavelength Calibration.” <em>AJ</em>, 160, 25. DOI: 10.3847/1538-3881/ab929c. arXiv:1910.08079.
+— xwavecal algorithm: uses scale-invariant features (lines that appear in multiple adjacent echelle orders) to establish the dispersion solution without prior knowledge of order numbers or anchor pixels. Polynomial order <code class="docutils literal notranslate"><span class="pre">(N_i,</span> <span class="pre">N_x)</span> <span class="pre">≈</span> <span class="pre">(5,</span> <span class="pre">4)</span></code>. Reaches 10 m/s (NRES) / 1 m/s (HARPS) precision.</p></li>
+<li><p><strong>Zhao, L. L., Hogg, D. W., Bedell, M., &amp; Fischer, D. A. (2021).</strong> “Excalibur: A Nonparametric, Hierarchical Wavelength Calibration Method for a Precision Spectrograph.” <em>AJ</em>, 161, 80. DOI: 10.3847/1538-3881/abd105. arXiv:2010.13786.
+— Excalibur: nonparametric (Gaussian Process / hierarchical) wavelength calibration exploiting laser frequency combs; 5× lower residual RMS vs. polynomial solutions; reduces radial velocity noise from 1.17→1.05 m/s. Key insight: polynomial fits each exposure independently, discarding cross-exposure information.</p></li>
+<li><p><strong>Murphy, M. T., et al. (2007).</strong> “High-precision wavelength calibration of astronomical spectrographs with laser frequency combs.” <em>MNRAS</em>, 380, 839. DOI: 10.1111/j.1365-2966.2007.12147.x.
+— First demonstration of LFC calibration for astronomy; establishes LFC formalism <code class="docutils literal notranslate"><span class="pre">f_n</span> <span class="pre">=</span> <span class="pre">f_0</span> <span class="pre">+</span> <span class="pre">n·f_rep</span></code> and sub-pm wavelength accuracy.</p></li>
+<li><p><strong>Cersullo, F., et al. (2019).</strong> “New wavelength calibration of the HARPS spectrograph.” <em>A&amp;A</em>, 624, A122. DOI: 10.1051/0004-6361/201833852.
+— Best practice for high-resolution echelle calibration: Fabry–Pérot etalon + ThAr arc; Legendre polynomial dispersion model; discussion of vacuum/air wavelength conversion (Edlén formula) and instrumental drift.</p></li>
+<li><p><strong>Wang, K., et al. (2022).</strong> “Initial Drift Correction and Spectral Calibration of MarSCoDe LIBS on the Zhurong Rover.” <em>Remote Sensing</em>, 14, 5964. DOI: 10.3390/rs14235964.
+— LIBS-specific wavelength drift correction using cross-correlation between acquired spectra and calibration reference; demonstrates pixel-shift → wavelength-shift correction with cubic spline interpolation. Real-world evidence that even space-qualified spectrometers experience drift requiring in-situ correction.</p></li>
+<li><p><strong>Willett, P., et al. (2025).</strong> “Automated Spectroscopic Wavelength Calibration using Dynamic Time Warping.” <em>arXiv:2508.05862</em>.
+— DTW as an alternative to RANSAC/Hough for wavelength calibration; handles nonlinear dispersion without initial guesses; follows the same final polynomial/spline fitting step as IRAF IDENTIFY. Best for complex or poorly characterized instruments.</p></li>
+<li><p><strong>Song, Y.-H., et al. (2018).</strong> “Automated wavelength calibration using arc-lamp spectra.” <em>(internal RASCAL citation, cited as Song 2018 by Veitch-Michaelis; full citation in RASCAL source).</em>
+— Originator of the Hough-accumulator approach for spectral line matching; RASCAL extends it with RANSAC and higher-order polynomial fitting.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="what-correct-code-must-do-checklist">
+<h2>4. What Correct Code MUST Do — Checklist<a class="headerlink" href="#what-correct-code-must-do-checklist" title="Link to this heading"></a></h2>
+<section id="dispersion-model">
+<h3>Dispersion Model<a class="headerlink" href="#dispersion-model" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Normalize pixel coordinates</strong> to [−1, +1] before polynomial fitting; store <code class="docutils literal notranslate"><span class="pre">p_min</span></code>, <code class="docutils literal notranslate"><span class="pre">p_max</span></code> with the solution so it is reproducible.</p></li>
+<li><p>[ ] <strong>Choose polynomial basis</strong> (Legendre/Chebyshev preferred over monomial for numerical stability); validate condition number of the design matrix.</p></li>
+<li><p>[ ] <strong>Select polynomial order via residuals</strong>: target RMS ≈ centroiding precision (typically 0.05–0.2 pixel); use cross-validation or BIC if automated.</p></li>
+</ul>
+</section>
+<section id="line-identification-and-matching">
+<h3>Line Identification and Matching<a class="headerlink" href="#line-identification-and-matching" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Sub-pixel centroiding</strong>: fit each detected arc peak with a Gaussian to obtain fractional-pixel center before building the calibration pairs.</p></li>
+<li><p>[ ] <strong>Atlas filtering</strong>: exclude blended, saturated, and telluric-contaminated lines from the reference atlas used for calibration.</p></li>
+<li><p>[ ] <strong>Set RANSAC tolerance ε</strong> as a multiple (~3–5×) of the expected centroid precision in wavelength units, not as a fixed absolute value.</p></li>
+<li><p>[ ] <strong>Verify vacuum/air convention</strong>: NIST arc-line databases give air wavelengths for λ &gt; 200 nm; convert consistently using the Edlén formula if mixing with LFC vacuum wavelengths.</p></li>
+</ul>
+</section>
+<section id="drift-correction-for-pre-calibrated-instruments">
+<h3>Drift Correction (for pre-calibrated instruments)<a class="headerlink" href="#drift-correction-for-pre-calibrated-instruments" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Check whether recalibration is warranted</strong> at each measurement session: temperature excursion, mechanical disturbance, or optical component change all invalidate the factory calibration.</p></li>
+<li><p>[ ] <strong>Cross-correlation shift for drift monitoring</strong>: compute CCF of a known reference spectrum against the measured calibration line(s); use Gaussian/parabolic sub-pixel interpolation of the CCF peak for fractional-pixel accuracy.</p></li>
+<li><p>[ ] <strong>Account for nonlinear dispersion in cross-correlation corrections</strong>: multiply pixel shift by local <code class="docutils literal notranslate"><span class="pre">dλ/dp</span></code> at the reference line position; do NOT apply a single global wavelength offset to the entire nonlinear array.</p></li>
+<li><p>[ ] <strong>Apply shift by interpolating the spectrum</strong>, not by shifting the wavelength array. The spectrum is an intensity vs. pixel array; the wavelength axis is derived by evaluating the polynomial.</p></li>
+</ul>
+</section>
+<section id="libs-specific">
+<h3>LIBS-Specific<a class="headerlink" href="#libs-specific" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Monitor calibration per session</strong> with at least one strong, unblended known emission line (e.g., Hg 253.65 nm, Ne 585.25 nm, or an internal element line with known wavelength).</p></li>
+<li><p>[ ] <strong>Report calibration residual (RMS in nm)</strong> alongside each CF-LIBS result so downstream physics (line identification, Boltzmann fitting) can be weighted appropriately.</p></li>
+<li><p>[ ] <strong>For CF-LIBS line identification</strong>: require calibration accuracy &lt; 0.1 nm (1σ) to reliably distinguish closely-spaced lines; flag results if calibration RMS &gt; 0.2 nm.</p></li>
+<li><p>[ ] <strong>RANSAC on LIBS spectra</strong>: if running fresh wavelength calibration from a laser or arc source co-acquired with LIBS, use RASCAL’s default <code class="docutils literal notranslate"><span class="pre">fit_deg=4</span></code> and <code class="docutils literal notranslate"><span class="pre">num_slopes=1000</span></code>; validate by checking all strong known lines fall within ε of their atlas values.</p></li>
+</ul>
+<hr class="docutils" />
+<p><em>Sources: Based on peer-reviewed literature from 2018–2025 plus knowledge of established methods (Fischler &amp; Bolles 1981, Murphy et al. 2007). Web search conducted 2026-06-25.</em></p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

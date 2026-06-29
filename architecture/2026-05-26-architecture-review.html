@@ -1,0 +1,808 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architecture review — 2026-05-26 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Architecture review — 2026-05-26</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/2026-05-26-architecture-review.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="architecture-review-2026-05-26">
+<h1>Architecture review — 2026-05-26<a class="headerlink" href="#architecture-review-2026-05-26" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> session handoff for a Claude Agent Team. This document is the
+authoritative brief; each candidate below is self-contained enough that an
+agent can claim it without reading the prior transcript.</p>
+<p><strong>Goal of the new session:</strong> land the 5 architectural deepenings identified
+below (or a subset, with explicit triage). Each candidate has a beads id,
+a file:line target, a definition of done, and a validation command.</p>
+<p><strong>Glossary</strong> (use these terms exactly — do not substitute “service”,
+“component”, “boundary”):</p>
+<ul class="simple">
+<li><p><strong>Module</strong> = anything with an interface and an implementation</p></li>
+<li><p><strong>Interface</strong> = everything a caller must know (types, invariants,
+ordering, error modes, perf characteristics)</p></li>
+<li><p><strong>Implementation</strong> = body of code</p></li>
+<li><p><strong>Depth</strong> = leverage at the interface (high = deep, low = shallow)</p></li>
+<li><p><strong>Seam</strong> = location an interface lives</p></li>
+<li><p><strong>Adapter</strong> = concrete satisfier of an interface</p></li>
+<li><p><strong>Leverage</strong> = capability per unit of interface</p></li>
+<li><p><strong>Locality</strong> = change/bug/knowledge concentrated in one module</p></li>
+</ul>
+<p><strong>Source for full skill definitions:</strong>
+<code class="docutils literal notranslate"><span class="pre">/home/brian/.claude/skills/improve-codebase-architecture/LANGUAGE.md</span></code>.</p>
+<hr class="docutils" />
+<section id="quick-start-for-the-agent-team">
+<h2>Quick-start for the agent team<a class="headerlink" href="#quick-start-for-the-agent-team" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Working dir</span>
+<span class="nb">cd</span><span class="w"> </span>/home/brian/code/CF-LIBS-improved
+git<span class="w"> </span>checkout<span class="w"> </span>dev<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull
+
+<span class="c1"># Tooling</span>
+ast-grep<span class="w"> </span>--lang<span class="w"> </span>python<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;&lt;pattern&gt;&#39;</span><span class="w"> </span>cflibs/<span class="w">       </span><span class="c1"># structural search</span>
+<span class="c1"># Serena MCP via mcp__plugin_serena_serena__*       # symbol-level lookup</span>
+.venv/bin/python<span class="w">                                     </span><span class="c1"># JAX, scipy, pyarrow</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>&lt;path&gt;<span class="w"> </span>-q<span class="w"> </span>--timeout<span class="o">=</span><span class="m">60</span><span class="w">   </span><span class="c1"># fast tests</span>
+
+<span class="c1"># Cluster (V100S nodes vasp-01..03, ssh as briansquires@brians-...</span>
+<span class="c1"># is NOT how to reach them — direct ssh to vasp-02, vasp-03)</span>
+ssh<span class="w"> </span>vasp-02<span class="w"> </span><span class="s1">&#39;squeue --states=all&#39;</span><span class="w">                   </span><span class="c1"># check before submit</span>
+ssh<span class="w"> </span>vasp-02<span class="w"> </span><span class="s1">&#39;cd ~brian/code/cflibs-bench &amp;&amp; git pull &amp;&amp; sbatch scripts/&lt;x&gt;.sh&#39;</span>
+
+<span class="c1"># Beads (don&#39;t use TodoWrite — use bd)</span>
+bd<span class="w"> </span>ready<span class="w">                </span><span class="c1"># claimable</span>
+bd<span class="w"> </span>show<span class="w"> </span>&lt;id&gt;<span class="w">            </span><span class="c1"># detail</span>
+bd<span class="w"> </span>update<span class="w"> </span>&lt;id&gt;<span class="w"> </span>--status<span class="o">=</span>in_progress
+bd<span class="w"> </span>close<span class="w"> </span>&lt;id&gt;<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;...&quot;</span>
+
+<span class="c1"># Honor the user&#39;s cluster-coordination rule: another agent shares</span>
+<span class="c1"># vasp-01..03. Do NOT pin --nodelist — let SLURM schedule.</span>
+</pre></div>
+</div>
+<p><strong>Cluster filesystem layout:</strong></p>
+<ul class="simple">
+<li><p>Repo on cluster: <code class="docutils literal notranslate"><span class="pre">~brian/code/cflibs-bench/</span></code> (note: different name from
+<code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved</span></code> here). Sync via <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">pull</span> <span class="pre">origin</span> <span class="pre">dev</span></code>.</p></li>
+<li><p>Data: <code class="docutils literal notranslate"><span class="pre">/cluster/shared/cf-libs-bench/data</span></code> (NFS-mounted)</p></li>
+<li><p>JAX compile cache: <code class="docutils literal notranslate"><span class="pre">~brian/jax-cache</span></code> (user-private — the shared one has
+uid skew and hangs jobs)</p></li>
+<li><p>Benchmark output: <code class="docutils literal notranslate"><span class="pre">~brian/code/cflibs-bench/output/&lt;run&gt;/</span></code></p></li>
+<li><p>ai-proxy ↔ vasp-02 share <code class="docutils literal notranslate"><span class="pre">/home/brian/</span></code> via NFS, so files appear on
+both sides instantly.</p></li>
+</ul>
+<p><strong>Bead JSONL is unstable across sessions:</strong> <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">close</span></code> and <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">update</span></code>
+get rolled back on the next <code class="docutils literal notranslate"><span class="pre">bd</span></code> invocation because the JSONL auto-imports
+the on-disk state. Commit <code class="docutils literal notranslate"><span class="pre">.beads/issues.jsonl</span></code> immediately after bead
+operations or the closes will revert.</p>
+<p><strong>Worktree isolation does NOT work for the Agent tool</strong> in this repo —
+agents spawned with <code class="docutils literal notranslate"><span class="pre">isolation:</span> <span class="pre">worktree</span></code> wrote files to the main repo
+working tree (their CWD ignored the worktree path). The work was correct,
+just placed in the wrong directory. Either accept this and review the
+main repo diff, or run agents without isolation and accept the
+serialization.</p>
+</section>
+<hr class="docutils" />
+<section id="state-at-session-end-2026-05-26">
+<h2>State at session end (2026-05-26)<a class="headerlink" href="#state-at-session-end-2026-05-26" title="Link to this heading"></a></h2>
+<section id="current-benchmark-leaderboard-phase-7-n-24-quick">
+<h3>Current benchmark leaderboard (Phase 7, n=24, –quick)<a class="headerlink" href="#current-benchmark-leaderboard-phase-7-n-24-quick" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>hybrid_union                F1=0.619  R=0.625  P=0.679   ← king
+alias_high_recall           F1=0.545  R=0.510  P=0.644   ← post-n3rf.2
+hybrid_consensus_weighted   F1=0.491  R=0.422  P=0.701   ← post-jbfg.2
+alias_v2                    F1=0.402  R=0.361  P=0.534   ← post-FISTA + n3rf.4
+spectral_nnls               F1=0.399  R=0.490  P=0.374
+alias                       F1=0.202  R=0.142  P=0.542
+comb                        F1=0.014  R=0.042  P=0.008   ← s1qr.2 OPEN
+</pre></div>
+</div>
+<p>Reference baseline (Phase 1b CPU, pre-fix): <code class="docutils literal notranslate"><span class="pre">alias_v2</span> <span class="pre">F1=0.364</span></code>,
+<code class="docutils literal notranslate"><span class="pre">alias_high_recall</span> <span class="pre">F1=0.083</span></code>. The leaderboard above is <strong>post-all-fixes</strong>.</p>
+</section>
+<section id="open-beads-relevant-to-this-review">
+<h3>Open beads relevant to this review<a class="headerlink" href="#open-beads-relevant-to-this-review" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">s1qr.2</span></code> (P1) — comb wavelength_tolerance pivot. The amplitude-floor
+fix collides with the SNR=3 LIBS detection-limit convention; the fix
+needs to be shape-based (template-correlation discriminator), not
+amplitude. See <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_comb_fp_reduction.py::test_tier2_strict_rejects_moderate_correlation_peaks</span></code>
+for the canary.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">e7u3</span></code> (P2) — jaxopt Anderson acceleration for outer fixed-point.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">nnci</span></code> (P3) — remove <code class="docutils literal notranslate"><span class="pre">object.__new__(SingleZoneLTEPlasma)</span></code> bypass.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">w6bf</span></code> (P3) — comb default relaxation (benchmark required).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pp9i</span></code> (P3) — alias_boltzmann_r2_sweep workflow.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wph7</span></code> (P2) — spectral_nnls residual-variance cap inversion (behavior-
+changing, benchmark required).</p></li>
+</ul>
+</section>
+<section id="recent-epics-with-mostly-closed-children">
+<h3>Recent epics with mostly-closed children<a class="headerlink" href="#recent-epics-with-mostly-closed-children" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">n3rf</span></code> (Post-ALIAS-fix followups): 3/4 closed</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jbfg</span></code> (JAX/CPU parity + voting): 3/3 closed via current epic state</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">s1qr</span></code> (Cross-exam): 2/3 closed (s1qr.2 reopened for shape-based rework)</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="recommended-sequencing">
+<h2>Recommended sequencing<a class="headerlink" href="#recommended-sequencing" title="Link to this heading"></a></h2>
+<p>The 5 candidates are independent enough that 5 agents can claim them in
+parallel, but #1 unblocks #2 (the preset table lives where the factory
+lives). Suggested phasing:</p>
+<p><strong>Wave 1 (parallel):</strong></p>
+<ul class="simple">
+<li><p>A1 — Candidate 1 (predictor-builder family)</p></li>
+<li><p>A3 — Candidate 3 (closure unification, ADR T1-3)</p></li>
+<li><p>A4 — Candidate 4 (PartitionFunction encapsulation, ADR B-P7)</p></li>
+<li><p>A5 — Candidate 5 (resonance filter seam)</p></li>
+</ul>
+<p><strong>Wave 2 (after A1 lands):</strong></p>
+<ul class="simple">
+<li><p>A2 — Candidate 2 (ALIAS preset cocktails — depends on factory from #1)</p></li>
+</ul>
+<p><strong>Validation gate:</strong> after each merge, run Phase 8 cluster benchmark on
+the n=24 cohort (24-spectrum Vrabel + Aalto + BHVO-2). Numbers must
+not regress the current leaderboard.</p>
+</section>
+<hr class="docutils" />
+<section id="candidate-1-collapse-the-predictor-builder-family">
+<h2>Candidate 1 · Collapse the predictor-builder family<a class="headerlink" href="#candidate-1-collapse-the-predictor-builder-family" title="Link to this heading"></a></h2>
+<p><strong>Strength:</strong> Strong. <strong>Beads:</strong> new bead to file as <code class="docutils literal notranslate"><span class="pre">arch-predictors</span></code>.</p>
+<section id="files">
+<h3>Files<a class="headerlink" href="#files" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py:1270-1703</span></code></p></li>
+<li><p>6 builders × ~70 LOC = ~420 LOC of near-identical closure boilerplate:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_alias_predictor</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_alias_v2_predictor</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_alias_high_recall_predictor</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_hybrid_consensus_2of3_predictor</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_hybrid_consensus_2of4_with_nnls_predictor</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_hybrid_consensus_weighted_predictor</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="problem">
+<h3>Problem<a class="headerlink" href="#problem" title="Link to this heading"></a></h3>
+<p>Each builder is a closure factory with identical outer shell. They
+differ only in 2-5 kwargs passed to <code class="docutils literal notranslate"><span class="pre">ALIASIdentifier()</span></code> and (for
+consensus variants) which sibling identifiers get composed.</p>
+<p><strong>Cost evidence (deletion test passes):</strong></p>
+<ul class="simple">
+<li><p>Bead <code class="docutils literal notranslate"><span class="pre">jbfg.2</span></code> required <code class="docutils literal notranslate"><span class="pre">r2_gate_mode=&quot;adaptive_t&quot;</span></code> + <code class="docutils literal notranslate"><span class="pre">relative_cl_per_ion_stage=True</span></code>
+inside <strong>three</strong> consensus builders (commit <code class="docutils literal notranslate"><span class="pre">06de07f</span></code>).</p></li>
+<li><p>Bead <code class="docutils literal notranslate"><span class="pre">n3rf.2</span></code> required the <strong>same</strong> two-kwarg fix inside the standalone
+<code class="docutils literal notranslate"><span class="pre">_build_alias_high_recall_predictor</span></code> (commit <code class="docutils literal notranslate"><span class="pre">b809d4b</span></code>).</p></li>
+<li><p>Bead <code class="docutils literal notranslate"><span class="pre">n3rf.4</span></code> required a third place to be aware of the same v2 cocktail.</p></li>
+</ul>
+<p>Four discoveries of one logical decision. The “good cocktail” is implicit
+knowledge scattered across docstrings and builder bodies.</p>
+</section>
+<section id="solution">
+<h3>Solution<a class="headerlink" href="#solution" title="Link to this heading"></a></h3>
+<p>Extract a single factory:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_make_predictor</span><span class="p">(</span>
+    <span class="n">identifier_class</span><span class="p">,</span>
+    <span class="n">preset</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>                          <span class="c1"># named cocktail, see #2</span>
+    <span class="n">voting</span><span class="p">:</span> <span class="n">VotingConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>    <span class="c1"># for consensus variants</span>
+    <span class="n">sibling_identifiers</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">type</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>  <span class="c1"># for ensemble variants</span>
+    <span class="n">config_namer</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">ElementIdentificationResult</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Single factory replacing 6 hand-rolled builders.&quot;&quot;&quot;</span>
+</pre></div>
+</div>
+<p>The registry then becomes data:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ID_WORKFLOW_PRESETS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;alias&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;strict&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="s2">&quot;alias_v2&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;v2&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="s2">&quot;alias_high_recall&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;high_recall_v2&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="s2">&quot;hybrid_consensus_2of3&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;v2&quot;</span><span class="p">,</span> <span class="n">BinaryVoting</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;alias&quot;</span><span class="p">,</span> <span class="s2">&quot;comb&quot;</span><span class="p">,</span> <span class="s2">&quot;correlation&quot;</span><span class="p">])),</span>
+    <span class="s2">&quot;hybrid_consensus_2of4_with_nnls&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;v2&quot;</span><span class="p">,</span> <span class="n">BinaryVoting</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="s2">&quot;nnls&quot;</span><span class="p">])),</span>
+    <span class="s2">&quot;hybrid_consensus_weighted&quot;</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;v2&quot;</span><span class="p">,</span> <span class="n">WeightedVoting</span><span class="p">(</span><span class="n">weights</span><span class="o">=</span><span class="p">{</span><span class="o">...</span><span class="p">},</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.40</span><span class="p">)),</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="definition-of-done">
+<h3>Definition of done<a class="headerlink" href="#definition-of-done" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>6 hand-rolled builders deleted; replaced by <code class="docutils literal notranslate"><span class="pre">_make_predictor</span></code> + registry
+table.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_alias_sweep_workflows_registered.py</span></code> and the
+existing hybrid_consensus tests still pass.</p></li>
+<li><p>New unit test asserts that <code class="docutils literal notranslate"><span class="pre">_make_predictor(ALIASIdentifier,</span> <span class="pre">&quot;v2&quot;)</span></code>
+produces a predictor functionally equivalent to the previous
+<code class="docutils literal notranslate"><span class="pre">_build_alias_v2_predictor</span></code> on at least one fixture spectrum.</p></li>
+<li><p>LOC delta ≥ -300 (net deletion).</p></li>
+</ul>
+</section>
+<section id="validation">
+<h3>Validation<a class="headerlink" href="#validation" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/benchmark/<span class="w"> </span>tests/test_hybrid_consensus_2of3.py<span class="w"> </span>-q<span class="w"> </span>--timeout<span class="o">=</span><span class="m">120</span>
+</pre></div>
+</div>
+<p>Then submit a Phase 8a cluster benchmark with the same 7-workflow list
+as Phase 7 (<code class="docutils literal notranslate"><span class="pre">scripts/submit_post_alias_fix_benchmark.sh</span></code> after rebasing).
+Numbers must match Phase 7 within 0.01 macro_F1 per workflow.</p>
+</section>
+<section id="watch-outs">
+<h3>Watch-outs<a class="headerlink" href="#watch-outs" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_alias_sweep_predictor_factory</span></code> at <code class="docutils literal notranslate"><span class="pre">unified.py:1094</span></code> is already
+the pattern to imitate. Don’t reinvent.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">_jax_identifier_flags_for(cls)</span></code> helper at <code class="docutils literal notranslate"><span class="pre">unified.py:29</span></code> does
+x64 enablement as a side effect — preserve that semantics in the new
+factory (or extract it to a more honest place).</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="candidate-2-name-the-alias-configuration-cocktails">
+<h2>Candidate 2 · Name the ALIAS configuration cocktails<a class="headerlink" href="#candidate-2-name-the-alias-configuration-cocktails" title="Link to this heading"></a></h2>
+<p><strong>Strength:</strong> Strong (after #1 lands). <strong>Beads:</strong> <code class="docutils literal notranslate"><span class="pre">arch-alias-presets</span></code>.</p>
+<section id="id1">
+<h3>Files<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py:820-920</span></code> — 30+ kwargs on <code class="docutils literal notranslate"><span class="pre">__init__</span></code></p></li>
+</ul>
+</section>
+<section id="id2">
+<h3>Problem<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">ALIASIdentifier.__init__</span></code> takes 30 kwargs. Five coherent “cocktails”
+have been discovered through bead-driven debugging. None of them are
+named.</p>
+</section>
+<section id="the-cocktails-discovered-the-hard-way">
+<h3>The cocktails, discovered the hard way<a class="headerlink" href="#the-cocktails-discovered-the-hard-way" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>preset</p></th>
+<th class="head"><p>r2_gate_mode</p></th>
+<th class="head"><p>relative_cl_per_ion_stage</p></th>
+<th class="head"><p>high_recall</p></th>
+<th class="head"><p>found via</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">strict</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">fixed</span></code></p></td>
+<td><p>False</p></td>
+<td><p>False</p></td>
+<td><p>baseline</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">v2</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">adaptive_t</span></code></p></td>
+<td><p>True</p></td>
+<td><p>False</p></td>
+<td><p>PR #175 + #176</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">high_recall_v2</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">adaptive_t</span></code></p></td>
+<td><p>True</p></td>
+<td><p>True</p></td>
+<td><p>n3rf.2</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">consensus_voter</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">adaptive_t</span></code></p></td>
+<td><p>True</p></td>
+<td><p>False</p></td>
+<td><p>jbfg.2</p></td>
+</tr>
+</tbody>
+</table>
+<p>Plus the JAX-flag bundle (<code class="docutils literal notranslate"><span class="pre">use_jax_*</span></code>) which is auto-injected.</p>
+</section>
+<section id="id3">
+<h3>Solution<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<p>Define a preset table in <code class="docutils literal notranslate"><span class="pre">alias.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ALIAS_PRESETS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;strict&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;r2_gate_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="s2">&quot;relative_cl_per_ion_stage&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="o">...</span><span class="p">},</span>
+    <span class="s2">&quot;v2&quot;</span><span class="p">:</span>     <span class="p">{</span><span class="s2">&quot;r2_gate_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;adaptive_t&quot;</span><span class="p">,</span> <span class="s2">&quot;relative_cl_per_ion_stage&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="o">...</span><span class="p">},</span>
+    <span class="s2">&quot;high_recall_v2&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;r2_gate_mode&quot;</span><span class="p">:</span> <span class="s2">&quot;adaptive_t&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="s2">&quot;high_recall&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+<span class="p">}</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">alias_preset</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">overrides</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ALIASIdentifier</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Public constructor: select a known cocktail.&quot;&quot;&quot;</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">ALIAS_PRESETS</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="o">**</span><span class="n">overrides</span><span class="p">}</span>
+    <span class="k">return</span> <span class="n">ALIASIdentifier</span><span class="p">(</span><span class="o">**</span><span class="n">cfg</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Existing <code class="docutils literal notranslate"><span class="pre">__init__</span></code> stays for experimentation; the predictor factory
+from #1 calls <code class="docutils literal notranslate"><span class="pre">alias_preset()</span></code>.</p>
+</section>
+<section id="id4">
+<h3>Definition of done<a class="headerlink" href="#id4" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ALIAS_PRESETS</span></code> table lives in <code class="docutils literal notranslate"><span class="pre">alias.py</span></code> (or <code class="docutils literal notranslate"><span class="pre">alias_presets.py</span></code>).</p></li>
+<li><p>All predictor builders (or the unified factory from #1) consume presets
+by name.</p></li>
+<li><p>New unit test: each named preset round-trips through <code class="docutils literal notranslate"><span class="pre">__init__</span></code> and
+the resulting kwargs match the table.</p></li>
+<li><p>Docstring on <code class="docutils literal notranslate"><span class="pre">ALIASIdentifier.__init__</span></code> references <code class="docutils literal notranslate"><span class="pre">ALIAS_PRESETS</span></code> so
+the next maintainer doesn’t have to discover the cocktails again.</p></li>
+</ul>
+</section>
+<section id="id5">
+<h3>Validation<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<p>Same as #1, plus:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_alias_unit.py<span class="w"> </span>-q<span class="w"> </span>--timeout<span class="o">=</span><span class="m">60</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="candidate-3-unify-the-two-compositional-closures">
+<h2>Candidate 3 · Unify the two compositional closures<a class="headerlink" href="#candidate-3-unify-the-two-compositional-closures" title="Link to this heading"></a></h2>
+<p><strong>Strength:</strong> Strong. <strong>ADR alignment:</strong> ADR-0001 T1-3.
+<strong>Beads:</strong> <code class="docutils literal notranslate"><span class="pre">arch-closure-unify</span></code>.</p>
+<section id="id6">
+<h3>Files<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/softmax_closure.py</span></code> — JAX, used by
+<code class="docutils literal notranslate"><span class="pre">joint_optimizer.py</span></code> + <code class="docutils literal notranslate"><span class="pre">coarse_to_fine.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure.py</span></code> — numpy, used by
+<code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> solver. Contains <code class="docutils literal notranslate"><span class="pre">ClosureEquation.apply_ilr</span></code> + PWLR
+(adaptive ridge).</p></li>
+</ul>
+</section>
+<section id="id7">
+<h3>Problem<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<p>Two mechanisms implementing the same compositional-simplex math
+(<code class="docutils literal notranslate"><span class="pre">sum</span> <span class="pre">C_i</span> <span class="pre">=</span> <span class="pre">1</span></code>). A caller’s choice depends on which solver was written
+first, not on the LIBS regime they’re modeling.</p>
+<p>The detective on bead s1qr.3 documented that:</p>
+<ul class="simple">
+<li><p>softmax_closure has log-sum-exp stabilization but vanishing gradient ∝ C_i (locks small elements out)</p></li>
+<li><p>ILR has no vanishing gradient (singularity moved to ±∞) but is only
+available via the iterative solver</p></li>
+<li><p>PWLR is the adaptive-ridge variant in <code class="docutils literal notranslate"><span class="pre">closure.py</span></code> not used at all
+in JAX-side solvers</p></li>
+</ul>
+<p>So JAX solvers can’t use the closure mode that handles trace elements
+best.</p>
+</section>
+<section id="id8">
+<h3>Solution<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">ClosureStrategy</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;jax&quot;</span><span class="p">,</span> <span class="s2">&quot;numpy&quot;</span><span class="p">]</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Array</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">gradient_check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># for trace-element safety</span>
+
+<span class="c1"># adapters</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SoftmaxClosure</span><span class="p">(</span><span class="n">ClosureStrategy</span><span class="p">):</span> <span class="o">...</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ILRClosure</span><span class="p">(</span><span class="n">ClosureStrategy</span><span class="p">):</span> <span class="o">...</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PWLRClosure</span><span class="p">(</span><span class="n">ClosureStrategy</span><span class="p">):</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>Solvers take a <code class="docutils literal notranslate"><span class="pre">ClosureStrategy</span></code> instance (not an import path).</p>
+</section>
+<section id="id9">
+<h3>Definition of done<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ClosureStrategy</span></code> protocol defined in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure_strategy.py</span></code>.</p></li>
+<li><p>All three adapters (Softmax, ILR, PWLR) implemented.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">joint_optimizer</span></code>, <code class="docutils literal notranslate"><span class="pre">coarse_to_fine</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative</span></code> all take a
+<code class="docutils literal notranslate"><span class="pre">closure:</span> <span class="pre">ClosureStrategy</span></code> constructor kwarg (default Softmax for JAX,
+ILR for iterative, matching current behavior).</p></li>
+<li><p>Existing tests in <code class="docutils literal notranslate"><span class="pre">tests/test_softmax_closure.py</span></code> + iterative-solver
+tests still pass.</p></li>
+<li><p>New parity test: <code class="docutils literal notranslate"><span class="pre">SoftmaxClosure(theta).apply()</span></code> produces the same
+output as the pre-refactor <code class="docutils literal notranslate"><span class="pre">softmax_closure(theta)</span></code> to bit precision.</p></li>
+</ul>
+</section>
+<section id="id10">
+<h3>Validation<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_softmax_closure.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tests/test_solver.py<span class="w"> </span>tests/test_closed_form_solver.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-q<span class="w"> </span>--timeout<span class="o">=</span><span class="m">120</span>
+</pre></div>
+</div>
+</section>
+<section id="adr-alignment">
+<h3>ADR alignment<a class="headerlink" href="#adr-alignment" title="Link to this heading"></a></h3>
+<p>ADR-0001 T1-3 (lax-while-iterative) already proposes pre-resolving
+closure mode into a closed-over <code class="docutils literal notranslate"><span class="pre">closure_fn</span></code>. This deepening generalizes
+T1-3 to all three solvers. Read <code class="docutils literal notranslate"><span class="pre">docs/adr/specs/T1-3-lax-while-iterative.md</span></code>
+before starting.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="candidate-4-encapsulate-the-partition-function">
+<h2>Candidate 4 · Encapsulate the partition function<a class="headerlink" href="#candidate-4-encapsulate-the-partition-function" title="Link to this heading"></a></h2>
+<p><strong>Strength:</strong> Strong. <strong>ADR alignment:</strong> ADR-0001 B-P7.
+<strong>Beads:</strong> <code class="docutils literal notranslate"><span class="pre">arch-partition-encapsulation</span></code> (also closes the partial fix
+notes from s1qr.1).</p>
+<section id="id11">
+<h3>Files<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/atomic/structures.py:118-145</span></code> — <code class="docutils literal notranslate"><span class="pre">PartitionFunction</span></code> dataclass
+exposes <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">ionization_stage,</span> <span class="pre">coefficients,</span> <span class="pre">t_min,</span> <span class="pre">t_max,</span> <span class="pre">source)</span></code></p></li>
+<li><p>8 call sites consume the dataclass; 4 of them (post-fix <code class="docutils literal notranslate"><span class="pre">80bc338</span></code>) now
+pass <code class="docutils literal notranslate"><span class="pre">t_min</span></code>/<code class="docutils literal notranslate"><span class="pre">t_max</span></code> through; <strong>4 still ignore the bounds</strong>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py:264</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py:414-415</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py:50</span></code> (used at lines 256, 356, 457,
+613-614, 645)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/plasma/anderson_solver.py:214</span></code></p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="id12">
+<h3>Problem<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">t_min/t_max</span></code> metadata exists in the dataclass but isn’t part of the
+contract — half the readers just take the coefficients. The deletion
+test passes: encapsulating bounds inside a provider concentrates the
+guard logic; today it’s smeared across the partial-fix call sites.</p>
+</section>
+<section id="id13">
+<h3>Solution<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">PartitionFunctionProvider</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">T_K</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Array</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">valid_range</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span> <span class="o">...</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">g0</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span> <span class="o">...</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">PolynomialPartitionFunctionProvider</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Polynomial form with bounds clamping and g0 floor.&quot;&quot;&quot;</span>
+    <span class="n">coefficients</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+    <span class="n">t_min</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">t_max</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">g0</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">T_K</span><span class="p">):</span> <span class="o">...</span>  <span class="c1"># clamp T to [t_min, t_max], floor at g0</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code> vends sealed instances:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">provider</span> <span class="o">=</span> <span class="n">atomic_db</span><span class="o">.</span><span class="n">partition_function_for</span><span class="p">(</span><span class="s2">&quot;Fe&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">U</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">at</span><span class="p">(</span><span class="n">T_K</span><span class="p">)</span>  <span class="c1"># bounds + g0 enforced inside</span>
+</pre></div>
+</div>
+<p>The polynomial coefficients never leave the provider.</p>
+</section>
+<section id="id14">
+<h3>Definition of done<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">PartitionFunctionProvider</span></code> protocol + concrete implementation in
+<code class="docutils literal notranslate"><span class="pre">cflibs/plasma/partition.py</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AtomicDatabase.partition_function_for(element,</span> <span class="pre">stage)</span></code> returns a
+provider instance.</p></li>
+<li><p>All 8 call sites migrated to <code class="docutils literal notranslate"><span class="pre">provider.at(T)</span></code> instead of
+<code class="docutils literal notranslate"><span class="pre">polynomial_partition_function(T,</span> <span class="pre">coeffs,</span> <span class="pre">...)</span></code>.</p></li>
+<li><p>The 4 batched-array call sites need a <code class="docutils literal notranslate"><span class="pre">BatchedPartitionFunctionProvider</span></code>
+with a <code class="docutils literal notranslate"><span class="pre">.at_batch(T_array,</span> <span class="pre">species_indices)</span> <span class="pre">-&gt;</span> <span class="pre">Array</span></code> method — this
+is the trickier part. Schema-level work on snapshot containers
+(<code class="docutils literal notranslate"><span class="pre">TraceableAtomicSnapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">AtomicDataContainer</span></code>) to carry
+per-species t_min/t_max/g0 arrays.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_partition_function_extrapolation.py</span></code> (5 existing tests</p>
+<ul>
+<li><p>at least 3 new tests for the batched provider).</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="id15">
+<h3>Validation<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_partition_function_extrapolation.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tests/test_plasma.py<span class="w"> </span>tests/test_atomic.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tests/test_closed_form_solver.py<span class="w"> </span>tests/test_solver.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tests/test_anderson_solver.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-q<span class="w"> </span>--timeout<span class="o">=</span><span class="m">120</span>
+</pre></div>
+</div>
+<p>Phase 8 cluster benchmark; no alias_v2 macro_F1 regression vs Phase 7 (0.402).</p>
+</section>
+<section id="id16">
+<h3>ADR alignment<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<p>ADR-0001 B-P7 specifies <code class="docutils literal notranslate"><span class="pre">RovibPartitionFunction</span></code> ABC with <code class="docutils literal notranslate"><span class="pre">at(T,</span> <span class="pre">**kwargs)</span></code>.
+This is the canonical direction. Read <code class="docutils literal notranslate"><span class="pre">docs/adr/ADR-0001-RUNBOOK.md</span></code> §B-P7
+before starting.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="candidate-5-move-the-resonance-filter-behind-the-boltzmann-seam">
+<h2>Candidate 5 · Move the resonance filter behind the Boltzmann seam<a class="headerlink" href="#candidate-5-move-the-resonance-filter-behind-the-boltzmann-seam" title="Link to this heading"></a></h2>
+<p><strong>Strength:</strong> Worth exploring. <strong>Beads:</strong> <code class="docutils literal notranslate"><span class="pre">arch-resonance-seam</span></code>.</p>
+<section id="id17">
+<h3>Files<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py:1528</span></code> — caller sets <code class="docutils literal notranslate"><span class="pre">cand[&quot;nnls_significant&quot;]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py:1734</span></code> — caller threads it into the check</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py:2598-2750</span></code> — <code class="docutils literal notranslate"><span class="pre">_boltzmann_consistency_check</span></code>
+uses the flag to filter resonance lines</p></li>
+</ul>
+</section>
+<section id="id18">
+<h3>Problem<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
+<p>Two checks (NNLS significance, Boltzmann linearity) couple through a
+kwarg the caller has to thread. The caller must know both checks; the
+flag rides through a stranger.</p>
+</section>
+<section id="id19">
+<h3>Solution<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
+<p>Move the decision-to-filter inside <code class="docutils literal notranslate"><span class="pre">_boltzmann_consistency_check</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_boltzmann_consistency_check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element</span><span class="p">,</span> <span class="n">fused_lines</span><span class="p">,</span> <span class="o">...</span><span class="p">,</span> <span class="n">candidate</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="c1"># Internal seam: filter resonance lines if NNLS supports the candidate</span>
+    <span class="n">lines_to_fit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_resonance_filter</span><span class="p">(</span><span class="n">fused_lines</span><span class="p">,</span> <span class="n">candidate</span><span class="p">)</span>
+    <span class="c1"># ... existing logic ...</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_apply_resonance_filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fused_lines</span><span class="p">,</span> <span class="n">candidate</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Internal seam. Drops resonance lines when NNLS supports the</span>
+<span class="sd">    candidate. Pre-scans to avoid stranding all-resonance elements</span>
+<span class="sd">    (n3rf.4 lesson).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">candidate</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">candidate</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nnls_significant&quot;</span><span class="p">):</span> <span class="k">return</span> <span class="n">fused_lines</span>
+    <span class="c1"># ... pre-scan + filter logic ...</span>
+</pre></div>
+</div>
+<p>The caller passes only the candidate dict it already owns.</p>
+</section>
+<section id="id20">
+<h3>Definition of done<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_apply_resonance_filter</span></code> extracted as a private method.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_boltzmann_consistency_check</span></code> signature loses the <code class="docutils literal notranslate"><span class="pre">nnls_significant</span></code>
+kwarg (or marks it as deprecated for one release).</p></li>
+<li><p>All callers updated.</p></li>
+<li><p>The n3rf.4 pre-scan guard (don’t strand all-resonance elements like
+Al I) is preserved.</p></li>
+<li><p>A new unit test exercises the filter directly on a synthetic candidate
+dict, not via the full <code class="docutils literal notranslate"><span class="pre">identify()</span></code> path.</p></li>
+</ul>
+</section>
+<section id="id21">
+<h3>Validation<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_alias_unit.py<span class="w"> </span>tests/inversion/<span class="w"> </span>-q<span class="w"> </span>--timeout<span class="o">=</span><span class="m">120</span>
+</pre></div>
+</div>
+<p>Phase 8 benchmark: alias_v2 macro_F1 must hold at 0.402 (Phase 7 baseline).</p>
+</section>
+<section id="id22">
+<h3>Watch-outs<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The n3rf.4 fix specifically handles the case where all matched lines
+are resonance lines (Al I, no non-resonance alternatives). The
+pre-scan logic must be preserved verbatim in the extracted method.
+See commit <code class="docutils literal notranslate"><span class="pre">4794d04</span></code> for the exact pre-scan code.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="cross-cutting-context-for-the-agent-team">
+<h2>Cross-cutting context for the agent team<a class="headerlink" href="#cross-cutting-context-for-the-agent-team" title="Link to this heading"></a></h2>
+<section id="tooling-preferences-the-user-has-corrected-twice-do-not-default-to-bash-grep">
+<h3>Tooling preferences (the user has corrected twice — do NOT default to bash grep)<a class="headerlink" href="#tooling-preferences-the-user-has-corrected-twice-do-not-default-to-bash-grep" title="Link to this heading"></a></h3>
+<p>Ladder (try in order, fall back only when previous fails):</p>
+<ol class="arabic simple">
+<li><p><strong>Serena MCP</strong> (LSP-grade symbol resolution) — <code class="docutils literal notranslate"><span class="pre">find_symbol</span></code>,
+<code class="docutils literal notranslate"><span class="pre">find_referencing_symbols</span></code>, <code class="docutils literal notranslate"><span class="pre">search_for_pattern</span></code>, <code class="docutils literal notranslate"><span class="pre">replace_symbol_body</span></code>,
+<code class="docutils literal notranslate"><span class="pre">rename_symbol</span></code>, <code class="docutils literal notranslate"><span class="pre">safe_delete_symbol</span></code>. Use this for any Python
+symbol-level question.</p></li>
+<li><p><strong>colgrep skill</strong> — semantic intent search (“where inversion line
+selection happens”).</p></li>
+<li><p><strong>ast-grep</strong> at <code class="docutils literal notranslate"><span class="pre">/usr/local/bin/ast-grep</span></code> — structural Python search
+(e.g. <code class="docutils literal notranslate"><span class="pre">ast-grep</span> <span class="pre">--lang</span> <span class="pre">python</span> <span class="pre">-p</span> <span class="pre">'def</span> <span class="pre">$F($$$):</span> <span class="pre">$$$</span> <span class="pre">scipy.optimize.nnls($$$)'</span></code>).</p></li>
+<li><p><strong>ripgrep / bash grep</strong> — last resort, only for non-Python files
+(YAML, TOML, Markdown, Rust).</p></li>
+</ol>
+<p>This is enforced by the CLAUDE.md at the repo root. Saved to memory at
+<code class="docutils literal notranslate"><span class="pre">/home/brian/.claude/projects/-home-brian-code-CF-LIBS-improved/memory/feedback_use_code_intelligence_tools.md</span></code>.</p>
+</section>
+<section id="physics-only-constraint-hard">
+<h3>Physics-only constraint (HARD)<a class="headerlink" href="#physics-only-constraint-hard" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> must NOT import: <code class="docutils literal notranslate"><span class="pre">sklearn</span></code>, <code class="docutils literal notranslate"><span class="pre">torch</span></code>, <code class="docutils literal notranslate"><span class="pre">tensorflow</span></code>, <code class="docutils literal notranslate"><span class="pre">keras</span></code>,
+<code class="docutils literal notranslate"><span class="pre">flax</span></code>, <code class="docutils literal notranslate"><span class="pre">equinox</span></code>, <code class="docutils literal notranslate"><span class="pre">transformers</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.experimental.stax</span></code>.
+Enforced by ruff TID251 (see <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>). ML is allowed only in
+<code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> (LLM-driven optimization tooling). Full spec:
+bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-3fy3</span></code>.</p>
+</section>
+<section id="jax-runtime-gotchas">
+<h3>JAX runtime gotchas<a class="headerlink" href="#jax-runtime-gotchas" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span></code> for local dev; <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cuda</span></code> on cluster.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jax_enable_x64=True</span></code> is <strong>required</strong> for the identifier path (see
+<code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py:_jax_identifier_flags_for</span></code> for the
+side-effect enablement). Without x64, FISTA NNLS at float32 silently
+drops 95% of coefficient precision on column-correlated matrices.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/</span></code> forces CPU + x64 via <code class="docutils literal notranslate"><span class="pre">conftest.py</span></code> — but benchmark
+cluster runs need explicit enablement at the call site.</p></li>
+</ul>
+</section>
+<section id="cluster-benchmark-conventions">
+<h3>Cluster benchmark conventions<a class="headerlink" href="#cluster-benchmark-conventions" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Phase numbering: this session’s runs were Phase 1b through Phase 7.
+Continue with Phase 8 for the next validation cycle.</p></li>
+<li><p>Submit script: <code class="docutils literal notranslate"><span class="pre">scripts/submit_post_alias_fix_benchmark.sh</span></code> (edit
+<code class="docutils literal notranslate"><span class="pre">--experiment-label</span></code> and <code class="docutils literal notranslate"><span class="pre">ID_WORKFLOWS</span></code> per phase).</p></li>
+<li><p>Output dir: <code class="docutils literal notranslate"><span class="pre">~brian/code/cflibs-bench/output/post-alias-fix-d553/</span></code> —
+rsync down to local <code class="docutils literal notranslate"><span class="pre">output/post-alias-fix-d553-phase&lt;N&gt;/</span></code> after
+completion.</p></li>
+<li><p>Comparison: pull <code class="docutils literal notranslate"><span class="pre">id_summary.json</span></code> and diff against Phase 7 baseline.</p></li>
+<li><p>Honor the multi-agent cluster-coordination rule: DO NOT pin
+<code class="docutils literal notranslate"><span class="pre">--nodelist=</span></code>; let SLURM schedule.</p></li>
+</ul>
+</section>
+<section id="beads-workflow-this-session-learned-the-hard-way">
+<h3>Beads workflow (this session learned the hard way)<a class="headerlink" href="#beads-workflow-this-session-learned-the-hard-way" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">close</span> <span class="pre">&lt;id&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">update</span> <span class="pre">&lt;id&gt;</span> <span class="pre">--status=X</span></code> work, BUT the JSONL
+rolls back on the next <code class="docutils literal notranslate"><span class="pre">bd</span></code> invocation due to auto-import.</p></li>
+<li><p><strong>Always <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">add</span> <span class="pre">.beads/issues.jsonl</span> <span class="pre">&amp;&amp;</span> <span class="pre">git</span> <span class="pre">commit</span></code> immediately after
+bead state changes.</strong> Otherwise the next session’s <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">ready</span></code> shows
+stale OPEN status.</p></li>
+</ul>
+</section>
+<section id="what-didn-t-work-this-session">
+<h3>What didn’t work this session<a class="headerlink" href="#what-didn-t-work-this-session" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The <code class="docutils literal notranslate"><span class="pre">isolation:</span> <span class="pre">worktree</span></code> flag on the Agent tool. Agents wrote to the
+main repo working tree instead of the assigned worktree. Either accept
+this and review the main repo diff, or serialize agents.</p></li>
+<li><p>The MAD-based 5σ noise floor for comb FP suppression (s1qr.2 v1). It
+collides with the LIBS detection-limit convention (SNR=3). The bug
+needs a shape-based fix, not amplitude. Reverted in commit <code class="docutils literal notranslate"><span class="pre">e382b05</span></code>.</p></li>
+</ul>
+</section>
+<section id="useful-commands-the-agent-team-will-need">
+<h3>Useful commands the agent team will need<a class="headerlink" href="#useful-commands-the-agent-team-will-need" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Find all callers of a symbol (use Serena, not grep)</span>
+<span class="c1"># In MCP: mcp__plugin_serena_serena__find_referencing_symbols(name_path=&quot;X&quot;, relative_path=&quot;cflibs/&quot;)</span>
+
+<span class="c1"># Run focused subset of tests</span>
+.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/&lt;file&gt;::&lt;test&gt;<span class="w"> </span>-q<span class="w"> </span>--timeout<span class="o">=</span><span class="m">60</span>
+
+<span class="c1"># Lint + format</span>
+ruff<span class="w"> </span>check<span class="w"> </span>&lt;files&gt;
+black<span class="w"> </span>--check<span class="w"> </span>&lt;files&gt;
+black<span class="w"> </span>&lt;files&gt;<span class="w">  </span><span class="c1"># apply</span>
+
+<span class="c1"># Cluster submit</span>
+ssh<span class="w"> </span>vasp-02<span class="w"> </span><span class="s1">&#39;cd ~brian/code/cflibs-bench &amp;&amp; git pull &amp;&amp; sbatch scripts/submit_post_alias_fix_benchmark.sh&#39;</span>
+
+<span class="c1"># Cluster monitor</span>
+ssh<span class="w"> </span>vasp-02<span class="w"> </span><span class="s1">&#39;squeue -u brian; tail -20 ~brian/code/cflibs-bench/logs/slurm/post-alias-fix-&lt;jobid&gt;.out&#39;</span>
+
+<span class="c1"># Pull cluster results</span>
+rsync<span class="w"> </span>-aq<span class="w"> </span>vasp-02:/home/brian/code/cflibs-bench/output/post-alias-fix-d553/<span class="w"> </span>output/post-alias-fix-d553-phase8/
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="recommendation-for-the-team-lead">
+<h2>Recommendation for the team lead<a class="headerlink" href="#recommendation-for-the-team-lead" title="Link to this heading"></a></h2>
+<p>Land Candidate 1 first. It’s the highest-leverage, lowest-risk refactor,
+and it unblocks #2 (the preset table lives where the factory lives).
+Once Wave 1 lands, run Phase 8 cluster benchmark to confirm no
+regression, then claim Wave 2.</p>
+<p>The HTML version of this review (with diagrams) is at
+<code class="docutils literal notranslate"><span class="pre">/tmp/architecture-review-20260526.html</span></code>. Open it for the visual
+before/after diagrams that complement this prose.</p>
+</section>
+<hr class="docutils" />
+<section id="provenance">
+<h2>Provenance<a class="headerlink" href="#provenance" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Generated 2026-05-26 by <code class="docutils literal notranslate"><span class="pre">/improve-codebase-architecture</span></code> skill</p></li>
+<li><p>Based on: two parallel <code class="docutils literal notranslate"><span class="pre">Explore</span></code>-agent walks of <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/</span></code>.</p></li>
+<li><p>Friction signals come from this session’s bead-driven fixes (jbfg.1, jbfg.2,
+n3rf.1, n3rf.2, n3rf.4, s1qr.1, s1qr.2, s1qr.3).</p></li>
+<li><p>Glossary terms per <code class="docutils literal notranslate"><span class="pre">/home/brian/.claude/skills/improve-codebase-architecture/LANGUAGE.md</span></code>.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

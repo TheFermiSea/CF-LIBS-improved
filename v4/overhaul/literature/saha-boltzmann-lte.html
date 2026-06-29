@@ -1,0 +1,640 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Literature Reference: Saha Equation, Boltzmann Distribution, and LTE in LIBS Plasmas &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Literature Reference: Saha Equation, Boltzmann Distribution, and LTE in LIBS Plasmas</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/literature/saha-boltzmann-lte.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="literature-reference-saha-equation-boltzmann-distribution-and-lte-in-libs-plasmas">
+<h1>Literature Reference: Saha Equation, Boltzmann Distribution, and LTE in LIBS Plasmas<a class="headerlink" href="#literature-reference-saha-equation-boltzmann-distribution-and-lte-in-libs-plasmas" title="Link to this heading"></a></h1>
+<p>Topic key: <code class="docutils literal notranslate"><span class="pre">saha-boltzmann-lte</span></code>
+Date compiled: 2026-06-25</p>
+<hr class="docutils" />
+<section id="governing-equations-in-canonical-form">
+<h2>1. Governing Equations in Canonical Form<a class="headerlink" href="#governing-equations-in-canonical-form" title="Link to this heading"></a></h2>
+<section id="boltzmann-distribution-level-populations">
+<h3>1.1 Boltzmann Distribution — Level Populations<a class="headerlink" href="#boltzmann-distribution-level-populations" title="Link to this heading"></a></h3>
+<p>For a single ionization stage of an element in LTE, the population density of
+level k with statistical weight g_k and excitation energy E_k (measured from
+the ground state of that stage) is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_k = n_s · (g_k / U(T)) · exp(-E_k / k_B T)
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p>n_s   = total number density of the ionization stage [cm^-3]</p></li>
+<li><p>g_k   = statistical weight (degeneracy) of level k = 2J+1 for LS coupling</p></li>
+<li><p>E_k   = energy of the upper level above the ground state of this stage [eV]</p></li>
+<li><p>U(T)  = partition function [dimensionless] (see §1.3)</p></li>
+<li><p>k_B   = Boltzmann constant = 8.617333×10^-5 eV/K</p></li>
+<li><p>T     = plasma temperature [K]</p></li>
+</ul>
+<p>The Boltzmann factor uses k_B T in eV when E_k is in eV (equivalently T in K
+with k_B in eV/K). Energy MUST be measured from the ground state of the SAME
+ionization stage, NOT from an absolute zero or from another stage.</p>
+</section>
+<section id="line-emissivity">
+<h3>1.2 Line Emissivity<a class="headerlink" href="#line-emissivity" title="Link to this heading"></a></h3>
+<p>The spontaneous-emission volume emissivity of a spectral line (power per unit
+volume per unit solid angle) for transition k → i is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ε_ki = (h c / 4π λ_ki) · A_ki · n_k         [erg s^-1 cm^-3 sr^-1]
+</pre></div>
+</div>
+<p>or equivalently, substituting n_k:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ε_ki = (h c / 4π λ_ki) · A_ki · n_s · (g_k / U(T)) · exp(-E_k / k_B T)
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p>h     = Planck constant = 6.626×10^-27 erg·s</p></li>
+<li><p>c     = speed of light = 2.998×10^10 cm/s</p></li>
+<li><p>λ_ki  = transition wavelength [cm]</p></li>
+<li><p>A_ki  = Einstein A-coefficient for spontaneous emission [s^-1]</p></li>
+<li><p>(upper level = k, lower level = i, consistent with NIST notation)</p></li>
+</ul>
+<p>CRITICAL: the 1/(4π) arises from integrating over a full sphere of solid angle
+(isotropic emission). The emissivity divided by integrated-sphere solid angle 4π
+gives the emissivity per steradian. Some references omit 4π and quote power per
+unit volume — check which convention applies before comparing.</p>
+<p>For observed integrated line intensity I_ki (measured at detector), optically thin:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_ki ∝ ε_ki · (path length or plasma volume) · F_instrument
+</pre></div>
+</div>
+<p>In the CF-LIBS linearized form (Boltzmann plot):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ln(I_ki · λ_ki / (g_k · A_ki)) = -E_k / (k_B T) + const
+</pre></div>
+</div>
+<p>The slope of ln(I λ / g A) vs. E_k gives -1/(k_B T).
+Equivalently written as ln(I / (A g)) vs. E_k (the λ dependence sometimes
+absorbed into the “const” if λ is approximately constant over the set of lines).</p>
+</section>
+<section id="partition-function">
+<h3>1.3 Partition Function<a class="headerlink" href="#partition-function" title="Link to this heading"></a></h3>
+<p>The canonical direct-sum definition:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>U(T) = Σ_i  g_i · exp(-E_i / k_B T)
+</pre></div>
+</div>
+<p>where the sum runs over ALL bound energy levels below the ionization potential
+(or the IPD-lowered ionization potential — see §1.5).</p>
+<ul class="simple">
+<li><p>E_i measured from the ground state of the species (E_ground ≡ 0)</p></li>
+<li><p>g_i = 2J_i + 1 for the i-th level in LS coupling</p></li>
+<li><p>The ground-level term (i=0) contributes g_0 · exp(0) = g_0 to U(T)</p></li>
+<li><p>U(T) → g_0 at T → 0; U(T) grows with T as higher levels become populated</p></li>
+</ul>
+<p>Polynomial fit form (Irwin 1981; used as a fallback in cflibs):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ln</span> <span class="n">U</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="n">a_0</span> <span class="o">+</span> <span class="n">a_1·</span><span class="p">(</span><span class="n">ln</span> <span class="n">T</span><span class="p">)</span> <span class="o">+</span> <span class="n">a_2·</span><span class="p">(</span><span class="n">ln</span> <span class="n">T</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="n">a_3·</span><span class="p">(</span><span class="n">ln</span> <span class="n">T</span><span class="p">)</span><span class="o">^</span><span class="mi">3</span> <span class="o">+</span> <span class="n">a_4·</span><span class="p">(</span><span class="n">ln</span> <span class="n">T</span><span class="p">)</span><span class="o">^</span><span class="mi">4</span>
+</pre></div>
+</div>
+<p>(4th-order polynomial in ln T, value is ln U — natural-log basis throughout.)
+Irwin (1981, ApJS 45, 621) originally tabulated in log_10 T / log_10 U; when
+ingesting those coefficients, apply the basis-change conversion.</p>
+<p>Alternative 5th/6th-order polynomial fits in log_10 T are also used in the
+literature (HITRAN, ExoMol conventions) — be explicit about which log base.</p>
+</section>
+<section id="saha-equation-saha-eggert-equation">
+<h3>1.4 Saha Equation (Saha-Eggert Equation)<a class="headerlink" href="#saha-equation-saha-eggert-equation" title="Link to this heading"></a></h3>
+<p>The Saha equation gives the ratio of number densities of two successive
+ionization stages z+1 (ion) and z (neutral or lower ion):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_{z+1} · n_e / n_z = (2 / h^3) · (2π m_e k_B T)^{3/2} · (U_{z+1} / U_z)
+                       · exp(-χ_z / k_B T)
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p>n_{z+1}  = number density of the (z+1)-th stage [cm^-3]</p></li>
+<li><p>n_z      = number density of the z-th stage [cm^-3]</p></li>
+<li><p>n_e      = electron number density [cm^-3]</p></li>
+<li><p>m_e      = electron mass = 9.109×10^-28 g</p></li>
+<li><p>h        = Planck constant = 6.626×10^-27 erg·s  (CGS)</p></li>
+<li><p>k_B      = Boltzmann constant = 1.381×10^-16 erg/K  (CGS)</p></li>
+<li><p>χ_z      = ionization potential of the z-th stage [eV] (energy to remove one electron)</p></li>
+<li><p>U_{z+1}  = partition function of the (z+1)-th (higher) stage</p></li>
+<li><p>U_z      = partition function of the z-th stage</p></li>
+<li><p>The factor “2” in the numerator is the electron spin degeneracy (g_e = 2·(1/2)+1 = 2)</p></li>
+</ul>
+<p>CRITICAL FACTOR: The factor of 2 (electron spin degeneracy) appears in the
+numerator because the free electron has two spin states. This is NOT a nuclear
+spin factor. It is often written as 2·U_e where U_e = 1 (there is no excitation
+for a free electron), so the total electron partition function contribution is
+just 2.</p>
+<p>CGS pre-factor evaluation (T in K, n in cm^-3):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>(2 / h^3) · (2π m_e k_B)^{3/2} = 4.829×10^15  [cm^-3 K^{-3/2}]
+</pre></div>
+</div>
+<p>SI pre-factor (T in K, n in m^-3):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>(2 / h^3) · (2π m_e k_B)^{3/2} = 4.829×10^21  [m^-3 K^{-3/2}]
+</pre></div>
+</div>
+<p>LIBS-convenient form (T in eV, n_e in cm^-3):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_{z+1} · n_e / n_z = SAHA_CONST · T_eV^{3/2} · (U_{z+1} / U_z)
+                       · exp(-χ_z / T_eV)
+</pre></div>
+</div>
+<p>where SAHA_CONST ≈ 6.042×10^21 cm^-3 eV^{-3/2}</p>
+<p>Derivation of SAHA_CONST:
+(2π m_e k_B)^{3/2} / h^3 × 2 × (eV→K conversion)^{3/2} × (m^-3 → cm^-3 factor)
+= (2π × 9.109e-31 × 1.381e-23)^{3/2} / (6.626e-34)^3 × 2 × (11604.52)^{3/2} × 1e-6
+≈ 6.04×10^21  cm^-3 eV^{-3/2}</p>
+<p>The Saha ratio S_z ≡ n_{z+1}/n_z is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>S_z = (SAHA_CONST / n_e) · T_eV^{3/2} · (U_{z+1}/U_z) · exp(-χ_eff,z / T_eV)
+</pre></div>
+</div>
+<p>Solving the multi-stage balance (up to three stages, as in cflibs):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_I + n_II + n_III = n_total
+n_II / n_I = S_1
+n_III / n_II = S_2
+=&gt; n_I = n_total / (1 + S_1 + S_1·S_2)
+   n_II = S_1 · n_I
+   n_III = S_2 · n_II
+</pre></div>
+</div>
+</section>
+<section id="ionization-potential-depression-ipd-continuum-lowering">
+<h3>1.5 Ionization Potential Depression (IPD / Continuum Lowering)<a class="headerlink" href="#ionization-potential-depression-ipd-continuum-lowering" title="Link to this heading"></a></h3>
+<p>In dense LIBS plasmas (n_e ~ 10^16–10^18 cm^-3), the effective ionization
+potential is reduced by the electrostatic screening of the plasma. This enters
+the Saha equation as χ_eff = χ - Δχ.</p>
+<p><strong>Debye-Hückel model</strong> (weak-coupling limit, simplest; default in cflibs):</p>
+<p>Debye length:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">λ_D</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">k_B</span> <span class="n">T</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span><span class="n">π</span> <span class="n">n_e</span> <span class="n">e</span><span class="o">^</span><span class="mi">2</span><span class="p">))</span>   <span class="p">[</span><span class="n">Gaussian</span><span class="o">-</span><span class="n">CGS</span><span class="p">]</span>
+    <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">ε_0</span> <span class="n">k_B</span> <span class="n">T</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_e</span> <span class="n">e</span><span class="o">^</span><span class="mi">2</span><span class="p">))</span>  <span class="p">[</span><span class="n">SI</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>IPD:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δχ_DH = e^2 / λ_D = e^2 · sqrt(4π n_e / (k_B T))   [Gaussian-CGS, result in erg]
+</pre></div>
+</div>
+<p>Numerically at n_e=10^17 cm^-3, T=10^4 K:  Δχ_DH ≈ 0.066 eV</p>
+<p><strong>Stewart-Pyatt (1966) model</strong> (interpolates Debye-Hückel and ion-sphere limits):</p>
+<p>Ion-sphere radius:  R_0 = (3 / (4π n_i))^{1/3}</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δχ_SP = (3(z+1)e^2 / (2R_0)) · [(1 + (λ_D/R_0)^3)^{2/3} - (λ_D/R_0)^2]
+</pre></div>
+</div>
+<p>Limits:</p>
+<ul class="simple">
+<li><p>λ_D &gt;&gt; R_0 (weak coupling): Δχ_SP → (z+1)e^2/λ_D = Δχ_DH</p></li>
+<li><p>λ_D &lt;&lt; R_0 (strong coupling, ion-sphere): Δχ_SP → 3(z+1)e^2/(2R_0)</p></li>
+</ul>
+<p>Note: Stewart-Pyatt (1966) disagrees with some XFEL experiments at high density
+(Ciricosta et al. 2012, PRL 109, 065002); the Ecker-Kröll model gives larger
+depression but was not reproduced by other XFEL experiments. For LIBS conditions
+(moderate density), both models give similar results; Stewart-Pyatt is standard.</p>
+<p>CRITICAL: The same Δχ MUST be used consistently for BOTH the Saha equation
+exponent (χ_eff = χ - Δχ) AND the partition function truncation cutoff
+(levels above χ_eff are merged into the continuum and excluded from the sum).
+Using different Δχ values in these two places breaks self-consistency.</p>
+</section>
+<section id="mcwhirter-criterion-for-lte-validity">
+<h3>1.6 McWhirter Criterion for LTE Validity<a class="headerlink" href="#mcwhirter-criterion-for-lte-validity" title="Link to this heading"></a></h3>
+<p>The McWhirter (1965) criterion gives the MINIMUM electron density for LTE:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_e &gt;= 1.6×10^12 · T^{1/2} · (ΔE)^3   [cm^-3]
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p>T    = plasma temperature [K]</p></li>
+<li><p>ΔE   = relevant energy gap [eV]</p></li>
+<li><p>n_e  = electron density [cm^-3]</p></li>
+</ul>
+<p><strong>CRITICAL — Definition of ΔE:</strong>
+ΔE is the energy gap of the HARDEST transition to collisionally thermalise —
+which is the largest energy gap between adjacent levels in the term scheme that
+is accessed by a dipole-allowed (resonance) transition.</p>
+<p>Cristoforetti et al. (2010, Spectrochim. Acta B 65, 86-95) clarify:
+“ΔE values to be inserted in the McWhirter criterion are determined by
+considering the FIRST RESONANCE TRANSITION, neglecting forbidden and
+intercombination lines.”</p>
+<p>The first resonance transition energy is the ground-state → first
+allowed-excited-state gap (i.e., the shortest-wavelength resonance line).
+This is NOT:</p>
+<ul class="simple">
+<li><p>The gap between consecutive adjacent observed upper levels (which would be
+tiny and badly underestimate the required density)</p></li>
+<li><p>The maximum upper-level energy of observed lines (which overestimates ΔE
+by treating the top of the Boltzmann ladder as a single step)</p></li>
+</ul>
+<p>Typical values for LIBS-relevant species:</p>
+<ul class="simple">
+<li><p>Fe I:  ΔE ≈ 2.48 eV  (transition at ~500 nm, ground 3d^6 4s^2 a^5D)</p></li>
+<li><p>Cu I:  ΔE ≈ 3.82 eV  (4s^2S_{1/2} → 4p^2P° transition, ~325 nm)</p></li>
+<li><p>Mg I:  ΔE ≈ 2.71 eV  (3s^2 → 3s3p, ~457 nm)</p></li>
+<li><p>Ca II: ΔE ≈ 1.69 eV  (4s → 4p, ~393 nm K-line)</p></li>
+</ul>
+<p><strong>Limitations:</strong> McWhirter is a NECESSARY but NOT SUFFICIENT condition.
+It applies to homogeneous, stationary plasmas. LIBS plasmas are inhomogeneous
+and rapidly evolving, so additional criteria are required.</p>
+</section>
+<section id="cristoforetti-relaxation-time-criterion-beyond-mcwhirter">
+<h3>1.7 Cristoforetti Relaxation-Time Criterion (Beyond McWhirter)<a class="headerlink" href="#cristoforetti-relaxation-time-criterion-beyond-mcwhirter" title="Link to this heading"></a></h3>
+<p>For transient LIBS plasmas, the relaxation time to reach excitation equilibrium
+(Cristoforetti et al. 2010, Eq. 4; Griem 1964) must be shorter than the
+plasma evolution timescale:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>τ_rel ≈ 6.3×10^4 / (n_e · &lt;g&gt; · f_nm) · ΔE_nm · sqrt(k_B T)
+         · exp(ΔE_nm / k_B T)         [seconds]
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p>n_e       = electron density [cm^-3]</p></li>
+<li><p><g>       = effective EEDF-averaged Gaunt factor (~1 for order-of-magnitude)</p></li>
+<li><p>f_nm      = absorption oscillator strength of the transition</p></li>
+<li><p>ΔE_nm     = energy gap [eV]</p></li>
+<li><p>k_B T     = thermal energy [eV]</p></li>
+</ul>
+<p>LTE criterion: τ_rel &lt;&lt; τ_evol (the plasma’s characteristic evolution time).
+Conventionally, require τ_rel &lt; τ_evol / 10.</p>
+<p>Note: τ_rel grows exponentially with ΔE/kT and inversely with n_e, so a
+rarefying plasma at early/late times can satisfy McWhirter (steady-state density
+floor) yet FAIL the transient criterion.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="common-implementation-pitfalls-and-correct-treatment">
+<h2>2. Common Implementation Pitfalls and Correct Treatment<a class="headerlink" href="#common-implementation-pitfalls-and-correct-treatment" title="Link to this heading"></a></h2>
+<section id="p1-energy-reference-inconsistency-critical">
+<h3>P1: Energy Reference Inconsistency (CRITICAL)<a class="headerlink" href="#p1-energy-reference-inconsistency-critical" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>All energies E_i in the Boltzmann/partition-function sum must be from the
+GROUND STATE of that specific ionization stage.</p></li>
+<li><p>The Saha equation exponent χ_z uses the ionization potential of stage z —
+the energy to remove an electron from the ground state of stage z.</p></li>
+<li><p>DO NOT mix energies from different references. NIST ASD reports all levels
+relative to the ground state of each ionization stage — use that convention.</p></li>
+</ul>
+</section>
+<section id="p2-partition-function-truncation-without-ipd-consistency-critical">
+<h3>P2: Partition Function Truncation Without IPD Consistency (CRITICAL)<a class="headerlink" href="#p2-partition-function-truncation-without-ipd-consistency-critical" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The partition function sum MUST be truncated at the same energy as the Saha
+equation ionization threshold. If IPD lowers χ by Δχ, both the Saha exponent
+(uses χ_eff = χ - Δχ) AND the partition function cutoff (E_max = χ_eff) must
+use the SAME Δχ.</p></li>
+<li><p>Previously identified in cflibs as “audit Family J” — two divergent IPD
+formulas (~1.44× difference) were fixed in 2026. The fix routes all IPD
+through a single canonical function.</p></li>
+</ul>
+</section>
+<section id="p3-the-factor-of-2-in-the-saha-equation">
+<h3>P3: The Factor of 2 in the Saha Equation<a class="headerlink" href="#p3-the-factor-of-2-in-the-saha-equation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The factor of 2 in “2 U_{z+1}/U_z” comes from the spin degeneracy of the
+free electron (g_e = 2). It is NOT the factor of 2 from the thermal de Broglie
+factor (that contributes to the T^{3/2} term).</p></li>
+<li><p>U_e = 1 for the free electron (no electronic excitation), so the full electron
+contribution is 2×1 = 2.</p></li>
+<li><p>Some texts write the Saha equation with “2 g_{z+1}/g_z” using only the ground
+state statistical weights instead of full partition functions — this is an
+approximation valid only at low T where higher levels are not populated.</p></li>
+</ul>
+</section>
+<section id="p4-mcwhirter-e-definition-major-common-error">
+<h3>P4: McWhirter ΔE Definition (MAJOR COMMON ERROR)<a class="headerlink" href="#p4-mcwhirter-e-definition-major-common-error" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Using the gap between adjacent OBSERVED upper-level energies (which are
+typically 0.05-0.5 eV for closely-spaced levels) instead of the resonance
+transition energy (typically 2-5 eV) underestimates the required n_e by
+(2-5/0.05)^3 ≈ 10^4 to 10^6 — completely invalidating the LTE check.</p></li>
+<li><p>The code in cflibs.plasma.lte_validator correctly documents this and warns
+about using max(E_k) as a proxy for the resonance gap when only upper levels
+are available — but max(E_k) overestimates ΔE and should also be avoided.</p></li>
+<li><p>Best practice: look up the resonance transition energy from NIST for each
+element and pass delta_E_eV explicitly.</p></li>
+</ul>
+</section>
+<section id="p5-partition-function-convergence-divergence">
+<h3>P5: Partition Function Convergence / Divergence<a class="headerlink" href="#p5-partition-function-convergence-divergence" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The partition function sum formally diverges for isolated atoms (infinitely
+many Rydberg states). Physical divergence is avoided by plasma broadening and
+merging into the continuum — implemented via the IPD energy cutoff.</p></li>
+<li><p>Using too many Rydberg levels (E_i close to IP) inflates U(T) and
+underestimates concentrations via the Saha equation.</p></li>
+<li><p>Correct approach: truncate at E_max = IP - Δχ. Alimohamadi &amp; Ferland (2022,
+PASP 134) discuss this in detail for astrophysical/LIBS conditions.</p></li>
+<li><p>The 98% of IP shortcut (no n_e available) is a common approximation that
+excludes autoionizing levels; self-consistent IPD cutoff is preferred when n_e
+is known.</p></li>
+</ul>
+</section>
+<section id="p6-polynomial-fit-basis-ln-vs-log-10">
+<h3>P6: Polynomial Fit Basis (ln vs log_10)<a class="headerlink" href="#p6-polynomial-fit-basis-ln-vs-log-10" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Historical confusion between log_10 and natural log polynomial fits for U(T).</p></li>
+<li><p>Irwin (1981, ApJS 45, 621) uses log_10 T and log_10 U.</p></li>
+<li><p>cflibs partition.py uses natural log (ln T, ln U) for the stored polynomial
+coefficients — converting from Irwin requires a basis change.</p></li>
+<li><p>The 30-60% errors reported in the cflibs 2026-05-09 audit were caused by
+stale fit data (coefficients fit against an older energy_levels snapshot),
+NOT a math/convention mismatch. Always re-fit polynomial coefficients from
+the CURRENT energy_levels table if levels are updated.</p></li>
+<li><p>Direct summation (preferred when energy levels are available) avoids all
+polynomial-fit ambiguities.</p></li>
+</ul>
+</section>
+<section id="p7-saha-const-units">
+<h3>P7: SAHA_CONST Units<a class="headerlink" href="#p7-saha-const-units" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>SAHA_CONST_CM3 = 6.042×10^21 cm^-3 eV^{-3/2} is valid ONLY when:</p>
+<ul>
+<li><p>T is in eV (T_eV, not K)</p></li>
+<li><p>n_e is in cm^-3</p></li>
+<li><p>ionization potential χ is in eV</p></li>
+</ul>
+</li>
+<li><p>If T is in K, multiply by (k_B in eV/K)^{3/2} before using.</p></li>
+<li><p>Do NOT mix SI and CGS in the same expression.</p></li>
+</ul>
+</section>
+<section id="p8-saha-self-consistency-charge-balance">
+<h3>P8: Saha Self-Consistency (Charge Balance)<a class="headerlink" href="#p8-saha-self-consistency-charge-balance" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The Saha equation is implicitly coupled: the ratio n_{II}/n_I depends on n_e,
+but n_e is the sum of electrons contributed by ALL ionization stages of ALL
+elements.</p></li>
+<li><p>Correct approach: iterate n_e until charge balance
+n_e = Σ_elements Σ_stages (stage_number × n_stage) converges.</p></li>
+<li><p>The CF-LIBS inversion loop (IterativeCFLIBSSolver) handles this; the forward
+model takes n_e as an external parameter.</p></li>
+</ul>
+</section>
+<section id="p9-mcwhirter-criterion-is-necessary-but-not-sufficient">
+<h3>P9: McWhirter Criterion is Necessary but Not Sufficient<a class="headerlink" href="#p9-mcwhirter-criterion-is-necessary-but-not-sufficient" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Satisfying McWhirter does NOT guarantee LTE in a transient LIBS plasma.</p></li>
+<li><p>Additional requirements: (1) Cristoforetti relaxation-time criterion for
+excitation equilibrium; (2) Spitzer thermal equilibration for electron-ion
+temperature equality; (3) spatial homogeneity assumption.</p></li>
+<li><p>LIBS plasma early after the laser pulse (&lt; 100 ns) typically violates
+the temporal criterion.</p></li>
+</ul>
+</section>
+<section id="p10-optical-thickness-self-absorption">
+<h3>P10: Optical Thickness / Self-Absorption<a class="headerlink" href="#p10-optical-thickness-self-absorption" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The Boltzmann plot and CF-LIBS equations assume OPTICAL THINNESS (each photon
+escapes without reabsorption). Self-absorption distorts line intensities and
+invalidates the linear relationship.</p></li>
+<li><p>Verify optical thinness by checking that doublet line intensity ratios match
+the theoretical A_ki × g_k ratio for lines sharing the same upper level.</p></li>
+<li><p>Strong resonance lines and lines of abundant elements are most prone to
+self-absorption.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-references">
+<h2>3. Key References<a class="headerlink" href="#key-references" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>McWhirter, R. W. P. (1965)</strong>
+“Spectral Intensities”
+In: <em>Plasma Diagnostic Techniques</em>, eds. Huddlestone &amp; Leonard, Chapter 5, pp. 201-264
+Academic Press, New York.
+[Canonical source for the 1.6×10^12 criterion and the ΔE definition.]</p></li>
+<li><p><strong>Ciucci, A., Corsi, M., Palleschi, V., Rastelli, S., Salvetti, A., &amp; Tognoni, E. (1999)</strong>
+“New Procedure for Quantitative Elemental Analysis by Laser-Induced Plasma Spectroscopy”
+<em>Applied Spectroscopy</em> 53(8), 960-964.
+DOI: 10.1366/0003702991947612
+[Seminal CF-LIBS paper. Establishes the Saha-Boltzmann + closure equation framework.]</p></li>
+<li><p><strong>Stewart, J. C. &amp; Pyatt, K. D. (1966)</strong>
+“Lowering of Ionization Potentials in Plasmas”
+<em>The Astrophysical Journal</em> 144, 1203-1211.
+ADS: 1966ApJ…144.1203S
+DOI: 10.1086/148714
+[Canonical Stewart-Pyatt IPD model. Interpolates Debye-Hückel and ion-sphere limits.]</p></li>
+<li><p><strong>Cristoforetti, G., De Giacomo, A., Dell’Aglio, M., Legnaioli, S., Tognoni, E.,
+Palleschi, V., &amp; Omenetto, N. (2010)</strong>
+“Local Thermodynamic Equilibrium in Laser-Induced Breakdown Spectroscopy:
+Beyond the McWhirter criterion”
+<em>Spectrochimica Acta Part B</em> 65, 86-95.
+DOI: 10.1016/j.sab.2009.11.005
+[Critical extension of LTE criteria; defines relaxation-time criterion Eq. 4;
+clarifies that ΔE = first resonance transition, not adjacent gap.]</p></li>
+<li><p><strong>Griem, H. R. (1964)</strong>
+“Plasma Spectroscopy”
+McGraw-Hill, New York. xii + 580 pp.
+[Foundational text. Relaxation times (used in Cristoforetti criterion).
+Partition function truncation (Inglis-Teller criterion). LTE conditions.]</p></li>
+<li><p><strong>Tognoni, E., Palleschi, V., Corsi, M., &amp; Cristoforetti, G. (2002)</strong>
+“Quantitative Micro-Analysis by Laser-Induced Breakdown Spectroscopy:
+A Review of the Experimental Approaches”
+<em>Spectrochimica Acta Part B</em> 57(7), 1115-1130.
+DOI: 10.1016/S0584-8547(02)00053-8
+[Comprehensive review of LIBS quantification. Derives the Saha-Boltzmann plot
+linearization and multi-element closure equation in usable form.]</p></li>
+<li><p><strong>Irwin, A. W. (1981)</strong>
+“Polynomial Partition Function Approximations of 344 Atomic and Molecular Species”
+<em>The Astrophysical Journal Supplement Series</em> 45, 621-633.
+DOI: 10.1086/190730
+[Standard polynomial partition function fits (log10 T, log10 U basis).
+Used in stellar atmospheres and as fallback in spectroscopy codes.]</p></li>
+<li><p><strong>Alimohamadi, M. &amp; Ferland, G. J. (2022)</strong>
+“A Practical Guide to the Partition Function of Atoms and Ions”
+arXiv: 2203.02188 [astro-ph.SR]
+[Discusses partition function divergence for complex atoms; IPD-based
+truncation at the continuum lowering limit; plasma vs. isolated-atom regime.]</p></li>
+<li><p><strong>Griem, H. R. (1997)</strong>
+“Principles of Plasma Spectroscopy”
+Cambridge University Press.
+ISBN: 978-0521455046
+[Updated reference for LTE criteria, Stark broadening, and partition functions.]</p></li>
+<li><p><strong>Cremers, D. A. &amp; Radziemski, L. J. (2013)</strong>
+“Handbook of Laser-Induced Breakdown Spectroscopy” (2nd ed.)
+Wiley-Blackwell.
+ISBN: 978-0470092996
+[Comprehensive LIBS reference. Chapters on plasma diagnostics, temperature
+measurement via Boltzmann plot, LTE validity, self-absorption correction.]</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="what-correct-code-must-do">
+<h2>4. What Correct Code MUST Do<a class="headerlink" href="#what-correct-code-must-do" title="Link to this heading"></a></h2>
+<section id="boltzmann-distribution">
+<h3>Boltzmann Distribution<a class="headerlink" href="#boltzmann-distribution" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Compute n_k = n_stage × (g_k / U) × exp(-E_k / T_eV), with E_k from the
+GROUND STATE of the same ionization stage</p></li>
+<li><p>[ ] Use U(T) computed over the SAME energy range as the level populations
+(same IPD cutoff; never use U from one cutoff and populations from another)</p></li>
+<li><p>[ ] Report the emissivity as (h c / 4π λ) × A_ki × n_k with the 1/(4π) factor</p></li>
+</ul>
+</section>
+<section id="saha-equation">
+<h3>Saha Equation<a class="headerlink" href="#saha-equation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Include the factor of 2 (electron spin degeneracy) in the numerator —
+S = (2 U_{z+1} / U_z) × (const × T^{3/2} / n_e) × exp(-χ_eff / T_eV)</p></li>
+<li><p>[ ] Use consistent units throughout: (SAHA_CONST_CM3 ≈ 6.042e21) is valid
+only for T_eV and n_e in cm^-3 and χ in eV</p></li>
+<li><p>[ ] Apply IPD: replace χ with χ_eff = max(χ - Δχ, 0) in the Saha exponent</p></li>
+<li><p>[ ] Iterate charge balance: n_e = Σ_elem Σ_stage (stage_index × n_stage)</p></li>
+</ul>
+</section>
+<section id="id1">
+<h3>Partition Function<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Prefer direct summation over energy levels when levels are available</p></li>
+<li><p>[ ] Truncate the sum at E_max = IP - Δχ (IPD-lowered continuum) to avoid
+Rydberg divergence; the SAME Δχ used in the Saha exponent</p></li>
+<li><p>[ ] If using polynomial fits: be explicit about log base (ln vs log_10);
+store and validate coefficients in the basis the code uses</p></li>
+<li><p>[ ] Warn (log, don’t silently return 0) if no energy levels are available
+for a species; fall back to ground-state g (U ≈ g_0) only as last resort</p></li>
+</ul>
+</section>
+<section id="ipd">
+<h3>IPD<a class="headerlink" href="#ipd" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Use a SINGLE canonical IPD function everywhere (Saha exponent AND
+partition function cutoff AND level population filter — all use same Δχ)</p></li>
+<li><p>[ ] Default to Debye-Hückel for typical LIBS conditions; make Stewart-Pyatt
+available as opt-in for higher-density or more accurate work</p></li>
+<li><p>[ ] The Debye-Hückel formula in Gaussian-CGS:
+λ_D = sqrt(k_B T [erg/K] / (4π n_e e^2 [esu^2/cm]))
+Δχ = e^2 / λ_D = e [esu] × sqrt(4π n_e / (k_B T))   [result in erg → convert to eV]</p></li>
+</ul>
+</section>
+<section id="mcwhirter-lte-check">
+<h3>McWhirter LTE Check<a class="headerlink" href="#mcwhirter-lte-check" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Use ΔE = resonance-line energy of the element being checked (energy of
+the ground → first-allowed-excited-state transition), NOT the adjacent
+gap between observed Boltzmann-plot upper levels</p></li>
+<li><p>[ ] Apply n_e &gt;= 1.6×10^12 × sqrt(T[K]) × (ΔE[eV])^3</p></li>
+<li><p>[ ] Flag McWhirter as necessary-not-sufficient; warn users when the criterion
+is satisfied but plasma lifetime is short (&lt; 1 µs) — add Cristoforetti
+relaxation-time check as a diagnostic</p></li>
+<li><p>[ ] For the relaxation-time check: τ_rel = 6.3e4 / (n_e × g_eff × f_nm)
+× ΔE × sqrt(T_eV) × exp(ΔE / T_eV)  [seconds]; require τ_rel &lt; τ_evol/10</p></li>
+</ul>
+</section>
+<section id="self-absorption-optical-thickness">
+<h3>Self-Absorption / Optical Thickness<a class="headerlink" href="#self-absorption-optical-thickness" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Verify optical thinness assumption before applying CF-LIBS; flag or
+correct for self-absorption on strong lines (especially neutral resonance
+lines and lines of major constituents)</p></li>
+<li><p>[ ] The forward model emissivity formula only applies in the optically thin
+limit; optically thick radiative transfer requires separate treatment</p></li>
+</ul>
+<hr class="docutils" />
+<p><em>Note: all web search tools were available and used for this report. The equations
+and constants above are well-established and cross-checked against multiple
+peer-reviewed sources. The cflibs codebase itself was audited directly via
+Read/rg to confirm the actual implementation against these canonical formulas.</em></p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

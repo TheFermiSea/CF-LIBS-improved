@@ -1,0 +1,180 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DED-PLAN Step 7 — constrained_elements no-drop flag (scoped, ready to implement) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">DED-PLAN Step 7 — constrained_elements no-drop flag (scoped, ready to implement)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/v4/ded/STEP7-constrained-elements-spec.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ded-plan-step-7-constrained-elements-no-drop-flag-scoped-ready-to-implement">
+<h1>DED-PLAN Step 7 — constrained_elements no-drop flag (scoped, ready to implement)<a class="headerlink" href="#ded-plan-step-7-constrained-elements-no-drop-flag-scoped-ready-to-implement" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> diagnosed in detail 2026-06-26; deferred to a focused session (ideally
+with real Ti-6Al-4V spectra to validate against). Default-OFF, so it cannot
+regress the current path; the work is in the new gated branch + its test.</p>
+<section id="goal">
+<h2>Goal<a class="headerlink" href="#goal" title="Link to this heading"></a></h2>
+<p>With a KNOWN element set, <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> must never drop a requested element, so
+real DED spectra (which go through detection, unlike the benchmark which bypasses
+it) always reach the solver. Today <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> on a synthetic Ti-6Al-4V
+spectrum fails <code class="docutils literal notranslate"><span class="pre">&quot;No</span> <span class="pre">usable</span> <span class="pre">spectral</span> <span class="pre">lines</span> <span class="pre">detected</span> <span class="pre">for</span> <span class="pre">inversion.&quot;</span></code></p>
+</section>
+<section id="diagnosis-clean-synthetic-ti-6al-4v-metallic-ded-preset">
+<h2>Diagnosis (clean synthetic Ti-6Al-4V, metallic_ded preset)<a class="headerlink" href="#diagnosis-clean-synthetic-ti-6al-4v-metallic-ded-preset" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> alone (default params) DOES find 23 obs across Ti/Al/V
+with zero drops -&gt; raw detection is fine.</p></li>
+<li><p>Through <code class="docutils literal notranslate"><span class="pre">detect_and_select_lines</span></code> with the metallic_ded params, all elements drop:
+<code class="docutils literal notranslate"><span class="pre">dropped_elements</span> <span class="pre">=</span> <span class="pre">{Ti:</span> <span class="pre">selection,</span> <span class="pre">Al:</span> <span class="pre">detection,</span> <span class="pre">V:</span> <span class="pre">selection}</span></code> -&gt; 0 lines.</p></li>
+<li><p>Relaxing the SELECTOR (<code class="docutils literal notranslate"><span class="pre">min_energy_spread_ev=0,</span> <span class="pre">min_snr=0,</span> <span class="pre">min_lines_per_element=1</span></code>)
+lets Ti+V through (Ti 85 / V 15) but <strong>Al is still dropped at DETECTION</strong> even on
+a clean, unshifted spectrum.</p></li>
+<li><p>V specifically fails <code class="docutils literal notranslate"><span class="pre">min_energy_spread_ev=1.5</span></code> (V’s E_k spread is 1.27 eV).</p></li>
+</ul>
+</section>
+<section id="two-drop-points-to-gate-on-constrained-elements-true">
+<h2>Two drop points to gate on <code class="docutils literal notranslate"><span class="pre">constrained_elements=True</span></code><a class="headerlink" href="#two-drop-points-to-gate-on-constrained-elements-true" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>SELECTOR</strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code>, <code class="docutils literal notranslate"><span class="pre">LineSelector.select</span></code>):
+for a requested element, do NOT drop it on <code class="docutils literal notranslate"><span class="pre">min_energy_spread_ev</span></code>, <code class="docutils literal notranslate"><span class="pre">min_snr</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code>; keep its best-available lines (still rank/cap them).</p></li>
+<li><p><strong>DETECTION</strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py</span></code>, <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>):
+the shift-coherence veto and/or per-line residual gate drop Al on a clean
+spectrum. When constrained, keep the wavelength CALIBRATION but do not DROP a
+requested element’s matched lines at the shift-coherence / residual stage.
+(Investigate why Al drops with zero shift: likely the consensus-residual gate
+treating the Al resonance doublet as incoherent.)</p></li>
+</ol>
+</section>
+<section id="plan">
+<h2>Plan<a class="headerlink" href="#plan" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Add <code class="docutils literal notranslate"><span class="pre">constrained_elements:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></code> to <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code>; thread to
+<code class="docutils literal notranslate"><span class="pre">detect_and_select_lines</span></code> -&gt; both the <code class="docutils literal notranslate"><span class="pre">LineSelector</span></code> and the <code class="docutils literal notranslate"><span class="pre">detect_kwargs</span></code>.</p></li>
+<li><p>Add the flag to the <code class="docutils literal notranslate"><span class="pre">metallic_ded</span></code> preset (the reserved slot already noted there).</p></li>
+<li><p>TEST: <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> on a synthetic Ti-6Al-4V spectrum with
+<code class="docutils literal notranslate"><span class="pre">constrained_elements=True</span></code> returns a result with all of {Ti,Al,V} present and
+recovers ~the clean-floor composition; with it False, behavior is unchanged.</p></li>
+<li><p>Re-run <code class="docutils literal notranslate"><span class="pre">tests/benchmarks/ded_precision</span></code> + a broad not-slow regression.</p></li>
+</ul>
+</section>
+<section id="why-deferred-not-done-now">
+<h2>Why deferred, not done now<a class="headerlink" href="#why-deferred-not-done-now" title="Link to this heading"></a></h2>
+<p>It spans two production-detection drop points with a subtle clean-spectrum Al
+drop still to root-cause; its payoff is only realized on REAL spectra (no open
+Ti-6Al-4V data exists). Better implemented carefully in a focused session than
+rushed. The synthetic benchmark (which bypasses detection) already validates the
+solver to ~1 wt%, so nothing is blocked in the meantime.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

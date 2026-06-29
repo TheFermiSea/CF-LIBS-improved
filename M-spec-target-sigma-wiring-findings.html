@@ -1,0 +1,204 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>target_sigma_t wiring — benchmark findings (honest negative result) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">target_sigma_t wiring — benchmark findings (honest negative result)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/M-spec-target-sigma-wiring-findings.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="target-sigma-t-wiring-benchmark-findings-honest-negative-result">
+<h1>target_sigma_t wiring — benchmark findings (honest negative result)<a class="headerlink" href="#target-sigma-t-wiring-benchmark-findings-honest-negative-result" title="Link to this heading"></a></h1>
+<p><strong>What:</strong> wired the verified-<code class="docutils literal notranslate"><span class="pre">ErrorBudget</span></code>-derived thresholds (<code class="docutils literal notranslate"><span class="pre">derived_thresholds.py</span></code>) into the
+line selector via a gated <code class="docutils literal notranslate"><span class="pre">target_sigma_t</span></code> knob (a target relative temperature accuracy σ_T/T),
+so <code class="docutils literal notranslate"><span class="pre">min_snr</span></code>/<code class="docutils literal notranslate"><span class="pre">min_energy_spread</span></code>/<code class="docutils literal notranslate"><span class="pre">min_lines</span></code> are <em>derived per-spectrum</em> instead of tuned constants.</p>
+<p><strong>Gate:</strong> paired, same-element-set <strong>conditioned RMSE</strong>, flag-OFF vs <code class="docutils literal notranslate"><span class="pre">target_sigma_t</span> <span class="pre">∈</span> <span class="pre">{0.10,</span> <span class="pre">0.05,</span> <span class="pre">0.03}</span></code>, on the optimization-tier datasets with local data. Driver: <code class="docutils literal notranslate"><span class="pre">scripts/benchmark_target_sigma.py</span></code>.</p>
+<section id="result-measured-no-op">
+<h2>Result: measured NO-OP<a class="headerlink" href="#result-measured-no-op" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>dataset</p></th>
+<th class="head"><p>target</p></th>
+<th class="head"><p>med_off</p></th>
+<th class="head"><p>med_on</p></th>
+<th class="head"><p>Δmedian</p></th>
+<th class="head"><p>n</p></th>
+<th class="head"><p>wins</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>supercam_labcal</p></td>
+<td><p>0.10 / 0.05 / 0.03</p></td>
+<td><p>3.762</p></td>
+<td><p>3.762</p></td>
+<td><p><strong>+0.000</strong></p></td>
+<td><p>20</p></td>
+<td><p>0/20</p></td>
+</tr>
+<tr class="row-odd"><td><p>aalto</p></td>
+<td><p>(all)</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>0</p></td>
+<td><p>— (single-element Al → degenerate conditioning)</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>VERDICT: 0 improved, 0 regressed, 3 flat (±0.01 wt%). median Δ = +0.000 wt%.</strong></p>
+</section>
+<section id="why-root-cause-not-a-wiring-bug">
+<h2>Why (root cause — not a wiring bug)<a class="headerlink" href="#why-root-cause-not-a-wiring-bug" title="Link to this heading"></a></h2>
+<p>Verified the derivation <em>fires</em> correctly on a real <code class="docutils literal notranslate"><span class="pre">supercam_labcal</span></code> spectrum (<code class="docutils literal notranslate"><span class="pre">target=0.03</span></code> →
+derived <code class="docutils literal notranslate"><span class="pre">min_snr=26.7</span></code>, <code class="docutils literal notranslate"><span class="pre">min_energy_spread=2e-5</span></code>, <code class="docutils literal notranslate"><span class="pre">min_lines=2</span></code>). But:</p>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">min_snr</span></code> is the only HARD gate the derivation drives, and it never binds.</strong> The detected lines
+on this dataset have <strong>SNR = 449,000–5,300,000</strong> (intensity / intensity_uncertainty). The gate
+threshold (legacy 10, or derived 27) is ~5 orders of magnitude below the <em>minimum</em> line SNR, so
+<strong>every line passes regardless of the threshold</strong>. Raising min_snr 10→27 rejects nothing.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">min_energy_spread</span></code> and <code class="docutils literal notranslate"><span class="pre">min_lines</span></code> are advisory-only</strong> in <code class="docutils literal notranslate"><span class="pre">LineSelector</span></code> (they emit warnings;
+they do not change the selected set). So deriving them changes no selection.</p></li>
+</ol>
+<p>This <strong>confirms the earlier sensitivity study from first principles</strong>: <code class="docutils literal notranslate"><span class="pre">min_snr</span></code> (and
+<code class="docutils literal notranslate"><span class="pre">min_energy_spread</span></code>) were already identified as <em>inert</em> levers; <code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code> is
+load-bearing only via downstream element handling, not the selector gate.</p>
+</section>
+<section id="honest-conclusions">
+<h2>Honest conclusions<a class="headerlink" href="#honest-conclusions" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>The tuned magic numbers <code class="docutils literal notranslate"><span class="pre">min_snr=10</span></code> / <code class="docutils literal notranslate"><span class="pre">min_energy_spread=2</span></code> / <code class="docutils literal notranslate"><span class="pre">min_lines=3</span></code> were never
+load-bearing in the reference selection path.</strong> Deriving them precisely from the verified error
+budget is <em>correct and generalizable</em>, but produces <strong>no accuracy change</strong> here because the
+pipeline does not bottleneck on these gates. The accuracy bottleneck remains elsewhere (atomic
+data, wavelength calibration/tolerance, solver element handling) — consistent with all prior M5
+findings.</p></li>
+<li><p><strong>The SNR gate is structurally inert because the dataset noise model gives ~10⁶ SNR.</strong> A realistic
+per-line noise estimate (the gate was designed for SNR~10) is a prerequisite for <em>any</em> SNR gate —
+tuned or derived — to matter. This is a data/preprocessing gap, not a selector gap.</p></li>
+</ul>
+</section>
+<section id="disposition">
+<h2>Disposition<a class="headerlink" href="#disposition" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Do NOT flip the default.</strong> No measured win → <code class="docutils literal notranslate"><span class="pre">target_sigma_t</span></code> stays <code class="docutils literal notranslate"><span class="pre">None</span></code> (default-off,
+byte-identical no-op; 94 selection/pipeline/oracle tests green).</p></li>
+<li><p><strong>Keep the knob as an opt-in.</strong> The derived thresholds are conformance-pinned to the verified
+proof (<code class="docutils literal notranslate"><span class="pre">tests/oracle/test_derived_thresholds.py</span></code>) and <em>generalize to low-SNR regimes</em> (weak-signal
+/ portable-instrument LIBS) where the gate WOULD bind — a principled alternative to a fixed 10 that
+a fixed constant cannot provide. On high-SNR lab data it is correctly a no-op.</p></li>
+<li><p><strong>The durable contribution of Bridge B is the conformance guard</strong>, not an accuracy delta: it
+certifies the shipped thresholds match the machine-verified math regardless of benchmark coverage.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

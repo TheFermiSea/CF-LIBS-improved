@@ -1,0 +1,179 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J3 Implementation Spec — Jittable Line Matching + Gates (detect_line_observations) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J3 Implementation Spec — Jittable Line Matching + Gates (<code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J3-line-matching-gates.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j3-implementation-spec-jittable-line-matching-gates-detect-line-observations">
+<h1>J3 Implementation Spec — Jittable Line Matching + Gates (<code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>)<a class="headerlink" href="#j3-implementation-spec-jittable-line-matching-gates-detect-line-observations" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J3 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §4 row 4, D5 · <strong>Track:</strong> A · <strong>Depends:</strong> J0, J1 (soft J2 — develops on reference calibration) · <strong>Estimated effort:</strong> 12–17 pd (snapshot infra 2; kdet + comb scan + shift selection 3–4; veto + residual gate + ownership scan + min-kept bars 4–6 — the subtlest logic in the whole front-end; intensity extraction 1–2; parity + scoreboard gating 2–3)</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Port <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:1099</span></code>; file is 2,475 lines; pipeline call at <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:519</span></code>) into <code class="docutils literal notranslate"><span class="pre">jitpipe/identify.py</span></code> with <strong>exact reference semantics</strong> — ADR-0004 D5: this stage is pure discrete logic + identical arithmetic; <em>nothing here is hot enough to justify semantic drift</em> (unlike J2’s hypothesis scoring). It is the tightest contract in the program.</p></li>
+<li><p>Generalize the three existing seed kernels in the same file (<code class="docutils literal notranslate"><span class="pre">_jax_peaks_within_tolerance</span></code> <code class="docutils literal notranslate"><span class="pre">:76</span></code>, <code class="docutils literal notranslate"><span class="pre">_jax_kdet_candidate_counts</span></code> <code class="docutils literal notranslate"><span class="pre">:118</span></code>, <code class="docutils literal notranslate"><span class="pre">_jax_local_maxima_mask</span></code> <code class="docutils literal notranslate"><span class="pre">:156</span></code>) rather than reinventing them.</p></li>
+</ul>
+</section>
+<section id="current-algorithm-and-jit-breakers-file-line-all-identify-line-detection-py-unless-noted">
+<h2>2. Current algorithm and jit-breakers (file:line; all <code class="docutils literal notranslate"><span class="pre">identify/line_detection.py</span></code> unless noted)<a class="headerlink" href="#current-algorithm-and-jit-breakers-file-line-all-identify-line-detection-py-unless-noted" title="Link to this heading"></a></h2>
+<p>Flow: early-exit empties (<code class="docutils literal notranslate"><span class="pre">:1271-1332</span></code>) → adaptive R-aware tolerances (<code class="docutils literal notranslate"><span class="pre">:592-616</span></code>, applied <code class="docutils literal notranslate"><span class="pre">:1283-1301</span></code>) → <code class="docutils literal notranslate"><span class="pre">_load_transitions</span></code> (<code class="docutils literal notranslate"><span class="pre">:1476</span></code>; <strong>SQL per element</strong> <code class="docutils literal notranslate"><span class="pre">:1502</span></code>; gA-Boltzmann top-K=60 ranking <code class="docutils literal notranslate"><span class="pre">:1550-1579</span></code>, weight <code class="docutils literal notranslate"><span class="pre">g·A·exp(−E_k/1</span> <span class="pre">eV)</span></code> <code class="docutils literal notranslate"><span class="pre">:1524-1537</span></code>) → <code class="docutils literal notranslate"><span class="pre">_find_peaks</span></code> (<code class="docutils literal notranslate"><span class="pre">:1315→2424</span></code>) → element-keyed transition <strong>dict</strong> (<code class="docutils literal notranslate"><span class="pre">:1334-1336</span></code>) → <strong>kdet pre-filter</strong> (<code class="docutils literal notranslate"><span class="pre">:1338→2148</span></code>; Rust path <code class="docutils literal notranslate"><span class="pre">:2185</span></code>; NumPy path = per-element max-over-shift-grid in-tolerance counts <code class="docutils literal notranslate"><span class="pre">:2034-2059</span></code>; coherence-mode count-only rule <code class="docutils literal notranslate"><span class="pre">:2083</span></code>) → comb top-30/element (<code class="docutils literal notranslate"><span class="pre">:1357-1360</span></code>) → shift grid (<code class="docutils literal notranslate"><span class="pre">:1592-1609</span></code>) → <strong>comb shift-scan</strong> (<code class="docutils literal notranslate"><span class="pre">:1851</span></code>; Python loop over shifts <code class="docutils literal notranslate"><span class="pre">:1881</span></code>; per (shift, element) score <code class="docutils literal notranslate"><span class="pre">:1612</span></code> calls the <strong>greedy matcher</strong> <code class="docutils literal notranslate"><span class="pre">_match_transitions_to_peaks</span></code> <code class="docutils literal notranslate"><span class="pre">:1919</span></code> — per transition, nearest in-tolerance peak not in the mutable <code class="docutils literal notranslate"><span class="pre">used</span></code> set <code class="docutils literal notranslate"><span class="pre">:1941-1986</span></code>; P/R/F1 + 4 pass thresholds <code class="docutils literal notranslate"><span class="pre">:1644-1656</span></code>; lexicographic best/fallback with <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> F1 tie-break <code class="docutils literal notranslate"><span class="pre">:1813-1848</span></code>) → accepted-element selection + fallback ladder (<code class="docutils literal notranslate"><span class="pre">:619-661</span></code>) → <strong>shift-coherence veto</strong> (<code class="docutils literal notranslate"><span class="pre">:1389→2287</span></code>; per-element nearest-peak signed residuals <code class="docutils literal notranslate"><span class="pre">:2227-2252</span></code>; pooled median consensus <code class="docutils literal notranslate"><span class="pre">:2335</span></code>; band = tol/3 <code class="docutils literal notranslate"><span class="pre">:2336</span></code>; keep rules <code class="docutils literal notranslate"><span class="pre">:2338-2366</span></code> incl. zero-match pass <code class="docutils literal notranslate"><span class="pre">:2343-2346</span></code>) → <strong>observation build</strong> <code class="docutils literal notranslate"><span class="pre">_collect_observations</span></code> (<code class="docutils literal notranslate"><span class="pre">:786</span></code>): elements in (f1, matched)-desc order (<code class="docutils literal notranslate"><span class="pre">:830-836</span></code>); per element: greedy comb matching with <strong>cross-element peak ownership</strong> (<code class="docutils literal notranslate"><span class="pre">used_peaks</span></code>, <code class="docutils literal notranslate"><span class="pre">:843-860</span></code>) and per-line residual gate (band = tol/3 around pooled consensus <code class="docutils literal notranslate"><span class="pre">:2255-2284</span></code>; <strong>gated candidates recorded without consuming the peak</strong> <code class="docutils literal notranslate"><span class="pre">:1958-1975</span></code>); per-peak nearest-transition pass (<code class="docutils literal notranslate"><span class="pre">:872-895,2386-2413</span></code>) honoring ownership + band; line-key dedupe via <code class="docutils literal notranslate"><span class="pre">seen_keys</span></code> (<code class="docutils literal notranslate"><span class="pre">:771-774</span></code>); <strong>min-kept bars</strong> <code class="docutils literal notranslate"><span class="pre">_drop_element_if_mostly_gated</span></code> (<code class="docutils literal notranslate"><span class="pre">:931</span></code>: kept-fraction &lt;0.5 or kept &lt;3 ⇒ <strong>retroactive <code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">observations[n_obs_before:]</span></code></strong> <code class="docutils literal notranslate"><span class="pre">:971</span></code> — the only place the pipeline un-does prior appends; used peaks stay claimed <code class="docutils literal notranslate"><span class="pre">:961-963</span></code>) → <strong>intensity extraction</strong> <code class="docutils literal notranslate"><span class="pre">_build_observation</span></code> (<code class="docutils literal notranslate"><span class="pre">:459</span></code>: trapezoid over ±<code class="docutils literal notranslate"><span class="pre">half_width_px</span></code> <code class="docutils literal notranslate"><span class="pre">:493-498</span></code>; Gaussian-equivalent fallback <code class="docutils literal notranslate"><span class="pre">h·FWHM·√(π/4ln2)</span></code> with walk-outward FWHM <code class="docutils literal notranslate"><span class="pre">:306-365</span></code>; Poisson σ <code class="docutils literal notranslate"><span class="pre">√(Σcounts)·Δλ</span></code> <code class="docutils literal notranslate"><span class="pre">:518-519</span></code>); Voigt deconvolution dispatch (<code class="docutils literal notranslate"><span class="pre">:722-751</span></code>; default-off, pipeline does not enable it) → result + warning strings (<code class="docutils literal notranslate"><span class="pre">:1066-1096</span></code>).</p>
+<p>Breakers: SQL + <code class="docutils literal notranslate"><span class="pre">sorted()</span></code> ranking; element dicts throughout; mutable <code class="docutils literal notranslate"><span class="pre">used</span></code> sets (catalog-order-dependent); <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> tie semantics (<code class="docutils literal notranslate"><span class="pre">:1841-1848</span></code>); Python <code class="docutils literal notranslate"><span class="pre">sort(key=…)</span></code> (<code class="docutils literal notranslate"><span class="pre">:836</span></code>) and <code class="docutils literal notranslate"><span class="pre">sorted(...)[:k]</span></code> fallback (<code class="docutils literal notranslate"><span class="pre">:653-659</span></code>); <code class="docutils literal notranslate"><span class="pre">seen_keys</span></code>/<code class="docutils literal notranslate"><span class="pre">resonance_lines</span></code>/<code class="docutils literal notranslate"><span class="pre">matched_peak_indices</span></code> sets; retroactive <code class="docutils literal notranslate"><span class="pre">del</span></code>; <code class="docutils literal notranslate"><span class="pre">gated_out</span></code> append-only bookkeeping (<code class="docutils literal notranslate"><span class="pre">:1965-1973</span></code>); walk-outward FWHM loops (<code class="docutils literal notranslate"><span class="pre">:349-361</span></code>); warning-string lists; <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> dataclass list output.</p>
+</section>
+<section id="redesign">
+<h2>3. Redesign<a class="headerlink" href="#redesign" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>FrontEndSnapshot</strong> (host, per dataset × element set; mirrors <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">solve/iterative.py:382</span></code>): <code class="docutils literal notranslate"><span class="pre">(E_max=32,</span> <span class="pre">K_lines=64)</span></code> padded arrays — wl, gA-weight, E_k, g_k, A_ki, stage, E_i, is_resonance, mask — plus the comb subset <code class="docutils literal notranslate"><span class="pre">(E_max,</span> <span class="pre">K_comb=32)</span></code> from the same deterministic host-side ranking (tie-break at <code class="docutils literal notranslate"><span class="pre">:1577</span></code>).</p></li>
+<li><p><strong>kdet:</strong> generalize <code class="docutils literal notranslate"><span class="pre">_jax_kdet_candidate_counts</span></code> — vmap over <code class="docutils literal notranslate"><span class="pre">(E_max,</span> <span class="pre">S_shift=32)</span></code> of searchsorted counts; density/rarity weights (<code class="docutils literal notranslate"><span class="pre">:2087-2100</span></code>) as vectorized reductions; coherence rule (<code class="docutils literal notranslate"><span class="pre">:2083</span></code>) → <code class="docutils literal notranslate"><span class="pre">(E_max,)</span></code> keep mask.</p></li>
+<li><p><strong>Comb scan with exact greedy parity:</strong> precompute per (element, comb line) the <code class="docutils literal notranslate"><span class="pre">K_match=8</span></code> nearest peak slots (banded searchsorted; measured fan-out ≤5 at tolerance). Per (shift, element): <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> over the 32 comb-line slots carrying a <code class="docutils literal notranslate"><span class="pre">(P_max,)</span></code> used-peak bitmask — each step picks the nearest <em>available</em> in-tolerance peak (masked argmin over 8 slots). Sequential depth 32; vmap over (S_shift × E_max) gives the whole scan as one kernel → <code class="docutils literal notranslate"><span class="pre">(S_shift,</span> <span class="pre">E_max)</span></code> P/R/F1/pass arrays.</p></li>
+<li><p><strong>Best/fallback shift selection:</strong> encode the lexicographic rules (<code class="docutils literal notranslate"><span class="pre">:1813-1848</span></code>) as composite sort keys with F1 <strong>quantized to reproduce <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> ties</strong>; masked argmax. Fallback ladder (<code class="docutils literal notranslate"><span class="pre">:644-661</span></code>) = masked top-k by matched count.</p></li>
+<li><p><strong>Veto + consensus:</strong> per-(element, comb-line) nearest-peak signed residual <code class="docutils literal notranslate"><span class="pre">(E_max,</span> <span class="pre">32)</span></code> masked; pooled masked median (sort + count-indexed gather); per-element coherent fraction/count → keep mask replicating <code class="docutils literal notranslate"><span class="pre">:2338-2366</span></code> including the zero-match keep rule.</p></li>
+<li><p><strong>Observation build:</strong> element order = <code class="docutils literal notranslate"><span class="pre">argsort</span></code> by (f1, matched) desc over E_max slots; <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> over ranked element slots carrying the global used-peak mask. In the scan body: (a) comb greedy sub-scan with the residual band; <strong>gated candidates set a gated flag without consuming the peak</strong> (exact port of <code class="docutils literal notranslate"><span class="pre">:1958-1975</span></code>); (b) per-peak pass = vectorized masked argmin over each free peak’s K_match in-band transitions, respecting ownership + band; lines matched in (a) masked out — reproduces <code class="docutils literal notranslate"><span class="pre">seen_keys</span></code> dedupe exactly (line keys unique within the snapshot); (c) <code class="docutils literal notranslate"><span class="pre">_drop_element_if_mostly_gated</span></code> = counts → drop flag → zero the element’s observation-validity mask; <strong>used peaks stay claimed</strong> (deliberate semantics at <code class="docutils literal notranslate"><span class="pre">:961-963</span></code>; the mask is never rolled back).</p></li>
+<li><p><strong>Intensity extraction:</strong> gather fixed windows <code class="docutils literal notranslate"><span class="pre">(OBS_max,</span> <span class="pre">2·half_width_px+1)</span></code> (<code class="docutils literal notranslate"><span class="pre">half_width_px</span></code> static per bucket, <code class="docutils literal notranslate"><span class="pre">:1323</span></code>) → trapezoid + Poisson σ vectorized; Gaussian-area fallback’s FWHM = vectorized first-crossing-from-apex via boolean cummax + linear interpolation within the window (exact port — the reference also stops at window edges, <code class="docutils literal notranslate"><span class="pre">:349-361</span></code>). Voigt deconvolution stays host-side scipy in phase 1 (default-off, unused); phase 2 = batched fixed-iteration Gauss–Newton Voigt reusing <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py:659</span></code> — also the bridge to J10’s forward-fitting scorer.</p></li>
+<li><p><strong>Output:</strong> padded <code class="docutils literal notranslate"><span class="pre">ObservationBatch</span></code> pytree (OBS_max=512: wl, intensity, σ, element id, stage, E_k, g_k, A_ki, resonance flag, validity) + counts + int warning bitmask; host wrapper rebuilds <code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code> with today’s strings.</p></li>
+</ul>
+</section>
+<section id="tolerance-contract-the-tightest-in-the-program">
+<h2>4. Tolerance contract (the tightest in the program)<a class="headerlink" href="#tolerance-contract-the-tightest-in-the-program" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>MUST agree: (a) <code class="docutils literal notranslate"><span class="pre">applied_shift_nm</span></code> <strong>exactly equal</strong> (same grid <code class="docutils literal notranslate"><span class="pre">:1592-1609</span></code>, replicated tie-breaks); (b) accepted/kept element sets <strong>identical</strong> per corpus spectrum (any diff is a bug or a documented <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code>-boundary case); (c) observation line-key sets identical (target; floor Jaccard ≥ 0.98 with every diff triaged at the residual-band boundary); (d) intensities + σ rtol 1e-10 (trapezoid path: same windows, same arithmetic); (e) <code class="docutils literal notranslate"><span class="pre">residual_gate</span></code> n_gated counts and dropped-element maps equal (order-insensitive).</p></li>
+<li><p>MAY differ: observation ordering, diagnostic float formatting, warning ordering.</p></li>
+<li><p>Board: expected ΔF1 = 0; hard gate |ΔF1| ≤ 0.005 — per project memory every identifier-scoring change is benchmark-gated (PR #229 paper-faithful-ALIAS −0.041 precedent).</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria">
+<h2>5. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Contract (a)–(e) green on fixtures + the 32-spectrum corpus; <strong>BHVO-2 Sn/Th confounder fixtures as mandatory canaries</strong> (the residual gate and min-kept bars exist for exactly those cases, <code class="docutils literal notranslate"><span class="pre">:944-958</span></code>).</p></li>
+<li><p>jit + vmap (B=16) + padding invariance + no-SQLite-in-kernel.</p></li>
+<li><p>Exact-port unit tests for each of the four named hazards: greedy order-dependence; <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> ties; gated-without-consuming-peak; retroactive element drop with peaks-stay-claimed.</p></li>
+<li><p>Host wrapper rebuilds <code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code>; legacy consumers unaffected.</p></li>
+<li><p>Scoreboard shadow on available datasets within the gate.</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>6. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_identify.py</span></code> (corpus + fixtures, assertion style of <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py:180</span></code>); targeted micro-fixtures per hazard (two elements competing for one peak; F1 within <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> of each other; gated line whose peak is later claimed by a worse line — must NOT be, per reference semantics; element with 2 kept / 3 gated triggering the drop).</p>
+</section>
+<section id="risks">
+<h2>7. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p><em>Numerical:</em> minimal (fp64 comparisons of identical arithmetic). <em>Memory:</em> minimal (tensors ≤ few MB). <em>Behavioral:</em> <strong>high concentration</strong> — each hazard is one-line-to-get-wrong; mitigation is the exact-scan ports + micro-fixtures; no parallel approximations permitted in this stage.</p>
+</section>
+<section id="dependencies-files">
+<h2>8. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0, J1; soft J2. Enables J8; J4 consumes <code class="docutils literal notranslate"><span class="pre">ObservationBatch</span></code>. Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/identify.py</span></code>, tests. Reference untouched. The pure-JAX ALIAS/comb/correlation/NNLS scoring ports (<code class="docutils literal notranslate"><span class="pre">docs/jax-port/{alias,comb-correlation,nnls}-consultation.md</span></code>) integrate here for J10’s presence scoring but are not required for parity of this stage.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

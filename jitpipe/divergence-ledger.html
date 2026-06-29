@@ -1,0 +1,276 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jitpipe divergence ledger (ADR-0004 R5; J8 spec §2) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">jitpipe divergence ledger (ADR-0004 R5; J8 spec §2)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jitpipe/divergence-ledger.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="jitpipe-divergence-ledger-adr-0004-r5-j8-spec-2">
+<h1>jitpipe divergence ledger (ADR-0004 R5; J8 spec §2)<a class="headerlink" href="#jitpipe-divergence-ledger-adr-0004-r5-j8-spec-2" title="Link to this heading"></a></h1>
+<p>Records every <em>intentional</em> numerical or behavioural divergence of the jittable
+pipeline (<code class="docutils literal notranslate"><span class="pre">cflibs.jitpipe</span></code>) from the frozen reference
+(<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.pipeline.run_pipeline</span></code>), with the adjudication. A divergence
+that is NOT listed here is a bug. Seeded with the M1 (J8) adjudications.</p>
+<p>Each entry: <strong>ID · stage · what diverges · why · parity status</strong>.</p>
+<hr class="docutils" />
+<section id="m1-j8-end-to-end-composition-adjudications">
+<h2>M1 (J8 — end-to-end composition) adjudications<a class="headerlink" href="#m1-j8-end-to-end-composition-adjudications" title="Link to this heading"></a></h2>
+<section id="d-j8-1-solve-production-sb-graph-path-vs-the-lax-fixed-point-parity-scoped">
+<h3>D-J8-1 · solve · production SB-graph path vs the lax fixed point · <em>parity-scoped</em><a class="headerlink" href="#d-j8-1-solve-production-sb-graph-path-vs-the-lax-fixed-point-parity-scoped" title="Link to this heading"></a></h3>
+<p>The production geological preset routes the reference solve through the
+<strong>SB-graph Python path</strong>: <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver.solve</span></code> forces <code class="docutils literal notranslate"><span class="pre">_solve_python</span></code>
+whenever <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code> <em>or</em> a Stark diagnostic is supplied
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:1603</span></code>), and the geological preset sets both
+(<code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code>, <code class="docutils literal notranslate"><span class="pre">stark_ne=True</span></code>).</p>
+<p>The J8 jit solve spine is <code class="docutils literal notranslate"><span class="pre">cflibs.jitpipe.solve.scan_solve</span></code>, the fixed-K
+<code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> mirror of <code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code> (the <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> body). That body
+implements the <strong>standard common-slope</strong> plane fit, NOT the pooled global-lstsq
+SB-graph intercept extraction (which <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> does not implement — it forces
+the Python loop). <code class="docutils literal notranslate"><span class="pre">scan_solve</span></code> is parity-tested bit-for-bit against
+<code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code> (<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_j7.py</span></code>), and <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> is
+parity-tested against <code class="docutils literal notranslate"><span class="pre">_solve_python</span></code> for the <strong>standard-closure, SB-graph-OFF</strong>
+path (<code class="docutils literal notranslate"><span class="pre">tests/inversion/test_iterative_lax.py</span></code>).</p>
+<p><strong>Adjudication:</strong> for M1, end-to-end COMPOSITION parity is asserted on the
+shared solve-math path — the reference pinned to <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=False</span></code>,
+<code class="docutils literal notranslate"><span class="pre">stark_ne=False</span></code>, <code class="docutils literal notranslate"><span class="pre">closure_mode=&quot;standard&quot;</span></code>
+(<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_pipeline.py</span></code>). On that path <code class="docutils literal notranslate"><span class="pre">run_one</span></code> reproduces
+<code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> <strong>bit-for-bit</strong> (ΔT = 0, Δn_e = 0, Δconcentration = 0 on both a
+synthetic forward-model spectrum and the real ChemCam BHVO-2 loc1 fixture).
+The full production SB-graph + oxide + Stark-pinned-n_e estimator
+(<code class="docutils literal notranslate"><span class="pre">joint_wls_solve</span></code>, ADR §6.1) is the J8.5+ deliverable; it is the production
+estimator, not the M1 composition gate. <strong>Parity status: exact on the scoped
+path; production-path parity tracked for J8.5.</strong></p>
+</section>
+<section id="d-j8-2-front-end-detect-identify-calibrate-driven-through-the-reference-path-delegated">
+<h3>D-J8-2 · front-end · detect/identify/calibrate driven through the reference path · <em>delegated</em><a class="headerlink" href="#d-j8-2-front-end-detect-identify-calibrate-driven-through-the-reference-path-delegated" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">run_one</span></code>’s front-end (response → calibrate → detect → identify → select) is
+driven through <code class="docutils literal notranslate"><span class="pre">cflibs.jitpipe.host.run_front_end</span></code>, which wraps the reference
+<code class="docutils literal notranslate"><span class="pre">detect_and_select_lines</span></code>. The J2 (<code class="docutils literal notranslate"><span class="pre">find_peaks_fixed</span></code>), J3/J4
+(<code class="docutils literal notranslate"><span class="pre">score_comb_grid</span></code>/<code class="docutils literal notranslate"><span class="pre">build_observations</span></code>/gate stack), and J3 calibrate
+(<code class="docutils literal notranslate"><span class="pre">calibrate_axis_kernel</span></code>) jit kernels are each parity-tested in isolation
+(<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_j2/j3/j4</span></code>), but the host wrapper that reassembles
+them into a byte-faithful reproduction of the <em>full</em> <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>
+gate stack (gA-Boltzmann comb ranking, shift-coherence veto, line-residual gate,
+retroactive min-kept-bars drop) is not yet on-device.</p>
+<p><strong>Adjudication:</strong> for M1 the observation set fed to the solve spine is therefore
+<strong>byte-identical</strong> to the reference (it IS the reference front-end), so
+composition parity is exact. Lifting the FrontEndSnapshot assembly + the full
+gate stack fully on-device (so the front-end is itself jit/vmap-clean) is the
+remaining work — it is a <em>re-host</em>, not a numerical divergence. <strong>Parity status:
+exact (front-end is the reference); on-device port is remaining_todo.</strong></p>
+</section>
+<section id="d-j8-3-solve-closure-native-jax-vs-reference-pure-callback-numerically-identical">
+<h3>D-J8-3 · solve · closure native-JAX vs reference <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code> · <em>numerically identical</em><a class="headerlink" href="#d-j8-3-solve-closure-native-jax-vs-reference-pure-callback-numerically-identical" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">scan_solve</span></code> applies closure (<code class="docutils literal notranslate"><span class="pre">standard</span></code>/<code class="docutils literal notranslate"><span class="pre">oxide</span></code>/<code class="docutils literal notranslate"><span class="pre">matrix</span></code>/ILR) through the
+native-JAX <code class="docutils literal notranslate"><span class="pre">_apply_closure</span></code> instead of the reference host <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code>
+(<code class="docutils literal notranslate"><span class="pre">_make_closure_callback</span></code>). Inherited from J7; numerically identical for
+standard/oxide/matrix, and ILR collapses to standard at the simplex.
+<strong>Parity status: exact (J7 parity test).</strong></p>
+</section>
+<section id="d-j8-4-failure-policy-valueerror-all-fn-cflibsresult-intentional-parity-preserving">
+<h3>D-J8-4 · failure policy · ValueError → all-FN CFLIBSResult · <em>intentional, parity-preserving</em><a class="headerlink" href="#d-j8-4-failure-policy-valueerror-all-fn-cflibsresult-intentional-parity-preserving" title="Link to this heading"></a></h3>
+<p>At zero usable observations the reference raises
+<code class="docutils literal notranslate"><span class="pre">ValueError(&quot;No</span> <span class="pre">usable</span> <span class="pre">spectral</span> <span class="pre">lines</span> <span class="pre">detected</span> <span class="pre">for</span> <span class="pre">inversion.&quot;)</span></code>
+(<code class="docutils literal notranslate"><span class="pre">pipeline.py:872</span></code>), which the scoreboard scores as all-false-negative
+(<code class="docutils literal notranslate"><span class="pre">scoreboard.py:159</span></code>). <code class="docutils literal notranslate"><span class="pre">run_one</span></code> instead returns the <strong>same all-FN record</strong>
+(<code class="docutils literal notranslate"><span class="pre">host.all_fn_result</span></code>: all-zero concentrations with element keys preserved,
+<code class="docutils literal notranslate"><span class="pre">converged=False</span></code>, finite NaN-free T/n_e) — no crash, no NaN. This is the
+required masked equivalent (J8 spec §1, AC4). <strong>Parity status: scored-record
+equivalent (asserted in <code class="docutils literal notranslate"><span class="pre">test_failure_policy_parity</span></code>).</strong></p>
+</section>
+<section id="d-j8-5-batch-host-loop-vs-jit-vmap-deferred-to-j9">
+<h3>D-J8-5 · batch · host loop vs jit(vmap) · <em>deferred to J9</em><a class="headerlink" href="#d-j8-5-batch-host-loop-vs-jit-vmap-deferred-to-j9" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">run_batch</span></code> is a host loop over <code class="docutils literal notranslate"><span class="pre">run_one</span></code> for M1 (the front-end gather is impure
+— SQLite + scipy — so it stays host-side). The jit-graphable solve core
+(<code class="docutils literal notranslate"><span class="pre">scan_solve</span></code>) is already <code class="docutils literal notranslate"><span class="pre">vmap</span></code>-clean (J7 <code class="docutils literal notranslate"><span class="pre">test_vmap_batched_scan</span></code>); lifting the
+whole solve spine under <code class="docutils literal notranslate"><span class="pre">jit(vmap(...))</span></code> once the front-end is on-device is J9.
+<strong>Parity status: per-spectrum identical to <code class="docutils literal notranslate"><span class="pre">run_one</span></code>; batched vmap is J9.</strong></p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="j9-j12-on-device-front-end-scoreboard-adjudications">
+<h2>J9 / J12 (on-device front-end + scoreboard) adjudications<a class="headerlink" href="#j9-j12-on-device-front-end-scoreboard-adjudications" title="Link to this heading"></a></h2>
+<section id="d-j9-1-front-end-detect-identify-kdet-lineselector-segmented-calibration-moved-on-device-re-host-parity-exact">
+<h3>D-J9-1 · front-end · detect/identify/kdet/LineSelector/segmented-calibration moved on-device · <em>re-host, parity exact</em><a class="headerlink" href="#d-j9-1-front-end-detect-identify-kdet-lineselector-segmented-calibration-moved-on-device-re-host-parity-exact" title="Link to this heading"></a></h3>
+<p>Supersedes the “remaining_todo” of D-J8-2. <code class="docutils literal notranslate"><span class="pre">run_one(ondevice_front_end=True)</span></code> (the
+default) now runs the J1 detect, J3 comb scan / shift-select / veto / observation
+build, the kdet coherence pre-filter, the post-detection <code class="docutils literal notranslate"><span class="pre">LineSelector</span></code>, <strong>and</strong> the
+segmented wavelength calibration as parity-tested JIT kernels
+(<code class="docutils literal notranslate"><span class="pre">run_front_end_ondevice</span></code>). The catalog SQL + gA-Boltzmann comb ranking + scipy peak
+detection stay host-side (ADR-0001; dynamic-shaped pre-trace). <strong>Adjudication:</strong> the
+on-device gate stack reproduces the reference <code class="docutils literal notranslate"><span class="pre">detect_and_select_lines</span></code> observation
+set bit-for-bit (obs Jaccard 1.0 on synthetic + real BHVO-2, raw + geological), and
+the segmented axis matches the reference to max|Δλ| 0.00025 nm on multi-segment
+broadband. <strong>Parity status: exact (re-host, not a numerical divergence).</strong></p>
+</section>
+<section id="d-j9-2-front-end-single-segment-calibration-delegated-to-the-reference-core-aa9e-parity-restored">
+<h3>D-J9-2 · front-end · single-segment calibration delegated to the reference core (aa9e) · <em>parity-restored</em><a class="headerlink" href="#d-j9-2-front-end-single-segment-calibration-delegated-to-the-reference-core-aa9e-parity-restored" title="Link to this heading"></a></h3>
+<p>The on-device segmented calibrator’s robust core is a <strong>deterministic stratified
+RANSAC</strong>, vs the reference’s <strong>600-draw random RANSAC</strong>. On seam-free <strong>single-segment</strong>
+spectra (narrow-band synthetic + the real aalto minerals) the two resolve a sparse /
+multimodal anchor set to different registrations (model-class flip on sparse synthetic;
+~1.9 nm shift-mode flip on muscoviteE35), shifting the corrected axis and flipping
+marginal lines / the solve outcome (board run2: synthetic ΔF1 −0.291, aalto fail 1 vs 0).
+<strong>Adjudication (bead aa9e, commit a2f6009):</strong> keyed on the <em>structural</em> signal
+(<code class="docutils literal notranslate"><span class="pre">detect_ccd_seams(...).size</span> <span class="pre">==</span> <span class="pre">0</span></code>), single-segment spectra delegate to the reference
+<code class="docutils literal notranslate"><span class="pre">_ld_calibrate</span></code>, restoring byte parity (board run3: aalto/synthetic ΔF1 = 0, failures
+= reference); the multi-segment path is untouched (D-J9-1). <strong>Known residual:</strong> on
+muscoviteE35 parity is restored by inheriting the reference’s physically-dubious
+~1.9 nm shift mode — a pre-existing reference multimodal-RANSAC issue, filed as a
+separate bug (an ambiguity guard for <em>both</em> pipelines), not a jit divergence.
+<strong>Parity status: exact for single-segment (= reference); regression test
+<code class="docutils literal notranslate"><span class="pre">test_ondevice_calib_single_segment_parity.py</span></code>.</strong></p>
+</section>
+<section id="d-j9-3-front-end-stark-n-e-diagnostic-reference-delegated-delegated-6apc-blocked-on-kernel-hardening">
+<h3>D-J9-3 · front-end · Stark n_e diagnostic reference-delegated · <em>delegated (6apc blocked on kernel-hardening)</em><a class="headerlink" href="#d-j9-3-front-end-stark-n-e-diagnostic-reference-delegated-delegated-6apc-blocked-on-kernel-hardening" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">run_front_end_ondevice</span></code> calls the reference <code class="docutils literal notranslate"><span class="pre">measure_stark_ne</span></code> for the n_e
+diagnostic (<code class="docutils literal notranslate"><span class="pre">host.py:2512</span></code>); n_e pins the production solve to the ≤10 % M1 tolerance
+with <strong>no downstream slack</strong>. <strong>6apc attempt (2026-06-15, parked on branch
+<code class="docutils literal notranslate"><span class="pre">6apc-stark-build</span></code>):</strong> the host candidate-selection orchestrator (<code class="docutils literal notranslate"><span class="pre">_ondevice_stark_ne</span></code>,
+mirroring the reference two-pass control flow incl. the DB 0.1 nm nearest-match,
+the multiplet-blend gate, and the break-after-max_lines-<em>successes</em> cap-before-trim)
+was fully built and the break-after-successes regression test passes. But the
+already-“parity-tested” device LM Voigt kernel (<code class="docutils literal notranslate"><span class="pre">measure_stark_ne_jit</span></code> /
+<code class="docutils literal notranslate"><span class="pre">fit_lorentz_fwhm_lm</span></code>) <strong>cannot fit real ChemCam windows</strong> — it returns <code class="docutils literal notranslate"><span class="pre">None</span></code> (no
+usable line) on BHVO-2 loc1, geological <em>and</em> raw. Three kernel-internal root causes:
+(1) the 5×5 normal-equations solve goes NaN at ChemCam intensity scale (~1e12);
+(2) <code class="docutils literal notranslate"><span class="pre">extract_windows</span></code> centers the window but <code class="docutils literal notranslate"><span class="pre">_init_params</span></code> assumes left-packing, so on
+the coarse real axis (~0.049 nm/sample) the init baseline is NaN — synthetic parity
+held only because its dense axis fills the whole window; (3) the strict 20-iter
+<code class="docutils literal notranslate"><span class="pre">converged</span></code> gate rejects otherwise-good real-data fits. The kernel was only ever
+exercised on synthetic dense-axis data. <strong>Adjudication:</strong> Stark stays <strong>delegated</strong> —
+the n_e fed to the solve IS the reference’s, so composition parity through n_e is exact.
+6apc is <strong>blocked on hardening the LM Voigt kernel for real-data</strong> (per-window intensity
+normalization + left-packed windows + a scipy-equivalent acceptance gate), tracked as a
+new bead; the host orchestrator is ready on <code class="docutils literal notranslate"><span class="pre">6apc-stark-build</span></code> for when the kernel lands.
+<strong>Parity status: exact (delegated); on-device port blocked on kernel-hardening.</strong></p>
+</section>
+<section id="d-j12-1-scoreboard-jit-pipeline-vs-reference-on-the-goal-board-parity-scoped-capped">
+<h3>D-J12-1 · scoreboard · jit pipeline vs reference on the goal board · <em>parity-scoped, capped</em><a class="headerlink" href="#d-j12-1-scoreboard-jit-pipeline-vs-reference-on-the-goal-board-parity-scoped-capped" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">scoreboard</span> <span class="pre">--pipeline</span> <span class="pre">jit</span></code> runs <code class="docutils literal notranslate"><span class="pre">run_one(ondevice_front_end=True)</span></code> per spectrum
+vs <code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">reference</span></code> (<code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code>). On the capped board (aalto +
+synthetic_fixedforward, max-spectra 8, post-aa9e run3) the jit pipeline reproduces the
+reference <strong>micro-F1 exactly (ΔF1 = 0)</strong> and the <strong>failure count exactly</strong>. <strong>Known
+residual:</strong> synthetic_fixedforward solve RMSE 48.7 vs 44.4 wt % over the 5 solved
+spectra — a small on-device-solve delta within the M1 concentration tolerance, on a
+synthetic corpus whose truth is itself suspect (bead 5yo1); not observed on real data.
+<strong>Adjudication:</strong> scoped-board parity holds; the full all-spectra + holdout board is
+the M3 measurement (bead stdl), gated on D-J9-3 (6apc) for an end-to-end “fully
+on-device” claim. <strong>Parity status: exact on the capped board; full-board M3 run
+pending.</strong></p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,249 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Data Composition-Accuracy Program — Summary (2026-06-27) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Real-Data Composition-Accuracy Program — Summary (2026-06-27)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/research/real-data-accuracy-program-summary.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="real-data-composition-accuracy-program-summary-2026-06-27">
+<h1>Real-Data Composition-Accuracy Program — Summary (2026-06-27)<a class="headerlink" href="#real-data-composition-accuracy-program-summary-2026-06-27" title="Link to this heading"></a></h1>
+<p>The “explore all levers, ground in truth” program that took CF-LIBS from a real-data failure to
+a shipped, honestly-validated 4× accuracy gain. Companion: <code class="docutils literal notranslate"><span class="pre">real-steel-accuracy-levers.md</span></code>,
+<code class="docutils literal notranslate"><span class="pre">real-steel-opc-promotion.md</span></code>.</p>
+<section id="result">
+<h2>Result<a class="headerlink" href="#result" title="Link to this heading"></a></h2>
+<p><strong>Real steel (PhdYoda/steel_266_LIBS, 36 NIST-class samples, honest held-out RMSEP, wt%):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>stage</p></th>
+<th class="head"><p>RMSEP</p></th>
+<th class="head"><p>lever</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>baseline</p></td>
+<td><p>39.04</p></td>
+<td><p>naive constrained solve</p></td>
+</tr>
+<tr class="row-odd"><td><p>neutral-anchor line selection</p></td>
+<td><p>30.43</p></td>
+<td><p>fix Cu ion-only Saha trap</p></td>
+</tr>
+<tr class="row-even"><td><p>+ fixed optimal-T</p></td>
+<td><p>29.98</p></td>
+<td><p>(gain mostly from lines)</p></td>
+</tr>
+<tr class="row-odd"><td><p>+ robust OPC</p></td>
+<td><p>10.12</p></td>
+<td><p>conditioning-gated multi-standard F</p></td>
+</tr>
+<tr class="row-even"><td><p>+ thin-line Fe filter</p></td>
+<td><p>9.56</p></td>
+<td><p>drop self-absorbed Fe lines</p></td>
+</tr>
+<tr class="row-odd"><td><p>+ CD-SB Fe matrix</p></td>
+<td><p><strong>8.38</strong></p></td>
+<td><p>columnar-density ordinate for self-absorbed Fe</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>4.7× reduction.</strong> Per-element &#64;8.38: Cu 2.5, Ni 2.2, Cr 2.8, Mn 2.7, Si 7.7, Mo 11.6, Fe 16.5.
+(CD-SB keeps Fe lines via a width-derived columnar-density ordinate — composes with OPC, unlike
+an intensity scale which double-corrects; keeping Fe right stops closure mass-bleed → Cu/Ni fall.)</p>
+<p><strong>DED real goal (Ti-6Al-4V synthetic):</strong> OPC cut the <strong>V/Ti limiter 15.2% → 3.6%</strong> (4.3×, R²
+intact). Safe on the DED path (Al/Ti slightly over-corrected on clean synthetic — a real-data
+bias OPC targets is absent there; on real DED data it would help, as on steel).</p>
+<p><strong>DED real goal (Ti-6Al-4V REAL Mars data):</strong> real SuperCam SCCT_TITANIUM observations (32
+distinct-sol shots of the rover-deck Ti6Al4V wavelength-calibration plate; truth = nominal CCCT9
+{Ti 89.5, Al 6.1, V 4.0} wt%). Constrained known-feedstock force-extraction (force-extract at the
+KNOWN {Ti,Al,V} catalog line positions, peak-locked for the per-spectrometer wavelength offset,
+detector-gap lines dropped) + matrix-matched OPC, <strong>through the shipped pipeline</strong>, takes the
+honest leave-one-out held-out RMSEP from <strong>24.1 wt% (early generic detection) → 4.88 (generic
+detection, tuned) → 0.65 per-shot / 0.35 averaged</strong>. The generic detector drops Al in ~44% of
+these dense-Ti-forest spectra (Al silently vanishes from the closure); the constrained extraction
+measures every known line on <strong>100%</strong> of spectra. Per-element &#64;0.65: Ti 0.81, Al 0.60, V 0.49.
+This is the first end-to-end real-Ti-6Al-4V DED-matrix validation (partially closes Open item 1).</p>
+<p><strong>Real-data validation summary (honest held-out RMSEP, wt%):</strong> real steel 8.38 · BHVO-2 (USGS
+basalt) 8.11 · 66-standard ChemCam preflight 10.23 · real Mars Ti-6Al-4V 24.1 → 0.65/0.35
+(constrained known-feedstock).</p>
+</section>
+<section id="what-shipped-production-cflibs-opt-in-default-path-byte-identical">
+<h2>What shipped (production cflibs, opt-in, default path byte-identical)<a class="headerlink" href="#what-shipped-production-cflibs-opt-in-default-path-byte-identical" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/opc.py</span></code> — <code class="docutils literal notranslate"><span class="pre">OPCCalibration</span></code>, <code class="docutils literal notranslate"><span class="pre">calibrate_opc</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_opc</span></code>,
+<code class="docutils literal notranslate"><span class="pre">choose_optimal_temperature</span></code>, <code class="docutils literal notranslate"><span class="pre">select_optically_thin_lines</span></code> (physics-only NumPy; structurally
+non-peeking — <code class="docutils literal notranslate"><span class="pre">calibrate_opc</span></code> sees only standards, <code class="docutils literal notranslate"><span class="pre">apply_opc</span></code> never reads recovered comp).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code> — <code class="docutils literal notranslate"><span class="pre">select_lines_by_policy(policy=&quot;neutral_anchor&quot;)</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> — <code class="docutils literal notranslate"><span class="pre">fixed_temperature_K</span></code> (byte-identical when None).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/opc.py</span></code> — also <code class="docutils literal notranslate"><span class="pre">cdsb_*</span></code> columnar-density primitives + <code class="docutils literal notranslate"><span class="pre">OPCCalibration.cdsb_scale</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py</span></code> — opt-in <code class="docutils literal notranslate"><span class="pre">opc</span></code> + <code class="docutils literal notranslate"><span class="pre">opc_thin_filter</span></code> + <code class="docutils literal notranslate"><span class="pre">opc_cdsb_matrix</span></code> config (all
+default off → byte-identical); <code class="docutils literal notranslate"><span class="pre">cflibs/io/opc.py</span></code> JSON persistence; CLI <code class="docutils literal notranslate"><span class="pre">calibrate-opc</span></code> + <code class="docutils literal notranslate"><span class="pre">invert</span> <span class="pre">--opc</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/constrained_extraction.py</span></code> — <code class="docutils literal notranslate"><span class="pre">build_constrained_line_list</span></code>,
+<code class="docutils literal notranslate"><span class="pre">extract_peak_locked</span></code>, <code class="docutils literal notranslate"><span class="pre">constrained_extract</span></code> (peak-lock at KNOWN feedstock line positions,
+detector-gap drop; physics-only NumPy). <code class="docutils literal notranslate"><span class="pre">line_selection.select_lines_by_policy(prefer_spread=False)</span></code>
+for the strongest-cleanest joint-Saha-Boltzmann regime.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py</span></code> — opt-in <code class="docutils literal notranslate"><span class="pre">constrained_extraction</span></code> mode (<code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span> <span class="pre">.constrained_extraction</span></code> / <code class="docutils literal notranslate"><span class="pre">known_elements</span></code> / <code class="docutils literal notranslate"><span class="pre">constrained_line_budget</span></code> / <code class="docutils literal notranslate"><span class="pre">…_window_nm</span></code> /
+<code class="docutils literal notranslate"><span class="pre">…_detector_gaps</span></code> / <code class="docutils literal notranslate"><span class="pre">…_instrument_fwhm_nm</span></code> / <code class="docutils literal notranslate"><span class="pre">…_search_tol_nm</span></code>): <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> bypasses generic
+detection and composes with the shipped matrix-isolation + OPC. Default off → byte-identical.</p></li>
+<li><p>Shipped-API reproduction tests: held-out <strong>8.38 wt%</strong> (CD-SB, ≤8.5 guard) and 9.56 (thin-filter,
+≤9.7) through the production path; real-Mars Ti-6Al-4V constrained+OPC <strong>0.65 wt%</strong> (≤0.8 guard,
+<code class="docutils literal notranslate"><span class="pre">tests/benchmarks/real_steel/test_opc_shipped_titanium.py</span></code>); OPC/pipeline unit tests + DED
+no-regression green.</p></li>
+</ul>
+</section>
+<section id="diagnosis-chain-each-step-diagnosed-notebooklm-confirmed-before-fixing">
+<h2>Diagnosis chain (each step diagnosed + NotebookLM-confirmed before fixing)<a class="headerlink" href="#diagnosis-chain-each-step-diagnosed-notebooklm-confirmed-before-fixing" title="Link to this heading"></a></h2>
+<p>Cu (0.19 wt%) recovered as ~93% → root cause: Cu observed only via <strong>ionized</strong> lines at a low
+fitted T → Saha <code class="docutils literal notranslate"><span class="pre">N_I</span> <span class="pre">∝</span> <span class="pre">N_II·exp(E_ion/kT)</span></code> explodes a phantom neutral population
+(Zhao 2018; CF-LIBS review). Fix family: neutral-anchor lines, optimal-T, and OPC relative-
+sensitivity calibration (Cavalcanti 2013). Fe matrix collapse → self-absorbed major lines;
+fixed by <em>dropping</em> self-absorbed lines (a selection change composes with OPC; an intensity
+<em>correction</em> double-counts OPC’s F — empirically confirmed).</p>
+</section>
+<section id="regime-of-validity-mapped">
+<h2>Regime of validity (mapped)<a class="headerlink" href="#regime-of-validity-mapped" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Works:</strong> dominant-matrix alloys (one major + minors) — steel (Fe 85-95%), <strong>Ti-6Al-4V
+(Ti ~90% + Al/V)</strong> = the DED deployment regime.</p></li>
+<li><p><strong>Does NOT generalize:</strong> full-range binaries (Fe-Co ladder, every rung a different matrix) —
+OPC F averages to ≈1, no consistent bias to correct. Regime limit, <em>not</em> a data limit (Co has
+1022 usable DB lines). Benchmark: <code class="docutils literal notranslate"><span class="pre">tests/benchmarks/real_feco/</span></code>.</p></li>
+</ul>
+</section>
+<section id="honesty-discipline-no-overfitting">
+<h2>Honesty discipline (no overfitting)<a class="headerlink" href="#honesty-discipline-no-overfitting" title="Link to this heading"></a></h2>
+<p>Every calibration uses standards’ own data + certified truth only (in-sample conditioning gate),
+never held-out samples; OPC F is a geometric mean over well-conditioned standards (clamp-saturated
+degenerates filtered); leave-one-out held-out scoring throughout. Lower-but-fragile knob settings
+were explicitly rejected. (Contrast: the earlier synthetic-clean Optuna “win” was an overfit,
+caught + rejected by a robustness gate.)</p>
+</section>
+<section id="open-items-ranked">
+<h2>Open items (ranked)<a class="headerlink" href="#open-items-ranked" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Ti-6Al-4V / Al-alloy real LIBS data with certified composition does not exist openly</strong> —
+<em>partially closed:</em> the real Mars SuperCam SCCT_TITANIUM Ti6Al4V plate (nominal-panel truth)
+now gives an end-to-end real-Ti-6Al-4V DED-matrix validation (0.65 wt% held-out via shipped
+constrained extraction + OPC). Still missing: an Al-alloy and a <em>certified</em> (not nominal-panel)
+Ti-6Al-4V CRM for absolute-accuracy confirmation. Needs in-house CRM acquisition, a data
+partnership, or paper-supplement extraction.</p></li>
+<li><p>More steel (PhdYoda/266_steel_LIBS, 2160 spectra, license TBD) → deeper same-matrix stats.</p></li>
+<li><p>Marginal/regime-limited levers: Stark-n_e (neutral-anchored solve is less n_e-sensitive),
+3D-CF-LIBS (needs time-resolved multi-delay data; steel set is single-delay), cluster knob
+optimization (36-sample overfit risk; results already shown stable → low headroom).</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

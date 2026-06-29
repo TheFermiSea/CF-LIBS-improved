@@ -1,0 +1,637 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strict Single-Shot &lt;1 ms CF-LIBS Composition Pipeline — Plan v2 (ExoJAX2-evaluated) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Strict Single-Shot &lt;1 ms CF-LIBS Composition Pipeline — Plan v2 (ExoJAX2-evaluated)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/research/realtime/2026-06-19-realtime-1ms-plan.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="strict-single-shot-1-ms-cf-libs-composition-pipeline-plan-v2-exojax2-evaluated">
+<h1>Strict Single-Shot &lt;1 ms CF-LIBS Composition Pipeline — Plan v2 (ExoJAX2-evaluated)<a class="headerlink" href="#strict-single-shot-1-ms-cf-libs-composition-pipeline-plan-v2-exojax2-evaluated" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-19
+<strong>Supersedes:</strong> <code class="docutils literal notranslate"><span class="pre">/tmp/realtime_plan.md</span></code> (v1).
+<strong>New inputs folded in this revision:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/exojax_latency.json</span></code> — ExoJAX2 v2.5.0 single-shot GPU benchmark (same V100S, float32, batch=1).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/exojax_capability.md</span></code> — ExoJAX2 data-stack + physics-fit audit (what to reuse vs not).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/asta_redo.md</span></code> — re-verified asta literature on sub-ms physics inversion + atomic data beyond NIST ASD.</p></li>
+<li><p>(carried) <code class="docutils literal notranslate"><span class="pre">/tmp/rt_latency.json</span></code> — the hand-rolled single-shot V100S latency measurement.</p></li>
+</ul>
+<p><strong>One-line ExoJAX2 verdict:</strong> <strong>OFFLINE.</strong> ExoJAX2 is for offline manifold/reference-accuracy work,
+<strong>not</strong> the &lt;1 ms hot path — measured K=3 Gauss-Newton with ExoJAX is ~11.3 ms (7.3x over the
+hand-rolled 1.54 ms), and <em>no</em> trimmed config crossed under 1 ms for K=3.</p>
+<hr class="docutils" />
+<section id="executive-summary">
+<h2>0. Executive summary<a class="headerlink" href="#executive-summary" title="Link to this heading"></a></h2>
+<p>The v1 feasibility result is <strong>unchanged and re-confirmed</strong>: a differentiable fixed-step Gauss-Newton
+single-shot CF-LIBS inversion hits <strong>strict &lt;1 ms on the measured V100S in a bounded configuration</strong>
+(K=3 GN on a &lt;=1000-channel ROI = <strong>684 us</strong>, recommended default; K=3 &#64; 500 ch = 571 us; K=2 &#64;
+&lt;=1000 ch ~= 550 us), while the demanding <strong>full config (K=3 &#64; 4000 ch) is 1.46-1.54 ms, ~50% over
+budget</strong>. The regime is <strong>dispatch/launch-bound, not compute-bound</strong> (trivial-op floor 126 us; K=3 &#64;
+256 ch still 502 us), so the winning levers are <strong>fewer kernel launches</strong> — manifold warm-start to keep
+K tiny, fixed-K <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code>, ROI windowing, and CUDA-graph capture — not fewer FLOPs.</p>
+<p>The <strong>new decision</strong> this revision adds is ExoJAX2’s role. We benchmarked ExoJAX2 v2.5.0 on the same
+V100S at the CF-LIBS target (300 lines x 4000 channels, 17 params, batch=1, float32). The result is
+decisive: ExoJAX’s <strong>forward</strong> is 390 us (2.7x the hand-rolled 142 us) and its forward-mode <strong>Jacobian</strong>
+is 3386 us (6.5x the hand-rolled 520 us), giving an <strong>estimated K=3 inversion of ~11.3 ms</strong> — 7.3x over
+the hand-rolled 1.54 ms and an order of magnitude over the &lt;1 ms budget. Critically, ExoJAX’s forward is
+<strong>not</strong> launch-limited (34 jaxpr eqns / ~16 fused HLO kernels); the killer is the <strong>(N_line x N_chan) =
+1.2M-element Voigt-Hjerting numatrix</strong> OpaDirect materializes, whose cost the 17-input jacfwd multiplies
+~9x. Even the most aggressive trim (100 lines &#64; 1000 ch) still yields K=3 ~ 1.19 ms, and <strong>no measured
+configuration crossed under 1 ms for K=3.</strong> ExoJAX2 is therefore confirmed <strong>offline-only</strong>: use it for
+manifold pre-computation and reference-accuracy cross-checks; <strong>keep the hand-rolled fused float32
+forward + GN kernel on the hot path</strong>.</p>
+<p>What we <strong>do</strong> adopt from the ExoJAX ecosystem is its <strong>physics-only data plumbing</strong> (it is jax + radis</p>
+<ul class="simple">
+<li><p>numba with <strong>zero</strong> banned imports — passes our TID251 ban and AST blocklist): VALD3/Kurucz line
+ingestion, Barklem &amp; Collet 2016 / Irwin 1981 partition functions, Voigt/Hjerting profile primitives,
+and H-/Rayleigh continuum. These feed <strong>offline</strong> into the baked per-line static arrays the hot-path
+kernel reads at zero runtime cost. We do <strong>not</strong> reuse ExoJAX’s multi-layer atmospheric RT, and we keep
+CF-LIBS’s own <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">n_e)</span></code> Saha/Boltzmann solver (ExoJAX has no Saha; <code class="docutils literal notranslate"><span class="pre">n_e</span></code> enters it only as Stark
+broadening width).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="ms-feasibility-unchanged-restated-crisply">
+<h2>1. &lt;1 ms FEASIBILITY (UNCHANGED — restated crisply)<a class="headerlink" href="#ms-feasibility-unchanged-restated-crisply" title="Link to this heading"></a></h2>
+<p>Device: <strong>Tesla V100S-PCIE-32GB</strong>, JAX 0.9.2, <strong>float32</strong>, warm (compile-once then median of &gt;=200
+per-call <code class="docutils literal notranslate"><span class="pre">block_until_ready</span></code>). Problem: 4000 channels, 300 lines, 15 elements, 17 params, GN damping
+lambda=0.01. Single-shot = batch=1 with each call individually blocked (true latency, not throughput).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Quantity</p></th>
+<th class="head text-right"><p>median (us)</p></th>
+<th class="head text-right"><p>min (us)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>forward <code class="docutils literal notranslate"><span class="pre">S(theta)</span></code></p></td>
+<td class="text-right"><p>142.1</p></td>
+<td class="text-right"><p>116.6</p></td>
+</tr>
+<tr class="row-odd"><td><p>Jacobian <code class="docutils literal notranslate"><span class="pre">dS/dtheta</span></code> (jacfwd, 4000x17)</p></td>
+<td class="text-right"><p>520.0</p></td>
+<td class="text-right"><p>461.1</p></td>
+</tr>
+<tr class="row-even"><td><p>one GN step (fwd + jac + 17x17 solve), fused jit</p></td>
+<td class="text-right"><p>657.1</p></td>
+<td class="text-right"><p>614.5</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>K=3 fused GN (the actual single-shot inversion)</strong></p></td>
+<td class="text-right"><p><strong>1543.5</strong></p></td>
+<td class="text-right"><p><strong>1459.2</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>K=2 fused GN</p></td>
+<td class="text-right"><p>1139.0</p></td>
+<td class="text-right"><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>trivial 1-op jit (launch-overhead floor)</p></td>
+<td class="text-right"><p>125.9</p></td>
+<td class="text-right"><p>91.7</p></td>
+</tr>
+<tr class="row-even"><td><p>compile (one-time)</p></td>
+<td class="text-right"><p>2292 ms</p></td>
+<td class="text-right"><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Configs that meet strict &lt;1 ms (measured lever tables):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Config</p></th>
+<th class="head text-right"><p>Measured median</p></th>
+<th class="head"><p>Verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>K=3 + ROI &lt;=1000 ch</p></td>
+<td class="text-right"><p><strong>684 us</strong></p></td>
+<td><p><strong>PASS (recommended default)</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>K=3 + ROI 500 ch</p></td>
+<td class="text-right"><p>571 us</p></td>
+<td><p>PASS (aggressive ROI)</p></td>
+</tr>
+<tr class="row-even"><td><p>K=2 + ROI &lt;=1000 ch</p></td>
+<td class="text-right"><p>~550 us (interp)</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>K=1 + 4000 ch</p></td>
+<td class="text-right"><p>605 us</p></td>
+<td><p>PASS on time, risky on convergence</p></td>
+</tr>
+<tr class="row-even"><td><p>K=2 + 4000 ch</p></td>
+<td class="text-right"><p>1013 us</p></td>
+<td><p>BORDERLINE FAIL (13 us over)</p></td>
+</tr>
+<tr class="row-odd"><td><p>K=3 + 4000 ch</p></td>
+<td class="text-right"><p>1496 us</p></td>
+<td><p>FAIL (the demanding config)</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why launch-bound, not compute-bound (3 independent signals):</strong></p>
+<ol class="arabic simple">
+<li><p>The trivial 1-op jit floors at <strong>126 us median / 92 us min</strong> — ~1100x more than the FLOPs warrant;
+pure Python-&gt;XLA dispatch + kernel-launch + sync tax.</p></li>
+<li><p>K=3 at <strong>256 channels</strong> still floors at <strong>502 us</strong> — collapsing channels 16x (4000-&gt;256) only drops
+K3 from 1496-&gt;502 us; the residual ~500 us is <em>stacked op launches across 3 GN steps</em>, not arithmetic.</p></li>
+<li><p>Async-pipelined K=3 is 1262 us vs 1543 us blocking — the ~280 us gap is the per-call sync tax.</p></li>
+</ol>
+<p><strong>Implication (unchanged):</strong> the path to &lt;1 ms is <strong>fewer kernel launches</strong>. Reduce K (fewer stacked op
+groups), fuse the whole K-step loop into one <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> region, ROI-window to &lt;=1000 channels, and
+CUDA-graph the loop. <strong>Ship the bounded ROI config as the strict-&lt;1 ms product; treat full-spectrum
+K=3 &#64; 4000 ch as a CUDA-graph stretch goal that must be benchmark-gated before any &lt;1 ms claim
+(plausible landing ~0.7-1.0 ms, not proven).</strong></p>
+</section>
+<hr class="docutils" />
+<section id="exojax2-role-hot-path-forward-vs-offline-decided-from-measurement">
+<h2>2. ExoJAX2 ROLE — hot-path forward vs OFFLINE (decided from measurement)<a class="headerlink" href="#exojax2-role-hot-path-forward-vs-offline-decided-from-measurement" title="Link to this heading"></a></h2>
+<section id="the-head-to-head-benchmark-same-v100s-batch-1-float32-300-lines-x-4000-ch-17-params">
+<h3>2.1 The head-to-head benchmark (same V100S, batch=1, float32, 300 lines x 4000 ch, 17 params)<a class="headerlink" href="#the-head-to-head-benchmark-same-v100s-batch-1-float32-300-lines-x-4000-ch-17-params" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Quantity</p></th>
+<th class="head text-right"><p>Hand-rolled (rt_latency)</p></th>
+<th class="head text-right"><p>ExoJAX2 OpaDirect (exojax_latency)</p></th>
+<th class="head text-right"><p>Ratio</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>forward <code class="docutils literal notranslate"><span class="pre">S(theta)</span></code></p></td>
+<td class="text-right"><p>142.1 us</p></td>
+<td class="text-right"><p>389.6 us</p></td>
+<td class="text-right"><p><strong>2.7x slower</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Jacobian <code class="docutils literal notranslate"><span class="pre">dS/dtheta</span></code></p></td>
+<td class="text-right"><p>520.0 us (jacfwd)</p></td>
+<td class="text-right"><p>3386.4 us (jacfwd; jacrev OOMs &#64; 17.95 GiB)</p></td>
+<td class="text-right"><p><strong>6.5x slower</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>K=3 GN inversion</strong></p></td>
+<td class="text-right"><p><strong>1543.5 us (measured)</strong></p></td>
+<td class="text-right"><p><strong>~11328 us (estimated 3x(fwd+jac))</strong></p></td>
+<td class="text-right"><p><strong>7.3x slower</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>forward op count</p></td>
+<td class="text-right"><p>(fused)</p></td>
+<td class="text-right"><p>34 jaxpr eqns / ~16 fused HLO kernels</p></td>
+<td class="text-right"><p>forward NOT launch-bound</p></td>
+</tr>
+</tbody>
+</table>
+<p>ExoJAX ROI sweep (jacfwd; K3 = 3*(fwd+jacfwd)) confirms the structural problem rather than a tuning miss:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ROI</p></th>
+<th class="head text-right"><p>ExoJAX fwd</p></th>
+<th class="head text-right"><p>ExoJAX jacfwd</p></th>
+<th class="head text-right"><p>ExoJAX K3</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>256 ch</p></td>
+<td class="text-right"><p>215 us</p></td>
+<td class="text-right"><p>266 us</p></td>
+<td class="text-right"><p><strong>1443 us</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>500 ch</p></td>
+<td class="text-right"><p>203 us</p></td>
+<td class="text-right"><p>312 us</p></td>
+<td class="text-right"><p><strong>1545 us</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>1000 ch</p></td>
+<td class="text-right"><p>208 us</p></td>
+<td class="text-right"><p>345 us</p></td>
+<td class="text-right"><p><strong>1659 us</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>2000 ch</p></td>
+<td class="text-right"><p>323 us</p></td>
+<td class="text-right"><p>1814 us</p></td>
+<td class="text-right"><p>6413 us</p></td>
+</tr>
+<tr class="row-even"><td><p>4000 ch</p></td>
+<td class="text-right"><p>370 us</p></td>
+<td class="text-right"><p>3177 us</p></td>
+<td class="text-right"><p>10639 us</p></td>
+</tr>
+</tbody>
+</table>
+<p>And the line-count sweep at 1000 ch: <strong>100 lines</strong> -&gt; K3 = <strong>1187 us</strong>; 300 lines -&gt; 1839 us. So even the
+single most aggressive trim measured (100 lines &#64; 1000 ch) is <strong>still 1.19 ms</strong> — over the strict &lt;1 ms
+budget. <strong>No measured ExoJAX configuration crossed under 1 ms for K=3.</strong></p>
+</section>
+<section id="why-exojax-loses-on-the-hot-path-root-cause-not-a-tuning-artifact">
+<h3>2.2 Why ExoJAX loses on the hot path (root cause, not a tuning artifact)<a class="headerlink" href="#why-exojax-loses-on-the-hot-path-root-cause-not-a-tuning-artifact" title="Link to this heading"></a></h3>
+<p>The forward op-launch count is <strong>fine</strong> (~16 fused kernels, 34 jaxpr eqns) — ExoJAX is <em>not</em>
+launch-limited the way our hand-rolled batch=1 path is. The killer is <strong>compute structure</strong>: OpaDirect
+(LPF line-by-line) materializes a full <strong>(N_line x N_chan) = 300 x 4000 = 1.2M-element Voigt-Hjerting
+<code class="docutils literal notranslate"><span class="pre">numatrix</span></code></strong> per evaluation. That is fine for ExoJAX’s <em>batched, broadband, accuracy-first</em> design point,
+but at batch=1 it is heavier than our quadrature-folded single-Gaussian-scatter forward, and the
+<strong>17-input forward-mode Jacobian replicates that 1.2M-element matrix across 17 tangents (~9x blowup)</strong> —
+which is exactly the ~6.5x Jacobian / ~7.3x K3 penalty we measured. This is intrinsic to a faithful
+Voigt-Hjerting LPF opacity engine; trimming lines/channels does not buy a sub-ms K=3.</p>
+</section>
+<section id="decision-exojax2-is-offline-the-hot-path-stays-custom">
+<h3>2.3 Decision: ExoJAX2 is OFFLINE; the hot path stays custom<a class="headerlink" href="#decision-exojax2-is-offline-the-hot-path-stays-custom" title="Link to this heading"></a></h3>
+<p><strong>REUSE from ExoJAX (OFFLINE only):</strong></p>
+<ul class="simple">
+<li><p><strong>Atomic-line ingestion:</strong> <code class="docutils literal notranslate"><span class="pre">database/vald</span></code> (<code class="docutils literal notranslate"><span class="pre">AdbVald</span></code>/<code class="docutils literal notranslate"><span class="pre">AdbSepVald</span></code>) and <code class="docutils literal notranslate"><span class="pre">database/kurucz</span></code>
+(<code class="docutils literal notranslate"><span class="pre">AdbKurucz</span></code>) — deeper metal/iron-group line lists than NIST ASD, plus per-line radiative/Stark/vdW
+damping constants (<code class="docutils literal notranslate"><span class="pre">gamRad</span></code>, <code class="docutils literal notranslate"><span class="pre">gamSta</span></code>, <code class="docutils literal notranslate"><span class="pre">vdWdamp</span></code>) ASD does not carry.</p></li>
+<li><p><strong>Partition functions:</strong> <code class="docutils literal notranslate"><span class="pre">database/core_atom/pf.py</span></code> — Barklem &amp; Collet 2016 U(T) on a 42-pt grid for
+284 species (<code class="docutils literal notranslate"><span class="pre">load_pf_Barklem2016</span></code>, <code class="docutils literal notranslate"><span class="pre">interp_QT_284</span></code>) + Irwin-1981 polynomial <code class="docutils literal notranslate"><span class="pre">log</span> <span class="pre">U</span> <span class="pre">=</span> <span class="pre">sum</span> <span class="pre">a_n</span> <span class="pre">(log</span> <span class="pre">T)^n</span></code>
+(the <em>same</em> polynomial form CF-LIBS already uses) — drop-in for the offline DB-build partition layer.</p></li>
+<li><p><strong>Voigt / Hjerting / Faddeeva primitives:</strong> <code class="docutils literal notranslate"><span class="pre">special/faddeeva.py</span></code>, <code class="docutils literal notranslate"><span class="pre">erfcx.py</span></code>, <code class="docutils literal notranslate"><span class="pre">expn.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">opacity/lpf/</span></code> — as the <strong>reference-accuracy</strong> line-shape used to validate our cheaper folded-Gaussian
+hot-path approximation, and as the opacity engine inside the offline manifold generator.</p></li>
+<li><p><strong>Boltzmann line strength + T-reweight</strong> (<code class="docutils literal notranslate"><span class="pre">core_atom/line_strength.py</span></code>, PreMODIT <code class="docutils literal notranslate"><span class="pre">f(E,T)=</span> <span class="pre">exp(-c2</span> <span class="pre">E</span> <span class="pre">(1/T</span> <span class="pre">-</span> <span class="pre">1/Tref))</span></code>) — for offline cross-checks of our Boltzmann population physics.</p></li>
+<li><p><strong>PreMODIT precompute-LBD-once / reweight-per-T pattern</strong> (<code class="docutils literal notranslate"><span class="pre">opacity/premodit</span></code>) — the natural template
+for the offline <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/</span></code> grid generator (amortize line work once; cheap per-(T) evaluation).</p></li>
+<li><p><strong>Continuum H-/Rayleigh</strong> (<code class="docutils literal notranslate"><span class="pre">opacity/opacont.py:OpaHminus</span></code>, <code class="docutils literal notranslate"><span class="pre">opacity/rayleigh.py</span></code>) — differentiable
+JAX <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">nu)</span></code> functions usable in the offline forward for LIBS continuum components.</p></li>
+</ul>
+<p><strong>KEEP CUSTOM (HOT PATH, the &lt;1 ms kernel):</strong></p>
+<ul class="simple">
+<li><p><strong>Single-zone LTE emission with our own <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">n_e)</span></code> Saha/Boltzmann solver.</strong> ExoJAX has <strong>no Saha
+ionization-balance solver</strong> anywhere in <code class="docutils literal notranslate"><span class="pre">src/</span></code> — populations are a function of <strong>T only</strong> (Boltzmann x
+per-species U(T)); ion-stage ratios come from external chemistry, and <code class="docutils literal notranslate"><span class="pre">n_e</span></code> enters ExoJAX <strong>only</strong> as
+the <code class="docutils literal notranslate"><span class="pre">Nelec</span></code> term in Stark broadening (<code class="docutils literal notranslate"><span class="pre">gamma_vald3</span></code>), a line <em>width</em>, not a population driver. CF-LIBS
+must own its <code class="docutils literal notranslate"><span class="pre">SahaBoltzmannSolver</span></code> (the <code class="docutils literal notranslate"><span class="pre">(T,n_e)</span></code> -&gt; ion-ratio + level-population core).</p></li>
+<li><p><strong>The fused float32 GN kernel</strong> (<code class="docutils literal notranslate"><span class="pre">forward</span></code> + <code class="docutils literal notranslate"><span class="pre">jacfwd</span></code> + damped 17x17 solve under <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code>), with the
+<strong>quadrature-folded single Gaussian-scatter matmul</strong> (Doppler+Stark+instrument folded into one
+effective sigma; deliberately avoiding the cuDNN conv path AND avoiding the (N_line x N_chan)
+Voigt-Hjerting numatrix that sinks ExoJAX at batch=1). This is the 142 us forward / 1.54 ms K3 path.</p></li>
+<li><p><strong>Manifold nearest-neighbor warm-start</strong> (physics grid + argmin/FAISS), CUDA-graph capture, resident
+device buffers — all the launch-reduction machinery from Section 1.</p></li>
+</ul>
+<p><strong>What CF-LIBS does NOT reuse from ExoJAX:</strong> everything in <code class="docutils literal notranslate"><span class="pre">rt/</span></code> (multi-layer <code class="docutils literal notranslate"><span class="pre">dtau</span></code> (N_layer, N_nu),
+two-stream/n-stream layer solvers, chord/transmission geometry, Toon reflection) and the <code class="docutils literal notranslate"><span class="pre">(T,P)</span></code>
+atmospheric/hydrostatic driving convention. CF-LIBS is single-/two-zone optically-thin/thick LTE plasma
+emission, not a layered atmosphere.</p>
+<p><strong>Integration shape (offline build, hot-path read):</strong>
+<code class="docutils literal notranslate"><span class="pre">ExoJAX</span> <span class="pre">(VALD3/Kurucz</span> <span class="pre">ingestion</span> <span class="pre">+</span> <span class="pre">B&amp;C/Irwin</span> <span class="pre">U(T)</span> <span class="pre">+</span> <span class="pre">Voigt</span> <span class="pre">reference</span> <span class="pre">+</span> <span class="pre">H-/Rayleigh)</span> <span class="pre">-&gt;</span> <span class="pre">offline</span> <span class="pre">DB</span> <span class="pre">build</span> <span class="pre">-&gt;</span> <span class="pre">baked</span> <span class="pre">per-line</span> <span class="pre">static</span> <span class="pre">arrays</span> <span class="pre">(line_center,</span> <span class="pre">line_Ek,</span> <span class="pre">line_gA</span> <span class="pre">+</span> <span class="pre">data-quality</span> <span class="pre">weight,</span> <span class="pre">line_stark</span> <span class="pre">coeffs,</span> <span class="pre">U_coeffs)</span> <span class="pre">in</span> <span class="pre">PipelineSnapshot/BatchAtomicData</span> <span class="pre">-&gt;</span> <span class="pre">CF-LIBS</span> <span class="pre">hot-path</span> <span class="pre">kernel:</span> <span class="pre">Saha(T,n_e)</span> <span class="pre">-&gt;</span> <span class="pre">Boltzmann</span> <span class="pre">-&gt;</span> <span class="pre">emissivity</span> <span class="pre">-&gt;</span> <span class="pre">folded-Gaussian</span> <span class="pre">scatter</span> <span class="pre">-&gt;</span> <span class="pre">instrument</span> <span class="pre">convolution.</span></code> No ExoJAX code on the hot path; no
+layered RT in the loop.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="atomic-data-strategy-beyond-nist-asd-via-exojax-ingestion-asta-verified-sources">
+<h2>3. ATOMIC / DATA STRATEGY beyond NIST ASD (via ExoJAX ingestion + asta-verified sources)<a class="headerlink" href="#atomic-data-strategy-beyond-nist-asd-via-exojax-ingestion-asta-verified-sources" title="Link to this heading"></a></h2>
+<p>NIST ASD is the gold standard for <em>evaluated</em> gA but is incomplete (weak/UV/iron-group lines absent or
+high-uncertainty), carries <strong>no Stark-width data</strong>, and has limited high-T partition functions. ExoJAX’s
+ingestion layer (VALD3/Kurucz/B&amp;C/Irwin) is the plumbing that lets us pull these in <strong>offline</strong>, baking
+the result into static arrays. All sources below are physics data (no ML) — fully physics-only-compliant.</p>
+<section id="ga-oscillator-strengths-by-element-regime">
+<h3>3.1 gA / oscillator strengths — by element/regime<a class="headerlink" href="#ga-oscillator-strengths-by-element-regime" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element / regime</p></th>
+<th class="head"><p>Primary source</p></th>
+<th class="head"><p>Why (asta-verified)</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Common/light elements, low-charge ions</strong> (the analytic spine)</p></td>
+<td><p><strong>NIST ASD</strong> (graded) + <strong>VALD3</strong> curated, NIST-preferred provenance</p></td>
+<td><p>VALD picks best gA per line (NIST &gt; experimental &gt; HFR &gt; Kurucz) + carries Stark/vdW constants; Ryabchikova 2015 DOI <code class="docutils literal notranslate"><span class="pre">10.1088/0031-8949/90/5/054005</span></code>; VALD3 arXiv <code class="docutils literal notranslate"><span class="pre">1710.10854</span></code>.</p></td>
+<td><p><strong>Trusted spine</strong>: prefer ASD-grade gA for the strong analytic lines a calibration-free method trusts.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Transition metals / iron group / UV-blue line forest</strong> (Fe, Ni, Cr, Ti, Mn)</p></td>
+<td><p><strong>Kurucz</strong> line lists (~10^7-10^8 lines) for <strong>completeness</strong>, <strong>down-weighted</strong> where it disagrees with NIST/VALD/OP</p></td>
+<td><p>Completeness-over-accuracy trade; Kurucz gA replaced by Opacity Project in WR opacity work (CorpusId 12736045); MAFAGS-OS / halo-star cross-checks (CorpusId 16044163).</p></td>
+<td><p>Populate weak/blended lines for forward-model fidelity; <strong>per-line data-quality weight</strong> down-ranks unreliable Kurucz gA in the GN residual.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Rare earths / lanthanides, complex spectra</strong></p></td>
+<td><p><strong>Cowan/HFR</strong> (semi-empirical, fitted to observed levels) and <strong>FAC (Gu)</strong> relativistic-CI for any missing/highly-ionized lines</p></td>
+<td><p>HFR ~10-20% on strong lines, often the <em>only</em> source for complex spectra; FAC fills completeness for arbitrary ions but gA is <em>calculated</em> (10-30%). Gu, <em>Can. J. Phys.</em> 86, 675 (2008), DOI <code class="docutils literal notranslate"><span class="pre">10.1139/p07-197</span></code> [reference-known]; FAC-in-use: Del Zanna ArXIII DOI <code class="docutils literal notranslate"><span class="pre">10.1016/J.ADT.2004.07.002</span></code>.</p></td>
+<td><p>Synthesize <em>missing</em> lines only; defer to NIST/VALD where graded. Apply Slater-Condon scaling (~0.85-0.90) for transition-metal radial integrals.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>gA accuracy audit (all of the above)</strong></p></td>
+<td><p><strong>BRASS</strong> benchmark cross-check</p></td>
+<td><p>Quality-controlled cross-validation of Kurucz/VALD/NIST gA against benchmark stellar spectra; Lobel et al., <em>Atoms</em> 7(4):105 (2018), DOI <code class="docutils literal notranslate"><span class="pre">10.3390/atoms7040105</span></code>. Fe I specifically: <em>Solar Physics</em> (2019) DOI <code class="docutils literal notranslate"><span class="pre">10.1007/s11207-019-1543-2</span></code>.</p></td>
+<td><p>Sets the <strong>per-line data-quality weight</strong> baked into the residual (down-weight low-grade lines).</p></td>
+</tr>
+</tbody>
+</table>
+<p>ExoJAX ingests VALD3 (<code class="docutils literal notranslate"><span class="pre">AdbVald</span></code>) and Kurucz (<code class="docutils literal notranslate"><span class="pre">AdbKurucz</span></code>) directly to HDF5 caches; FAC/Cowan outputs are
+merged at DB-build. <strong>All gA is a frozen per-line constant</strong> -&gt; enters the kernel as a static <code class="docutils literal notranslate"><span class="pre">line_gA</span></code>
+array at <strong>zero runtime cost</strong>.</p>
+</section>
+<section id="partition-functions-high-t-saha-boltzmann">
+<h3>3.2 Partition functions (high-T Saha-Boltzmann)<a class="headerlink" href="#partition-functions-high-t-saha-boltzmann" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Primary:</strong> <strong>Barklem &amp; Collet 2016</strong> U(T) for all neutral + singly/doubly-ionized atoms (Z&lt;=92) +
+291 diatomics, consistent level cutoffs. A&amp;A 588, A96 (2016), arXiv <code class="docutils literal notranslate"><span class="pre">1602.03304</span></code>, DOI
+<code class="docutils literal notranslate"><span class="pre">10.1051/0004-6361/201526961</span></code>. (Repo already has a B&amp;C-2016 patch script.) Loaded via ExoJAX
+<code class="docutils literal notranslate"><span class="pre">load_pf_Barklem2016</span></code> / <code class="docutils literal notranslate"><span class="pre">interp_QT_284</span></code> at DB-build.</p></li>
+<li><p><strong>Fast evaluator / fallback:</strong> <strong>Irwin 1981</strong> polynomial <code class="docutils literal notranslate"><span class="pre">log</span> <span class="pre">U</span> <span class="pre">=</span> <span class="pre">sum</span> <span class="pre">a_n</span> <span class="pre">(log</span> <span class="pre">T)^n</span></code> for 344 species —
+the exact form CF-LIBS already uses; one einsum at runtime. Irwin, <em>ApJS</em> 45, 621 (1981), DOI
+<code class="docutils literal notranslate"><span class="pre">10.1086/190731</span></code> [reference-known]. Bake as <code class="docutils literal notranslate"><span class="pre">U_coeffs</span></code> static array; B&amp;C as primary, Irwin polynomial
+as the cheap hot-path evaluator.</p></li>
+</ul>
+</section>
+<section id="molecular-bands-oxides-radicals-offline-forward-option">
+<h3>3.3 Molecular bands (oxides / radicals) — offline forward option<a class="headerlink" href="#molecular-bands-oxides-radicals-offline-forward-option" title="Link to this heading"></a></h3>
+<p>ExoJAX’s molecular stack (<strong>ExoMol</strong> native + <strong>HITRAN/HITEMP via RADIS</strong>) can model LIBS molecular
+emission bands (CN, C2, TiO, AlO, CaO/CaOH, oxide tails in geological/SuperCam spectra) <em>consistently
+with the atomic lines</em> — something a pure NIST-ASD atomic pipeline cannot. <strong>Offline only</strong> (RADIS is a
+heavy transitive stack; molecular bands are not in the primary &lt;1 ms analytic-line path). Use for
+geological/SuperCam regimes where oxide tails matter; bake resulting band opacity into the offline
+forward / manifold, not the hot-path kernel.</p>
+</section>
+<section id="continua-for-which-regimes">
+<h3>3.4 Continua — for which regimes<a class="headerlink" href="#continua-for-which-regimes" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>H- (negative-hydrogen bound-free + free-free, John 1988)</strong> and <strong>Rayleigh</strong> — ExoJAX <code class="docutils literal notranslate"><span class="pre">OpaHminus</span></code> /
+<code class="docutils literal notranslate"><span class="pre">xsvector_rayleigh_gas</span></code>, differentiable <code class="docutils literal notranslate"><span class="pre">(T,nu)</span></code> JAX functions; relevant to LIBS plasma continuum
+(Rayleigh at the blue end; H- in cooler/recombining plasma). <strong>Reusable offline.</strong></p></li>
+<li><p><strong>NOT in ExoJAX:</strong> LIBS continuum is dominated by <strong>bremsstrahlung (free-free) + radiative
+recombination</strong>, which ExoJAX (cool-atmosphere target) does not provide. CF-LIBS must supply its own
+free-free + recombination continuum. <strong>CIA</strong> (ExoJAX <code class="docutils literal notranslate"><span class="pre">OpaCIA</span></code>) is high-pressure molecular gas — <strong>not
+relevant</strong> to optically-thin hot LIBS plasma.</p></li>
+</ul>
+</section>
+<section id="stark-widths-not-in-nist-asd-needed-for-n-e-from-broadening">
+<h3>3.5 Stark widths (NOT in NIST ASD — needed for n_e from broadening)<a class="headerlink" href="#stark-widths-not-in-nist-asd-needed-for-n-e-from-broadening" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>STARK-B database</strong> (Sahal-Brechot, Dimitrijevic et al.; VAMDC node) — theoretical Stark FWHM/shifts
+vs T and n_e; ~20-30% accuracy (semiclassical perturbation theory). <em>Phys. Scr.</em> 90, 054008 (2015),
+DOI <code class="docutils literal notranslate"><span class="pre">10.1088/0031-8949/90/5/054008</span></code>. The standard source for the data NIST entirely lacks.</p></li>
+<li><p><strong>Recent Dimitrijevic/Djurovic measurements</strong> for LIBS-relevant high densities — esp. <strong>Al II/III + He
+I 388.86 nm at high n_e</strong>, <em>Spectrochim. Acta B</em> (2020), DOI <code class="docutils literal notranslate"><span class="pre">10.1016/j.sab.2020.105816</span></code>; plus O I
+(2025) DOI <code class="docutils literal notranslate"><span class="pre">10.3390/galaxies13050116</span></code>, N V (2025) DOI <code class="docutils literal notranslate"><span class="pre">10.3390/data10090140</span></code>, N VI (2024) DOI
+<code class="docutils literal notranslate"><span class="pre">10.3390/data9060077</span></code>. Use to back <strong>strong diagnostic lines</strong> used for n_e.</p></li>
+<li><p><strong>Hot-path form:</strong> analytic, n_e-linear (<code class="docutils literal notranslate"><span class="pre">stark_fwhm</span> <span class="pre">=</span> <span class="pre">line_stark</span> <span class="pre">*</span> <span class="pre">(n_e/1e17)</span></code>); per-line Stark
+coefficient is a baked static array; the n_e dependence is the one live term. VALD3 also carries a
+per-line <code class="docutils literal notranslate"><span class="pre">gamSta</span></code> Stark constant that ExoJAX exposes (<code class="docutils literal notranslate"><span class="pre">gamma_vald3</span></code>’s <code class="docutils literal notranslate"><span class="pre">gamStark</span> <span class="pre">=</span> <span class="pre">10^gamSta</span> <span class="pre">*</span> <span class="pre">Nelec</span> <span class="pre">*</span> <span class="pre">(T/1e4)^(1/6)</span></code> — note it <strong>does</strong> take electron density), usable as a fallback Stark coefficient where
+STARK-B lacks the transition.</p></li>
+</ul>
+</section>
+<section id="level-energies">
+<h3>3.6 Level energies<a class="headerlink" href="#level-energies" title="Link to this heading"></a></h3>
+<p>NIST-shift any ab-initio (FAC/Cowan) levels at DB-build for blend-assignment accuracy; bakes into
+<code class="docutils literal notranslate"><span class="pre">line_center</span></code> / <code class="docutils literal notranslate"><span class="pre">line_Ek</span></code> static arrays at zero runtime cost.</p>
+<p><strong>Net:</strong> every accuracy gain beyond ASD is <strong>per-line static data computed offline</strong> and baked into
+<code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> / <code class="docutils literal notranslate"><span class="pre">BatchAtomicData</span></code>. The only <em>live</em> hot-path physics terms remain Saha (n_e), Boltzmann
+(T), Stark (n_e), and an optional flagged escape-factor self-absorption term.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="risks-the-physics-only-vs-ml-tension-dependency-weight">
+<h2>4. RISKS + the physics-only-vs-ML tension + dependency weight<a class="headerlink" href="#risks-the-physics-only-vs-ml-tension-dependency-weight" title="Link to this heading"></a></h2>
+<section id="latency-engineering-risks-carried-from-v1-still-load-bearing">
+<h3>4.1 Latency / engineering risks (carried from v1, still load-bearing)<a class="headerlink" href="#latency-engineering-risks-carried-from-v1-still-load-bearing" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>CUDA-graph capture is the load-bearing assumption for full-spectrum K=3.</strong> If it does not deliver
+~0.7-1.0 ms, the product <em>must</em> fall back to the bounded ROI config. Benchmark-gate before any claim.</p></li>
+<li><p><strong>float64 -&gt; float32 forward port.</strong> Shipped <code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code> is float64; the latency numbers
+are float32. Risk: conditioning in Saha <code class="docutils literal notranslate"><span class="pre">exp(-Eion/kT)</span></code> and partition functions. Keep the 17x17 GN
+solve in float32 + damping; validate round-trip vs float64 reference on golden spectra.</p></li>
+<li><p><strong>K too small -&gt; under-convergence.</strong> K=1 &#64; 4000 ch passes on time (605 us) but may under-converge.
+Manifold warm-start makes small K viable; gate on composition-recovery error, not just latency.</p></li>
+<li><p><strong>ROI windowing can drop diagnostic lines</strong> for unexpected elements -&gt; biased T/n_e. Choose ROI from
+the candidate element set (presumes ID ran) or use a fixed super-ROI covering all target elements.</p></li>
+</ul>
+</section>
+<section id="new-exojax-specific-risks">
+<h3>4.2 NEW — ExoJAX-specific risks<a class="headerlink" href="#new-exojax-specific-risks" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>ExoJAX on the hot path is the wrong tool, measured.</strong> ~11.3 ms K=3 (7.3x over budget) and no trim
+reaches &lt;1 ms K=3. The risk would be <em>adopting</em> it for inference; the measurement closes that door.
+Mitigation: ExoJAX is offline-only by decision.</p></li>
+<li><p><strong>Jacobian memory:</strong> ExoJAX <code class="docutils literal notranslate"><span class="pre">jacrev</span></code> <strong>OOMs</strong> at 4000 ch (tries 17.95 GiB); <code class="docutils literal notranslate"><span class="pre">jacfwd</span></code> works but is the
+~3.4 ms cost. Even offline manifold/Jacobian work with ExoJAX must use forward-mode or chunked
+reverse-mode and watch device memory.</p></li>
+<li><p><strong>gA accuracy regression risk:</strong> Kurucz/FAC are <em>completeness over accuracy</em>; for a calibration-free
+method that trusts absolute line intensities, naively swapping in Kurucz gA for strong analytic lines
+would degrade quantification. Mitigation: VALD/NIST-preferred provenance + BRASS-derived per-line
+data-quality weights; <strong>benchmark-gate every atomic-data swap</strong> against the synthetic corpus + NIST
+parity before it lands (per project memory: identifier/forward changes are benchmark-gated).</p></li>
+</ul>
+</section>
+<section id="physics-only-vs-ml-tension-stated-plainly">
+<h3>4.3 Physics-only vs ML tension (stated plainly)<a class="headerlink" href="#physics-only-vs-ml-tension-stated-plainly" title="Link to this heading"></a></h3>
+<p><strong>HARD CONSTRAINT (CLAUDE.md):</strong> shipped CF-LIBS must not import sklearn/torch/tensorflow/keras/flax/
+equinox/transformers/<code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>/<code class="docutils literal notranslate"><span class="pre">jax.experimental.stax</span></code>; ML only in <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code>.</p>
+<ul class="simple">
+<li><p><strong>ExoJAX does NOT add tension — it is physics-only.</strong> A full banned-import scan of all 183 <code class="docutils literal notranslate"><span class="pre">src/exojax/</span></code>
+<code class="docutils literal notranslate"><span class="pre">.py</span></code> files returned <strong>ZERO</strong> matches; ExoJAX is jax + numba + radis + numpy/pandas/astroquery. The
+subset we’d import (database/, opacity/, special/, partition functions) <strong>passes</strong> our Ruff TID251 ban
+and the AST blocklist scanner.</p></li>
+<li><p><strong>The real tension is the <em>accuracy-at-&lt;1 ms</em> gap, unchanged from v1.</strong> If the bounded physics config
+(K=3 &#64; &lt;=1000-ch ROI, 684 us) meets the accuracy bar, <strong>there is no tension</strong> — ship a fully
+physics-only differentiable-GN pipeline. The manifold nearest-neighbor warm-start is <strong>physics, not
+ML</strong> (precomputed grid + argmin/FAISS) and is the escape hatch that likely makes a learned surrogate
+unnecessary. Only if the bounded config fails accuracy AND full-spectrum K=3 cannot be graph-captured
+under 1 ms would high-accuracy-&lt;1ms force an <strong>ADR-level</strong> revisit of the constraint (learned
+warm-start/surrogate) — a gated decision, not a default. <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code> is banned, so the closure softmax
+stays the manual <code class="docutils literal notranslate"><span class="pre">exp/sum</span></code> form (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/softmax_closure.py</span></code>).</p></li>
+</ul>
+</section>
+<section id="dependency-weight-of-adopting-exojax-radis">
+<h3>4.4 Dependency weight of adopting exojax/radis<a class="headerlink" href="#dependency-weight-of-adopting-exojax-radis" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Do NOT take the full <code class="docutils literal notranslate"><span class="pre">exojax</span></code> PyPI dependency on the shipped library.</strong> Its stack pulls <strong>radis
+(&gt;=0.15.2)</strong> (heavy: astropy, scipy, transitive), <strong>numba</strong> (LLVM compiler dep), <strong>astroquery,
+PyMieScatt, hitran-api, vaex, zarr, tables, h5py</strong> — most needed only for clouds/molecular/remote-fetch
+paths CF-LIBS does not run at inference.</p></li>
+<li><p><strong>Recommended adoption mode: vendor/extract the targeted physics-only subset</strong> —
+<code class="docutils literal notranslate"><span class="pre">database/core_atom/</span></code>, <code class="docutils literal notranslate"><span class="pre">database/kurucz/</span></code>, <code class="docutils literal notranslate"><span class="pre">database/vald/</span></code>, <code class="docutils literal notranslate"><span class="pre">database/hminus.py</span></code>, <code class="docutils literal notranslate"><span class="pre">opacity/rayleigh.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">opacity/lpf/</span></code>, <code class="docutils literal notranslate"><span class="pre">special/</span></code>, and the partition-function code — into an <strong>offline DB-build tool</strong>, so the
+shipped CF-LIBS install stays lean and never drags radis/astroquery/PyMieScatt into the runtime. The
+atomic-only ingestion path should be checked to confirm it can avoid the radis transitive import (or
+vendor only <code class="docutils literal notranslate"><span class="pre">core_atom/</span></code> + <code class="docutils literal notranslate"><span class="pre">opacity/lpf/</span></code>). All of that subset is physics-only and ban-compliant.</p></li>
+<li><p><strong>astroquery</strong> is only needed for <em>fetching</em> line lists; once cached to HDF5 it is not an inference-time
+dependency. <strong>Net:</strong> exojax/radis are <strong>build-time/offline</strong> dependencies, never hot-path runtime ones.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="build-sequence-reuse-jitpipe-forward-autodiff-manifold-exojax-offline-fused-gn-hot-path">
+<h2>5. BUILD SEQUENCE (reuse jitpipe forward/autodiff/manifold; ExoJAX offline; fused GN hot path)<a class="headerlink" href="#build-sequence-reuse-jitpipe-forward-autodiff-manifold-exojax-offline-fused-gn-hot-path" title="Link to this heading"></a></h2>
+<p>Reuse map (verified in repo):</p>
+<ul class="simple">
+<li><p><strong>Differentiable forward:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py::single_spectrum_forward</span></code> (Saha -&gt;
+Boltzmann -&gt; emissivity -&gt; Voigt, JAX, <strong>float64 — needs float32 RT variant</strong>); <code class="docutils literal notranslate"><span class="pre">batch_forward_model</span></code>,
+<code class="docutils literal notranslate"><span class="pre">forward_from_snapshot</span></code>.</p></li>
+<li><p><strong>Atomic-data packing:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py::pack_atomic_data</span></code> / <code class="docutils literal notranslate"><span class="pre">BatchAtomicData</span></code>
+(struct-of-arrays pytree); <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/snapshot.py::build_snapshot</span></code> / <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code>
+(host-built, <code class="docutils literal notranslate"><span class="pre">.npz</span></code>-cached, pytree-registered) — the baked static arrays from Section 3 live here.</p></li>
+<li><p><strong>jit/vmap + fixed-iteration solve:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe</span></code> (<code class="docutils literal notranslate"><span class="pre">run_one</span></code>, <code class="docutils literal notranslate"><span class="pre">run_batch</span></code>, <code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code>,
+<code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code>); <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/solve.py::scan_solve</span></code> (already a <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> fixed-iteration solver —
+the template for the fixed-K GN loop).</p></li>
+<li><p><strong>Manifold warm-start:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/{generator,loader,vector_index,basis_index}.py</span></code> +
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/coarse_to_fine.py::HybridInverter.invert</span></code> (coarse manifold lookup -&gt; fine
+optimize). Reuse the coarse lookup; replace fine L-BFGS-B with fixed-K GN.</p></li>
+<li><p><strong>Closure:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/softmax_closure.py</span></code> (manual <code class="docutils literal notranslate"><span class="pre">exp/sum</span></code>, physics-only-safe).</p></li>
+<li><p><strong>Real-time harness + latency SLA:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/streaming.py</span></code> (<code class="docutils literal notranslate"><span class="pre">FastAnalyzer</span></code>,
+<code class="docutils literal notranslate"><span class="pre">StreamingAnalyzer</span></code>, <code class="docutils literal notranslate"><span class="pre">LatencyStats</span></code>, <code class="docutils literal notranslate"><span class="pre">LatencyMonitor</span></code>, <code class="docutils literal notranslate"><span class="pre">create_streaming_pipeline</span></code>).</p></li>
+</ul>
+<p><strong>Step 0 (NEW) — ExoJAX-fed offline DB-build tool (NO runtime dep; gate at DB build).</strong> Stand up an
+offline tool that uses the vendored ExoJAX subset to ingest VALD3/Kurucz, compute B&amp;C-2016/Irwin U(T),
+and (optionally) generate Voigt/H-/Rayleigh reference opacity. Output: baked per-line static arrays
+(<code class="docutils literal notranslate"><span class="pre">line_center</span></code>, <code class="docutils literal notranslate"><span class="pre">line_Ek</span></code>, <code class="docutils literal notranslate"><span class="pre">line_gA</span></code> + data-quality weight, <code class="docutils literal notranslate"><span class="pre">line_stark</span></code> coeffs, <code class="docutils literal notranslate"><span class="pre">U_coeffs</span></code>) merged into
+<code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> / <code class="docutils literal notranslate"><span class="pre">BatchAtomicData</span></code>. <strong>Gate:</strong> ban-scan the vendored subset (TID251 + AST blocklist);
+confirm radis is not pulled into the shipped runtime; benchmark-gate the new atomic data vs synthetic
+corpus + NIST parity before promoting any gA/level/Stark swap. <em>Reuses:</em> ExoJAX (offline only),
+<code class="docutils literal notranslate"><span class="pre">pack_atomic_data</span></code>, <code class="docutils literal notranslate"><span class="pre">build_snapshot</span></code>.</p>
+<p><strong>Step 1 — float32 RT forward kernel (gate: forward &lt;150 us &#64; 4000 ch).</strong> Port <code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code>
+to a float32 RT variant (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/rt_kernel.py</span></code>). Keep the quadrature-folded single
+Gaussian-scatter matmul (no cuDNN conv; <strong>NO</strong> (N_line x N_chan) Voigt-Hjerting numatrix — that is the
+ExoJAX cost we are avoiding). Validate round-trip vs the float64 reference (and, offline, vs the ExoJAX
+Voigt reference) on golden spectra. <em>Reuses:</em> <code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code>, <code class="docutils literal notranslate"><span class="pre">pack_atomic_data</span></code>.</p>
+<p><strong>Step 2 — fixed-K GN inversion as one <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> fused jit (gate: K=3 &#64; 1000 ch &lt;1 ms blocking on
+V100S).</strong> Implement the GN step (fwd + jacfwd + damped 17x17 solve), wrap K of them in <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> (mirror
+<code class="docutils literal notranslate"><span class="pre">scan_solve</span></code>), manual softmax closure. Reproduce the <strong>684 us &#64; 1000 ch / K=3</strong> acceptance number.
+<em>Reuses:</em> <code class="docutils literal notranslate"><span class="pre">jitpipe/solve.scan_solve</span></code> pattern, <code class="docutils literal notranslate"><span class="pre">softmax_closure</span></code>.</p>
+<p><strong>Step 3 — manifold warm-start hookup (gate: warm-start lookup &lt;100 us; total still &lt;1 ms).</strong> Wire the
+coarse manifold nearest-neighbor (<code class="docutils literal notranslate"><span class="pre">HybridInverter</span></code> coarse stage / <code class="docutils literal notranslate"><span class="pre">vector_index</span></code>) to produce theta0
+feeding Step 2; confirm K stays &lt;=3 with the warm start on the synthetic corpus. <em>Reuses:</em>
+<code class="docutils literal notranslate"><span class="pre">coarse_to_fine</span></code>, <code class="docutils literal notranslate"><span class="pre">manifold/vector_index</span></code>, <code class="docutils literal notranslate"><span class="pre">manifold/loader</span></code>.</p>
+<p><strong>Step 4 — CUDA-graph capture + resident buffers (gate: per-shot replay latency; attempt full 4000-ch
+K=3 &lt; 1 ms).</strong> Capture the Step-2+3 fused fn as a CUDA graph; pin theta/S_meas/atomic arrays on device
+with <code class="docutils literal notranslate"><span class="pre">donate_argnums</span></code>. Re-run the Section 1 lever table; record whether full-spectrum K=3 crosses under
+1 ms. <strong>This gate decides whether bounded ROI is the product or full-spectrum is reachable.</strong></p>
+<p><strong>Step 5 — accuracy gate on the physics path (gate: composition recovery vs synthetic corpus + NIST
+parity).</strong> Run the bounded config end-to-end on <code class="docutils literal notranslate"><span class="pre">output/synthetic_corpus</span></code> / golden spectra; measure
+T/n_e/C error vs ground truth. <strong>This gate decides the Section 4.3 fork:</strong> physics-only bounded config
+passes -&gt; ship it; only if it fails do we open the constraint-revisit ADR. <em>Reuses:</em> <code class="docutils literal notranslate"><span class="pre">cflibs/validation</span></code>
+(GoldenSpectrum, NIST parity), <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark</span></code>.</p>
+<p><strong>Step 6 — offline manifold-gen via ExoJAX PreMODIT pattern (no runtime cost; gate at build).</strong> For the
+offline <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/</span></code> grid generator, adopt ExoJAX’s precompute-LBD-once / reweight-per-T pattern
+(and optionally its Voigt opacity) for <strong>reference-accuracy</strong> manifold nodes, while the hot-path warm
+start still reads the cheap grid. <em>Reuses:</em> <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator</span></code>, ExoJAX <code class="docutils literal notranslate"><span class="pre">opacity/premodit</span></code>
+(offline).</p>
+<p><strong>Step 7 — streaming integration + latency SLA (gate: <code class="docutils literal notranslate"><span class="pre">LatencyStats</span></code> p99 &lt;1 ms over a shot stream).</strong>
+Drop the kernel into <code class="docutils literal notranslate"><span class="pre">runtime/streaming.FastAnalyzer</span></code>; assert p99 single-shot latency &lt;1 ms via
+<code class="docutils literal notranslate"><span class="pre">LatencyMonitor</span></code>. <em>Reuses:</em> <code class="docutils literal notranslate"><span class="pre">runtime/streaming</span></code>.</p>
+<p><strong>Benchmark-gate discipline (project memory):</strong> replicate the strict single-shot timing harness
+(compile-once, &gt;=200 per-call <code class="docutils literal notranslate"><span class="pre">block_until_ready</span></code>, median+min) in CI as the latency gate, and the
+synthetic-corpus recovery + NIST parity test as the accuracy gate. <strong>Never run the full pytest suite
+inside a sub-agent</strong> (watchdog); use narrow subsets or background from the parent.</p>
+</section>
+<hr class="docutils" />
+<section id="one-line-exojax2-verdict">
+<h2>One-line ExoJAX2 verdict<a class="headerlink" href="#one-line-exojax2-verdict" title="Link to this heading"></a></h2>
+<p><strong>OFFLINE.</strong> Keep the hand-rolled fused float32 forward + Gauss-Newton kernel on the &lt;1 ms hot path
+(ExoJAX K=3 measured ~11.3 ms = 7.3x over budget, and no trim reaches sub-ms K=3 because OpaDirect’s
+1.2M-element Voigt-Hjerting numatrix x 17-tangent Jacobian is ~9x too heavy at batch=1); <strong>use ExoJAX2
+offline</strong> for atomic-line ingestion (VALD3/Kurucz), partition functions (B&amp;C 2016 / Irwin), Voigt/H-/
+Rayleigh reference accuracy, and the PreMODIT manifold-gen pattern — it is physics-only (zero banned
+imports), so adopt it as a vendored offline DB-build/manifold tool, never a hot-path or shipped-runtime
+dependency.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

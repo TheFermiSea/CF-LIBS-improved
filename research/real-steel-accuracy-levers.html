@@ -1,0 +1,205 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Data Composition-Accuracy Levers (literature-grounded) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Real-Data Composition-Accuracy Levers (literature-grounded)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/research/real-steel-accuracy-levers.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="real-data-composition-accuracy-levers-literature-grounded">
+<h1>Real-Data Composition-Accuracy Levers (literature-grounded)<a class="headerlink" href="#real-data-composition-accuracy-levers-literature-grounded" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> active exploration (all levers green-lit 2026-06-27). Gate = real-steel benchmark
+(<code class="docutils literal notranslate"><span class="pre">data/real_steel/steel_266.parquet</span></code>, PhdYoda/steel_266_LIBS, 36 NIST-class steel samples,
+certified Cr/Ni/Fe/Si/Cu/Mn/Mo/C wt%, 4096-ch spectra 194-948 nm, 15 shots each).</p>
+<section id="root-cause-of-the-real-steel-failure-diagnosed-literature-confirmed">
+<h2>Root cause of the real-steel failure (diagnosed + literature-confirmed)<a class="headerlink" href="#root-cause-of-the-real-steel-failure-diagnosed-literature-confirmed" title="Link to this heading"></a></h2>
+<p>Naive constrained solve over-estimates trace minors (Cu 0.19 wt% recovered as ~93%,
+“keystone collapse”). Diagnosis (<code class="docutils literal notranslate"><span class="pre">scripts/_realsteel_diag2.py</span></code>):</p>
+<ul class="simple">
+<li><p>Cu observed <strong>only via singly-ionized (Cu II) lines</strong> (0 neutral / 3 ion), high E_k 8.2-8.8 eV.</p></li>
+<li><p>Fitted plasma T low (~6705 K vs expected 8000-12000 K).</p></li>
+<li><p>Saha back-correction ion-&gt;total: <code class="docutils literal notranslate"><span class="pre">N_I</span> <span class="pre">∝</span> <span class="pre">N_II</span> <span class="pre">·</span> <span class="pre">N_e</span> <span class="pre">·</span> <span class="pre">exp(E_ion/kT)</span></code>. At low T, <code class="docutils literal notranslate"><span class="pre">exp(E_ion/kT)</span></code>
+explodes -&gt; the solver infers a massive unobserved-neutral Cu population -&gt; Cu soaks the closure.</p></li>
+</ul>
+<p><strong>NotebookLM grounding (notebook <code class="docutils literal notranslate"><span class="pre">f1d2a053</span></code>, sources: CF-LIBS review; Tognoni/Cristoforetti
+2010 review; Zhao et al. 2018 Plasma Sci. Technol. 20 035502 copper-lead alloy):</strong></p>
+<ol class="arabic simple">
+<li><p><em>Ion-only over-estimation is a known failure mode</em> — under-estimated T makes exp(E_ion/kT)
+blow up the unobserved-neutral population (exactly our Cu).</p></li>
+<li><p><em>Composition is hypersensitive to T.</em> Zhao 2018: Pb-only lines -&gt; 6700 K, Cu lines -&gt; 9300 K
+(mirrors our 6705 K from a low-E_k/ion-biased fit); relative errors 12-32% at wrong T vs
+1.8-13.4% at the optimal T (7110 K) found by minimizing the composition standard error.</p></li>
+<li><p><em>Line selection:</em> cover a WIDE E_k range; neutral-only lines bias T low; avoid resonance /
+self-absorbed lines (or use Columnar-Density Saha-Boltzmann, Cristoforetti-Tognoni 2013);
+prefer lines with small self-absorption coefficient (e.g. Cu I 312.61 nm).</p></li>
+<li><p><em>Absolute closure flaw:</em> a ~1% error on the major matrix element -&gt; huge relative error on
+minors. <strong>One-Point Calibration (OPC, Cavalcanti 2013):</strong> one matrix-matched standard fixes
+an empirical F(λ) correction applied to the Boltzmann plot -&gt; much better minor accuracy
+while keeping CF-LIBS’ T/n_e adaptivity. <strong>This is the known-matrix (steel/Ti-alloy/DED) case.</strong></p></li>
+</ol>
+</section>
+<section id="lever-set-each-real-steel-gated-implement-as-opt-in-parity-safe">
+<h2>Lever set (each real-steel-gated; implement as opt-in, parity-safe)<a class="headerlink" href="#lever-set-each-real-steel-gated-implement-as-opt-in-parity-safe" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Lever</p></th>
+<th class="head"><p>Mechanism</p></th>
+<th class="head"><p>Expected impact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>L1</p></td>
+<td><p><strong>Optimal-T / OPC δ(T,α) minimization</strong> (Zhao 2018)</p></td>
+<td><p>scan T (+α) to minimize composition error vs a matrix-matched standard</p></td>
+<td><p>HIGH — composition is hypersensitive to T</p></td>
+</tr>
+<tr class="row-odd"><td><p>L2</p></td>
+<td><p><strong>Line-selection policy</strong></p></td>
+<td><p>wide E_k spread, neutral anchor per element, drop ion-only-observed minors or require a neutral line, avoid self-absorbed/resonance</p></td>
+<td><p>HIGH — direct cause of Cu trap</p></td>
+</tr>
+<tr class="row-even"><td><p>L3</p></td>
+<td><p><strong>OPC F(λ) correction</strong> (Cavalcanti 2013)</p></td>
+<td><p>one steel standard -&gt; per-line multiplicative correction applied to Boltzmann plot</p></td>
+<td><p>HIGHEST for known matrix (the real goal)</p></td>
+</tr>
+<tr class="row-odd"><td><p>L4</p></td>
+<td><p><strong>CD-SB self-absorption</strong> (Cristoforetti-Tognoni 2013)</p></td>
+<td><p>columnar-density Saha-Boltzmann for self-absorbed major (Fe) lines</p></td>
+<td><p>MED — Fe matrix self-absorption</p></td>
+</tr>
+<tr class="row-even"><td><p>L5</p></td>
+<td><p><strong>Real-axis wavelength calibration</strong></p></td>
+<td><p>calibrate the measured axis before extraction</p></td>
+<td><p>MED</p></td>
+</tr>
+<tr class="row-odd"><td><p>L6</p></td>
+<td><p><strong>Saha ion-only robustness</strong></p></td>
+<td><p>require neutral anchor / down-weight / flag ion-only-observed elements</p></td>
+<td><p>MED — guards the Cu trap generally</p></td>
+</tr>
+<tr class="row-even"><td><p>L7</p></td>
+<td><p><strong>H_α / Stark n_e</strong></p></td>
+<td><p>n_e from Stark width (self-absorption-free) instead of injected/pressure-balance</p></td>
+<td><p>MED — n_e feeds Saha</p></td>
+</tr>
+</tbody>
+</table>
+<p>L1+L2+L3 directly target the diagnosed Cu/T failure and are the known-matrix (DED) sweet spot.
+Combine winners; use the cluster for the combinatorial T/α/line-policy optimization, gated on
+the 36-sample real-steel RMSEP (un-overfittable) + DED no-regression + NIST parity.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

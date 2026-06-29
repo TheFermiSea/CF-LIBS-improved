@@ -1,0 +1,269 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phase 3 — SOTA implementation plan (cited, benchmark-gated) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Phase 3 — SOTA implementation plan (cited, benchmark-gated)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/research/2026-06-19-phase3-implementation-plan.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="phase-3-sota-implementation-plan-cited-benchmark-gated">
+<h1>Phase 3 — SOTA implementation plan (cited, benchmark-gated)<a class="headerlink" href="#phase-3-sota-implementation-plan-cited-benchmark-gated" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-19 · <strong>Inputs:</strong> <a class="reference internal" href="2026-06-19-cross-discipline-sota.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">2026-06-19-cross-discipline-sota.md</span></code></span></a> (123 asta-verified methods) + an 8-stage codebase gap analysis (65 non-default candidates, 18 top-tier) + direct code verification.</p>
+<section id="governing-discipline">
+<h2>Governing discipline<a class="headerlink" href="#governing-discipline" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Physics-only</strong> — no sklearn/torch/tf/jax.nn in shipped <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> (ML only in <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code>).</p></li>
+<li><p><strong>Benchmark-gate every accuracy-changing edit</strong> — the repo has regressed ≥3× on un-gated algorithm changes (memory <code class="docutils literal notranslate"><span class="pre">project_benchmark_gate_identifier_changes</span></code>). No default flip without a scoreboard win.</p></li>
+<li><p><strong>Grounded in peer-reviewed literature</strong> — every candidate cites a verified DOI from the KB.</p></li>
+</ol>
+<section id="verified-cautionary-facts-from-reading-the-code-not-agent-reports">
+<h3>Verified cautionary facts (from reading the code, not agent reports)<a class="headerlink" href="#verified-cautionary-facts-from-reading-the-code-not-agent-reports" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Self-absorption correction is OFF by default</strong> (<code class="docutils literal notranslate"><span class="pre">iterative.py</span></code>: <code class="docutils literal notranslate"><span class="pre">self_absorption_mode=&quot;off&quot;</span></code>), AND a prior SA path was <strong>deleted because it measurably worsened</strong> intercept inflation on real ChemCam BHVO-2 (positive-feedback loop; audit <code class="docutils literal notranslate"><span class="pre">02-inversion-solver.md</span></code> F4). ⇒ Any SA-on change is <strong>high-risk</strong>, benchmark-gated hardest.</p></li>
+<li><p>Boltzmann fit is <strong>weighted OLS</strong> (<code class="docutils literal notranslate"><span class="pre">np.polyfit</span></code>), not errors-in-variables. ⇒ ODR is a real gap (but E_k errors are small; leverage to be measured, not assumed).</p></li>
+<li><p>Multiplet-aware Boltzmann aggregation <strong>exists in <code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter.fit</span></code></strong> but is not plumbed from the production solver. ⇒ wiring, not new code.</p></li>
+</ul>
+</section>
+</section>
+<section id="track-a-additive-uq-robustness-cannot-regress-the-point-estimate-merge-on-unit-tests-lint">
+<h2>Track A — additive UQ / robustness (cannot regress the point estimate; merge on unit tests + lint)<a class="headerlink" href="#track-a-additive-uq-robustness-cannot-regress-the-point-estimate-merge-on-unit-tests-lint" title="Link to this heading"></a></h2>
+<p>These add diagnostics, calibrated intervals, or model-selection <em>options</em>; they do not change the inversion’s point estimate, so they need unit tests, not a benchmark gate. They are exactly what an elite physicist/mathematician reviewer looks for (calibrated, honest UQ).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>candidate</p></th>
+<th class="head"><p>where</p></th>
+<th class="head"><p>citation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>A1</p></td>
+<td><p><strong>TARP</strong> coverage test (posterior-sample coverage, no density eval)</p></td>
+<td><p>new <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/coverage.py</span></code> + benchmark hook</p></td>
+<td><p>Lemos, Coogan, Hezaveh, Perreault-Levasseur, ICML 2023, arXiv:2302.03026</p></td>
+</tr>
+<tr class="row-odd"><td><p>A2</p></td>
+<td><p><strong>Split Conformal Prediction + CQR</strong> — distribution-free composition intervals wrapping the inversion output</p></td>
+<td><p>new <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/conformal.py</span></code></p></td>
+<td><p>Lei et al., JASA 2018; Romano, Patterson, Candès, NeurIPS 2019 (CQR)</p></td>
+</tr>
+<tr class="row-even"><td><p>A3</p></td>
+<td><p><strong>Simulation-Based Calibration (SBC)</strong> rank-uniformity harness over NUTS/dynesty</p></td>
+<td><p>extend <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/diagnostics.py</span></code></p></td>
+<td><p>Talts, Betancourt, Simpson, Vehtari, Gelman, arXiv:1804.06788</p></td>
+</tr>
+<tr class="row-odd"><td><p>A4</p></td>
+<td><p><strong>ILR/Aitchison analytical UQ</strong> — full-rank covariance in ILR coordinates (closes the rank-deficient closed-composition covariance)</p></td>
+<td><p>extend <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure.py</span></code> <code class="docutils literal notranslate"><span class="pre">ClosedFormILRSolver</span></code></p></td>
+<td><p>Egozcue et al., Math. Geol. 2003; Aitchison 1986</p></td>
+</tr>
+<tr class="row-even"><td><p>A5</p></td>
+<td><p><strong>SpIC / AICc</strong> model-selection options alongside the existing BIC element prune</p></td>
+<td><p>extend <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/model_selection.py</span></code></p></td>
+<td><p>(KB topic_3 SpIC) + Hurvich &amp; Tsai 1989 (AICc)</p></td>
+</tr>
+<tr class="row-odd"><td><p>A6</p></td>
+<td><p><strong>Optimal-Estimation closure diagnostics</strong> — posterior covariance Ŝ, averaging kernels, DOFS reported from the joint solve</p></td>
+<td><p>extend <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/joint_optimizer.py</span></code></p></td>
+<td><p>Rodgers, <em>Inverse Methods for Atmospheric Sounding</em>, 2000</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="track-b-accuracy-changing-opt-in-flag-first-benchmark-gated-default-flip-only-on-a-scoreboard-win">
+<h2>Track B — accuracy-changing (opt-in flag first, benchmark-gated, default-flip only on a scoreboard win)<a class="headerlink" href="#track-b-accuracy-changing-opt-in-flag-first-benchmark-gated-default-flip-only-on-a-scoreboard-win" title="Link to this heading"></a></h2>
+<p>Ordered by (leverage / risk). Each agent adds the method behind a flag with a citation docstring and unit tests; <strong>the default is not changed</strong>. The parent then runs the scoreboard (reference pipeline, optimization-tier datasets) before/after and flips the default only if aggregate metrics improve and no dataset regresses past M3 tolerances.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>candidate</p></th>
+<th class="head"><p>risk</p></th>
+<th class="head"><p>citation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>B1</p></td>
+<td><p><strong>Errors-in-variables / weighted TLS (ODR)</strong> Boltzmann/Saha-Boltzmann slope</p></td>
+<td><p>low</p></td>
+<td><p>Aragón &amp; Aguilera (SAB review); ODR = Boggs &amp; Rogers 1990</p></td>
+</tr>
+<tr class="row-odd"><td><p>B2</p></td>
+<td><p><strong>Multiplet-aware Boltzmann</strong> wired into the default solver (already supported by <code class="docutils literal notranslate"><span class="pre">fit</span></code>)</p></td>
+<td><p>low</p></td>
+<td><p>Völker &amp; Gornushkin 2023; Wakil et al. 2023</p></td>
+</tr>
+<tr class="row-even"><td><p>B3</p></td>
+<td><p><strong>Rigorous temporal/relaxation LTE criterion</strong> beyond McWhirter, enabled in the solver</p></td>
+<td><p>low</p></td>
+<td><p>Cristoforetti et al., SAB 2010</p></td>
+</tr>
+<tr class="row-odd"><td><p>B4</p></td>
+<td><p><strong>Stewart-Pyatt IPD</strong> consistent with the partition cutoff in the Saha balance</p></td>
+<td><p>low</p></td>
+<td><p>Stewart &amp; Pyatt, ApJ 1966</p></td>
+</tr>
+<tr class="row-even"><td><p>B5</p></td>
+<td><p><strong>pLTE thermalized-lower-level</strong> line-selection cut</p></td>
+<td><p>medium</p></td>
+<td><p>Cristoforetti et al. (pLTE)</p></td>
+</tr>
+<tr class="row-odd"><td><p>B6</p></td>
+<td><p><strong>STARK-B (Sahal-Bréchot 2015) + Djurović 2023</strong> evaluated Stark widths into <code class="docutils literal notranslate"><span class="pre">stark_ne.py</span></code></p></td>
+<td><p>medium</p></td>
+<td><p>Sahal-Bréchot et al., STARK-B/VAMDC; Djurović, Blagojević, Konjević 2023</p></td>
+</tr>
+<tr class="row-even"><td><p>B7</p></td>
+<td><p><strong>Columnar-Density Saha-Boltzmann (CD-SB)</strong> as an SA-tolerant quantification path</p></td>
+<td><p>medium</p></td>
+<td><p>Cristoforetti/Poggialini CD-SB; Aragón &amp; Aguilera</p></td>
+</tr>
+<tr class="row-odd"><td><p>B8</p></td>
+<td><p><strong>One-point calibration (OPC)</strong> of the Saha-Boltzmann intercept</p></td>
+<td><p>medium</p></td>
+<td><p>Cavalcanti et al., SAB 2013 (doi:10.1016/J.SAB.2013.05.016)</p></td>
+</tr>
+<tr class="row-even"><td><p>B9</p></td>
+<td><p><strong>C-sigma generalized curve-of-growth</strong> joint multi-element fit</p></td>
+<td><p>medium</p></td>
+<td><p>Aragón &amp; Aguilera, JQSRT 2014 (doi:10.1016/J.JQSRT.2014.07.026)</p></td>
+</tr>
+<tr class="row-odd"><td><p>B10</p></td>
+<td><p><strong>Enable observable-gated SA correction by default</strong> (doublet-ratio + Planck-ceiling)</p></td>
+<td><p><strong>high</strong> (regression history)</p></td>
+<td><p>Voelker &amp; Gornushkin 2023; El Sherbini</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="benchmark-gate-protocol-track-b">
+<h2>Benchmark-gate protocol (Track B)<a class="headerlink" href="#benchmark-gate-protocol-track-b" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">track_B</span><span class="p">:</span>
+  <span class="n">implement</span> <span class="n">opt</span><span class="o">-</span><span class="ow">in</span> <span class="n">flag</span> <span class="o">+</span> <span class="n">unit</span> <span class="n">tests</span> <span class="p">(</span><span class="n">physics</span><span class="o">-</span><span class="n">only</span><span class="p">)</span>            <span class="c1"># worktree-isolated agent</span>
+  <span class="n">run</span> <span class="n">scoreboard</span> <span class="o">--</span><span class="n">pipeline</span> <span class="n">reference</span>  <span class="p">(</span><span class="n">baseline</span><span class="p">,</span> <span class="n">optimization</span><span class="o">-</span><span class="n">tier</span><span class="p">,</span> <span class="n">seed</span> <span class="mi">20260610</span><span class="p">)</span>
+  <span class="n">run</span> <span class="n">scoreboard</span> <span class="o">--</span><span class="n">pipeline</span> <span class="n">reference</span>  <span class="k">with</span> <span class="n">the</span> <span class="n">flag</span> <span class="n">on</span>
+  <span class="n">adopt</span> <span class="p">(</span><span class="n">flip</span> <span class="n">default</span><span class="p">)</span> <span class="n">iff</span> <span class="n">aggregate</span> <span class="n">F1</span><span class="o">/</span><span class="n">RMSE</span> <span class="o">&gt;=</span> <span class="n">baseline</span> <span class="n">AND</span> <span class="n">no</span> <span class="n">dataset</span> <span class="n">regresses</span> <span class="n">past</span> <span class="n">M3</span> <span class="n">tol</span>
+  <span class="k">else</span> <span class="n">keep</span> <span class="n">opt</span><span class="o">-</span><span class="ow">in</span> <span class="o">+</span> <span class="n">record</span> <span class="n">the</span> <span class="n">negative</span> <span class="n">result</span> <span class="p">(</span><span class="n">still</span> <span class="n">valuable</span><span class="p">:</span> <span class="n">documents</span> <span class="n">what</span> <span class="n">doesn</span><span class="s1">&#39;t help)</span>
+</pre></div>
+</div>
+<p>Gate runs on SLURM (vasp nodes) after job <code class="docutils literal notranslate"><span class="pre">3256</span></code> frees, or on a fast local subset for quick triage.</p>
+</section>
+<section id="execution">
+<h2>Execution<a class="headerlink" href="#execution" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Track A</strong> launches now (parallel, worktree-isolated, file-mostly-disjoint, unit-tested) → merges on green unit tests.</p></li>
+<li><p><strong>Track B</strong> launches in localized, benchmark-gated batches (several touch <code class="docutils literal notranslate"><span class="pre">boltzmann.py</span></code>/<code class="docutils literal notranslate"><span class="pre">iterative.py</span></code>, so not all parallel-safe).</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

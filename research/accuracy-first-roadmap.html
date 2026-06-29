@@ -1,0 +1,823 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Accuracy-First Roadmap (Authoritative) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Accuracy-First Roadmap (Authoritative)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/research/accuracy-first-roadmap.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-accuracy-first-roadmap-authoritative">
+<h1>CF-LIBS Accuracy-First Roadmap (Authoritative)<a class="headerlink" href="#cf-libs-accuracy-first-roadmap-authoritative" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> Authoritative synthesis · <strong>Date:</strong> 2026-06-20 · <strong>Owner:</strong> synthesis lead
+<strong>Supersedes:</strong> ad-hoc lever notes; consolidates the 6 per-lever analyses + literature packs into one program.
+<strong>Standing directive (binding):</strong> ACCURACY, PRECISION, and RELIABILITY of T / n_e / composition extraction take
+<strong>strict precedence over latency.</strong> Sub-millisecond inference is the eventual goal but is <strong>deferred</strong> until the
+pipeline is scientifically robust. Never trade accuracy for speed. Physics-only constraint holds throughout:
+shipped <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> must not import <code class="docutils literal notranslate"><span class="pre">sklearn</span></code>, <code class="docutils literal notranslate"><span class="pre">torch</span></code>, <code class="docutils literal notranslate"><span class="pre">tensorflow</span></code>, <code class="docutils literal notranslate"><span class="pre">keras</span></code>, <code class="docutils literal notranslate"><span class="pre">flax</span></code>, <code class="docutils literal notranslate"><span class="pre">equinox</span></code>, <code class="docutils literal notranslate"><span class="pre">transformers</span></code>,
+<code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>, or <code class="docutils literal notranslate"><span class="pre">jax.experimental.stax</span></code> (ML only in <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code>). Every accuracy-changing recommendation is
+<strong>benchmark-gateable</strong> (flag-off vs flag-on on the scoreboard) — the repo has regressed <strong>three times</strong> on ungated
+scoring changes, so non-regression gating is mandatory, not optional.</p>
+<hr class="docutils" />
+<section id="thesis-sequencing">
+<h2>1. Thesis &amp; Sequencing<a class="headerlink" href="#thesis-sequencing" title="Link to this heading"></a></h2>
+<p><strong>Thesis.</strong> The binding error in CF-LIBS on this codebase is <strong>the inputs</strong>, not the solver math. The plan-v4
+controlled round-trip (workflow <code class="docutils literal notranslate"><span class="pre">wphrxvuyj</span></code>, 2026-06-20, V100S, real ExoJAX forward + real ChemCam/SuperCam) measured
+the <strong>inversion-algorithm floor at RMSE 2.9×10⁻⁶ (≈0)</strong> — i.e. when the atomic data and the forward model agree, the
+solver recovers truth essentially exactly. The same campaign measured that the <strong>atomic-data line-list mismatch alone
+injects RMSE 0.171 mass-fraction</strong> — roughly <strong>five orders of magnitude above the solver floor</strong> and of the same order
+as the real-data composition error (ChemCam 0.12–0.17 mass-frac). A third measured term, <strong>noisy weak-emitter
+ill-posedness, floors at RMSE ≈0.20</strong> (Na/K/Si dynamic range ≈10⁶). Real-data tests were run <strong>uncalibrated</strong>
+(Mode C: fixed-FWHM proxy, no E(λ)), and SuperCam composition RMSE was <strong>20–26 wt%</strong>, 4–10× the 1–3 wt% CF-LIBS norm.</p>
+<p>The conclusion is unambiguous and is the spine of this roadmap:</p>
+<blockquote>
+<div><p>The solver is already correct to ≈0. The accuracy ceiling is set by <strong>atomic data quality, instrument calibration,
+self-absorption on optically-thick majors, and weak-emitter ill-posedness</strong> — in that rough order. Optimizing the
+solver further (and especially optimizing it for <em>speed</em>) cannot move composition RMSE while the inputs dominate by
+five orders of magnitude.</p>
+</div></blockquote>
+<p><strong>Sequencing.</strong> Work proceeds in three strictly-ordered phases:</p>
+<ol class="arabic simple">
+<li><p><strong>ACCURACY</strong> — fix the inputs (atomic data, calibration, self-absorption, n_e identifiability). This is where the
+0.171 and the 20–26 wt% live. (Levers 1–4 below; milestones M1–M6.)</p></li>
+<li><p><strong>RELIABILITY / UQ</strong> — make every reported number <em>honest</em>: refuse-to-report gates (LTE validity, quality flags),
+calibrated per-element uncertainty, and precision-vs-accuracy separation. This does not lower the <em>unconditional</em>
+RMSE — it ensures we never emit a confident wrong number, and it lowers the <em>conditional</em> (reported-subset) RMSE.
+(Levers 5–6; milestones M7–M9.)</p></li>
+<li><p><strong>LATENCY — DEFERRED.</strong> Sub-ms is the eventual product goal, but it is gated on the entire accuracy + reliability
+program being complete and benchmark-locked. The fast structured-GN is presently <strong>~2× <em>less</em> accurate</strong> than the
+legacy iterative solver on real data (median 0.151 vs 0.076; §3), so promoting it now would be trading accuracy for
+speed — forbidden by the standing directive. Latency is milestone <strong>M10</strong>, last, and explicitly gated.</p></li>
+</ol>
+<p><strong>Why latency is deferred (stated explicitly).</strong> The fast GN’s speed advantage (~2000×) is real and valuable, but it
+is presently bought at an accuracy cost we cannot pay: it cannot identify n_e from a flat prior, modeling
+self-absorption inside it rails n_e, and it does not consume the atomic-data uncertainty it already stores. None of
+these are latency problems — they are accuracy problems that happen to live in the fast path. We perfect accuracy in
+the legacy path first, <em>then</em> port the validated physics into the fast path under parity gates. The v4 finding —
+algorithm floor ≈0 vs atomic-data 0.171 — is the quantitative justification: there is no accuracy to be gained from
+the solver, only from the inputs, so spending engineering on a faster solver before the inputs are fixed optimizes the
+wrong term.</p>
+</section>
+<hr class="docutils" />
+<section id="the-composition-t-n-e-error-budget">
+<h2>2. The Composition / T / n_e Error Budget<a class="headerlink" href="#the-composition-t-n-e-error-budget" title="Link to this heading"></a></h2>
+<p>Ranked by share of the <strong>measured</strong> real-data accuracy gap. The two anchor numbers are the v4 controlled
+measurements: algorithm floor <strong>2.9×10⁻⁶</strong> and atomic-data mismatch <strong>0.171</strong> RMSE mass-fraction. Shares below are
+reconciled to those numbers; where a lever has not yet been isolated with its own flag-off/flag-on experiment, the
+share is marked <strong>UNMEASURED</strong> and an isolation experiment is the headline deliverable for that lever.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Lever</p></th>
+<th class="head"><p>Share of measured accuracy gap</p></th>
+<th class="head"><p>Cited / measured expected gain</p></th>
+<th class="head"><p>Basis</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><strong>Atomic data quality &amp; gf-grade-aware selection</strong></p></td>
+<td><p><strong>DOMINANT.</strong> Owns the measured <strong>0.171 RMSE</strong> atomic-data term — ~5 orders of magnitude above the solver floor; same order as the real-data RMSE.</p></td>
+<td><p>Targets the full 0.171 term. Repo-measured: <strong>Kurucz beats NIST by −5 to −6 wt% on line-rich SuperCam</strong> (completeness). Per-line: grade-A (≤3%) vs heuristic-B (10%) vs D/E (50%) is a <strong>3–17× per-line accuracy swing</strong> propagating ~1:1 into species bias.</p></td>
+<td><p>v4 measured; Ciucci 1999; Tognoni 2010; atomic_data lever</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><strong>Instrument calibration E(λ) / LSF / axis (ADR-0006)</strong></p></td>
+<td><p><strong>LARGE, partly UNMEASURED.</strong> Second only to atomic data. Real-data was Mode-C uncalibrated → SuperCam <strong>20–26 wt%</strong> (4–10×). E(λ) does <strong>not</strong> cancel under closure; it rotates (T) and scatters (composition) the Boltzmann plot.</p></td>
+<td><p>Literature norm for well-calibrated, optically-thin LTE CF-LIBS: <strong>1–3 wt%</strong> (target). E(λ) correction removes the slope-rotation T bias and wavelength-region composition bias; magnitude scales with response variation across a species’ line set (10s of % when response spans a steep grating/QE edge).</p></td>
+<td><p>v4 measured (Mode-C); Tognoni 2010; ADR-0006 §1.2; calibration_matrix lever</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><strong>Weak-emitter ill-posedness</strong></p></td>
+<td><p><strong>LARGE.</strong> Owns the measured <strong>~0.20 RMSE noisy floor</strong> (Na/K/Si, ~10⁶ dynamic range). Not solver math — fundamental ill-conditioning.</p></td>
+<td><p>No point-estimate fix; the honest response is <strong>calibrated large CIs + reliability downgrade</strong> (Lever 6), not a tighter wrong number. Tognoni 2007: even an <em>ideal</em> plasma has an atomic-data/line-intensity precision floor.</p></td>
+<td><p>v4 measured; Tognoni 2007; uncertainty_precision lever</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><strong>Self-absorption (optically-thick majors)</strong></p></td>
+<td><p><strong>MODERATE, conditional, UNMEASURED in-repo.</strong> Bounded to the optically-thick major subset (Ca/Na/Mg/Al/Fe). Cannot touch the 0.171 atomic-data floor or weak emitters. Concrete symptom: Al I 877 doublet sits <strong>+3 ln</strong> above the resonance-anchored Boltzmann line.</p></td>
+<td><p>Literature ceiling <strong>~27% → ~2% rel error</strong> when SA dominates; Bulajic ~10× when SA dominates. Realistic repo gain: <strong>single-digit wt% on SA-heavy spectra</strong>, not transformational; doublet-pass often a no-op on real detected lists.</p></td>
+<td><p>al-calibration-rootcause audit; Bulajic 2002; self_absorption lever</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><strong>Stark n_e identifiability &amp; coverage</strong></p></td>
+<td><p><strong>MODERATE, asymmetric. Headline gain already BANKED.</strong> Fixes one specific failure mode: n_e is unidentifiable from a flat prior (<strong>ne_rel ≈0.3</strong> at ~1e17). Pin/seed already implemented in both solvers — residual is <strong>literature-grade DB coverage</strong> (only <strong>244/28,727 lines = 0.85%</strong> carry <code class="docutils literal notranslate"><span class="pre">stark_b</span></code>).</p></td>
+<td><p>Stark on isolated literature-grade lines: <strong>~10–20% n_e accuracy</strong> (vs measured ~30% from a flat prior). Composition gain is indirect via Saha; 30%→15% n_e roughly halves the Saha-correction error. Incremental gain = converting silent pressure-balance-fallback solves into Stark-pinned solves (each is the ~2× legacy-vs-GN delta).</p></td>
+<td><p>v4 measured; Konjevic 2002; Aragon-Aguilera 2008; Gigosos 2014; stark_ne lever</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><strong>LTE validity / multi-zone reliability</strong></p></td>
+<td><p><strong>SMALL on current RMSE; OWNS the trust surface.</strong> Controlled floor ≈0 ⇒ single-zone math is not the dominant bias <em>when LTE holds</em>. But gradient-rich planetary plasmas emit biased single-T composites <strong>with no flag today</strong>.</p></td>
+<td><p>No unconditional RMSE drop claimed. Gain = <strong>conditional RMSE</strong> (refuse-to-report below “acceptable” excludes the worst solves) + a reported flag-fraction. Thomson-scattering: apparent single-T can diverge from true T_e by <strong>tens of %</strong> in early/non-LTE conditions, propagating to factor-level concentration error.</p></td>
+<td><p>v4 framing; Cristoforetti 2010; Aguilera 2008; Liu 2015; lte_reliability lever</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><strong>Uncertainty calibration &amp; reporting</strong></p></td>
+<td><p><strong>~0% of the point-estimate gap; ~100% of the trustworthiness gap.</strong> UQ never moves the mean — it makes the error bars honest.</p></td>
+<td><p>Bring classical-path 95%-CI empirical coverage into <strong>[0.93, 0.97]</strong> (the repo’s own protocol band, already used for Bayesian). Weak emitters get CIs that bracket truth / a reliability downgrade instead of false “good”.</p></td>
+<td><p>uncertainty_precision lever; posterior_metrics.py band; Tognoni 2007; Safi 2019</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reconciliation to v4.</strong> Levers 1+2+3 account for essentially all of the measured real-data RMSE: atomic data
+(0.171) is the dominant term; calibration E(λ) is the second uncontrolled input (Mode-C ⇒ 20–26 wt% SuperCam); weak
+emitters floor the noisy term at ~0.20. Levers 4 and 5 are corrections to specific <em>subsets</em> (optically-thick majors;
+n_e-degenerate spectra) and cannot exceed those subsets. Levers 6 and 7 are reliability/reporting, not RMSE-of-the-mean.
+This is internally consistent with algorithm-floor ≈0: every remaining error is an input or an ill-posedness, never the
+solver.</p>
+</section>
+<hr class="docutils" />
+<section id="the-architectural-fork-perfect-the-legacy-solver-first">
+<h2>3. The Architectural Fork — Perfect the Legacy Solver First<a class="headerlink" href="#the-architectural-fork-perfect-the-legacy-solver-first" title="Link to this heading"></a></h2>
+<p><strong>Recommendation: YES — perfect the legacy iterative solver first; treat the fast structured-GN as a later latency
+play, ported under parity gates only after the accuracy program is complete.</strong></p>
+<p><strong>Justification from the measured legacy-vs-GN data.</strong> Plan v4 measured the legacy iterative solver
+(<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.pipeline.run_pipeline</span></code>, geological preset, <code class="docutils literal notranslate"><span class="pre">stark_ne=True</span></code>) at <strong>median composition RMSE 0.076 vs
+the fast structured-GN at 0.151 on real data — ~2× more accurate on 4/5 real spectra</strong> — at the cost of being ~2000×
+slower. The standing directive forbids trading that accuracy for the speed. Three measured mechanisms make the legacy
+path the correct accuracy host today:</p>
+<ol class="arabic simple">
+<li><p><strong>Stark n_e exploitation.</strong> The legacy solver consumes <code class="docutils literal notranslate"><span class="pre">measure_stark_ne</span></code> as its primary per-iteration n_e update
+(50/50 damped); this is <em>why</em> it is 2× more accurate — it is the path where the Stark seed is fully used. The fast
+GN merely pins n_e to the Stark value and otherwise cannot identify n_e from a flat prior (ne_rel ≈0.3).</p></li>
+<li><p><strong>Self-absorption placement.</strong> Modeling SA inside the fast GN <strong>rails n_e</strong> (v4 failure mode). Observable-gated SA
+correction belongs <strong>upstream</strong> in the legacy path (it is already correctly wired there, applied once before the
+Boltzmann fit). The fast GN is structurally the wrong place for SA.</p></li>
+<li><p><strong>Atomic-data uncertainty consumption.</strong> The legacy solver folds <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> into fit-space σ in quadrature
+(<code class="docutils literal notranslate"><span class="pre">_line_y_uncertainty</span></code>, <code class="docutils literal notranslate"><span class="pre">aki_uncertainty_weighting</span></code>). The fast GN <strong>stores</strong> <code class="docutils literal notranslate"><span class="pre">line_aki_uncertainty</span></code> but <strong>never
+uses it</strong> in its objective — the grade data is dead weight on the fast path.</p></li>
+</ol>
+<p><strong>Operating rule.</strong> All accuracy-changing physics (Levers 1–6) lands in the <strong>legacy iterative path first</strong>, is
+benchmark-gated there, and only then is ported to the fast GN under the existing jitpipe parity-test discipline. The
+fast GN is not abandoned — it is the eventual latency vehicle (M10) — but it inherits validated physics; it does not
+pioneer it. This also matches the physics-only and non-regression constraints: the legacy path is <code class="docutils literal notranslate"><span class="pre">numpy</span></code>/<code class="docutils literal notranslate"><span class="pre">scipy</span></code>, has
+the richest <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code>, and is where defensible CIs matter most.</p>
+</section>
+<hr class="docutils" />
+<section id="per-lever-program-ordered-by-priority">
+<h2>4. Per-Lever Program (Ordered by Priority)<a class="headerlink" href="#per-lever-program-ordered-by-priority" title="Link to this heading"></a></h2>
+<p>Each lever lists: what exists in <code class="docutils literal notranslate"><span class="pre">cflibs</span></code> (verified symbols/files), the gap, the scientifically-grounded change, and
+the exact benchmark-gate (flag · datasets · metric · accept criterion). <strong>All gates obey the non-regression rule</strong> (the
+repo regressed 3× on ungated scoring changes): a change ships behind its own flag, default-off, and must not regress any
+dataset.</p>
+<hr class="docutils" />
+<section id="p0-lever-1-atomic-data-quality-gf-grade-aware-line-selection">
+<h3>P0 — Lever 1: Atomic Data Quality &amp; gf-Grade-Aware Line Selection<a class="headerlink" href="#p0-lever-1-atomic-data-quality-gf-grade-aware-line-selection" title="Link to this heading"></a></h3>
+<p><strong>Owns the dominant measured error (0.171 RMSE). This is the single highest-value lever.</strong></p>
+<p><strong>What exists (verified):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LineSelector</span></code> / <code class="docutils literal notranslate"><span class="pre">LineScore</span></code> / <code class="docutils literal notranslate"><span class="pre">LineSelectionResult</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code>. Grade-aware
+<strong>soft</strong> scoring only: <code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">SNR</span> <span class="pre">·</span> <span class="pre">(1/σ_atomic)</span> <span class="pre">·</span> <span class="pre">isolation</span></code>; <code class="docutils literal notranslate"><span class="pre">ATOMIC_UNCERTAINTIES</span></code> grade→σ map (AAA…E).
+<strong>No grade threshold / hard gate anywhere</strong> (confirmed by grep across <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LineObservation.aki_uncertainty</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/data_structures.py</span></code> (carries the grade into the solver).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver.aki_uncertainty_weighting</span></code> / <code class="docutils literal notranslate"><span class="pre">_line_y_uncertainty</span></code> —
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> (the <strong>one path that actually uses</strong> grade data, folds it into fit-space σ).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AtomicLine.accuracy_grade</span></code> schema + <code class="docutils literal notranslate"><span class="pre">_backfill_uncertainty</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/structures.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py</span></code>. <strong>PARTIAL / DEAD-data:</strong> schema exists but grades are <strong>heuristic for ~99.7% of lines</strong>
+(rel-int → B/C/D/E backfill); <strong>only 72/28,727 lines carry real NIST-derived unc</strong> (0.03/0.07).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code> NIST scrape — reads <code class="docutils literal notranslate"><span class="pre">obs_wl_air</span></code> + <code class="docutils literal notranslate"><span class="pre">Aki</span></code>; <strong>drops <code class="docutils literal notranslate"><span class="pre">acc</span></code>/<code class="docutils literal notranslate"><span class="pre">unc_Aki</span></code> for nearly all lines</strong> (root cause
+of fabricated grades). Stores <strong>air</strong> wavelengths.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">line_aki_uncertainty</span></code> in the structured-GN — <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/snapshot.py</span></code>, <code class="docutils literal notranslate"><span class="pre">host.py</span></code>. <strong>STORED but UNUSED</strong> in the
+GN objective.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AtomicDataSource</span></code> ABC — <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py</span></code> (the natural seam for a graded Kurucz/VALD3 backend; only
+SQLite/NIST implemented).</p></li>
+<li><p><strong>Air↔vacuum conversion — MISSING ENTIRELY</strong> (verified: no <code class="docutils literal notranslate"><span class="pre">edlen</span></code>/<code class="docutils literal notranslate"><span class="pre">ciddor</span></code>/<code class="docutils literal notranslate"><span class="pre">vac2air</span></code>/<code class="docutils literal notranslate"><span class="pre">air2vac</span></code> anywhere in
+<code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>). Datagen stores <code class="docutils literal notranslate"><span class="pre">obs_wl_air</span></code> with no enforced convention vs the forward model.</p></li>
+</ul>
+<p><strong>The gap.</strong> The transition metals that dominate geological LIBS (Fe 7312 lines, Ti, V, Cr, Mn, Ni) have <strong>zero real
+grade-A lines</strong>. The entire gf-grade-aware machinery is selecting and weighting on <strong>invented grades</strong> — the worst-case
+input-quality failure for a calibration-free method.</p>
+<p><strong>The change (three ordered, independently-flagged sub-levers):</strong></p>
+<ul class="simple">
+<li><p><strong>(A) Fix data provenance first (root cause).</strong> Make the NIST ASD query in <code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code> request and parse the
+<code class="docutils literal notranslate"><span class="pre">acc</span></code> and <code class="docutils literal notranslate"><span class="pre">unc_Aki</span></code> columns per line and persist them verbatim; fall back to the rel-int heuristic <strong>only</strong> when NIST
+truly has no grade. This converts the existing grade-aware scoring and the legacy solver’s <code class="docutils literal notranslate"><span class="pre">aki_uncertainty_weighting</span></code>
+from fabricated to real, <strong>at zero solver-math risk</strong> (Ciucci 1999: per-line gf error ~1:1 into intercept).</p></li>
+<li><p><strong>(B) Add a hard grade threshold</strong> as a selection gate (none exists today). Add <code class="docutils literal notranslate"><span class="pre">max_atomic_uncertainty</span></code> / <code class="docutils literal notranslate"><span class="pre">min_grade</span></code>
+to <code class="docutils literal notranslate"><span class="pre">LineSelector</span></code> that — <strong>where ≥<code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code> grade-A/B lines with adequate E_k spread exist</strong> — restricts
+the Boltzmann/Saha quantitation fit to them and demotes C+/D/E lines to identification-only. Must be a graceful soft
+gate, never an unconditional cutoff (see risks).</p></li>
+<li><p><strong>(C) Add a curated completeness backend behind a flag.</strong> A Kurucz (and later VALD3) <code class="docutils literal notranslate"><span class="pre">AtomicDataSource</span></code>
+implementation, used <strong>only to fill gaps</strong> where NIST has no graded value, with explicit air↔vacuum normalization.
+<strong>A new Edlén/Ciddor converter MUST be added and applied at ingest</strong> so the line list, wavelength solution, and
+forward model share one convention (Ciucci/Tognoni). Kurucz/VALD lines carry a synthetic grade <code class="docutils literal notranslate"><span class="pre">U</span></code> (unknown) and are
+quantitation-eligible only when no NIST-graded alternative exists.</p></li>
+</ul>
+<p>Wire all of this into the <strong>legacy iterative path first</strong> (it already consumes <code class="docutils literal notranslate"><span class="pre">aki_uncertainty_weighting</span></code>); wire the
+fast GN only after the legacy path validates.</p>
+<p><strong>Benchmark-gate.</strong> Three independent flags.</p>
+<ul class="simple">
+<li><p><strong>Datasets:</strong> synthetic round-trip corpus (controlled ground truth, isolates the atomic-data term toward 0.171) +
+real ChemCam + SuperCam (<code class="docutils literal notranslate"><span class="pre">validate_real_data.py</span></code>).</p></li>
+<li><p><strong>Metric:</strong> composition RMSE (mass-fraction) primary; Aitchison/ILR distance secondary; report T/n_e drift to confirm
+no regression.</p></li>
+<li><p><strong>Accept:</strong> (A) regenerate DB; grade distribution sanity (real NIST grades must produce <strong>&gt;0 grade-A for Fe-group</strong>
+vs current 0) AND synthetic RMSE with real grades ≤ RMSE with heuristic grades. (B) flag <code class="docutils literal notranslate"><span class="pre">use_grade_threshold</span></code>
+(default off); accept iff real-data median RMSE improves on ≥3/5 spectra with no synthetic regression. (C) flag
+<code class="docutils literal notranslate"><span class="pre">atomic_source=kurucz</span></code> vs <code class="docutils literal notranslate"><span class="pre">nist</span></code>; accept on the already-measured target: <strong>SuperCam composition improves ~5–6 wt% vs
+NIST</strong> with T/n_e stable and no synthetic regression. All three must pass <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-m</span> <span class="pre">physics</span></code> + a new narrow
+air/vacuum-roundtrip unit test. Full suite via parent-backgrounded job, never inside a sub-agent.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="p1-lever-2-instrument-calibration-adr-0006-matrix-effects">
+<h3>P1 — Lever 2: Instrument Calibration (ADR-0006) &amp; Matrix Effects<a class="headerlink" href="#p1-lever-2-instrument-calibration-adr-0006-matrix-effects" title="Link to this heading"></a></h3>
+<p><strong>Second-largest error, currently UNMEASURED in-repo — the first deliverable is to measure it.</strong></p>
+<p><strong>What exists (verified):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code> / <code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code> (forward E(λ) multiply), <code class="docutils literal notranslate"><span class="pre">apply_response</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_instrument_function</span></code>
+(Gaussian LSF, <strong>single σ only</strong>) — <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectralResponseCorrection</span></code> (inversion-side divide by E(λ), coverage/extrapolation guards, uncertainty
+propagation) — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/response_correction.py</span></code>. <strong>Wired into legacy inversion</strong>
+(<code class="docutils literal notranslate"><span class="pre">pipeline.py:816–820</span></code>) and into jitpipe (<code class="docutils literal notranslate"><span class="pre">host.py</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">derive_response_from_argon_branching_ratios</span></code> — <code class="docutils literal notranslate"><span class="pre">response_correction.py:363</span></code>. <strong>DEAD stub</strong> (raises
+<code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis</span></code> (segmented RANSAC+BIC + CCD seam detection) — <code class="docutils literal notranslate"><span class="pre">preprocess/wavelength_calibration.py</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MatrixEffectCorrector</span></code> / <code class="docutils literal notranslate"><span class="pre">InternalStandardizer</span></code> / <code class="docutils literal notranslate"><span class="pre">CorrectionFactorDB</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/matrix_effects.py</span></code>.
+<strong>DEAD CODE:</strong> exported + one isolated test, <strong>zero pipeline/solve/benchmark callers</strong>, generic uncalibrated <code class="docutils literal notranslate"><span class="pre">n_s</span></code>
+factors.</p></li>
+<li><p>Chebyshev baseline + resolving-power nuisance in <code class="docutils literal notranslate"><span class="pre">bayesian/</span></code> — <strong>additive</strong> baseline, <strong>NOT</strong> a multiplicative E(λ)
+fit.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> object + builders (ADR-0006) — <strong>MISSING</strong> (verified: <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/calibration.py</span></code> does
+not exist).</p></li>
+</ul>
+<p><strong>The gap.</strong> No isolation experiment quantifying the E(λ) contribution; <strong>no response-curve data files in <code class="docutils literal notranslate"><span class="pre">data/</span></code></strong> (so
+every real-data benchmark is genuinely Mode-C); the argon branching-ratio derivation is a stub; no measured/variable
+LSF (only fixed-FWHM/resolving-power — instrument width can be over-attributed to Stark n_e, the n_e-rails failure);
+matrix correction is dead code with uncalibrated factors; no calibration-mode column on the scoreboard.</p>
+<p><strong>The change (measurement-first; do NOT start with the full ADR-0006 object):</strong></p>
+<ol class="arabic simple">
+<li><p><strong>MEASUREMENT FIRST.</strong> Derive an E(λ) — finish <code class="docutils literal notranslate"><span class="pre">derive_response_from_argon_branching_ratios</span></code> (argon
+branching-ratio method, J. Anal. At. Spectrom. 29 (2014) 657-664 + Whaling 1993 tables) <strong>or</strong> inject a known E(λ)
+on the synthetic corpus — and report composition RMSE with <code class="docutils literal notranslate"><span class="pre">response_curve</span></code> OFF vs ON through the <strong>legacy</strong>
+pipeline. This quantifies the lever and <em>is</em> the gate.</p></li>
+<li><p><strong>Provide/derive curves for non-vendor lab datasets</strong>; label vendor-corrected ChemCam/SuperCam as <strong>Mode B</strong> and
+<strong>do not double-correct</strong> (the hook correctly defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code> for CCS — preserve and test that guard).</p></li>
+<li><p><strong>Add a measured LSF path</strong> (Voigt / σ(λ) fit from isolated lamp/self lines) so width is not over-attributed to
+Stark n_e.</p></li>
+<li><p><strong>Resolve matrix_effects.py:</strong> wire <code class="docutils literal notranslate"><span class="pre">InternalStandardizer</span></code> as a <em>gated</em> post-step for closure-breaking matrices,
+backed by <strong>matrix-matched</strong> factors — or mark it explicitly non-default/experimental. Generic <code class="docutils literal notranslate"><span class="pre">n_s</span></code> factors must
+not ship as a default.</p></li>
+<li><p><strong>Defer</strong> the full <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> object and the Mode-C multiplicative E(λ) self-fit until (1)–(2) prove
+the lever’s size. Mode-C smoothing, if built, is explicit Chebyshev/spline/Savitzky-Golay — <strong>never <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code></strong> — and
+carries a loud non-quantitative flag (ADR-0006 D3).</p></li>
+</ol>
+<p><strong>Benchmark-gate.</strong></p>
+<ul class="simple">
+<li><p><strong>Flag:</strong> <code class="docutils literal notranslate"><span class="pre">response_curve</span></code> (existing pipeline knob) — OFF (<code class="docutils literal notranslate"><span class="pre">None</span></code>) vs ON (derived/measured E(λ)).</p></li>
+<li><p><strong>Datasets:</strong> (a) synthetic corpus with a <strong>known injected E(λ)</strong> (exact RMSE) as the primary gate; (b) in-house lab
+sets lacking vendor correction (<code class="docutils literal notranslate"><span class="pre">nist_steel</span></code>, <code class="docutils literal notranslate"><span class="pre">silva2022_tropical_soils</span></code>, <code class="docutils literal notranslate"><span class="pre">nist_srm_612</span></code>) for confirmation. Solver:
+legacy <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code>, geological preset, <code class="docutils literal notranslate"><span class="pre">stark_ne=True</span></code>.</p></li>
+<li><p><strong>Metric:</strong> composition RMSE (mass-frac) + Aitchison/ILR; also report fitted-T shift (slope-rotation check).</p></li>
+<li><p><strong>Accept:</strong> flag-ON must reduce RMSE on the synthetic-known-E(λ) set by a pre-registered margin (≥10% relative, no
+regression on any dataset) AND must <strong>not</strong> increase RMSE on vendor-corrected ChemCam/SuperCam (which stay Mode-B,
+response OFF — double-correction guard). Add a <strong>calibration-mode column</strong> to the real-data scoreboard and enforce
+ADR-0006 D3: <strong>Mode-C results are non-quantitative and cannot flip a default.</strong></p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="p1-lever-5-stark-broadening-electron-density-diagnostics">
+<h3>P1 — Lever 5: Stark Broadening &amp; Electron-Density Diagnostics<a class="headerlink" href="#p1-lever-5-stark-broadening-electron-density-diagnostics" title="Link to this heading"></a></h3>
+<p><strong>Headline gain (pin/seed n_e) already BANKED — this lever is incremental coverage + bias-correction. Correctly P1,
+not P0.</strong></p>
+<p><strong>What exists (verified):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">measure_stark_ne</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/stark_ne.py</span></code>. Literature-grade (<code class="docutils literal notranslate"><span class="pre">stark_b</span></code>) gating, pinned-Gaussian
+Voigt fit, instrument-FWHM ladder, Doppler removal, multiplet-blend DB gate, resonance down-rank, median+1.4826·MAD
+combine. <code class="docutils literal notranslate"><span class="pre">LITERATURE_STARK_SOURCES</span> <span class="pre">=</span> <span class="pre">(&quot;stark_b&quot;,)</span></code> (verified).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">estimate_ne_from_stark</span></code> / <code class="docutils literal notranslate"><span class="pre">stark_width</span></code> / <code class="docutils literal notranslate"><span class="pre">stark_hwhm</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/stark.py</span></code> (single source of truth for the
+width law; A4-CONV-2 20× over-broadening bug documented as fixed).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_update_ne_python</span></code> / <code class="docutils literal notranslate"><span class="pre">_estimate_ne_from_stark_multi</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> (legacy solver consumes
+Stark as <strong>primary</strong> per-iteration n_e, 50/50 damped; pressure-balance only as warned fallback).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">measure_stark_ne_jit</span></code> (J6 on-device port) — <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/stark.py</span></code> (parity-tested).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">solve_python</span></code> n_e pin — <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/solve.py</span></code> (fast GN <strong>pins</strong> n_e = <code class="docutils literal notranslate"><span class="pre">ne_stark_cm3</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stark_ne=True</span></code> in geological/default presets (verified <code class="docutils literal notranslate"><span class="pre">pipeline.py:63</span></code>).</p></li>
+</ul>
+<p><strong>The gap (binding).</strong> <strong>Only 244/28,727 DB lines (0.85%) carry <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> provenance</strong> (the rest:
+<code class="docutils literal notranslate"><span class="pre">konjevic_lambda_sq_scaled</span></code> 22,951, <code class="docutils literal notranslate"><span class="pre">interpolated</span></code> 4,574, <code class="docutils literal notranslate"><span class="pre">hydrogenic</span></code> 562). On many real spectra 0–2 <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> lines
+survive the SNR/isolation/resonance gates ⇒ diagnostic returns <code class="docutils literal notranslate"><span class="pre">usable==False</span></code> ⇒ solver silently falls back to the
+<strong>physically-invalid 1-atm pressure balance</strong> (the exact F2 failure the lever was built to remove). Secondary: H-α
+stored as <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> α=0.2 under the <strong>linear-in-n_e</strong> convention, but Balmer widths genuinely scale <strong>~n_e^0.7</strong>
+(Gigosos 2014) — inverting H-α with n_e ∝ w^1.0 biases n_e. Tertiary: no in-solve Stark-vs-Saha n_e self-consistency
+flag.</p>
+<p><strong>The change.</strong></p>
+<ul class="simple">
+<li><p><strong>PRIMARY:</strong> expand literature-grade Stark-width coverage. Promote <code class="docutils literal notranslate"><span class="pre">scripts/archive/migrations/ingest_stark_b.py</span></code> to
+a maintained data step; ingest critically-evaluated widths (Konjevic 2002 + STARK-B / Sahal-Bréchot) for the
+canonical LIBS diagnostics across the full 240–850 nm SuperCam/ChemCam window, tagged <code class="docutils literal notranslate"><span class="pre">stark_w_source='stark_b'</span></code>.
+Each conversion of a silent pressure-balance fallback into a Stark-pinned solve <strong>is</strong> the measured ~2× legacy-vs-GN
+delta. <strong>Do NOT relax the gate</strong> to admit <code class="docutils literal notranslate"><span class="pre">konjevic_lambda_sq_scaled</span></code> for <em>measurement</em> — widen the trusted set by
+improving the data, not the gate.</p></li>
+<li><p><strong>SECONDARY:</strong> implement the H-α n_e^0.7 exponent (per-line Balmer flag in the inverse path, mirrored in the forward
+path to preserve round-trip symmetry).</p></li>
+<li><p><strong>TERTIARY (reliability):</strong> add an in-solve Stark-vs-Saha n_e self-consistency QC flag (set
+<code class="docutils literal notranslate"><span class="pre">quality_metrics['stark_saha_inconsistent']=1.0</span></code> when they diverge by &gt;0.3 dex). <strong>Report-only</strong> — never wire it back
+into the loop (that risks the n_e-rails instability).</p></li>
+</ul>
+<p><strong>Benchmark-gate.</strong></p>
+<ul class="simple">
+<li><p><strong>Flag:</strong> <code class="docutils literal notranslate"><span class="pre">--stark-coverage</span> <span class="pre">{legacy,</span> <span class="pre">expanded}</span></code> (legacy = current 244-line DB; expanded = newly-ingested set).
+Separate <code class="docutils literal notranslate"><span class="pre">--halpha-exponent</span> <span class="pre">{linear,</span> <span class="pre">balmer}</span></code>. Stark-Saha flag is report-only.</p></li>
+<li><p><strong>Datasets:</strong> real ChemCam + SuperCam (where legacy scores 0.076 vs GN 0.151) + synthetic round-trip corpus
+(controlled n_e ground truth).</p></li>
+<li><p><strong>Metric:</strong> (1) composition RMSE; (2) fraction of spectra where <code class="docutils literal notranslate"><span class="pre">ne_from_stark==True</span></code> (firing rate — the mechanism);
+(3) synthetic |n_e − n_e_true|/n_e_true (target 10–20%, down from ~30%).</p></li>
+<li><p><strong>Accept:</strong> expanded coverage must (a) strictly increase the firing rate, (b) <strong>not regress composition RMSE on any
+dataset</strong>, and (c) improve median composition RMSE on ≥1 real dataset OR improve synthetic n_e RMSE by ≥5 percentage
+points. H-α exponent: accept iff synthetic n_e RMSE improves with no composition regression. Stark-Saha flag: must
+fire (true-positive) on known-non-LTE spectra and stay silent on clean round-trips, <strong>zero change to T/n_e/composition
+outputs</strong>. Every ingested width must pass <code class="docutils literal notranslate"><span class="pre">tests/test_stark_provenance.py</span></code> published-value anchors (the A4-CONV-2 20×
+history is the cautionary tale).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="p1-lever-6-lte-validity-plasma-homogeneity-multi-zone-reliability">
+<h3>P1 — Lever 6: LTE Validity, Plasma Homogeneity &amp; Multi-Zone Reliability<a class="headerlink" href="#p1-lever-6-lte-validity-plasma-homogeneity-multi-zone-reliability" title="Link to this heading"></a></h3>
+<p><strong>Small share of current RMSE; owns the reliability/trust surface, which is presently un-enforced. Cheapest to wire —
+the physics code already exists.</strong></p>
+<p><strong>What exists (verified):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LTEValidator</span></code> (<code class="docutils literal notranslate"><span class="pre">check_mcwhirter</span></code>, <code class="docutils literal notranslate"><span class="pre">check_temporal</span></code>, <code class="docutils literal notranslate"><span class="pre">validate</span></code>) — <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/lte_validator.py</span></code>. McWhirter wired
+into the solver; <strong>temporal defaults OFF, never enabled in production</strong>; δE uses <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> not the resonance gap
+(under-estimates required n_e ⇒ lets non-LTE plasmas pass).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver._assemble_quality_metrics</span></code> LTE block (<code class="docutils literal notranslate"><span class="pre">iterative.py:2005–2044</span></code>) — merges
+<code class="docutils literal notranslate"><span class="pre">lte_mcwhirter_satisfied</span></code> / <code class="docutils literal notranslate"><span class="pre">lte_n_e_ratio</span></code> into the result; <strong>necessary condition only</strong>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QualityAssessor.assess</span></code> / <code class="docutils literal notranslate"><span class="pre">QualityMetrics</span></code> / <code class="docutils literal notranslate"><span class="pre">_determine_quality_flag</span></code>
+(excellent/good/acceptable/poor/reject) — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/quality.py</span></code>. <strong>DEAD IN PRODUCTION:</strong> the full
+Cristoforetti necessary-not-sufficient gate (Saha-Boltzmann consistency, inter-element T scatter, closure thresholds)
+has <strong>zero call sites</strong> outside tests.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">physical_consistency</span></code> (McWhirter floor + multi-T LTE consistency) — <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/physical_consistency.py</span></code>.
+Wired as a corpus-level benchmark gate; but <code class="docutils literal notranslate"><span class="pre">check_lte_consistency</span></code> is effectively always N/A (solver emits a single
+T).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TwoZoneMCMCSampler</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/two_zone.py</span></code>. Exists, <strong>unwired</strong>, self-absorption-scoped,
+not an LTE/gradient fallback.</p></li>
+<li><p>CLI quality surfacing (<code class="docutils literal notranslate"><span class="pre">cli/main.py:282–296</span></code>) — McWhirter failure is a <strong>soft warning only</strong>; the “RESULT UNRELIABLE”
+decision (line 294) keys <strong>only</strong> on converged/boltzmann_degenerate/closure_degenerate — <strong>LTE failure does not mark
+a result unreliable.</strong></p></li>
+</ul>
+<p><strong>The gap.</strong> No refuse-to-report default; the Cristoforetti multi-check is dead; the solver emits a single excitation
+temperature (multi-T LTE consistency permanently N/A); McWhirter δE under-estimates the floor; no automatic multi-zone
+fallback.</p>
+<p><strong>The change (two phases).</strong></p>
+<ul class="simple">
+<li><p><strong>PHASE 1 (P1, cheap — wire existing dead code into a refuse-to-report default):</strong> (a) call <code class="docutils literal notranslate"><span class="pre">QualityAssessor.assess</span></code>
+inside <code class="docutils literal notranslate"><span class="pre">_assemble_quality_metrics</span></code> and merge <code class="docutils literal notranslate"><span class="pre">quality_flag</span></code> + <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_consistency</span></code> +
+<code class="docutils literal notranslate"><span class="pre">inter_element_t_std_frac</span></code>; (b) fix the McWhirter δE to use the true resonance ground→first-excited gap (from
+<code class="docutils literal notranslate"><span class="pre">energy_levels</span></code>) instead of <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code>; (c) add an <code class="docutils literal notranslate"><span class="pre">overall_reliable</span></code> boolean to <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> ({McWhirter satisfied
+AND quality_flag ∈ (excellent, good, acceptable)}) and add it to the CLI “RESULT UNRELIABLE” gate so the CLI refuses
+to present a confident composition below acceptable; (d) optionally enable <code class="docutils literal notranslate"><span class="pre">check_temporal</span></code> when a gate-delay/lifetime
+is known.</p></li>
+<li><p><strong>PHASE 2 (P3, prove-before-trust):</strong> wire <code class="docutils literal notranslate"><span class="pre">TwoZoneMCMCSampler</span></code> as an <strong>opt-in</strong> fallback triggered only when Phase-1
+flags inhomogeneity, and benchmark whether two-zone beats biased single-zone on the flagged subset. <strong>Do NOT make
+two-zone a default</strong> (it adds identifiability problems — n_e is already unidentifiable from a flat prior).</p></li>
+</ul>
+<p>Host all Phase-1 gates in the legacy iterative solver (the 2×-more-accurate path with the richest <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code>).</p>
+<p><strong>Benchmark-gate.</strong></p>
+<ul class="simple">
+<li><p><strong>Flag:</strong> <code class="docutils literal notranslate"><span class="pre">CFLIBS_REFUSE_TO_REPORT</span></code> (default OFF for the gate run). Each sub-change (assess-wiring, δE fix, CLI gate)
+ships behind its own toggle and is benched independently.</p></li>
+<li><p><strong>Datasets:</strong> real ChemCam + SuperCam (the 5 spectra) + synthetic corpus (<code class="docutils literal notranslate"><span class="pre">output/synthetic_corpus</span></code>, ground-truth
+T/n_e to label known-LTE vs known-non-LTE).</p></li>
+<li><p><strong>Metric:</strong> (i) fraction of spectra at each quality_flag; (ii) composition RMSE flag-OFF (report-everything) vs
+flag-ON (conditioned on quality_flag ≥ acceptable, refused excluded); (iii) synthetic confusion — does the gate flag
+spectra whose injected n_e is below the resonance-gap McWhirter floor?</p></li>
+<li><p><strong>Accept:</strong> flag-ON conditional RMSE on the passing subset ≤ flag-OFF unconditional RMSE; <strong>zero false-reject on
+known-good synthetic LTE spectra</strong>; gate <strong>must</strong> flag the SuperCam 20–26 wt% outliers if they trip ≥2
+physical-consistency checks. The δE fix is separately gated: re-run the corpus and confirm the n_e-required floor
+rises (more spectra correctly flagged) <strong>without changing any composition value</strong> (the fix touches only the flag).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="p2-lever-4-self-absorption">
+<h3>P2 — Lever 4: Self-Absorption<a class="headerlink" href="#p2-lever-4-self-absorption" title="Link to this heading"></a></h3>
+<p><strong>Moderate, conditional, and never benchmark-gated in-repo. Do NOT add new physics first — PROVE the existing
+observable corrector, then wire it into the preset only if it wins.</strong></p>
+<p><strong>What exists (verified):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ObservableSelfAbsorptionCorrector</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/self_absorption_observable.py</span></code>
+(<strong>production path</strong>; the composition-fed corrector was deliberately deleted per bead 0jvr).</p></li>
+<li><p>Planck-ceiling path (<code class="docutils literal notranslate"><span class="pre">correct_intensity_planck</span></code>, Voelker &amp; Gornushkin 2023) — present but <strong>inert on uncalibrated
+data</strong> (needs absolute peak radiance).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">correct_via_doublet_ratio</span></code> / <code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> (Pace 2025) — <code class="docutils literal notranslate"><span class="pre">self_absorption.py</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CurveOfGrowthAnalyzer</span></code> / <code class="docutils literal notranslate"><span class="pre">estimate_optical_depth_from_intensity_ratio</span></code> — <code class="docutils literal notranslate"><span class="pre">self_absorption.py</span></code>
+(<strong>diagnostic-only</strong>; composition-fed <code class="docutils literal notranslate"><span class="pre">.correct()</span></code> deleted).</p></li>
+<li><p>Legacy solver SA wiring (<code class="docutils literal notranslate"><span class="pre">iterative.py:1573–1576</span></code>) — corrector applied <strong>once before</strong> the Boltzmann fit
+(correct placement: upstream, observable-gated, <strong>not</strong> inside the fast GN).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--apply-self-absorption</span></code> CLI flag (<code class="docutils literal notranslate"><span class="pre">cli/main.py:968</span></code>).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">ANALYSIS_PRESETS['geological']</span></code> has SA OFF</strong> (verified: <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code> default-off in every preset incl.
+the measured-best geological).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">score_spectrum(config_overrides=...)</span></code> / <code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code> — gate harness ready.</p></li>
+</ul>
+<p><strong>The gap.</strong> <strong>Benchmark gate never run</strong> — zero SA references in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code>. A wired, audited,
+deleted-feedback-loop-replacement corrector that production never invokes. No C-σ graph (Aguilera-Aragon 2014) / CD-SB
+joint solver. No El Sherbini 2005 Stark-width-ratio τ path (the highest-yield missing observable, since doublet pairs
+are rare on real detected lists). No IRSAC internal-reference path. The scoreboard does not report whether SA actually
+fired (null-effect vs no-pairs indistinguishable).</p>
+<p><strong>The change (sequence — prove, then wire, then add the one high-yield observable):</strong></p>
+<ol class="arabic simple">
+<li><p>Add an <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code> override to <code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code> (<code class="docutils literal notranslate"><span class="pre">config_overrides={'apply_self_absorption':'observable'}</span></code>
+reaches <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code>); run the existing real ChemCam/SuperCam datasets flag-off vs flag-on, <strong>reporting
+n_corrected/n_suspect/max_tau per spectrum</strong> so null-effect is visible.</p></li>
+<li><p><strong>If and only if</strong> flag-on improves the optically-thick spectra (esp. the Al 877 case) <strong>without regressing the thin
+majority</strong>, add <code class="docutils literal notranslate"><span class="pre">'apply_self_absorption':'observable'</span></code> to <code class="docutils literal notranslate"><span class="pre">ANALYSIS_PRESETS['geological']</span></code> and <code class="docutils literal notranslate"><span class="pre">'metallic'</span></code>.</p></li>
+<li><p><strong>Then</strong> add the El Sherbini 2005 Stark-width-ratio τ path inside <code class="docutils literal notranslate"><span class="pre">ObservableSelfAbsorptionCorrector</span></code> (the DB already
+exposes Stark widths via <code class="docutils literal notranslate"><span class="pre">stark_ne</span></code>) — it supplies per-line τ <strong>without</strong> needing a doublet pair. Keep it
+observable-gated (τ from measured/Stark width ratio, <strong>never</strong> from composition); mask τ&gt;3.</p></li>
+<li><p><strong>DEFER</strong> the C-σ / CD-SB joint solver to a separate bead (large new physics surface; the directive says perfect the
+legacy path first). Keep <strong>all</strong> SA upstream in the legacy path and <strong>out of the fast GN</strong> (modeling SA inside the GN
+rails n_e).</p></li>
+</ol>
+<p><strong>Benchmark-gate.</strong></p>
+<ul class="simple">
+<li><p><strong>Flag:</strong> <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code> (<code class="docutils literal notranslate"><span class="pre">off</span></code> baseline vs <code class="docutils literal notranslate"><span class="pre">observable</span></code>), threaded
+<code class="docutils literal notranslate"><span class="pre">run_scoreboard</span> <span class="pre">→</span> <span class="pre">score_spectrum(config_overrides)</span> <span class="pre">→</span> <span class="pre">build_pipeline_config</span></code>.</p></li>
+<li><p><strong>Datasets:</strong> real ChemCam + SuperCam (geological preset, <code class="docutils literal notranslate"><span class="pre">stark_ne=True</span></code>, <code class="docutils literal notranslate"><span class="pre">pipeline_impl='reference'</span></code> — SA lives in
+the legacy path, <strong>not</strong> jit) <strong>plus</strong> a synthetic optically-thick positive control (attenuate a known doublet by
+physical escape factors, per <code class="docutils literal notranslate"><span class="pre">test_self_absorption_wiring.py</span></code>).</p></li>
+<li><p><strong>Metric:</strong> median per-spectrum composition RMSE (wt%); secondary per-spectrum n_corrected/n_suspect/max_tau and
+signed per-element error on the optically-thick majors (Ca/Na/Al/Fe).</p></li>
+<li><p><strong>Accept (ALL required):</strong> (a) synthetic positive control RMSE strictly decreases flag-on; (b) median real-data RMSE
+does <strong>not</strong> increase (non-regression on the thin majority is mandatory — 3 prior regressions); (c) on SA-heavy
+spectra where n_corrected&gt;0 (e.g. Al 877), RMSE decreases or the resonance-intercept bias shrinks; (d) mode <code class="docutils literal notranslate"><span class="pre">off</span></code>
+remains bit-identical to default. Only flip the preset default after (a)–(d) pass.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="p2-lever-6-7-uncertainty-calibration-precision-reporting">
+<h3>P2 — Lever 6/7: Uncertainty Calibration &amp; Precision Reporting<a class="headerlink" href="#p2-lever-6-7-uncertainty-calibration-precision-reporting" title="Link to this heading"></a></h3>
+<p><strong>~0% of the point-estimate gap; ~100% of the trustworthiness gap. The engine is strong — close the three reporting
+gaps. Strictly a reliability lever; never sold as an RMSE reducer.</strong></p>
+<p><strong>What exists (verified):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">MonteCarloUQ</span></code> / <code class="docutils literal notranslate"><span class="pre">run_monte_carlo_uq</span></code> / <code class="docutils literal notranslate"><span class="pre">MonteCarloResult</span></code> — <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/uncertainty.py</span></code>. Full-pipeline
+re-run with SPECTRAL_NOISE/ATOMIC_DATA/<strong>COMBINED</strong> perturbation (COMBINED is default, includes A_ki); Gaussian +
+Poisson noise; T/n_e/conc means+std+CI_68+CI_95; <code class="docutils literal notranslate"><span class="pre">correlation_matrix</span></code>; <code class="docutils literal notranslate"><span class="pre">compare_with_bayesian</span></code>.</p></li>
+<li><p>Analytical path: <code class="docutils literal notranslate"><span class="pre">create_boltzmann_uncertainties</span></code> / <code class="docutils literal notranslate"><span class="pre">propagate_through_closure_*</span></code> (correlation-aware via the
+<code class="docutils literal notranslate"><span class="pre">uncertainties</span></code> package; correlated_values from the 2×2 Boltzmann covariance).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver.solve_with_uncertainty</span></code> — analytical UQ for the legacy solver. <strong>CIs only populated by
+<code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code></strong>; plain <code class="docutils literal notranslate"><span class="pre">solve()</span></code> / fallbacks set them to 0.0/{}/None.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AtomicDataUncertainty</span></code> (NIST grades → fractional A_ki uncertainty) — used by MC ATOMIC_DATA/COMBINED.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PosteriorDiagnostics</span></code> (coverage_95, coverage_in_band band <strong>[0.93, 0.97]</strong> — verified, PIT, sharpness, PSIS-LOO,
+R-hat, ESS) — <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/posterior_metrics.py</span></code>. <strong>BAYESIAN-ONLY</strong> (invoked via
+<code class="docutils literal notranslate"><span class="pre">_maybe_compute_posterior_diagnostics</span></code>). <strong>Not applied to classical/MC CIs.</strong></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QualityMetrics._determine_quality_flag</span></code> — derives the flag <strong>only</strong> from
+r_squared/saha_consistency/t_std_frac/closure_residual. <strong>Completely decoupled from uncertainty/CI width</strong> ⇒ a weak
+emitter with a huge CI can be flagged “good”.</p></li>
+</ul>
+<p><strong>The gap.</strong> No coverage/calibration check for the <strong>classical</strong> path — analytical and MC CIs are never validated
+against synthetic-corpus truth; given the ~0.20 weak-emitter floor, the analytical Gaussian CIs almost certainly
+<strong>under-cover</strong> for Na/K/Si (overconfident-and-wrong — the worst failure mode). The budget is incomplete: A_ki enters
+analytically only as a per-line weight (no correlated σ_gf systematic), and self-absorption uncertainty propagates in
+neither path.</p>
+<p><strong>The change (do NOT add new estimators):</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Couple uncertainty to the reliability flag:</strong> extend <code class="docutils literal notranslate"><span class="pre">_determine_quality_flag</span></code> with an uncertainty-aware tier that
+<strong>downgrades</strong> quality_flag to poor/reject when an element’s relative concentration uncertainty exceeds a threshold
+(&gt;50% → poor, &gt;100% → reject). Add per-element reliability flags to <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code>. (Thresholds tuned on the
+synthetic corpus, not guessed — gate on the confusion metric.)</p></li>
+<li><p><strong>Extend the coverage gate to the classical path:</strong> reuse <code class="docutils literal notranslate"><span class="pre">posterior_metrics._coverage_per_param</span></code> /
+<code class="docutils literal notranslate"><span class="pre">_coverage_verdict</span></code> (band [0.93, 0.97]) to compute empirical 95%-CI coverage of <code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code> +
+<code class="docutils literal notranslate"><span class="pre">MonteCarloUQ</span></code> outputs against synthetic-corpus truth.</p></li>
+<li><p><strong>Complete the budget:</strong> make the COMBINED/atomic-data term the documented default for the analytical path (add a
+correlated σ_gf systematic per element via <code class="docutils literal notranslate"><span class="pre">AtomicDataUncertainty.from_transitions</span></code>), and propagate a
+self-absorption uncertainty term <strong>by perturbing the SA correction factor in <code class="docutils literal notranslate"><span class="pre">MonteCarloUQ</span></code></strong> (outer-loop re-runs of
+the legacy solver) — <strong>never inside the fast GN</strong> (rails n_e).</p></li>
+</ol>
+<p>Prefer the legacy solver’s <code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code> (2× more accurate; defensible CIs matter most there).</p>
+<p><strong>Benchmark-gate.</strong></p>
+<ul class="simple">
+<li><p><strong>Flag:</strong> <code class="docutils literal notranslate"><span class="pre">--uq-coverage-gate</span></code> (off) + <code class="docutils literal notranslate"><span class="pre">reliability_from_uncertainty</span></code>, <code class="docutils literal notranslate"><span class="pre">analytical_atomic_uncertainty</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sa_uncertainty_mc</span></code> (all default off).</p></li>
+<li><p><strong>Datasets:</strong> synthetic ID/composition corpus (known truth ⇒ coverage computable) + controlled round-trip golden
+spectra (<code class="docutils literal notranslate"><span class="pre">cflibs/validation</span></code> <code class="docutils literal notranslate"><span class="pre">GoldenSpectrum</span></code>).</p></li>
+<li><p><strong>Metric:</strong> (a) empirical 95%-CI coverage_95 of classical CIs vs truth; (b) sharpness (mean CI width, CLR space);
+(c) weak-emitter reliability-flag confusion (does Na/K/Si get downgraded when its CI misses truth?); (d) composition
+RMSE on the scoreboard.</p></li>
+<li><p><strong>Accept:</strong> flag-off == flag-on RMSE <strong>bit-for-bit on the point estimate</strong> (proves no accuracy regression); flag-on
+coverage_95 moves toward/into [0.93, 0.97]; weak emitters that miss truth now carry CIs that bracket truth OR a
+downgraded reliability flag (no silent overconfidence). Watch for the σ_gf systematic pushing coverage to
+<em>over</em>-cover (&gt;0.97) — the bidirectional band catches this; balance σ_gf against the existing per-line weighting to
+avoid double-counting A_ki.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="per-matrix-sota-accuracy-targets">
+<h2>5. Per-Matrix SOTA Accuracy Targets<a class="headerlink" href="#per-matrix-sota-accuracy-targets" title="Link to this heading"></a></h2>
+<p>Literature-best CF-LIBS accuracy by matrix class, and the target this program should hit. Targets are set at or
+slightly above the literature SOTA for well-calibrated, optically-thin, LTE conditions; <strong>honest caveat:</strong> these are
+reachable only <strong>after</strong> Levers 1–2 land (atomic data + calibration are the binding inputs). Today’s measured numbers
+are listed for contrast.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Matrix class</p></th>
+<th class="head"><p>Literature-best CF-LIBS accuracy</p></th>
+<th class="head"><p>Citation</p></th>
+<th class="head"><p>This program’s target</p></th>
+<th class="head"><p>Today (v4 measured)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Alloys / steel</strong> (optically-thin, well-characterized)</p></td>
+<td><p><strong>~1–3 wt% relative for majors</strong> under well-calibrated, optically-thin, LTE conditions</p></td>
+<td><p>Tognoni 2010 (10.1016/J.SAB.2009.11.006); Aguilera &amp; Aragón C-σ for optically-thick steel (10.1016/J.JQSRT.2014.07.026); Hou 2019 blackbody-ref on stainless (10.1016/j.aca.2019.01.016, ~27%→~2% class)</p></td>
+<td><p><strong>≤3 wt% majors</strong> (Mode-A/B calibrated, grade-A/B line list); SA-corrected for thick lines</p></td>
+<td><p>In-house lab steel is Mode-C uncalibrated; E(λ) fully uncontrolled (calibration_matrix lever)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Geology / soils / SRM glass</strong> (Fe-group-rich, matrix effects)</p></td>
+<td><p><strong>~1–3 wt% norm</strong> for majors when matrix-matched / internally standardized; <strong>10s of % shifts</strong> when matrix effects uncorrected</p></td>
+<td><p>Tognoni 2010; Hahn &amp; Omenetto 2012 (10.1366/11-06574, matrix effects dominant limiter); Cremers &amp; Radziemski 2013 (10.1002/9781118567371)</p></td>
+<td><p><strong>≤5 wt% majors</strong> initially (gated on Lever 1 Fe-group grade-A coverage via Wood 2014 V II / Lawler 2013 Ti I), tightening toward <strong>3 wt%</strong> with matrix-matched internal standardization</p></td>
+<td><p>ChemCam <strong>0.12–0.17 mass-frac</strong>; legacy median <strong>0.076</strong> (the 2×-better path)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Planetary</strong> (ChemCam/SuperCam, Mode-B vendor radiance-corrected)</p></td>
+<td><p>Calibration-library / matrix-aware quantitation; instrument response handled upstream</p></td>
+<td><p>Wan et al. 2025 (10.3847/1538-4357/ae14ef, Zhurong Mars-rover library); Tognoni 2010</p></td>
+<td><p><strong>&lt;10 wt% near-term, target ≤5 wt%</strong> for line-rich SuperCam after Kurucz completeness (measured −5/−6 wt% gain) + Stark coverage; residual is atomic-data + weak-emitter + matrix-ablation (E(λ) is Mode-B-handled)</p></td>
+<td><p>SuperCam <strong>20–26 wt%</strong> (Mode-C uncalibrated, 4–10× over norm); <strong>Kurucz −5/−6 wt% vs NIST</strong> measured</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Caveat on weak emitters (all matrices).</strong> Na/K/Si at ~10⁶ dynamic range floor at <strong>RMSE ≈0.20</strong> by ill-posedness
+(v4 measured). For these the target is <strong>not</strong> a tight RMSE but <strong>calibrated coverage</strong> (Lever 6/7): the reported CI
+must bracket truth ~95% of the time, and the per-element reliability flag must downgrade when ill-posed. Tognoni 2007
+establishes this floor is intrinsic to CF-LIBS precision even for an ideal plasma.</p>
+</section>
+<hr class="docutils" />
+<section id="reliability-precision-making-results-absolutely-reliable">
+<h2>6. Reliability &amp; Precision — Making Results “Absolutely Reliable”<a class="headerlink" href="#reliability-precision-making-results-absolutely-reliable" title="Link to this heading"></a></h2>
+<p>Accuracy of the mean is necessary but not sufficient; a scientific result is reliable only when it is <strong>honest about
+its own uncertainty</strong> and <strong>refuses to report</strong> when its assumptions are violated. This combines Levers 6 and 7 into one
+discipline.</p>
+<p><strong>(A) Refuse-to-report gates (LTE validity).</strong></p>
+<ul class="simple">
+<li><p><strong>McWhirter as a necessary condition</strong> with the corrected δE (true resonance ground→first-excited gap, not
+<code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code>), surfaced in <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code> (Cristoforetti 2010: necessary, <strong>not sufficient</strong>).</p></li>
+<li><p><strong>Cristoforetti multi-check</strong> (currently dead <code class="docutils literal notranslate"><span class="pre">QualityAssessor.assess</span></code>) wired into the production solver:
+Saha-Boltzmann T consistency, inter-element T scatter, closure residual → <code class="docutils literal notranslate"><span class="pre">quality_flag</span></code>
+∈ {excellent, good, acceptable, poor, reject}.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">overall_reliable</span></code></strong> boolean on <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> ({McWhirter satisfied AND quality_flag ≥ acceptable}), wired into the
+CLI “RESULT UNRELIABLE” gate. Below <code class="docutils literal notranslate"><span class="pre">acceptable</span></code>, <strong>the pipeline refuses to present a confident composition.</strong></p></li>
+<li><p>Quality-flag thresholds (repo <code class="docutils literal notranslate"><span class="pre">quality.py</span></code>, Cristoforetti-grounded): Boltzmann R² &gt;0.95 excellent / &gt;0.80 acceptable;
+Saha-Boltzmann consistency &lt;0.10 / &lt;0.30; inter-element T std/mean &lt;0.05 / &lt;0.15; closure residual &lt;0.01 / &lt;0.10.</p></li>
+</ul>
+<p><strong>(B) Calibrated per-element uncertainty.</strong></p>
+<ul class="simple">
+<li><p>Report <strong>both</strong> analytical (correlation-aware via the <code class="docutils literal notranslate"><span class="pre">uncertainties</span></code> package — essential because Boltzmann slope (T)
+and intercept (composition) are correlated from the same regression) <strong>and</strong> Monte-Carlo (<code class="docutils literal notranslate"><span class="pre">MonteCarloUQ</span></code>,
+perturbation-by-noise, Anderson 2025 methodology) uncertainties.</p></li>
+<li><p><strong>Coverage validation</strong> of the classical path against synthetic truth, gated into the repo’s own <strong>[0.93, 0.97]</strong>
+band (the protocol band already used for Bayesian).</p></li>
+<li><p><strong>Full budget</strong> (Tognoni 2007 / Safi 2019): spectral-noise + correlated σ_gf atomic-data + T + n_e + self-absorption
+terms. Weak-emitter CIs must <strong>widen</strong> to reflect the ~0.20 ill-posedness floor — large honest CIs, never tight wrong
+ones.</p></li>
+</ul>
+<p><strong>(C) Couple uncertainty to the reliability flag.</strong> The decisive reliability rule: a result is labeled trustworthy only
+when <strong>BOTH</strong> the uncertainty is bounded AND the quality_flag ≥ acceptable. A weak emitter with a huge CI is downgraded
+to poor/reject even if its fit metrics look fine. Distinguish <strong>precision</strong> (MC spread, repeatability) from <strong>accuracy</strong>
+(bias vs reference) in reporting.</p>
+<p><strong>(D) Stark-Saha self-consistency flag.</strong> Report-only <code class="docutils literal notranslate"><span class="pre">stark_saha_inconsistent</span></code> when Stark-measured n_e and
+Saha/charge-balance n_e diverge by &gt;0.3 dex (Cristoforetti 2010 self-consistency). Never wired back into the loop.</p>
+<p><strong>(E) Multi-zone fallback (deferred, opt-in).</strong> When Phase-1 flags inhomogeneity, optionally route to
+<code class="docutils literal notranslate"><span class="pre">TwoZoneMCMCSampler</span></code> and benchmark whether two-zone beats biased single-zone on the flagged subset. Prove before
+trusting; never default.</p>
+</section>
+<hr class="docutils" />
+<section id="sequenced-milestones-m1-m10">
+<h2>7. Sequenced Milestones (M1…M10)<a class="headerlink" href="#sequenced-milestones-m1-m10" title="Link to this heading"></a></h2>
+<p>Accuracy milestones first; latency last and explicitly gated. Each milestone is benchmark-gated per §4 and obeys the
+non-regression rule.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Milestone</p></th>
+<th class="head"><p>Lever(s)</p></th>
+<th class="head"><p>Deliverable</p></th>
+<th class="head"><p>Gate criterion</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>M1 — Real atomic-data provenance</strong></p></td>
+<td><p>1A</p></td>
+<td><p>Capture NIST <code class="docutils literal notranslate"><span class="pre">acc</span></code>/<code class="docutils literal notranslate"><span class="pre">unc_Aki</span></code> in <code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code>; regenerate DB; real grades replace heuristic for ~99.7% of lines</p></td>
+<td><p><strong>&gt;0 grade-A for Fe-group</strong> (vs current 0); synthetic RMSE with real grades ≤ heuristic; T/n_e stable</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>M2 — Grade threshold + air/vacuum</strong></p></td>
+<td><p>1B, 1C</p></td>
+<td><p>Hard <code class="docutils literal notranslate"><span class="pre">min_grade</span></code> soft-gate in <code class="docutils literal notranslate"><span class="pre">LineSelector</span></code>; Edlén/Ciddor converter at ingest; one-convention enforcement</p></td>
+<td><p>Real-data median RMSE improves ≥3/5 spectra, no synthetic regression; air/vacuum-roundtrip unit test passes</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>M3 — Calibration measurement + E(λ)</strong></p></td>
+<td><p>2</p></td>
+<td><p>Finish argon branching-ratio E(λ) derivation OR synthetic known-E(λ); calibration-mode scoreboard column; Mode-B double-correction guard</p></td>
+<td><p>Flag-ON reduces synthetic-known-E(λ) RMSE ≥10% relative, no regression; ChemCam/SuperCam stay Mode-B/response-OFF</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>M4 — Stark coverage + H-α exponent</strong></p></td>
+<td><p>5</p></td>
+<td><p>Ingest critically-evaluated <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> widths across 240–850 nm; H-α n_e^0.7 exponent; Stark-Saha report-only flag</p></td>
+<td><p>Firing rate ↑, no composition regression on any dataset, (≥1 real RMSE ↓ OR synthetic n_e RMSE ↓ ≥5 pts); provenance anchors pass</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>M5 — Kurucz completeness backend</strong></p></td>
+<td><p>1C</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">AtomicDataSource</span></code> Kurucz backend behind a flag (fill NIST gaps; grade <code class="docutils literal notranslate"><span class="pre">U</span></code>; vacuum-correct)</p></td>
+<td><p><strong>SuperCam ~5–6 wt% improvement</strong> (the measured target), T/n_e stable, no synthetic regression</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>M6 — Self-absorption gated + wired</strong></p></td>
+<td><p>4</p></td>
+<td><p>Score observable SA flag-off vs flag-on; El Sherbini width-ratio τ; wire into geological/metallic presets if it wins</p></td>
+<td><p>Synthetic positive-control RMSE ↓; real-data non-regression; SA-heavy (Al 877) RMSE ↓ or intercept-bias ↓; mode-off bit-identical</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>M7 — LTE refuse-to-report (Phase 1)</strong></p></td>
+<td><p>6</p></td>
+<td><p>Wire <code class="docutils literal notranslate"><span class="pre">QualityAssessor.assess</span></code>; fix McWhirter δE; <code class="docutils literal notranslate"><span class="pre">overall_reliable</span></code> + CLI gate</p></td>
+<td><p>Conditional RMSE ≤ unconditional; zero false-reject on known-LTE synthetic; flags SuperCam 20–26 wt% outliers</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>M8 — Classical-path coverage + reliability coupling</strong></p></td>
+<td><p>7</p></td>
+<td><p>Extend coverage gate to classical/MC CIs; couple quality_flag to CI width; per-element reliability flags</p></td>
+<td><p>RMSE bit-identical flag-on/off; coverage_95 → [0.93, 0.97]; weak emitters bracket truth or downgrade</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>M9 — Full uncertainty budget</strong></p></td>
+<td><p>7</p></td>
+<td><p>Correlated σ_gf systematic (analytical) + SA-uncertainty MC term</p></td>
+<td><p>Coverage stays in-band (not over-covering); no point-estimate change; budget completeness documented</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>M10 — LATENCY (DEFERRED, gated)</strong></p></td>
+<td><p>fast GN</p></td>
+<td><p>Port validated physics (Stark pin, grade weighting, observable-SA upstream) into the structured-GN under parity gates; pursue sub-ms</p></td>
+<td><p><strong>Gated on M1–M9 complete and locked.</strong> Fast-GN composition RMSE must <strong>match the legacy path within tolerance</strong> on real data (close the measured 0.151 vs 0.076 gap) before any latency claim. Latency improvements must <strong>not</strong> regress accuracy — parity-tested, scoreboard-gated.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Phase-2 (post-M9, prove-before-trust, not on the critical path):</strong> wire <code class="docutils literal notranslate"><span class="pre">TwoZoneMCMCSampler</span></code> as an opt-in
+inhomogeneity fallback (Lever 6 Phase 2); add a C-σ / CD-SB joint optically-thick solver (Lever 4 deferred); add a
+real-replicate repeatability check (Lever 7 caveat). Each is a separate benchmark-gated bead.</p>
+<p><strong>Explicit deferral statement.</strong> M10 is the only latency milestone and it is <strong>last</strong>. It cannot start until M1–M9 have
+landed and the accuracy scoreboard is locked. The fast structured-GN is presently 2× less accurate on real data;
+promoting it before the accuracy program is complete would violate the standing directive (trading accuracy for speed).
+Sub-ms is pursued <strong>only</strong> once the fast path matches the legacy path’s accuracy.</p>
+</section>
+<hr class="docutils" />
+<section id="open-blockers">
+<h2>8. Open Blockers<a class="headerlink" href="#open-blockers" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>VALD3 (human-gated).</strong> VALD3 is untested in v4 and gated; it requires registered access and a human decision. Ship
+it <strong>flag-only, never default</strong>, behind the same <code class="docutils literal notranslate"><span class="pre">AtomicDataSource</span></code> seam as Kurucz, with the same air↔vacuum
+normalization and synthetic <code class="docutils literal notranslate"><span class="pre">U</span></code> grade. <strong>Blocker:</strong> access + human sign-off; do not ship as default. (atomic_data
+lever)</p></li>
+<li><p><strong>Response-curve data / E(λ) derivation.</strong> No response-curve files exist in <code class="docutils literal notranslate"><span class="pre">data/</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">derive_response_from_argon_branching_ratios</span></code> is a dead stub. The calibration lever (Lever 2) <strong>cannot be measured</strong>
+until either the argon branching-ratio derivation is implemented or known-E(λ) is injected on the synthetic corpus.
+<strong>Decision needed:</strong> which lab datasets get derived curves; tungsten-halogen lamp validation availability.
+(calibration_matrix lever)</p></li>
+<li><p><strong>STARK-B / Konjevic 2002 width ingestion.</strong> <code class="docutils literal notranslate"><span class="pre">ingest_stark_b.py</span></code> is archived
+(<code class="docutils literal notranslate"><span class="pre">scripts/archive/migrations/</span></code>) and incomplete; only 0.85% of DB lines carry <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> provenance. <strong>Blocker:</strong>
+promote and complete the ingest with published-value anchor tests (the A4-CONV-2 20× over-broadening history is the
+cautionary tale). <strong>Data dependency.</strong> (stark_ne lever)</p></li>
+<li><p><strong>Fe-group laboratory log(gf).</strong> Fe/Ti/V/Cr/Mn/Ni have zero real grade-A lines. Integrating Wisconsin/Lund
+FTS+lifetime campaigns (Wood 2014 V II ~few-%; Lawler 2013 Ti I) is the path to grade-A Fe-group coverage but is a
+<strong>data-curation dependency</strong>, not a code change. (atomic_data lever)</p></li>
+<li><p><strong>DB regeneration coordination.</strong> Regenerating the DB (M1) is hours-long and changes a <code class="docutils literal notranslate"><span class="pre">frozen_manifest</span></code> sha used for
+campaign pinning. <strong>Coordinate</strong> so in-flight benchmark runs are not invalidated mid-run. (atomic_data lever risks)</p></li>
+<li><p><strong>Single-temperature solver limits multi-T LTE consistency.</strong> The solver emits one excitation temperature, so the
+strongest homogeneity signal (neutral-stage vs ion-stage T) is permanently N/A in the benchmark gate. A
+stage-resolved temperature output is a <strong>design decision</strong> required before the multi-T LTE check can fire.
+(lte_reliability lever)</p></li>
+<li><p><strong>Reliability-downgrade thresholds need empirical tuning.</strong> The &gt;50%/&gt;100% relative-uncertainty thresholds (Lever 7)
+are heuristic and must be tuned on the synthetic corpus coverage data, not guessed; an over-strict gate over-flags
+precise weak-emitter results. <strong>Tuning dependency on M8 coverage data.</strong> (uncertainty_precision lever)</p></li>
+<li><p><strong>Mode-C non-quantitative enforcement.</strong> ADR-0006 D3 requires that Mode-C (uncalibrated) results cannot flip a
+default or claim a SOTA number. This must be enforced on the scoreboard as a hard column-level rule — the discipline
+that prevents an uncalibrated regression from masquerading as an algorithm result (the repo’s 3×-regression failure
+class). <strong>Decision:</strong> enforce as a CI gate, not just a label. (calibration_matrix lever)</p></li>
+</ol>
+<hr class="docutils" />
+<section id="cross-cutting-invariants-apply-to-every-lever">
+<h3>Cross-cutting invariants (apply to every lever)<a class="headerlink" href="#cross-cutting-invariants-apply-to-every-lever" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Non-regression is mandatory</strong> (3 prior ungated regressions): every change ships behind its own flag, default-off,
+and must not regress any dataset on the scoreboard.</p></li>
+<li><p><strong>Physics-only:</strong> all proposed work is pure <code class="docutils literal notranslate"><span class="pre">numpy</span></code>/<code class="docutils literal notranslate"><span class="pre">scipy</span></code> + the <code class="docutils literal notranslate"><span class="pre">uncertainties</span></code> package + data curation. No banned
+ML imports. Mode-C smoothing (if ever built) is explicit Chebyshev/spline, never <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>.</p></li>
+<li><p><strong>Legacy-first:</strong> accuracy physics lands in the legacy iterative path, is gated there, then ported to the fast GN
+under parity tests.</p></li>
+<li><p><strong>Full suite via parent-backgrounded job, never inside a sub-agent</strong> (stream-idle watchdog); sub-agent gates use
+narrow <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-m</span> <span class="pre">physics</span></code> subsets.</p></li>
+<li><p><strong>Honest uncertainty about the program itself:</strong> no single literature value quantifies the exact composition-RMSE
+drop for <em>this</em> pipeline from a curated graded list, from E(λ) correction, or from expanded Stark coverage. Each
+lever’s headline number is therefore an <strong>isolation experiment to be run</strong> (M1/M3/M4), bounded above by the measured
+0.171 atomic-data term, not an asserted result.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

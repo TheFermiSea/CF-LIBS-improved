@@ -1,0 +1,449 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Composition Pipeline Diagnosis &amp; Ranked Remediation Plan &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Composition Pipeline Diagnosis &amp; Ranked Remediation Plan</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/2026-06-03-composition-pipeline-diagnosis.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="composition-pipeline-diagnosis-ranked-remediation-plan">
+<h1>Composition Pipeline Diagnosis &amp; Ranked Remediation Plan<a class="headerlink" href="#composition-pipeline-diagnosis-ranked-remediation-plan" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-03
+<strong>Worktree:</strong> <code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-comp</span></code> &#64; <code class="docutils literal notranslate"><span class="pre">fix/composition-pipeline-2026-06-03</span></code> (HEAD <code class="docutils literal notranslate"><span class="pre">616dec8</span></code>)
+<strong>DB under test:</strong> <code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-comp/ASD_da/libs_production.db</span></code> (28,727 lines / 175 species / 9,448 energy levels / 146 partition-function rows)
+<strong>Method:</strong> Diagnose → adversarially Verify → synthesize. Every blocker below survived an independent adversarial reproduction. Findings the verifier <em>downgraded</em> (severity or root cause) are flagged inline.</p>
+<hr class="docutils" />
+<section id="headline-verdict">
+<h2>1. Headline Verdict<a class="headerlink" href="#headline-verdict" title="Link to this heading"></a></h2>
+<p><strong>The atomic database is NOT broken in the way the user feared — the line/level/IP <em>inputs</em> are clean and NIST-consistent — but it carries two genuine, separately-real data defects that DO bias composition on the manifold/Bayesian/forward paths: (C) the polynomial partition-function table is 1.7–2.6× too low at LIBS temperatures for iron-group workhorse species, and (A4) a 20× Stark-width unit/reference-density convention mismatch between the data and every runtime consumer. The default CPU <code class="docutils literal notranslate"><span class="pre">invert</span></code>/<code class="docutils literal notranslate"><span class="pre">analyze</span></code> solver is structurally immune to (C) (it prefers direct-sum) and to the (A4) <em>tolerance</em> path (alias passes <code class="docutils literal notranslate"><span class="pre">transition=None</span></code>), which is why the user’s “DB isn’t validated against truth” hypothesis is <em>half right</em>: the validation gate that exists (<code class="docutils literal notranslate"><span class="pre">validate_partition_functions.py</span></code>) silently tests the <em>correct</em> code path (direct-sum) and never exercises the broken polynomial artifact that production JAX paths actually consume.</strong></p>
+<p><strong>Peak-ID underperforms for ALGORITHM reasons, not data reasons.</strong> The recall collapse (alias macro-F1=0.185, recall=0.144) is driven by ALIAS gates: a Boltzmann-consistency fit that pools all ionization stages into one regression (collapsing R² to ~0.01), then a fixed R²≥0.85 hard-reject. Fixing the DB will NOT move peak-ID F1 — U(T) and Stark widths do not enter the production identifier’s line-matching at all. The literature offers <strong>no published macro-F1</strong> for physics-based per-element line-ID; the defensible target is the project’s own protocol floor: <strong>per-element recall ≥ 0.6, macro-F1 ≥ 0.7</strong>. The production-best identifier <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> already sits at <strong>0.688</strong>, just below that bar; the open levers are the ALIAS ion-stage + R² gates (alias arm) and the spectral_nnls relative-magnitude detection gate (precision arm).</p>
+<p><strong>Bottom line for fix ordering:</strong> the highest impact-per-effort items are the two ALIAS gate fixes (cheap, directly recover recall on the alias arm) and the spectral_nnls relative-magnitude gate (cheap, cuts the 5.67 FP/spectrum). The DB fixes (PF re-fit, Stark ÷20) are real and worth doing for <em>composition correctness on the manifold/Bayesian/forward paths</em>, but they are larger and do not touch the F1 baseline.</p>
+</section>
+<hr class="docutils" />
+<section id="database-validation-results-vs-truth">
+<h2>2. Database Validation Results vs Truth<a class="headerlink" href="#database-validation-results-vs-truth" title="Link to this heading"></a></h2>
+<p>This section directly answers the user’s hypothesis that the DB isn’t validated against truth. <strong>Verdict: the line/level/IP inputs ARE consistent with truth; the partition-function polynomial and Stark-width columns are NOT.</strong></p>
+<section id="partition-functions-broken-prior-audit-defect-c-confirmed-real">
+<h3>2.1 Partition functions — BROKEN (prior-audit defect C, CONFIRMED REAL)<a class="headerlink" href="#partition-functions-broken-prior-audit-defect-c-confirmed-real" title="Link to this heading"></a></h3>
+<p>Three-way cross-check (stored polynomial vs DB direct-sum vs Barklem &amp; Collet 2016), at LIBS temperatures, all numbers reproduced by the verifier:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Species</p></th>
+<th class="head"><p>T (K)</p></th>
+<th class="head"><p>U_poly / B&amp;C16</p></th>
+<th class="head"><p>U_directsum / B&amp;C16</p></th>
+<th class="head"><p>poly / directsum</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Fe I</p></td>
+<td><p>8000 / 10000 / 12000</p></td>
+<td><p><strong>71.9% / 56.7% / 44.2%</strong></p></td>
+<td><p>99.6% / 98.3% / 95.1%</p></td>
+<td><p>0.58 &#64;10kK</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti I</p></td>
+<td><p>8000 / 10000 / 12000</p></td>
+<td><p><strong>54.1% / 38.5% / 28.2%</strong></p></td>
+<td><p>95.6% / 90.9% / 84.9%</p></td>
+<td><p>0.42 &#64;10kK</p></td>
+</tr>
+<tr class="row-even"><td><p>Cr I</p></td>
+<td><p>8000 / 10000 / 12000</p></td>
+<td><p><strong>59.1% / 39.2% / 26.9%</strong></p></td>
+<td><p>97.7% / 94.1% / 89.1%</p></td>
+<td><p>0.42 &#64;10kK</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ni I</p></td>
+<td><p>8000 / 10000 / 12000</p></td>
+<td><p>95.4% / 92.6% / 87.7%</p></td>
+<td><p>99.7% / 98.8% / 96.5%</p></td>
+<td><p>0.94 &#64;10kK</p></td>
+</tr>
+<tr class="row-even"><td><p>Cu I</p></td>
+<td><p>8000 / 10000 / 12000</p></td>
+<td><p>99.0% / 97.0% / 90.6%</p></td>
+<td><p>99.5% / 97.0% / 90.3%</p></td>
+<td><p>1.00 &#64;10kK</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Direct-sum from the DB’s own <code class="docutils literal notranslate"><span class="pre">energy_levels</span></code> tracks B&amp;C16 to within 0.4–5% across 8000–10000 K</strong> → the energy_levels table is essentially complete and is NOT the cause. The broken artifact is the <em>polynomial fit</em>.</p></li>
+<li><p><strong>28 of 146 polynomial rows</strong> have <code class="docutils literal notranslate"><span class="pre">min(U_poly/U_directsum)</span> <span class="pre">&lt;</span> <span class="pre">0.80</span></code> somewhere in 6000–12000 K; <strong>0 rows overstate</strong>. Since direct-sum is a strict lower bound on true U, <code class="docutils literal notranslate"><span class="pre">poly</span> <span class="pre">&lt;</span> <span class="pre">directsum</span></code> is physically impossible for a correct fit → definitive red flag.</p></li>
+<li><p><strong>Source correlation is the smoking gun:</strong> <code class="docutils literal notranslate"><span class="pre">Irwin1981</span></code> 11/12 bad, <code class="docutils literal notranslate"><span class="pre">NIST_ASD_fit</span></code> 17/99 bad, <code class="docutils literal notranslate"><span class="pre">direct_sum_fit_v1</span></code> <strong>0/35 bad</strong>. The fix is data regeneration (re-fit via the same recipe that produced the clean <code class="docutils literal notranslate"><span class="pre">direct_sum_fit_v1</span></code> rows), not a code/math change.</p></li>
+<li><p><strong>Saha ratio error</strong> (U_II/U_I vs direct-sum): Fe +12/+23/+34%, Cr +73/+108/+138%, Ti +36/+61/+86%, Ca +37/+77/+122% at 8000/10000/12000 K.</p></li>
+<li><p><strong>Composition impact (non-cancelling):</strong> inter-element concentration ratios skewed −31% to +60% at 0.8 eV (e.g. C(Si)/C(Fe) +59%, C(Cu)/C(Fe) +60%, C(Ca)/C(Fe) −31%) because the U-bias is species-dependent.</p></li>
+</ul>
+<p><strong>Path asymmetry (this is the load-bearing scoping fact):</strong></p>
+<ul class="simple">
+<li><p>SAFE (prefers direct-sum, bypasses bad poly for the 144/146 species with levels): <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py:184-187</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:255-278</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">:754-757</span></code> (the <strong>default <code class="docutils literal notranslate"><span class="pre">invert</span></code>/<code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> CPU solver</strong>), <code class="docutils literal notranslate"><span class="pre">closed_form.py:81</span></code>.</p></li>
+<li><p>BROKEN (polynomial-only, NO direct-sum fallback): <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py:409-420</span></code> (verified: <code class="docutils literal notranslate"><span class="pre">polynomial_partition_function_jax</span></code>, U in Boltzmann denominator at :420), <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py:362</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/anderson_solver.py:255</span></code> (test/benchmark-only, 0 production refs), and the Bayesian atomic loader.</p></li>
+</ul>
+<p><strong>Commands:</strong> <code class="docutils literal notranslate"><span class="pre">PYTHONPATH=/tmp/cflibs-comp</span> <span class="pre">.venv/bin/python</span> <span class="pre">scripts/validate_partition_functions.py</span> <span class="pre">--db-path</span> <span class="pre">ASD_da/libs_production.db</span> <span class="pre">--no-download</span></code> ; custom 3-way cross-check <code class="docutils literal notranslate"><span class="pre">/tmp/pf_check.py</span></code>, <code class="docutils literal notranslate"><span class="pre">/tmp/pf_cross.py</span></code>, full 146-row audit <code class="docutils literal notranslate"><span class="pre">/tmp/pf2_audit.py</span></code>, B&amp;C16 truth <code class="docutils literal notranslate"><span class="pre">/tmp/pf2_truth.py</span></code>, path trace <code class="docutils literal notranslate"><span class="pre">/tmp/pf_path.py</span></code>, forward impact <code class="docutils literal notranslate"><span class="pre">/tmp/pf_impact.py</span></code>.</p>
+<blockquote>
+<div><p><strong>Verifier downgrade:</strong> PF-1/2/3/4 were all confirmed REAL and BLOCKING but <strong>severity downgraded from “blocker” to “major”</strong> because the default CPU composition path is genuinely immune (direct-sum-first for all 12 workhorse species). The blast radius is the manifold/JAX/Bayesian sub-paths, not the whole pipeline.
+<strong>Refuted sub-claims:</strong> (a) “direct-sum matches B&amp;C16 to &lt;2% everywhere” is overstated — Ti I direct-sum is 91% and Cr II is 75–84% at 10–12 kK (those levels ARE incomplete), so a re-fit cannot beat the underlying level-table completeness at the hot edge. (b) The PF-3 citation “kernels.py:278/294 compute_spectrum_jax” is WRONG — <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/kernels.py</span></code> has no such symbol; the real polynomial kernel is <code class="docutils literal notranslate"><span class="pre">batch_forward.py:409</span></code> (corrected and re-verified here).</p>
+</div></blockquote>
+</section>
+<section id="data-5-the-26-partition-function-failure-headline-downgraded-to-not-a-defect-as-stated">
+<h3>2.2 DATA-5 (the “26% partition-function failure” headline) — DOWNGRADED to not-a-defect-as-stated<a class="headerlink" href="#data-5-the-26-partition-function-failure-headline-downgraded-to-not-a-defect-as-stated" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">run_nist_validation.py</span></code> reports “1482/2014 within 5%” (= 26% fail), which Phase-1 read as corroborating defect C. <strong>The verifier refuted the attribution:</strong> that 26% is <strong>fixture drift</strong>, not a polynomial-vs-truth gap. <code class="docutils literal notranslate"><span class="pre">run_nist_validation.py</span></code> compares the <em>current direct-sum</em> against a stale local fixture <code class="docutils literal notranslate"><span class="pre">tests/data/nist_reference/partition_functions.json</span></code> (whose own metadata says it was “computed by summing g·exp(−E/kT) over levels in libs_production.db” but no longer matches a current direct-sum — e.g. Ca I &#64;12000 K: prod_calc 6.43 vs fixture 1.18, +447%). It does not measure the polynomial at all. Follow-up: regenerate or delete the stale fixture. <strong>This does not change the PF verdict — defect C is independently confirmed via B&amp;C16 — it just removes a misleading number.</strong></p>
+</section>
+<section id="stark-widths-broken-convention-prior-audit-defect-a4-confirmed-real-direction-refuted">
+<h3>2.3 Stark widths — BROKEN convention (prior-audit defect A4, CONFIRMED REAL, direction REFUTED)<a class="headerlink" href="#stark-widths-broken-convention-prior-audit-defect-a4-confirmed-real-direction-refuted" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Provenance:</strong> only 244/28,331 (0.86%) Stark widths are line-specific literature (<code class="docutils literal notranslate"><span class="pre">stark_w_source='stark_b'</span></code>); 81% are λ²-scaled from ONE reference width per species (<code class="docutils literal notranslate"><span class="pre">konjevic_lambda_sq_scaled</span></code>), 16% interpolated, 2% hydrogenic. Width carries no line-resolved physics for 99% of lines (Fe II: 4730 distinct values / 4809 lines = deterministic λ² function).</p></li>
+<li><p><strong>The 20× convention mismatch (verified end-to-end):</strong> the data is stored &amp; tested as <strong>FWHM at n_e=1e17</strong> (<code class="docutils literal notranslate"><span class="pre">scripts/ingest_stark_b.py:7-9,94</span></code> “n_e=1.0e17”; <code class="docutils literal notranslate"><span class="pre">tests/test_stark_provenance.py:85-96</span></code>), but every runtime consumer treats it as <strong>HWHM at n_e=1e16</strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/radiation/stark.py:17</span></code> <code class="docutils literal notranslate"><span class="pre">REF_NE=1.0e16</span></code>, <code class="docutils literal notranslate"><span class="pre">:77</span></code>, <code class="docutils literal notranslate"><span class="pre">:102</span></code> FWHM=2×HWHM; <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/element_id.py:184</span></code> docstring literally says “HWHM at REF_NE=1e16”; <code class="docutils literal notranslate"><span class="pre">kernels.py:377</span></code>; <code class="docutils literal notranslate"><span class="pre">batch_forward.py:86-87</span></code>). Net inflation = ×10 (density) × ×2 (HWHM→FWHM) = <strong>×20</strong>, reproduced exactly: Al I 396.15 stored 4.5 pm → runtime omega_stark = <strong>90.0 pm</strong> at 1e17/10000 K; Ca II K 8.4 → 168 pm; Fe II 430.317 33 → 660 pm.</p></li>
+<li><p><strong>The original audit’s “Al ×10 <em>under</em>” is REFUTED in direction:</strong> with current data+runtime the line is ~90 pm = ~2.25× <em>over</em> (vs Konjević ~40 pm), because the ×20 convention bug overpowers the too-small stored value.</p></li>
+<li><p><strong>Two passing test files encode contradictory conventions</strong> (<code class="docutils literal notranslate"><span class="pre">tests/test_stark.py</span></code> HWHM&#64;1e16 vs <code class="docutils literal notranslate"><span class="pre">tests/test_stark_provenance.py</span></code> FWHM&#64;1e17) — a guardrail gap; both pass because they test disjoint things.</p></li>
+</ul>
+<p><strong>Commands:</strong> DB provenance <code class="docutils literal notranslate"><span class="pre">GROUP</span> <span class="pre">BY</span> <span class="pre">stark_w_source</span></code>; numeric repro via <code class="docutils literal notranslate"><span class="pre">stark_hwhm</span></code>/<code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance</span></code> at 1e17/10000 K; convention grep across <code class="docutils literal notranslate"><span class="pre">stark.py</span></code>/<code class="docutils literal notranslate"><span class="pre">kernels.py</span></code>/<code class="docutils literal notranslate"><span class="pre">batch_forward.py</span></code>/<code class="docutils literal notranslate"><span class="pre">element_id.py</span></code> + the two test files.</p>
+<blockquote>
+<div><p><strong>Verifier downgrade:</strong> A4-CONV-2 confirmed REAL + BLOCKING but <strong>severity blocker→major</strong>; the “peak-ID F1” framing is overstated. The production-best identifier (<code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>/alias, F1=0.688) is immune because alias passes <code class="docutils literal notranslate"><span class="pre">transition=None</span></code> → omega_stark=0 (<code class="docutils literal notranslate"><span class="pre">alias.py:3088-3093</span></code>, verified). The load-bearing harm is the <strong>forward-model / Voigt / manifold composition path</strong> (<code class="docutils literal notranslate"><span class="pre">apply_stark=True</span></code> after A2 → every Stark line over-broadened ×20 at ps-LIBS densities), plus inflated tolerances on the weak comb/correlation arms. A4-PROV-1 (λ²-scaling) downgraded to <strong>minor</strong> — the default solver and top identifier never read <code class="docutils literal notranslate"><span class="pre">stark_w</span></code> at all.</p>
+</div></blockquote>
+</section>
+<section id="lines-table-vs-nist-asd-clean-checked-found-ok">
+<h3>2.4 Lines table vs NIST ASD — CLEAN (checked, found OK)<a class="headerlink" href="#lines-table-vs-nist-asd-clean-checked-found-ok" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Zero structural defects across all 28,727 lines:</strong> no NULL/NaN/negative/zero ei,ek; no zero/negative gi,gk; no ek≤ei; no wavelength-unit errors (no Ångström-as-nm).</p></li>
+<li><p><strong>Energy–wavelength self-consistency:</strong> <code class="docutils literal notranslate"><span class="pre">|(E_k−E_i)</span> <span class="pre">−</span> <span class="pre">hc/λ|</span> <span class="pre">/</span> <span class="pre">(hc/λ)</span></code> &lt; 1% for <strong>100% of lines</strong>, worst single line 0.16% (Al III 569.66). Median residual 2.8e-4 = the expected air-vs-vacuum refractive-index offset.</p></li>
+<li><p><strong>13/13 hand-checked strong workhorse lines</strong> found at correct wavelength to &lt;0.001 nm with Aki/ek matching NIST (Ca II H/K, Mg I 285.21, Na I D1/D2, Al I 396.15, Mn I 403.08, Cr I 425.43, Ni I 341.48, K I 766.49 all 1.00× Aki). Si I 288.16 (1.15×) and Ti II 334.94 (1.68×) are within the spread of competing NIST source datasets, not errors.</p></li>
+<li><p><strong>The real peak-ID hazard is physical line density, not data errors:</strong> 206 cross-element strong-line (Aki&gt;1e7) wavelength collisions within 0.005 nm among workhorse elements (e.g. Cr I 404.878 vs Mn I 404.876). This is intrinsic LIBS physics — it explains low alias recall and the spectral_nnls FP rate, NOT bad atomic data.</p></li>
+</ul>
+<p><strong>Commands:</strong> global null/range/consistency queries via direct sqlite3-in-python; 13-line by-hand NIST spot-check; collision scan.</p>
+</section>
+<section id="species-physics-ionization-energies-energy-levels-clean-checked-found-ok">
+<h3>2.5 species_physics (ionization energies) &amp; energy_levels — CLEAN (checked, found OK)<a class="headerlink" href="#species-physics-ionization-energies-energy-levels-clean-checked-found-ok" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>All 10 workhorse first ionization potentials match NIST within 0.01%</strong> (Fe 7.9020 vs 7.9025; Ca, Si, Al, Mg, Na, K, Ti, Mn, Cr all |diff|&lt;0.01%); II→III within 0.08%. Zero NULL/zero/negative IPs or masses; IPs monotonic with sp_num for every element.</p></li>
+<li><p><strong>energy_levels (9448 rows / 144 species):</strong> zero negative/NULL energies, zero g≤0, max energy 24.86 eV (no cm⁻¹ contamination), zero exact-duplicate rows. The 79 “same-energy-different-g” groups are physically real fine-structure multiplets (verified Mg I 7.4717 eV → J-split g=1,3,5 cross-checked against line gk).</p></li>
+<li><p><strong>Minor gaps (all negligible at ps-LIBS T):</strong> 1,075/28,727 lines (3.7%, 97% with E_k&gt;5 eV) reference an upper level absent from energy_levels → slight direct-sum under-count, Boltzmann-suppressed. Na II has 0 levels/0 PF but 0 lines and IP 47.3 eV (never populates). 18 sp≤2 species have &lt;10 levels but all (except Na II) have a polynomial-PF fallback.</p></li>
+</ul>
+<p><strong>Commands:</strong> workhorse IP-vs-NIST diff%; IP monotonicity scan; energy_levels range/duplicate/multiplet checks; orphan-line count.</p>
+</section>
+<section id="tooling-gaps-found">
+<h3>2.6 Tooling gaps found<a class="headerlink" href="#tooling-gaps-found" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">scripts/validate_partition_functions.py</span></code> does NOT validate the stored polynomial</strong> — its “[Ours]” column is computed via <code class="docutils literal notranslate"><span class="pre">direct_sum_partition_function</span></code> (line 254, verified), the <em>correct</em> path, then compared to B&amp;C16. This is why the broken polynomial shipped: the only nominal gate silently exercises a different (correct) code path. <strong>Fix: add a 3rd column evaluating <code class="docutils literal notranslate"><span class="pre">partition_function_for(...).at(T)</span></code> (the stored polynomial) and gate CI on poly-vs-reference.</strong></p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tests/test_partition_function_parity.py</span></code> passes tautologically</strong> — it compares the polynomial against a <em>deliberately truncated</em> direct-sum (<code class="docutils literal notranslate"><span class="pre">PARITY_TRUNCATION_EV</span></code>) tuned to Irwin’s observed-only convention, so 11 tests pass while the polynomial is 30–60% off B&amp;C16.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">scripts/validate_kramida_2024.py</span></code> is BROKEN against the schema</strong> — queries column <code class="docutils literal notranslate"><span class="pre">ion_stage</span></code>; actual column is <code class="docutils literal notranslate"><span class="pre">sp_num</span></code> (<code class="docutils literal notranslate"><span class="pre">scripts/validate_kramida_2024.py:59</span></code>); also needs absent cluster DBs. Cannot run as a lines-table validator.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">scripts/validate_nist_parity.py</span></code> does NOT validate per-line values</strong> — only ionization fractions + spectrum shape, and its lone Fe reference is hardcoded at T=0.8 eV (<code class="docutils literal notranslate"><span class="pre">:33-38</span></code>), so running at the requested T=1.0 eV prints “differences” that are pure Saha shift, not data defects.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">scripts/compare_stark_vjbh.py</span></code> is NOT a Stark validator</strong> — it is a before/after composition-benchmark delta tool requiring two <code class="docutils literal notranslate"><span class="pre">composition_records.parquet</span></code> artifacts (absent); cannot confirm/refute A4.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">scripts/benchmark_synthetic_identifiers.py</span></code> emits only presence P/R/F1/FPR, NOT composition metrics</strong> — yet runbook ADR-0001 §6 (line 174) gates “within 5% … (Aitchison distance, ILR error, top-K recall)” against it, so §6 is unenforceable as written (bead qsnf). <strong>Does NOT corrupt the F1 baseline</strong> (separate <code class="docutils literal notranslate"><span class="pre">UnifiedBenchmarkRunner</span></code> harness, real data n=33).</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="peak-id-diagnosis">
+<h2>3. Peak-ID Diagnosis<a class="headerlink" href="#peak-id-diagnosis" title="Link to this heading"></a></h2>
+<section id="root-causes-of-the-f1-gap-algorithm-not-data">
+<h3>3.1 Root causes of the F1 gap (algorithm, not data)<a class="headerlink" href="#root-causes-of-the-f1-gap-algorithm-not-data" title="Link to this heading"></a></h3>
+<p>Reproduced on a bounded synthetic corpus (224.6–265.3 nm UV, T~0.8–1.3 eV). For a <strong>pure-Fe</strong> spectrum, Fe — the only true element — is hard-rejected by stacked ALIAS gates:</p>
+<ol class="arabic simple">
+<li><p><strong>Ion-stage pooling (blocker, CONFIRMED, verifier kept severity=blocker).</strong> <code class="docutils literal notranslate"><span class="pre">_collect_boltzmann_observations</span></code> (<code class="docutils literal notranslate"><span class="pre">alias.py:2728-2756</span></code>, verified) appends a <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> for every matched line and records <code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code> but <strong>never groups by it</strong>; <code class="docutils literal notranslate"><span class="pre">_boltzmann_consistency_check</span></code> (<code class="docutils literal notranslate"><span class="pre">:2814-2818</span></code>) runs ONE <code class="docutils literal notranslate"><span class="pre">ln(Iλ/gA)</span></code>-vs-E_k regression over the pooled set. Verifier reproduced: Fe I-only R²=0.997, Fe II-only R²=0.999, <strong>pooled R²=0.012</strong> (matches Phase-1’s 0.012). Collapse is driven specifically by the Saha inter-stage population offset. This is the single biggest algorithmic recall killer for iron-group (Fe/Cr/Ti/Mn/Ni) elements whose UV lines span stages.</p></li>
+<li><p><strong>Fixed R²≥0.85 hard gate (major, CONFIRMED, verifier downgraded blocker→major).</strong> <code class="docutils literal notranslate"><span class="pre">alias.py:839-840</span></code> defaults <code class="docutils literal notranslate"><span class="pre">boltzmann_r2_min=0.85</span></code>, <code class="docutils literal notranslate"><span class="pre">r2_gate_mode='fixed'</span></code>; <code class="docutils literal notranslate"><span class="pre">:1781-1782</span></code> converts a sub-0.85 fit into <code class="docutils literal notranslate"><span class="pre">detected=False</span></code> (verified <code class="docutils literal notranslate"><span class="pre">_r2_gate_rejects</span></code> at <code class="docutils literal notranslate"><span class="pre">:2614-2615</span></code>). Verifier reproduced: pure-Fe Fe R²=0.342–0.772 → rejected at default; disabling/lowering the gate flips Fe to <code class="docutils literal notranslate"><span class="pre">detected=True</span></code>. Downgraded because non-strict presets already ship (<code class="docutils literal notranslate"><span class="pre">v2</span></code>/<code class="docutils literal notranslate"><span class="pre">high_recall_v2</span></code>/<code class="docutils literal notranslate"><span class="pre">consensus_voter</span></code> use <code class="docutils literal notranslate"><span class="pre">adaptive_t</span></code>), and the production <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> is NNLS-weighted; <strong>a clean lift also requires the ion-stage fix and the cold-biased temperature estimator</strong> (the adaptive_t cold floor only relaxes below 5500 K; ps-LIBS spans 5800–15000 K).</p></li>
+<li><p><strong>spectral_nnls relative-magnitude detection gate (major, CONFIRMED, verifier corrected the mechanism).</strong> spectral_nnls’ 5.67 FP/spectrum is real (precision 0.42 is the bottleneck), but the verifier <strong>refuted the “collinear basis → near-singular AᵀA” root cause</strong>: the Gaussian basis is near-orthogonal (max off-diagonal corr 0.017, cond ~38, full rank) and the proposed Voigt fix <em>increases</em> collinearity. The true mechanism is matched-filter projection of a structured residual onto absent-element basis vectors, with the raw <code class="docutils literal notranslate"><span class="pre">element_snr≥3.0</span></code> rule (<code class="docutils literal notranslate"><span class="pre">spectral_nnls.py:481</span></code>) firing on tiny coefficients (~2.6% of total signal). <strong>The load-bearing fix is the parenthetical secondary one: gate on coefficient magnitude relative to total (~5% floor), which cut FPs 2→0 in repro while keeping both true elements.</strong> The Voigt-basis rewrite (LIT-F1-2 / A3) is a follow-up, gated on Stark-width accuracy (A4).</p></li>
+</ol>
+</section>
+<section id="bead-triage-genuinely-open-vs-stale-open">
+<h3>3.2 Bead triage (genuinely open vs stale-OPEN)<a class="headerlink" href="#bead-triage-genuinely-open-vs-stale-open" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Bead</p></th>
+<th class="head"><p>Claim</p></th>
+<th class="head"><p>Status</p></th>
+<th class="head"><p>Verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>n3rf.4</p></td>
+<td><p>resonance filter strands all-resonance elements</p></td>
+<td><p><strong>stale-OPEN (FIXED)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2683-2696</span></code> pre-scan, landed <code class="docutils literal notranslate"><span class="pre">4794d04</span></code>; Al recall 0.0→0.5. Close.</p></td>
+</tr>
+<tr class="row-odd"><td><p>jbfg.1</p></td>
+<td><p>JAX/CPU FISTA parity</p></td>
+<td><p><strong>stale-OPEN (FIXED)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">max_iter=50000</span></code> default (<code class="docutils literal notranslate"><span class="pre">alias.py:306/377/433</span></code>); gap closed 0.060→0.017. Close.</p></td>
+</tr>
+<tr class="row-even"><td><p>n3rf.2</p></td>
+<td><p>alias_high_recall regresses</p></td>
+<td><p><strong>stale-OPEN (FIXED in code)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">b809d4b</span></code> high_recall inherits v2 gates; Phase-7 number not recorded. Close after confirming.</p></td>
+</tr>
+<tr class="row-odd"><td><p>wzus</p></td>
+<td><p>min-3-lines + per-element R² gate</p></td>
+<td><p><strong>stale-OPEN (IMPLEMENTED)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:679-683</span></code> + <code class="docutils literal notranslate"><span class="pre">:638-651</span></code>. Close.</p></td>
+</tr>
+<tr class="row-even"><td><p>5thd</p></td>
+<td><p>comb is FN-bound</p></td>
+<td><p><strong>OPEN, downgraded</strong></p></td>
+<td><p>Symptom real (<code class="docutils literal notranslate"><span class="pre">comb.py:1160</span></code> dilution denominator), but <strong>verifier refuted FN-bound thesis</strong>: real-data comb is <em>precision</em>-bound (P=0.018, recall=0.091); the binding gate is the amplitude gate + <code class="docutils literal notranslate"><span class="pre">max_lines_per_element</span></code>, not the denominator; the proposed denominator fix inflates FP scores. comb is NOT in <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>. <strong>Non-blocking.</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>s1qr.2</p></td>
+<td><p>comb FP (7-element false match)</p></td>
+<td><p><strong>OPEN, fold into 5thd</strong></p></td>
+<td><p>Not reproducible via forward-model path; its committed fix landed in the wrong function. Re-scope.</p></td>
+</tr>
+<tr class="row-even"><td><p>qsnf</p></td>
+<td><p>synthetic harness lacks composition metrics</p></td>
+<td><p><strong>OPEN, independent</strong></p></td>
+<td><p>Real (ADR-0001 §6 unenforceable) but does NOT block F1 work. Amend §6 to gate on presence metrics.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="literature-target">
+<h3>3.3 Literature target<a class="headerlink" href="#literature-target" title="Link to this heading"></a></h3>
+<p>There is <strong>no published macro-F1 for physics-based LIBS line/element identification.</strong> Labutin/Zaytsev/Popov 2013 (correlation) and Noel et al. 2025 (ALIAS) report only qualitative success; Gajarska 2024 (comb) reports none and explicitly notes the method is “highly prone to false positives.” The 0.88–0.99 “F1” numbers in LIBS literature are sample <em>classification</em>, a different task — do NOT adopt them. <strong>Defensible target = project protocol floor: per-element recall ≥ 0.6, macro-F1 ≥ 0.7.</strong> <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> is at 0.688. The repo methods are faithful to their cited sources (sound-but-buggy, not mis-designed); the gap to literature is execution, not algorithm selection. (Minor: the ALIAS docstring cites the wrong arXiv ID 2501.01057 — an unrelated HPC paper; the real source is Noel et al., Spectrochim. Acta B 2025.)</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="confirmed-blocker-table-ranked-by-impact-confidence-effort">
+<h2>4. Confirmed-Blocker Table (ranked by impact × confidence ÷ effort)<a class="headerlink" href="#confirmed-blocker-table-ranked-by-impact-confidence-effort" title="Link to this heading"></a></h2>
+<p>Only items the Verify phase confirmed as real <strong>and</strong> blocking are included. Ranked for top-down execution.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>ID</p></th>
+<th class="head"><p>Title</p></th>
+<th class="head"><p>Category</p></th>
+<th class="head"><p>Lift</p></th>
+<th class="head"><p>Effort</p></th>
+<th class="head"><p>Conf</p></th>
+<th class="head"><p>Depends on</p></th>
+<th class="head"><p>Cite (file:line) + verifying command</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>ALIAS-BOLTZ-IONMIX-1</p></td>
+<td><p>ALIAS pools ionization stages into one Boltzmann fit → R²≈0.01 → hard-reject</p></td>
+<td><p>peak_id</p></td>
+<td><p>+0.05–0.12 alias macro-F1 (recall-bound)</p></td>
+<td><p>small</p></td>
+<td><p>high</p></td>
+<td><p>—</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2728-2756</span></code>, <code class="docutils literal notranslate"><span class="pre">:2814-2818</span></code>. Repro: per-stage R²=0.997/0.999 vs pooled R²=0.012 at T=0.9 eV, ne=1e17.</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>NNLS-GAUSS-BASIS-4</p></td>
+<td><p>spectral_nnls raw SNR≥3 detection rule fires on ~2.6%-signal coefficients → 5.67 FP/spec</p></td>
+<td><p>peak_id</p></td>
+<td><p>spectral_nnls F1 0.44→~0.52–0.58 (precision)</p></td>
+<td><p>small</p></td>
+<td><p>high</p></td>
+<td><p>—</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">spectral_nnls.py:481</span></code>, basis <code class="docutils literal notranslate"><span class="pre">basis_library.py:179</span></code>. Repro: relative-magnitude ≥5% gate cut FP 2→0, kept both true elements. <strong>Fix is the relative-magnitude gate, NOT the Voigt rewrite.</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>ALIAS-R2GATE-2</p></td>
+<td><p>Fixed R²≥0.85 hard gate rejects valid ps-LIBS fits</p></td>
+<td><p>peak_id</p></td>
+<td><p>+0.05–0.10 alias macro-F1 (with #1)</p></td>
+<td><p>small</p></td>
+<td><p>high</p></td>
+<td><p>ALIAS-BOLTZ-IONMIX-1; ALIAS-TEST-EST-6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:839-840</span></code>, <code class="docutils literal notranslate"><span class="pre">:1781-1782</span></code>, <code class="docutils literal notranslate"><span class="pre">:2614-2615</span></code>. Repro: pure-Fe R²=0.342–0.772 rejected at default; flips to detected when gate disabled/lowered.</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>A4-CONV-2</p></td>
+<td><p>20× Stark unit/reference-density convention mismatch (data FWHM&#64;1e17 vs runtime HWHM&#64;1e16)</p></td>
+<td><p>physics</p></td>
+<td><p>composition-correctness (forward/manifold/Bayesian); ~0 F1</p></td>
+<td><p>medium</p></td>
+<td><p>high</p></td>
+<td><p>—</p></td>
+<td><p>data <code class="docutils literal notranslate"><span class="pre">ingest_stark_b.py:7-9,94</span></code>; runtime <code class="docutils literal notranslate"><span class="pre">stark.py:17,77,102</span></code>, <code class="docutils literal notranslate"><span class="pre">element_id.py:184,217</span></code>, <code class="docutils literal notranslate"><span class="pre">kernels.py:377</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_forward.py:86</span></code>. Repro: Al I 4.5 pm → 90 pm at 1e17/10000 K (×20 exactly).</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>PF-1/PF-2</p></td>
+<td><p>Polynomial partition functions 1.7–2.6× too low at LIBS T (Irwin1981 + bad NIST_ASD_fit rows)</p></td>
+<td><p>database</p></td>
+<td><p>composition ratios on manifold/Bayesian/forward paths skewed −31%/+60%; ~0 F1</p></td>
+<td><p>medium</p></td>
+<td><p>high</p></td>
+<td><p>—</p></td>
+<td><p>table audit (28/146 rows poly&lt;0.80×directsum); consumer <code class="docutils literal notranslate"><span class="pre">batch_forward.py:409-420</span></code>, <code class="docutils literal notranslate"><span class="pre">generator.py:362</span></code>. Repro: <code class="docutils literal notranslate"><span class="pre">validate_partition_functions.py</span> <span class="pre">--no-download</span></code>; <code class="docutils literal notranslate"><span class="pre">/tmp/pf2_audit.py</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>PF-3/PF-4</p></td>
+<td><p>Manifold/JAX/Bayesian paths have no direct-sum fallback; validation gate tests the wrong path</p></td>
+<td><p>database</p></td>
+<td><p>enables #5 fix verification; defense-in-depth</p></td>
+<td><p>medium</p></td>
+<td><p>high</p></td>
+<td><p>PF-1/PF-2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">batch_forward.py:409</span></code> (poly-only), <code class="docutils literal notranslate"><span class="pre">validate_partition_functions.py:254</span></code> (gate uses direct_sum). Repro: path trace <code class="docutils literal notranslate"><span class="pre">/tmp/pf_path.py</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>CORR-RELGATE-5</p></td>
+<td><p>Correlation scores present elements with negative whole-spectrum Pearson → clipped to 0 → min_confidence rejects</p></td>
+<td><p>peak_id</p></td>
+<td><p>correlation F1 0.17→~0.4; ~0 on ensemble</p></td>
+<td><p>medium</p></td>
+<td><p>high</p></td>
+<td><p>—</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">correlation.py:507/551</span></code> clip, <code class="docutils literal notranslate"><span class="pre">:384</span></code> gate. <strong>Verifier refuted the relative-threshold root cause</strong> (gate never fires; needs ≥3 nonzero scores, scorer produces 1–2). Real fix = residual/sequential per-element scoring.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Excluded by the Verify phase (do NOT fix as stated):</strong></p>
+<ul class="simple">
+<li><p><strong>ALIAS-NNLS-PLOCAL-3</strong> — verifier marked <code class="docutils literal notranslate"><span class="pre">real=false</span></code>: faithful pure-Fe repro gives Fe P_local=1.0 (not 0.000), still not detected; the named P_local/nnls collinearity gates are NOT the operative cause. The real recall driver is <code class="docutils literal notranslate"><span class="pre">_fast_screening</span></code> (<code class="docutils literal notranslate"><span class="pre">alias.py:2552</span></code>) + degenerate Boltzmann R² — already captured by #1/#3.</p></li>
+<li><p><strong>DATA-5</strong> — verifier marked <code class="docutils literal notranslate"><span class="pre">real=false</span></code>: the 26% figure is stale-fixture drift, not a polynomial defect. (Defect C itself is captured by #5/#6.)</p></li>
+<li><p><strong>A4-PROV-1, A4-AL-3, A4-TOL-4</strong> — confirmed real but <code class="docutils literal notranslate"><span class="pre">blocking=false</span></code>/minor: the default solver and <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> never read <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>; the genuine harm is folded into #4 (A4-CONV-2).</p></li>
+<li><p><strong>TRIAGE-5thd-comb-FN, ALIAS-TEST-EST-6</strong> — non-blocking (comb not in production hybrid; T-estimator is a second-order amplifier feeding #3).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="wave-ordered-remediation-plan">
+<h2>5. Wave-Ordered Remediation Plan<a class="headerlink" href="#wave-ordered-remediation-plan" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Wave 0 (zero-risk cleanup):</strong> Close the 4 stale-OPEN beads (n3rf.4, jbfg.1, n3rf.2, wzus) after confirming their landed commits; delete/regenerate the stale <code class="docutils literal notranslate"><span class="pre">tests/data/nist_reference/partition_functions.json</span></code> fixture so <code class="docutils literal notranslate"><span class="pre">run_nist_validation.py</span></code> stops reporting the phantom 26%; amend ADR-0001 §6 (qsnf) to gate on presence P/R/F1.</p></li>
+<li><p><strong>Wave 1 (cheap peak-ID recall, alias arm):</strong> Fix ALIAS ion-stage pooling (#1) — group <code class="docutils literal notranslate"><span class="pre">_collect_boltzmann_observations</span></code> by <code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code>, fit the dominant stage (≥3 lines) or Saha-map to neutral plane, report best per-stage R². Land with the R²-gate relaxation (#3, default <code class="docutils literal notranslate"><span class="pre">adaptive_t</span></code> or ~0.55) since they must ship together; guard the cold-biased temperature estimator (ALIAS-TEST-EST-6) in the same change.</p></li>
+<li><p><strong>Wave 2 (cheap peak-ID precision, nnls arm):</strong> Add the spectral_nnls relative-magnitude detection gate (#2) — gate on coefficient ≥ ~5% of total signal instead of raw <code class="docutils literal notranslate"><span class="pre">element_snr≥3.0</span></code>; re-measure FP/spectrum.</p></li>
+<li><p><strong>Wave 3 (Stark correctness):</strong> Fix A4-CONV-2 (#4) as ONE unit — pick a single convention project-wide (recommend redefine DB column as HWHM&#64;1e16, i.e. ÷20, OR set runtime <code class="docutils literal notranslate"><span class="pre">REF_NE=1e17</span></code> and drop the ×2), reconcile the two contradicting test files, and add a canonical data→element_id→kernels anchor assertion. <strong>Must update <code class="docutils literal notranslate"><span class="pre">tests/inversion/common/test_get_wavelength_tolerance.py</span></code> (pins the buggy convention) in the same commit</strong> to avoid double-counting.</p></li>
+<li><p><strong>Wave 4 (partition-function regeneration):</strong> Re-fit the 12 Irwin1981 + 17 bad NIST_ASD_fit rows via direct-sum on 2000–25000 K (the <code class="docutils literal notranslate"><span class="pre">direct_sum_fit_v1</span></code> recipe, 0/35 failures), monotone-constrained; verify each vs B&amp;C16 to &lt;5–10% before storing (#5). Add the direct-sum fallback to <code class="docutils literal notranslate"><span class="pre">manifold/batch_forward.py</span></code> / <code class="docutils literal notranslate"><span class="pre">generator.py</span></code> AtomicSnapshot so all four solver paths match (#6), and add the 3rd-column poly-vs-reference CI gate to <code class="docutils literal notranslate"><span class="pre">validate_partition_functions.py</span></code>. Accept that Cr II / hot-edge Ti I cannot beat level-table completeness.</p></li>
+<li><p><strong>Wave 5 (follow-ups, gated on Wave 3/4):</strong> Voigt+Stark NNLS basis (LIT-F1-2 / A3) — only after A4 widths are validated; correlation residual/sequential scoring (#7); ingest line-resolved Konjević/STARK-B/Aragón widths to replace λ²-scaling; expand <code class="docutils literal notranslate"><span class="pre">test_stark_provenance.py</span></code> ANCHORS to include Al I 396.15; fix the broken <code class="docutils literal notranslate"><span class="pre">validate_kramida_2024.py</span></code> schema (<code class="docutils literal notranslate"><span class="pre">ion_stage</span></code>→<code class="docutils literal notranslate"><span class="pre">sp_num</span></code>); fix the ALIAS arXiv citation.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="checked-and-found-ok-do-not-re-audit">
+<h2>6. Checked-and-Found-OK (do not re-audit)<a class="headerlink" href="#checked-and-found-ok-do-not-re-audit" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Lines table (28,727 rows):</strong> zero structural defects; 100% energy–wavelength consistent to &lt;1% (worst 0.16%); 13/13 strong workhorse lines correct vs NIST. (§2.4)</p></li>
+<li><p><strong>species_physics IPs (175 rows):</strong> all 10 workhorse first IPs within 0.01% of NIST; monotonic; no NULL/zero/negative. (§2.5)</p></li>
+<li><p><strong>energy_levels (9448 rows):</strong> clean energies/degeneracies; max 24.86 eV (no cm⁻¹ contamination); fine-structure multiplets are real, not duplicates; direct-sum tracks B&amp;C16 to &lt;2% for Fe I/II, Ti II at 8–10 kK → the level table is NOT the cause of defect C. (§2.5)</p></li>
+<li><p><strong>Default CPU <code class="docutils literal notranslate"><span class="pre">invert</span></code>/<code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> solver:</strong> structurally immune to defect C (direct-sum-first, <code class="docutils literal notranslate"><span class="pre">iterative.py:255-278/754-757</span></code>) and to the Stark tolerance bug (alias <code class="docutils literal notranslate"><span class="pre">transition=None</span></code>). Do not chase composition bias here.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> immunity:</strong> NNLS+ALIAS, alias passes <code class="docutils literal notranslate"><span class="pre">transition=None</span></code> → omega_stark=0; not gated solely by the R² gate. DB fixes will not move its F1.</p></li>
+<li><p><strong>ALIAS-NNLS-PLOCAL-3 mechanism (P_local/nnls collinearity):</strong> refuted by faithful repro — not the recall driver.</p></li>
+<li><p><strong>spectral_nnls basis conditioning:</strong> near-orthogonal (cond ~38, full rank) — the FP problem is the SNR detection rule, not ill-conditioning; the Voigt rewrite is NOT the load-bearing fix.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="open-empirical-questions">
+<h2>7. Open Empirical Questions<a class="headerlink" href="#open-empirical-questions" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Realized peak-ID lift from Waves 1+2.</strong> Estimates (+0.05–0.12 alias macro-F1; spectral_nnls 0.44→~0.52–0.58) are bounded by reproductions on narrow synthetic spectra, not the real n=33 <code class="docutils literal notranslate"><span class="pre">UnifiedBenchmarkRunner</span></code> baseline. Must re-run the production harness after Wave 1/2 land. Will <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> cross the 0.70 floor, or do the alias-arm gains get absorbed by the NNLS-weighted union?</p></li>
+<li><p><strong>Composition-accuracy lift from Waves 3+4 on the manifold/Bayesian paths.</strong> No end-to-end Aitchison/ILR number was measured (<code class="docutils literal notranslate"><span class="pre">compare_stark_vjbh.py</span></code> needs absent parquet artifacts). Build the two <code class="docutils literal notranslate"><span class="pre">composition_records.parquet</span></code> runs to quantify the ×20 Stark and 1.7–2.6× PF fixes against ground truth.</p></li>
+<li><p><strong>Hot-edge partition-function ceiling.</strong> Direct-sum itself is ~10% low at ≥12000 K (Cr II 75–84%, Ti I 91%) due to missing high-lying NIST levels. If ps-LIBS analyses routinely exceed ~10000 K, does the re-fit need synthetic Rydberg-level completion, or is the residual within composition tolerance?</p></li>
+<li><p><strong>Temperature-estimator cold bias.</strong> ALIAS est_T is 2.3× low on pure Fe (5863 vs 13774 K). How much of the R²-gate lift in Wave 1 is contingent on first fixing the unweighted-slope “dragged cold” estimator (<code class="docutils literal notranslate"><span class="pre">alias.py:2099</span></code>)?</p></li>
+<li><p><strong>comb’s place.</strong> Is comb on the roadmap as a <code class="docutils literal notranslate"><span class="pre">hybrid_consensus</span></code> voter? If not, 5thd/s1qr.2 stay non-blocking; if yes, its 0.018 precision must be fixed (amplitude gate, not the denominator) before it can join without regressing <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> precision (gate tolerance 0.02).</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

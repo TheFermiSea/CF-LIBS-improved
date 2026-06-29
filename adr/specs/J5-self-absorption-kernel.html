@@ -1,0 +1,168 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J5 Implementation Spec — Jittable Observable-Gated Self-Absorption &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J5 Implementation Spec — Jittable Observable-Gated Self-Absorption</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J5-self-absorption-kernel.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j5-implementation-spec-jittable-observable-gated-self-absorption">
+<h1>J5 Implementation Spec — Jittable Observable-Gated Self-Absorption<a class="headerlink" href="#j5-implementation-spec-jittable-observable-gated-self-absorption" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J5 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §4 row 7 · <strong>Track:</strong> B · <strong>Depends:</strong> J0, J4 (masked-median helper + array conventions) · <strong>Estimated effort:</strong> 3–5 pd</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Port <code class="docutils literal notranslate"><span class="pre">ObservableSelfAbsorptionCorrector.correct</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/self_absorption_observable.py:354-427</span></code>) into <code class="docutils literal notranslate"><span class="pre">jitpipe/selfabs.py</span></code>. It is applied ONCE pre-fit in <code class="docutils literal notranslate"><span class="pre">solve()</span></code> (<code class="docutils literal notranslate"><span class="pre">solve/iterative.py:1586-1590</span></code>) and never reads the composition (the audited F4 feedback loop was deleted) — so it is a pure <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">L)</span></code> array transform.</p>
+</section>
+<section id="current-algorithm-and-jit-breakers-file-line">
+<h2>2. Current algorithm and jit-breakers (file:line)<a class="headerlink" href="#current-algorithm-and-jit-breakers-file-line" title="Link to this heading"></a></h2>
+<p>Ladder: (a) <strong>doublet pass</strong> (<code class="docutils literal notranslate"><span class="pre">self_absorption_observable.py:466-545</span></code>) over <code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> (<code class="docutils literal notranslate"><span class="pre">physics/self_absorption.py:508+</span></code>; same species + same upper level within 1 meV), solving <code class="docutils literal notranslate"><span class="pre">f(τ₁)/f(τ₁/ρ)</span> <span class="pre">=</span> <span class="pre">r_meas/r_thin</span></code> with <code class="docutils literal notranslate"><span class="pre">scipy.optimize.brentq</span></code> on τ₁∈[1e-4, 30], xtol 1e-6 (<code class="docutils literal notranslate"><span class="pre">self_absorption.py:447</span></code>); same-sign-endpoints “observably thin” branch returns τ=1e-4 (<code class="docutils literal notranslate"><span class="pre">:424-444</span></code>); two-sided significance gate combining intensity + A_ki uncertainties with a 0.10 absolute floor (<code class="docutils literal notranslate"><span class="pre">_ratio_deviation_significant</span></code>, <code class="docutils literal notranslate"><span class="pre">self_absorption_observable.py:433-464</span></code>); τ &gt; 5 validity ceiling → force-suspect, never boost (<code class="docutils literal notranslate"><span class="pre">:507-525</span></code>, constant at <code class="docutils literal notranslate"><span class="pre">:90</span></code>). (b) <strong>Planck-ceiling</strong> closed form <code class="docutils literal notranslate"><span class="pre">τ₀</span> <span class="pre">=</span> <span class="pre">−ln(1</span> <span class="pre">−</span> <span class="pre">I_peak/B_λ(T))</span></code> (<code class="docutils literal notranslate"><span class="pre">:115-172</span></code>) + Doppler curve-of-growth escape factor as a fixed 64-term alternating series (<code class="docutils literal notranslate"><span class="pre">:175-201</span></code>), validity τ ≤ 3 (<code class="docutils literal notranslate"><span class="pre">:84</span></code>). (c) <strong>Suspect pass</strong> (<code class="docutils literal notranslate"><span class="pre">:614-648</span></code>): per-element median intensity; Fayyaz low-E_i (&lt;0.74 eV, <code class="docutils literal notranslate"><span class="pre">:95</span></code>) AND bright → σ×3 (down-weight w/9), never boosted.</p>
+<p>Breakers: <code class="docutils literal notranslate"><span class="pre">brentq</span></code> (host root-finder); combinatorial pair discovery over a Python list; <strong>order-dependent first-usable-pair-wins</strong> (<code class="docutils literal notranslate"><span class="pre">:480</span></code>: skip if index already corrected/cleared); dict bookkeeping keyed by float wavelength (<code class="docutils literal notranslate"><span class="pre">:377</span></code>); <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>-based validation (<code class="docutils literal notranslate"><span class="pre">self_absorption.py:430-446</span></code>); warning strings; <code class="docutils literal notranslate"><span class="pre">replace(...)</span></code> dataclass churn.</p>
+</section>
+<section id="redesign">
+<h2>3. Redesign<a class="headerlink" href="#redesign" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Pair discovery is atomic-data-static:</strong> which lines form doublets depends only on (element, stage, E_k, λ, g_k, A_ki) — none of it measured. Precomputed at snapshot build (J0): <code class="docutils literal notranslate"><span class="pre">(P,</span> <span class="pre">2)</span></code> int32 line-index pairs + per-pair ρ and r_thin constants (<code class="docutils literal notranslate"><span class="pre">self_absorption.py:222-233</span></code>).</p></li>
+<li><p><strong>Root solve → fixed-K bisection:</strong> residual is smooth and pre-bracketed [1e-4, 30]; 60 fixed bisection steps give a relative bracket ≪ brentq’s xtol=1e-6 — branchless, vmapped over all P pairs at once. The same-sign thin test becomes a mask reproducing the τ=1e-4 branch exactly.</p></li>
+<li><p><strong>First-pair-wins → deterministic claim resolution:</strong> sort pairs in the reference iteration order; per-line <code class="docutils literal notranslate"><span class="pre">claimed_by</span> <span class="pre">=</span> <span class="pre">scatter-min(pair_index)</span></code> over the pair→line incidence; only the claiming pair’s correction applies. Order-free, deterministic; reproduces the sequential semantics whenever each line appears in ≤1 <em>usable</em> pair (the common case); the multi-claim contract is documented and fixed by the scatter-min rule.</p></li>
+<li><p><strong>Planck pass:</strong> already pure math incl. the fixed 64-term series — port verbatim. <strong>Suspect pass:</strong> per-element masked median (segment median over E groups, J4 helper) + boolean signature; inflation = <code class="docutils literal notranslate"><span class="pre">where(suspect,</span> <span class="pre">σ·3,</span> <span class="pre">σ)</span></code>.</p></li>
+<li><p><strong>Output:</strong> corrected <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">L)</span></code> intensity/σ + per-line uint8 method code + per-line τ, feeding the same padded arrays J4 consumes; <code class="docutils literal notranslate"><span class="pre">ObservableSAResult</span></code> counters (n_corrected/n_suspect/max_tau, <code class="docutils literal notranslate"><span class="pre">:406-411</span></code>) as masked reductions; warning strings host-side from codes.</p></li>
+</ul>
+</section>
+<section id="tolerance-contract">
+<h2>4. Tolerance contract<a class="headerlink" href="#tolerance-contract" title="Link to this heading"></a></h2>
+<p>τ atol 1e-6 per pair (= brentq xtol); corrected intensities rtol 1e-6; <strong>identical corrected/suspect/cleared sets</strong> under the documented pair-priority contract; quality counters exact.</p>
+</section>
+<section id="acceptance-criteria">
+<h2>5. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Contract green on golden fixtures + ChemCam BHVO-2 line lists.</p></li>
+<li><p><strong>Adversarial overlapping-doublet fixture</strong> (a triplet sharing one upper level → one line in two usable pairs) with the claim-resolution outcome asserted and documented.</p></li>
+<li><p>Significance gate, τ-ceiling force-suspect, and never-boost invariants property-tested (corrected intensity ≤ boosted bound; suspects only inflate σ).</p></li>
+<li><p>jit + vmap (B=16) + padding invariance; grad-finite hard assert (the escape-factor term feeds J7’s COG-in-regression extension).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>6. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_selfabs.py</span></code>: A/B vs <code class="docutils literal notranslate"><span class="pre">ObservableSelfAbsorptionCorrector</span></code> on identical observation arrays; bisection-vs-brentq property test over randomized (ρ, r_meas/r_thin) grids; the triplet fixture; counter equality.</p>
+</section>
+<section id="risks">
+<h2>7. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>LOW–MED. The only subtlety is the claim-ordering contract (mitigated by the adversarial fixture). Physics is closed-form throughout.</p>
+</section>
+<section id="dependencies-files">
+<h2>8. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0 (snapshot pairs), J4 (helpers). Enables J7 (corrected arrays + escape-factor term). Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/selfabs.py</span></code>, tests. Reference untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

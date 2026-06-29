@@ -1,0 +1,313 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JAX Port of alias.py — Codex + Gemini Consultation Synthesis &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">JAX Port of <code class="docutils literal notranslate"><span class="pre">alias.py</span></code> — Codex + Gemini Consultation Synthesis</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jax-port/alias-consultation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="jax-port-of-alias-py-codex-gemini-consultation-synthesis">
+<h1>JAX Port of <code class="docutils literal notranslate"><span class="pre">alias.py</span></code> — Codex + Gemini Consultation Synthesis<a class="headerlink" href="#jax-port-of-alias-py-codex-gemini-consultation-synthesis" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p><strong>SUPERSEDED (historical):</strong> This 2026-05-12 consultation is kept as design
+provenance only. The JAX/jittable inversion effort was subsequently
+re-scoped by <a class="reference internal" href="../adr/ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> and
+implemented in the shipped <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> package; some conclusions below
+were revised by that decision. Do not treat this as current guidance.</p>
+</div></blockquote>
+<p>Date: 2026-05-12
+Branch: <code class="docutils literal notranslate"><span class="pre">feat/jax-alias-finish</span></code>
+Models consulted: <code class="docutils literal notranslate"><span class="pre">gpt-5.3-codex</span></code> (Codex), <code class="docutils literal notranslate"><span class="pre">gemini-3.1-pro-low</span></code> (Gemini 3.1 Pro)</p>
+<section id="audit-of-remaining-scipy-hot-spots-in-cflibs-inversion-identify-alias-py">
+<h2>Audit of remaining scipy hot spots in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py</span></code><a class="headerlink" href="#audit-of-remaining-scipy-hot-spots-in-cflibs-inversion-identify-alias-py" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Hot spot</p></th>
+<th class="head"><p>Per-spectrum cost</p></th>
+<th class="head"><p>JAX viability</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.optimize.nnls</span></code> (lines 627, 2132, 2147, 2254)</p></td>
+<td><p>~12-15 calls per spectrum (1 full + leave-one-out + iron-group + sparse fallback) on ~30×12 matrices</p></td>
+<td><p>High</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.optimize.minimize</span></code> L-BFGS-B (line 2240) for sparse elastic-net NNLS</p></td>
+<td><p>1 call per spectrum, ~12-vector</p></td>
+<td><p>High</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> (line 966)</p></td>
+<td><p>1 call per spectrum, ~5000-pixel input</p></td>
+<td><p>Low (dynamic output shape)</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.special.erf</span></code> (line 2422)</p></td>
+<td><p>1 scalar call per spectrum</p></td>
+<td><p>Low (scalar dispatch overhead)</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_build_nnls_templates</span></code> Python loop (lines 2079-2096)</p></td>
+<td><p>1 build per spectrum, broadcastable</p></td>
+<td><p>High</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.stats.binom.sf</span></code> (line 2408)</p></td>
+<td><p>1 scalar call per element per spectrum</p></td>
+<td><p>Low (no JAX equivalent + cheap)</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.stats.linregress</span></code> (line 1167)</p></td>
+<td><p>1 call per spectrum</p></td>
+<td><p><strong>Already ported</strong> in PR #118</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="question-a-nnls-solver-choice">
+<h2>Question A — NNLS solver choice<a class="headerlink" href="#question-a-nnls-solver-choice" title="Link to this heading"></a></h2>
+<p><strong>Both models agree: FISTA (projected gradient + Nesterov momentum) is the right call.</strong></p>
+<ul class="simple">
+<li><p>Codex: projected-gradient NNLS with Lipschitz step from <code class="docutils literal notranslate"><span class="pre">||A||_2^2</span></code>. Trivial under
+<code class="docutils literal notranslate"><span class="pre">jit</span></code>/<code class="docutils literal notranslate"><span class="pre">vmap</span></code>. Optional Nesterov acceleration for faster convergence.</p></li>
+<li><p>Gemini: FISTA explicitly — Nesterov momentum hits <code class="docutils literal notranslate"><span class="pre">rtol</span> <span class="pre">1e-5</span></code> reliably; FNNLS
+(Lawson-Hanson active-set) has dynamic shape issues under <code class="docutils literal notranslate"><span class="pre">vmap</span></code>.</p></li>
+</ul>
+<p><strong>Why not FNNLS:</strong> active-set branching → variable-length passive set → cannot
+<code class="docutils literal notranslate"><span class="pre">vmap</span></code> cleanly. The whole point of the JAX path is future batching, so we
+avoid it.</p>
+<p><strong>Why not <code class="docutils literal notranslate"><span class="pre">jax.scipy.optimize.minimize</span></code> BFGS:</strong> both models confirmed it does
+<strong>not</strong> support bounds. JAXopt has <code class="docutils literal notranslate"><span class="pre">LBFGSB</span></code>/<code class="docutils literal notranslate"><span class="pre">ProjectedGradient</span></code> but adds a
+dependency we don’t need.</p>
+<p><strong>Iteration budget (followup to Codex):</strong> 1000 iters default, hard cap at 2000.
+For correlated columns (which happens when neighboring elements have overlapping
+peaks), objective converges fast but <code class="docutils literal notranslate"><span class="pre">x</span></code>-values may shift away from the
+SciPy active-set minimum. With well-conditioned <code class="docutils literal notranslate"><span class="pre">A</span></code> and a fixed-iter loop,
+1000 iters is plenty for <code class="docutils literal notranslate"><span class="pre">rtol</span> <span class="pre">1e-5</span></code> on residual; <code class="docutils literal notranslate"><span class="pre">x</span></code>-level matching may
+relax to <code class="docutils literal notranslate"><span class="pre">atol</span> <span class="pre">1e-4</span></code> in adversarial cases.</p>
+<p><strong>Final design:</strong> FISTA with <code class="docutils literal notranslate"><span class="pre">lax.fori_loop</span></code> (fixed iter count, jit-friendly).
+KKT-based early-stop is avoided because dynamic iteration count breaks
+<code class="docutils literal notranslate"><span class="pre">vmap</span></code>. 1000 iters is the default; the inner FISTA implementation is shared
+across the dense and sparse-elastic-net branches.</p>
+</section>
+<section id="question-b-sparse-elastic-net-nnls">
+<h2>Question B — Sparse elastic-net NNLS<a class="headerlink" href="#question-b-sparse-elastic-net-nnls" title="Link to this heading"></a></h2>
+<p><strong>Both models agree:</strong> no <code class="docutils literal notranslate"><span class="pre">minimize</span></code> with bounds in JAX. Use FISTA — under
+<code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">≥</span> <span class="pre">0</span></code>, the L1 term collapses to <code class="docutils literal notranslate"><span class="pre">α·sum(x)</span></code> and the full elastic-net
+objective is smooth, so a single FISTA implementation handles both
+the dense and sparse cases via different gradient terms.</p>
+<p>Objective: <code class="docutils literal notranslate"><span class="pre">0.5</span> <span class="pre">||A_norm</span> <span class="pre">x</span> <span class="pre">-</span> <span class="pre">b||^2</span> <span class="pre">+</span> <span class="pre">l1·sum(x)</span> <span class="pre">+</span> <span class="pre">0.5·l2·||x||^2</span></code>
+Gradient:  <code class="docutils literal notranslate"><span class="pre">A_norm^T</span> <span class="pre">(A_norm</span> <span class="pre">x</span> <span class="pre">-</span> <span class="pre">b)</span> <span class="pre">+</span> <span class="pre">l1</span> <span class="pre">+</span> <span class="pre">l2·x</span></code></p>
+<p>Column normalization is preserved exactly as in the CPU code path for
+backward-compatible coefficient scaling (<code class="docutils literal notranslate"><span class="pre">sparse_c</span> <span class="pre">=</span> <span class="pre">result.x</span> <span class="pre">/</span> <span class="pre">col_norms</span></code>).</p>
+</section>
+<section id="question-c-find-peaks">
+<h2>Question C — <code class="docutils literal notranslate"><span class="pre">find_peaks</span></code><a class="headerlink" href="#question-c-find-peaks" title="Link to this heading"></a></h2>
+<p><strong>Both models agree: SKIP for this PR.</strong> Reasons:</p>
+<ul class="simple">
+<li><p>Dynamic output shape (variable number of peaks) — incompatible with <code class="docutils literal notranslate"><span class="pre">vmap</span></code>
+without padding to <code class="docutils literal notranslate"><span class="pre">max_peaks</span></code>, which adds complexity for no current benefit.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> is already C-backend, called once per spectrum.
+The win is only when wrapping inside a <code class="docutils literal notranslate"><span class="pre">vmap</span></code>-ed batch path, which isn’t
+there yet.</p></li>
+<li><p>Both recommend implementing later as <code class="docutils literal notranslate"><span class="pre">lax.reduce_window</span></code> 1D max-pool +
+boolean mask + padding-to-<code class="docutils literal notranslate"><span class="pre">max_peaks</span></code>, when an end-to-end batched path is
+built.</p></li>
+</ul>
+<p><strong>Decision:</strong> Document as left on CPU. The JAX path uses the CPU peak
+detector and only ports the per-element scoring downstream.</p>
+</section>
+<section id="question-d-scalar-erf">
+<h2>Question D — Scalar <code class="docutils literal notranslate"><span class="pre">erf</span></code><a class="headerlink" href="#question-d-scalar-erf" title="Link to this heading"></a></h2>
+<p><strong>Both models agree:</strong> porting a single scalar call is a pure dispatch loss
+(JAX trace overhead &gt; C call). However, if the surrounding context is
+batched (e.g. computing <code class="docutils literal notranslate"><span class="pre">P_SNR</span></code> for many spectra inside a <code class="docutils literal notranslate"><span class="pre">vmap</span></code>-ed call),
+the JAX version becomes free.</p>
+<p><strong>Decision:</strong> Provide <code class="docutils literal notranslate"><span class="pre">_compute_p_snr_jax</span></code> that operates on a batch of
+spectra (B-element intensity batch + B-list of peak intensities). The
+batched version uses <code class="docutils literal notranslate"><span class="pre">jax.scipy.special.erf</span></code> and is the opt-in path; the
+existing scalar code path is untouched.</p>
+</section>
+<section id="question-e-added-gaussian-template-matrix-builder">
+<h2>Question E (added) — Gaussian template matrix builder<a class="headerlink" href="#question-e-added-gaussian-template-matrix-builder" title="Link to this heading"></a></h2>
+<p>Gemini specifically pointed out that the right port for hot spot #5 is
+broadcasting:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># shapes: peaks (n_peaks,1), lines (1, n_lines), sigma (n_peaks,1)</span>
+<span class="n">z</span> <span class="o">=</span> <span class="p">(</span><span class="n">peaks</span> <span class="o">-</span> <span class="n">lines</span><span class="p">)</span> <span class="o">/</span> <span class="n">sigma</span>
+<span class="n">A_col_contrib</span> <span class="o">=</span> <span class="n">eps</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5</span> <span class="o">*</span> <span class="n">z</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">peaks</span> <span class="o">-</span> <span class="n">lines</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">sigma</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is the cleanest port and the most directly batchable across spectra.</p>
+</section>
+<section id="final-port-plan-this-pr">
+<h2>Final port plan (this PR)<a class="headerlink" href="#final-port-plan-this-pr" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Function</p></th>
+<th class="head"><p>Action</p></th>
+<th class="head"><p>Tests</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve_nnls_jax(A,</span> <span class="pre">b)</span></code></p></td>
+<td><p>New module-level function — FISTA, 1000 iters, jit</p></td>
+<td><p>rtol 1e-5 vs scipy on random + correlated matrices</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve_sparse_nnls_jax(A,</span> <span class="pre">b,</span> <span class="pre">alpha,</span> <span class="pre">l1_ratio)</span></code></p></td>
+<td><p>New module-level — same FISTA with elastic-net grad</p></td>
+<td><p>match L-BFGS-B output to atol 1e-4 (non-unique solutions allowed to shift)</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_compute_nnls_attribution_jax(A,</span> <span class="pre">peak_intensities)</span></code></p></td>
+<td><p>Vectorized leave-one-out: builds a (n_cands, n_peaks, n_cands-1) tensor of leave-one-out A’s, runs <code class="docutils literal notranslate"><span class="pre">vmap</span></code>-ed FISTA over axis 0</p></td>
+<td><p>rtol 1e-4 vs CPU (FISTA accumulates)</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_build_nnls_templates_jax(...)</span></code></p></td>
+<td><p>Vectorized via broadcasting</p></td>
+<td><p>rtol 1e-10 vs CPU (exact arithmetic)</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_compute_p_snr_jax(intensity_batch,</span> <span class="pre">peak_indices_padded,</span> <span class="pre">peak_counts)</span></code></p></td>
+<td><p>Batched JAX p_snr using <code class="docutils literal notranslate"><span class="pre">jax.scipy.special.erf</span></code></p></td>
+<td><p>rtol 1e-6 vs CPU</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">find_peaks</span></code></p></td>
+<td><p>LEAVE ON CPU — documented in PR body</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">binom.sf</span></code></p></td>
+<td><p>LEAVE ON CPU — scalar, no JAX path needed</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Constructor opt-in flags: <code class="docutils literal notranslate"><span class="pre">use_jax_nnls</span></code>, <code class="docutils literal notranslate"><span class="pre">use_jax_p_snr</span></code></p></td>
+<td><p>Mirror <code class="docutils literal notranslate"><span class="pre">use_jax_boltzmann_fit</span></code> pattern</p></td>
+<td><p>constructor tests</p></td>
+</tr>
+</tbody>
+</table>
+<p>The new code lives in <code class="docutils literal notranslate"><span class="pre">alias.py</span></code> next to the existing
+<code class="docutils literal notranslate"><span class="pre">boltzmann_temperature_jax</span></code>. No external file changes.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

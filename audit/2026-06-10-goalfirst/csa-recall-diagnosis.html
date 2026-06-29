@@ -1,0 +1,475 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSA planetary recall diagnosis (bead CF-LIBS-improved-0fuh) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CSA planetary recall diagnosis (bead CF-LIBS-improved-0fuh)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-10-goalfirst/csa-recall-diagnosis.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="csa-planetary-recall-diagnosis-bead-cf-libs-improved-0fuh">
+<h1>CSA planetary recall diagnosis (bead CF-LIBS-improved-0fuh)<a class="headerlink" href="#csa-planetary-recall-diagnosis-bead-cf-libs-improved-0fuh" title="Link to this heading"></a></h1>
+<p><strong>Baseline (seeded board, 12 spectra, seed 20260610):</strong> P=1.000 R=0.267 F1=0.422,
+RMSE 15.82 wt% (median), 1 failure — the hardest real benchmark on the
+2026-06-10 scoreboard.</p>
+<p><strong>After the two calibration fixes in this bead:</strong> P=1.000 R=0.319 F1=0.484,
+0 failures. RMSE median 29.18 wt% (regression explained in §4 — a pre-existing
+solve-stage mechanism that the recall win now exposes on more spectra).</p>
+<p>Reproduce:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span>cflibs<span class="w"> </span>scoreboard<span class="w"> </span>--datasets<span class="w"> </span>csa_planetary<span class="w"> </span>--max-spectra<span class="w"> </span><span class="m">12</span><span class="w"> </span>--seed<span class="w"> </span><span class="m">20260610</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-dir<span class="w"> </span>output/scoreboard_csa
+</pre></div>
+</div>
+<section id="the-instrument-first">
+<h2>1. The instrument, first<a class="headerlink" href="#the-instrument-first" title="Link to this heading"></a></h2>
+<p>The CSA spectra (<code class="docutils literal notranslate"><span class="pre">data/csa_planetary_libs/</span></code>, adapter
+<code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/datasets/csa_planetary.py</span></code>) are <strong>stitched 11-segment
+broadband axes</strong> (198.07–970.14 nm, 13 490 samples, step 0.034–0.053 nm with
+0.31–1.25 nm inter-channel gaps; <code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code> finds 10 seams on every
+spectrum — consistent with a multi-channel Ocean-Optics-class spectrometer).
+Raw pulse-averaged counts, no certified resolving power (<code class="docutils literal notranslate"><span class="pre">resolving_power=None</span></code>).</p>
+<p>Each channel carries its <strong>own wavelength registration error</strong>. Measured
+per-segment shift fits (trusted, RMSE ≤ 0.05 nm) on the sampled spectra:
+−0.03 nm (198–266), −0.38 (266–294), −0.11 (294–471), ~0.00 (505–586),
+−0.31 nm (798–911). A single global shift model cannot represent this, and the
+line-matching tolerance is 0.1 nm — so whichever channels the global
+compromise leaves mis-registered lose their elements.</p>
+</section>
+<section id="miss-matrix-seeded-12-spectrum-board-before-fixes">
+<h2>2. Miss matrix (seeded 12-spectrum board, before fixes)<a class="headerlink" href="#miss-matrix-seeded-12-spectrum-board-before-fixes" title="Link to this heading"></a></h2>
+<p>TP=31 FP=0 FN=85 over 116 truth-element instances. Per-element FN/truth:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>El</p></th>
+<th class="head"><p>FN</p></th>
+<th class="head"><p>El</p></th>
+<th class="head"><p>FN</p></th>
+<th class="head"><p>El</p></th>
+<th class="head"><p>FN</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Si</p></td>
+<td><p>12/12</p></td>
+<td><p>P</p></td>
+<td><p>10/10</p></td>
+<td><p>C</p></td>
+<td><p>6/7</p></td>
+</tr>
+<tr class="row-odd"><td><p>Al</p></td>
+<td><p>11/11</p></td>
+<td><p>Ca</p></td>
+<td><p>10/11</p></td>
+<td><p>Mg</p></td>
+<td><p>4/11</p></td>
+</tr>
+<tr class="row-even"><td><p>Mn</p></td>
+<td><p>11/11</p></td>
+<td><p>K</p></td>
+<td><p>9/10</p></td>
+<td><p>Fe</p></td>
+<td><p>3/12</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na</p></td>
+<td><p>8/10</p></td>
+<td><p>Ti</p></td>
+<td><p>1/11</p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<p>The misses are <strong>systematic, not random</strong>: the silicate majors Si and Al are
+missed on every spectrum; Ca on 10/11. Fe/Ti/Mg (dense line forests in the
+well-anchored 294–471 nm channel) almost always survive.</p>
+<p><strong>Stage attribution:</strong> every FN element has <code class="docutils literal notranslate"><span class="pre">predicted_wt</span> <span class="pre">==</span> <span class="pre">0.0</span></code> exactly and
+<code class="docutils literal notranslate"><span class="pre">dropped_elements[el]</span> <span class="pre">==</span> <span class="pre">&quot;detection&quot;</span></code> — <strong>zero FNs at the selection gate, zero
+at solve-below-epsilon</strong>. Nothing is being solved-then-dropped; the elements
+never produce observations. (<code class="docutils literal notranslate"><span class="pre">detect_and_select_lines</span></code> diagnostics, all 12
+spectra.)</p>
+<section id="sub-stage-attribution-inside-detection">
+<h3>Sub-stage attribution inside detection<a class="headerlink" href="#sub-stage-attribution-inside-detection" title="Link to this heading"></a></h3>
+<p>Replaying the detection internals (kdet → comb shift-scan → shift-coherence
+veto → per-line residual gate) per truth element across the 12 spectra:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Bucket</p></th>
+<th class="head"><p>Count</p></th>
+<th class="head"><p>Share of FN</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>comb gate failure (dominated by <code class="docutils literal notranslate"><span class="pre">comb_min_precision</span></code>)</p></td>
+<td><p>69</p></td>
+<td><p>~80 %</p></td>
+</tr>
+<tr class="row-odd"><td><p>shift-coherence veto (passed comb, then killed)</p></td>
+<td><p>17</p></td>
+<td><p>~20 %</p></td>
+</tr>
+<tr class="row-even"><td><p>kdet, no-peaks, selection, solve</p></td>
+<td><p>0</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p>Example (Andesite73302, 308 detected peaks; comb pass needs matched ≥ 3,
+precision = matched/total_peaks ≥ 0.02 → <strong>≥ 7 matched lines</strong>, recall ≥ 0.1,
+missing_fraction ≤ 0.85):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>El</p></th>
+<th class="head"><p>matched/30 comb lines</p></th>
+<th class="head"><p>gates failed</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Ca</p></td>
+<td><p>14</p></td>
+<td><p>passes comb → <strong>vetoed</strong> (coherence)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg</p></td>
+<td><p>8</p></td>
+<td><p>passes comb → <strong>vetoed</strong> (coherence)</p></td>
+</tr>
+<tr class="row-even"><td><p>K</p></td>
+<td><p>6</p></td>
+<td><p>precision (needs 7)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si</p></td>
+<td><p>4</p></td>
+<td><p>precision + missing_fraction</p></td>
+</tr>
+<tr class="row-even"><td><p>Al</p></td>
+<td><p>4</p></td>
+<td><p>precision + missing_fraction</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na</p></td>
+<td><p>4</p></td>
+<td><p>precision + missing_fraction</p></td>
+</tr>
+<tr class="row-even"><td><p>Mn</p></td>
+<td><p>3</p></td>
+<td><p>precision + missing_fraction</p></td>
+</tr>
+<tr class="row-odd"><td><p>P</p></td>
+<td><p>1</p></td>
+<td><p>matches + recall + …</p></td>
+</tr>
+<tr class="row-even"><td><p>C</p></td>
+<td><p>1</p></td>
+<td><p>matches + recall + …</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="root-causes-ranked">
+<h2>3. Root causes, ranked<a class="headerlink" href="#root-causes-ranked" title="Link to this heading"></a></h2>
+<section id="rc1-catalog-aliased-segment-fits-wreck-the-per-channel-calibration-fixed">
+<h3>RC1 — catalog-aliased segment fits wreck the per-channel calibration (fixed)<a class="headerlink" href="#rc1-catalog-aliased-segment-fits-wreck-the-per-channel-calibration-fixed" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis_segmented</span></code> correctly fits most channels (offsets
+−0.03…−0.38 nm, RMSE ≤ 0.05). But on 5+ of the 12 spectra <strong>one short channel’s
+RANSAC fit locks onto a self-coherent, wrong registration 1–1.8 nm away</strong>
+(e.g. Andesite73302 seg 266–294 nm: 13 inliers, RMSE 0.025 nm, shift −1.58 nm;
+RedClay seg 471–505: +1.70; Ilmenite seg 198–266: −1.06). Dense catalogs make
+a wrong global minimum easy on a 20–30 nm window with 10–20 peaks.</p>
+<p>Two downstream behaviours, both bad:</p>
+<ul class="simple">
+<li><p>The aliased correction tears the stitched axis apart at a seam; the
+monotonicity restore needs &gt; 0.5 nm cumulative shift and the code <strong>reverted
+ALL segment fits to the global single-shift model</strong> (“large cumulative seam
+shift” warning). The global shift (≈ −0.09 nm) leaves per-channel residuals
+of −0.10…+0.30 nm against a 0.1 nm matching tolerance: Si 251.61/288.16,
+Mg 279.6/280.3/285.2, Na 818.3/819.5 all land outside or at the edge of
+tolerance → matched counts collapse → <code class="docutils literal notranslate"><span class="pre">comb_min_precision</span></code> fails (bucket 1).</p></li>
+<li><p>When the seams happen to swallow the discontinuity (Ilmenite), the aliased
+segment <strong>silently corrupts its channel by &gt; 1 nm</strong> — Ilmenite’s entire UV
+(Fe/Mn-rich) channel was displaced, leaving only Ti.</p></li>
+</ul>
+<p>The residual wavelength-dependent error also explains bucket 2: the
+shift-coherence veto pools ONE consensus residual across the whole axis. The
+consensus lands on the Fe/Ti-anchored 294–471 nm channel (+0.05 nm); Ca and Mg,
+whose lines sit in channels with residuals of opposite sign (−0.03…−0.19),
+pass the comb and are then <strong>vetoed as incoherent</strong> — the single-residual
+assumption is false on a stitched instrument when per-channel correction has
+failed.</p>
+<p><strong>Fix applied (cflibs/inversion/preprocess/wavelength_calibration.py):</strong></p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">segment_max_global_disagreement_nm</span></code> (default 0.5): a trusted segment fit
+whose median correction departs from the global fit’s correction over the
+same samples by more than the bound is demoted to the global fallback.
+Real channel offsets measured here are ≤ 0.4 nm; aliases are ≥ 0.9 nm —
+clean separation. Worst case equals the previous post-revert behaviour
+(“no segment worse than the global model”).</p></li>
+<li><p>All-fallback quality inheritance: when every segment falls back to the
+global correction the stitched result IS the global fit, so it now inherits
+the global fit’s quality verdict instead of being declared
+<code class="docutils literal notranslate"><span class="pre">quality_passed=False</span></code> (which made the pipeline discard a quality-passed
+axis and re-detect on the raw axis — the Graphite failure mode).</p></li>
+</ol>
+<p>Regression tests: <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_wavelength_calibration.py::</span> <span class="pre">TestSegmentGlobalDisagreementGate</span></code> (4 tests covering alias demotion, plausible
+offsets kept, quality inheritance pass/fail).</p>
+</section>
+<section id="rc2-scoring-design-29-85-fns-are-structurally-unwinnable">
+<h3>RC2 — scoring design: 29/85 FNs are structurally unwinnable<a class="headerlink" href="#rc2-scoring-design-29-85-fns-are-structurally-unwinnable" title="Link to this heading"></a></h3>
+<p>Truth presence uses cutoff 0.01 wt% (<code class="docutils literal notranslate"><span class="pre">PRESENCE_CUTOFF_WT</span></code>); a predicted element
+is “called present” only at ≥ 0.5 wt% (<code class="docutils literal notranslate"><span class="pre">PRESENCE_EPS_MASSFRAC</span></code>). Every truth
+element certified between 0.01 and 0.5 wt% is therefore a guaranteed FN even
+for a <em>perfect</em> pipeline (predicting its true concentration still falls below
+the presence epsilon). On this board: <strong>29 of 85 FNs</strong> (C 5, Mn 8, P 9, plus
+trace-level K/Al/Ca/Mg/Si/Fe rows) → <strong>recall ceiling 0.75</strong>. This affects
+every element-wt dataset, not just CSA. Scoreboard policy — reported, not
+changed here (the campaign objective shares the presence rule).</p>
+</section>
+<section id="rc3-comb-min-precision-scales-with-spectrum-richness-largest-residual-bucket">
+<h3>RC3 — <code class="docutils literal notranslate"><span class="pre">comb_min_precision</span></code> scales with spectrum richness (largest residual bucket)<a class="headerlink" href="#rc3-comb-min-precision-scales-with-spectrum-richness-largest-residual-bucket" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">precision</span> <span class="pre">=</span> <span class="pre">matched_lines</span> <span class="pre">/</span> <span class="pre">total_peaks</span> <span class="pre">≥</span> <span class="pre">0.02</span></code> demands 5 matches at 250
+peaks and <strong>13 at 650 peaks</strong> (Ilmenite: Ca matched 12 real lines and failed).
+Sparse-line emitters (K: 2 strong lines; Na: 4; Al: 4; Si: ~5 on this
+instrument) cannot scale their physical line count with the sample’s peak
+richness, so the gate structurally deletes them on busy broadband spectra.
+After the calibration fixes this remains the dominant residual bucket
+(64 of 79 residual FNs). Changing it is identifier-scoring tuning with known
+regression risk (paper-faithful-ALIAS precedent, PR #229) — recommended for a
+benchmark-gated follow-up, not changed here.</p>
+</section>
+<section id="rc4-global-max-relative-peak-floor-starves-weak-channels">
+<h3>RC4 — global-max-relative peak floor starves weak channels<a class="headerlink" href="#rc4-global-max-relative-peak-floor-starves-weak-channels" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">min_peak_height</span> <span class="pre">=</span> <span class="pre">0.01</span> <span class="pre">×</span> <span class="pre">max(intensity)</span></code>: the saturated Na D blend
+(the global max on most rocks) sets the floor ~50× above the C I 247.86 nm
+peak (0.17 % of max) and ~2–5× above the P I 253.6/255.3 peaks. On a stitched
+instrument whose channels differ by orders of magnitude in response, a
+global-max-relative floor erases entire weak channels. C and P are mostly
+&lt; 0.5 wt% here (RC2) so the recall impact on this board is small, but the
+mechanism is real for any weak-channel major. Reported, not changed.</p>
+</section>
+</section>
+<section id="composition-rmse-15-82-why-and-why-it-moves-to-29-18-after-the-fix">
+<h2>4. Composition: RMSE 15.82 → why, and why it moves to 29.18 after the fix<a class="headerlink" href="#composition-rmse-15-82-why-and-why-it-moves-to-29-18-after-the-fix" title="Link to this heading"></a></h2>
+<p>Per-element signed errors (mean over scored spectra, before): Si −21.5,
+Al −6.8 (the never-found majors count as 0 predicted), and Fe +12.7, Mg +16.7,
+Na +12.8, K +8.5, Ti +10.2 — <strong>the closure renormalizes the missing majors’
+mass onto whatever survived detection</strong>. RMSE 15.82 is the same detection
+failure seen through the closure equation, not an independent solve problem.</p>
+<p>After the fix, recall improves (Na found on 6 spectra vs 2, Mn/Mg gained,
+RockFer2 and Graphite both solve) but RMSE median worsens 15.82 → 29.18.
+Driver: the newly admitted <strong>alkali resonance lines are strongly self-absorbed</strong>
+(the Na D blend is the brightest feature of the spectrum) and the geological
+preset runs with <code class="docutils literal notranslate"><span class="pre">apply_self_absorption='off'</span></code>, so Na solves to 84–128 “wt%”
+(K to 90) — Na signed error +57. This mechanism <strong>pre-exists this change</strong>
+(before-board AndesiteAGV2: K 89.7, Na 51.7; BasaltBHVO2: Na 83.8) — finding
+more real elements simply exposes it on more spectra. Note also that predicted
+element mass fractions can sum to &gt; 1 (Andesite73302 after: Σ ≈ 1.50) — the
+oxide-closure output is not a normalized composition in this regime; that is a
+solve-stage bug lead in its own right.</p>
+</section>
+<section id="gate-results">
+<h2>5. Gate results<a class="headerlink" href="#gate-results" title="Link to this heading"></a></h2>
+<p>CSA seeded board (12 spectra, seed 20260610):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>P</p></th>
+<th class="head"><p>R</p></th>
+<th class="head"><p>F1</p></th>
+<th class="head"><p>RMSE med</p></th>
+<th class="head"><p>failures</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>before</p></td>
+<td><p>1.000</p></td>
+<td><p>0.267</p></td>
+<td><p>0.422</p></td>
+<td><p>15.82</p></td>
+<td><p>1 (RockFer2)</p></td>
+</tr>
+<tr class="row-odd"><td><p>after</p></td>
+<td><p><strong>1.000</strong></p></td>
+<td><p><strong>0.319</strong></p></td>
+<td><p><strong>0.484</strong></p></td>
+<td><p>29.18</p></td>
+<td><p><strong>0</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>No-regression boards (6 spectra, seed 20260610):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>dataset</p></th>
+<th class="head"><p>before P/R/F1</p></th>
+<th class="head"><p>after P/R/F1</p></th>
+<th class="head"><p>new FPs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>aalto</p></td>
+<td><p>1.000/0.471/0.640</p></td>
+<td><p>identical</p></td>
+<td><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p>chemcam_calib</p></td>
+<td><p>0.935/0.547/0.690</p></td>
+<td><p><strong>0.968/0.566/0.714</strong></p></td>
+<td><p>0 (one FP <em>removed</em>: SRM97A Ag)</p></td>
+</tr>
+<tr class="row-even"><td><p>silva2022</p></td>
+<td><p>0.000/0.000/0.000 (all 6 fail)</p></td>
+<td><p>identical</p></td>
+<td><p>0</p></td>
+</tr>
+</tbody>
+</table>
+<p>Targeted tests: <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_wavelength_calibration.py</span></code> 44/44,
+<code class="docutils literal notranslate"><span class="pre">tests/cli/test_pipeline_defaults.py</span></code> 34/34.</p>
+</section>
+<section id="recommended-follow-ups-not-applied-here">
+<h2>6. Recommended follow-ups (not applied here)<a class="headerlink" href="#recommended-follow-ups-not-applied-here" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Segment-aware residual consensus</strong> for the shift-coherence veto and
+per-line residual gate: on seam-detected axes, pool residuals per channel
+instead of globally. Removes the remaining veto bucket (15 instances after
+fix) without weakening the FP guard on single-channel instruments.</p></li>
+<li><p><strong>Bound <code class="docutils literal notranslate"><span class="pre">comb_min_precision</span></code>’s implied match count</strong> (e.g. cap the
+effective requirement at <code class="docutils literal notranslate"><span class="pre">min(ceil(0.02</span> <span class="pre">*</span> <span class="pre">total_peaks),</span> <span class="pre">N)</span></code> with N ~ 6–8)
+or normalize per element by its detectable line count. Largest residual
+recall bucket (64 instances); MUST be benchmark-gated across all boards
+(identifier-scoring precedent: audit Family 5 regressed F1 −0.041).</p></li>
+<li><p><strong>Self-absorption for alkali resonance lines at solve</strong>: evaluate
+<code class="docutils literal notranslate"><span class="pre">apply_self_absorption='observable'</span></code> (CDSB) for the geological preset, or
+down-weight resonance lines in the Boltzmann fit when an element has ≥ 3
+optically-thin lines. This is what RMSE on CSA (and the Na/K signed errors
+on chemcam_calib) is actually measuring now.</p></li>
+<li><p><strong>Closure normalization bug lead</strong>: predicted mass fractions summing to
+1.5 (§4) — the oxide closure’s output should never exceed unity.</p></li>
+<li><p><strong>Presence-rule mismatch</strong> (RC2): align <code class="docutils literal notranslate"><span class="pre">PRESENCE_CUTOFF_WT</span></code> (0.01 wt%)
+with <code class="docutils literal notranslate"><span class="pre">PRESENCE_EPS_MASSFRAC</span></code> (0.5 wt%) or report “detectable-truth recall”
+alongside raw recall; 34 % of CSA FNs are unwinnable by construction.</p></li>
+<li><p><strong>Per-channel peak floor</strong> (RC4) for stitched instruments.</p></li>
+</ol>
+</section>
+<section id="artifacts">
+<h2>Artifacts<a class="headerlink" href="#artifacts" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Before/after seeded boards and per-spectrum JSON: <code class="docutils literal notranslate"><span class="pre">output/w8/csa_before/</span></code>,
+<code class="docutils literal notranslate"><span class="pre">output/w8/csa_after2/</span></code>, regression boards <code class="docutils literal notranslate"><span class="pre">output/w8/reg_before/</span></code>,
+<code class="docutils literal notranslate"><span class="pre">output/w8/reg_after/</span></code> (local, not committed).</p></li>
+<li><p>Diagnosis scripts (replayable): <code class="docutils literal notranslate"><span class="pre">output/w8/diag_stage2.py</span></code> (stage
+attribution), <code class="docutils literal notranslate"><span class="pre">output/w8/diag_buckets.py</span></code> (sub-stage buckets),
+<code class="docutils literal notranslate"><span class="pre">output/w8/diag_forensic.py</span></code> (per-element comb/veto forensics),
+<code class="docutils literal notranslate"><span class="pre">output/w8/diag_cal_segments.py</span></code> (per-segment calibration dump).</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

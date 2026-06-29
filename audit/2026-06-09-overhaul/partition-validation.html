@@ -1,0 +1,756 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Partition-function validation — Barklem &amp; Collet 2016 patch &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Partition-function validation — Barklem &amp; Collet 2016 patch</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/partition-validation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="partition-function-validation-barklem-collet-2016-patch">
+<h1>Partition-function validation — Barklem &amp; Collet 2016 patch<a class="headerlink" href="#partition-function-validation-barklem-collet-2016-patch" title="Link to this heading"></a></h1>
+<p>Bead CF-LIBS-improved-16m7 / audit findings 01-F3, 02-F1. Generated by
+<code class="docutils literal notranslate"><span class="pre">scripts/patch_partition_functions_bc2016.py</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">U_old</span></code> = runtime policy on the shipped DB (direct-sum preferred; the
+canonical fallback ladder for absent species). <code class="docutils literal notranslate"><span class="pre">U_patched</span></code> = runtime
+policy on the patched copy (<code class="docutils literal notranslate"><span class="pre">BarklemCollet2016</span></code> rows are authoritative).
+<code class="docutils literal notranslate"><span class="pre">U_ref</span></code> = B&amp;C Table 8 (Nov-2022 revision) interpolated in (ln T, ln U)
+where in-grid (≤ 10 000 K, so 0.8 eV); above the grid edge (1.0 and
+1.3 eV) the reference is the documented effective-level extension —
+B&amp;C publish no values there (<code class="docutils literal notranslate"><span class="pre">ext:</span></code> rows). Gate: patched within 2 %.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Species</p></th>
+<th class="head"><p>T (eV)</p></th>
+<th class="head"><p>T (K)</p></th>
+<th class="head"><p>U_old</p></th>
+<th class="head"><p>U_patched</p></th>
+<th class="head"><p>U_ref</p></th>
+<th class="head"><p>ref kind</p></th>
+<th class="head"><p>old vs ref</p></th>
+<th class="head"><p>patched vs ref</p></th>
+<th class="head"><p>≤2 %</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Fe I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>52.285</p></td>
+<td><p>52.913</p></td>
+<td><p>52.975</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-1.3 %</p></td>
+<td><p>-0.12 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fe I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>75.508</p></td>
+<td><p>78.533</p></td>
+<td><p>78.468</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-3.8 %</p></td>
+<td><p>+0.08 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>124.802</p></td>
+<td><p>138.178</p></td>
+<td><p>138.240</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-9.7 %</p></td>
+<td><p>-0.04 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fe II</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>62.961</p></td>
+<td><p>63.010</p></td>
+<td><p>63.029</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-0.1 %</p></td>
+<td><p>-0.03 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe II</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>76.468</p></td>
+<td><p>76.476</p></td>
+<td><p>76.468</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>+0.01 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fe II</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>101.093</p></td>
+<td><p>101.088</p></td>
+<td><p>101.093</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>-0.00 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Ti I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>66.887</p></td>
+<td><p>72.343</p></td>
+<td><p>72.244</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-7.4 %</p></td>
+<td><p>+0.14 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>97.103</p></td>
+<td><p>111.181</p></td>
+<td><p>111.367</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-12.8 %</p></td>
+<td><p>-0.17 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Ti I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>150.710</p></td>
+<td><p>186.056</p></td>
+<td><p>185.938</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-18.9 %</p></td>
+<td><p>+0.06 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti II</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>79.533</p></td>
+<td><p>79.651</p></td>
+<td><p>79.670</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-0.2 %</p></td>
+<td><p>-0.02 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Ti II</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>92.544</p></td>
+<td><p>92.913</p></td>
+<td><p>92.897</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-0.4 %</p></td>
+<td><p>+0.02 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti II</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>112.082</p></td>
+<td><p>113.053</p></td>
+<td><p>113.060</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-0.9 %</p></td>
+<td><p>-0.01 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Ca I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>3.249</p></td>
+<td><p>4.296</p></td>
+<td><p>4.297</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-24.4 %</p></td>
+<td><p>-0.02 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>5.866</p></td>
+<td><p>10.496</p></td>
+<td><p>10.521</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-44.2 %</p></td>
+<td><p>-0.23 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Ca I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>12.053</p></td>
+<td><p>30.874</p></td>
+<td><p>30.800</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-60.9 %</p></td>
+<td><p>+0.24 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca II</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>3.320</p></td>
+<td><p>3.324</p></td>
+<td><p>3.323</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-0.1 %</p></td>
+<td><p>+0.01 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Ca II</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>4.109</p></td>
+<td><p>4.108</p></td>
+<td><p>4.109</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>-0.03 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca II</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>5.344</p></td>
+<td><p>5.345</p></td>
+<td><p>5.344</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>+0.01 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Na I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>3.256</p></td>
+<td><p>4.625</p></td>
+<td><p>4.625</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-29.6 %</p></td>
+<td><p>-0.00 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>5.327</p></td>
+<td><p>9.885</p></td>
+<td><p>9.921</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-46.3 %</p></td>
+<td><p>-0.36 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Na I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>10.815</p></td>
+<td><p>25.191</p></td>
+<td><p>25.101</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-56.9 %</p></td>
+<td><p>+0.36 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na II</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>1.000</p></td>
+<td><p>1.000</p></td>
+<td><p>1.000</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>+0.00 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Na II</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>1.000</p></td>
+<td><p>1.000</p></td>
+<td><p>1.000</p></td>
+<td><p>ext:flat</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>+0.00 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na II</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>1.000</p></td>
+<td><p>1.000</p></td>
+<td><p>1.000</p></td>
+<td><p>ext:flat</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>+0.00 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>K I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>4.661</p></td>
+<td><p>7.639</p></td>
+<td><p>7.644</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-39.0 %</p></td>
+<td><p>-0.07 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>K I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>7.818</p></td>
+<td><p>16.260</p></td>
+<td><p>16.289</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-52.0 %</p></td>
+<td><p>-0.18 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>K I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>14.631</p></td>
+<td><p>36.975</p></td>
+<td><p>36.903</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-60.4 %</p></td>
+<td><p>+0.20 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Al I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>6.243</p></td>
+<td><p>6.662</p></td>
+<td><p>6.671</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-6.4 %</p></td>
+<td><p>-0.14 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Al I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>6.973</p></td>
+<td><p>8.415</p></td>
+<td><p>8.401</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-17.0 %</p></td>
+<td><p>+0.16 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Al I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>9.181</p></td>
+<td><p>13.703</p></td>
+<td><p>13.723</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-33.1 %</p></td>
+<td><p>-0.14 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Mg I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>1.374</p></td>
+<td><p>1.449</p></td>
+<td><p>1.453</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-5.4 %</p></td>
+<td><p>-0.27 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>1.940</p></td>
+<td><p>2.385</p></td>
+<td><p>2.377</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-18.4 %</p></td>
+<td><p>+0.33 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Mg I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>3.658</p></td>
+<td><p>6.038</p></td>
+<td><p>6.054</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-39.6 %</p></td>
+<td><p>-0.26 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg II</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>2.024</p></td>
+<td><p>2.025</p></td>
+<td><p>2.025</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-0.0 %</p></td>
+<td><p>+0.02 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Mg II</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>2.074</p></td>
+<td><p>2.073</p></td>
+<td><p>2.074</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>-0.03 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg II</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>2.223</p></td>
+<td><p>2.224</p></td>
+<td><p>2.223</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>-0.0 %</p></td>
+<td><p>+0.01 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Si I</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>10.893</p></td>
+<td><p>11.002</p></td>
+<td><p>11.017</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-1.1 %</p></td>
+<td><p>-0.13 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si I</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>11.797</p></td>
+<td><p>12.559</p></td>
+<td><p>12.541</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-5.9 %</p></td>
+<td><p>+0.14 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Si I</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>13.990</p></td>
+<td><p>18.421</p></td>
+<td><p>18.449</p></td>
+<td><p>ext:effective-level</p></td>
+<td><p>-24.2 %</p></td>
+<td><p>-0.15 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si II</p></td>
+<td><p>0.8</p></td>
+<td><p>9284</p></td>
+<td><p>5.843</p></td>
+<td><p>5.845</p></td>
+<td><p>5.844</p></td>
+<td><p>B&amp;C interp</p></td>
+<td><p>-0.0 %</p></td>
+<td><p>+0.01 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>Si II</p></td>
+<td><p>1.0</p></td>
+<td><p>11604</p></td>
+<td><p>5.931</p></td>
+<td><p>5.929</p></td>
+<td><p>5.931</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>+0.0 %</p></td>
+<td><p>-0.02 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si II</p></td>
+<td><p>1.3</p></td>
+<td><p>15086</p></td>
+<td><p>6.161</p></td>
+<td><p>6.162</p></td>
+<td><p>6.161</p></td>
+<td><p>ext:db-direct-sum</p></td>
+<td><p>-0.0 %</p></td>
+<td><p>+0.01 %</p></td>
+<td><p>PASS</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Gate: 42/42 rows within 2 % of the reference.</strong></p>
+<section id="fit-residuals-validation-species">
+<h2>Fit residuals (validation species)<a class="headerlink" href="#fit-residuals-validation-species" title="Link to this heading"></a></h2>
+<p>Max |fit − target| / target of the stored quartic over the true-B&amp;C
+anchors (5000–10 000 K) and over the extension grid (11 000–25 000 K).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Species</p></th>
+<th class="head"><p>max resid (B&amp;C window)</p></th>
+<th class="head"><p>max resid (ext ≤16 kK)</p></th>
+<th class="head"><p>max resid (tail, clamped)</p></th>
+<th class="head"><p>t_max (K)</p></th>
+<th class="head"><p>extension mode</p></th>
+<th class="head"><p>E_eff (eV)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Al I</p></td>
+<td><p>0.57 %</p></td>
+<td><p>0.84 %</p></td>
+<td><p>62.7 %</p></td>
+<td><p>16000</p></td>
+<td><p>effective-level</p></td>
+<td><p>5.01</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca I</p></td>
+<td><p>0.81 %</p></td>
+<td><p>1.31 %</p></td>
+<td><p>76.0 %</p></td>
+<td><p>16000</p></td>
+<td><p>effective-level</p></td>
+<td><p>6.04</p></td>
+</tr>
+<tr class="row-even"><td><p>Ca II</p></td>
+<td><p>0.20 %</p></td>
+<td><p>0.05 %</p></td>
+<td><p>0.4 %</p></td>
+<td><p>25000</p></td>
+<td><p>db-direct-sum</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fe I</p></td>
+<td><p>0.17 %</p></td>
+<td><p>0.12 %</p></td>
+<td><p>0.8 %</p></td>
+<td><p>25000</p></td>
+<td><p>effective-level</p></td>
+<td><p>6.56</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe II</p></td>
+<td><p>0.06 %</p></td>
+<td><p>0.03 %</p></td>
+<td><p>0.1 %</p></td>
+<td><p>25000</p></td>
+<td><p>db-direct-sum</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>K I</p></td>
+<td><p>1.45 %</p></td>
+<td><p>1.18 %</p></td>
+<td><p>64.0 %</p></td>
+<td><p>16000</p></td>
+<td><p>effective-level</p></td>
+<td><p>4.19</p></td>
+</tr>
+<tr class="row-even"><td><p>Mg I</p></td>
+<td><p>1.18 %</p></td>
+<td><p>1.62 %</p></td>
+<td><p>79.7 %</p></td>
+<td><p>16000</p></td>
+<td><p>effective-level</p></td>
+<td><p>7.38</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg II</p></td>
+<td><p>0.11 %</p></td>
+<td><p>0.07 %</p></td>
+<td><p>0.4 %</p></td>
+<td><p>25000</p></td>
+<td><p>db-direct-sum</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Na I</p></td>
+<td><p>1.24 %</p></td>
+<td><p>1.96 %</p></td>
+<td><p>70.4 %</p></td>
+<td><p>16000</p></td>
+<td><p>effective-level</p></td>
+<td><p>4.92</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na II</p></td>
+<td><p>0.00 %</p></td>
+<td><p>0.00 %</p></td>
+<td><p>0.0 %</p></td>
+<td><p>25000</p></td>
+<td><p>flat</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Si I</p></td>
+<td><p>0.17 %</p></td>
+<td><p>0.76 %</p></td>
+<td><p>71.9 %</p></td>
+<td><p>16000</p></td>
+<td><p>effective-level</p></td>
+<td><p>7.76</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si II</p></td>
+<td><p>0.07 %</p></td>
+<td><p>0.03 %</p></td>
+<td><p>0.2 %</p></td>
+<td><p>25000</p></td>
+<td><p>db-direct-sum</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Ti I</p></td>
+<td><p>0.55 %</p></td>
+<td><p>0.21 %</p></td>
+<td><p>1.9 %</p></td>
+<td><p>25000</p></td>
+<td><p>effective-level</p></td>
+<td><p>3.92</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti II</p></td>
+<td><p>0.04 %</p></td>
+<td><p>0.02 %</p></td>
+<td><p>0.2 %</p></td>
+<td><p>25000</p></td>
+<td><p>effective-level</p></td>
+<td><p>4.43</p></td>
+</tr>
+</tbody>
+</table>
+<p>All 248 patched species: worst B&amp;C-window residual 1.96 %, worst LIBS-band extension residual 2.25 %. 41 Rydberg-rich species are tail-clamped (<code class="docutils literal notranslate"><span class="pre">t_max</span></code> = 16 000 K): above ~1.4 eV their stored U freezes at U(16 000 K) — conservative, and physically the regime where the runtime IPD truncation governs the level sum anyway.</p>
+</section>
+<section id="caveats">
+<h2>Caveats<a class="headerlink" href="#caveats" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>B&amp;C Table 8 stops at 10 000 K; 1.0 / 1.3 eV reference values are the
+effective-level extension described in the script docstring, anchored
+to B&amp;C at 8000/10 000 K and to our DB level sums (low-lying levels are
+complete; the deficit is high-Rydberg). They are a physically-motivated
+bridge, not B&amp;C data.</p></li>
+<li><p>The patched DB is NOT wired as the default; integration is gated on a
+BHVO-2 benchmark (maintainer decision).</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

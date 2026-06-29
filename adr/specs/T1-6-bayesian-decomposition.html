@@ -1,0 +1,382 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T1-6 Implementation Spec — Bayesian Decomposition + Forward-Model Registry &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">T1-6 Implementation Spec — Bayesian Decomposition + Forward-Model Registry</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/T1-6-bayesian-decomposition.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="t1-6-implementation-spec-bayesian-decomposition-forward-model-registry">
+<h1>T1-6 Implementation Spec — Bayesian Decomposition + Forward-Model Registry<a class="headerlink" href="#t1-6-implementation-spec-bayesian-decomposition-forward-model-registry" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-0mor</span></code> · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0001-radis-jaxrts-pattern-survey.html"><span class="std std-doc">ADR-0001</span></a> §7.2, §8.1 row T1-6 · <strong>Wave:</strong> 3 (parallel with T1-5) · <strong>Hard deps:</strong> T1-1 (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>), T1-2 (<code class="docutils literal notranslate"><span class="pre">swgm</span></code>) · <strong>Convergent:</strong> D-P1 (petitRADTRANS retrieval), D-P2 (named-model registry), C-P14 (exojax NumPyro coupling), LMFIT <code class="docutils literal notranslate"><span class="pre">Parameter</span></code></p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Retire the 3264-LOC <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian.py</span></code> monolith by decomposing along natural Bayesian-inference axes: <strong>priors</strong> (parameter declarations + transforms), <strong>forward</strong> (pure JAX kernel wrapper emitting the NumPyro <code class="docutils literal notranslate"><span class="pre">obs</span></code> site), <strong>samplers</strong> (NumPyro NUTS + dynesty adapters behind a common ABC). Add a named forward-model registry so downstream callers select by string instead of importing a class.</p>
+<ul class="simple">
+<li><p>Each file under 800 LOC.</p></li>
+<li><p>Public API frozen: every name currently exported from <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.bayesian</span></code> continues to resolve through a shim.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bayesian/forward.py</span></code> becomes a thin shell around <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.kernels.forward_model</span></code> (T1-2); no duplicated physics.</p></li>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">Sampler</span></code> Protocol lets new samplers (e.g., <code class="docutils literal notranslate"><span class="pre">BlackjaxSampler</span></code>, <code class="docutils literal notranslate"><span class="pre">EnsembleSampler</span></code>) plug in without touching the forward model.</p></li>
+</ul>
+</section>
+<section id="target-file-layout">
+<h2>2. Target file layout<a class="headerlink" href="#target-file-layout" title="Link to this heading"></a></h2>
+<p><strong>Before:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">solve</span><span class="o">/</span><span class="n">bayesian</span><span class="o">.</span><span class="n">py</span>   <span class="c1"># 3264 LOC monolith</span>
+<span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">bayesian</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># shim: from cflibs.inversion.solve.bayesian import *</span>
+</pre></div>
+</div>
+<p><strong>After:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">solve</span><span class="o">/</span><span class="n">bayesian</span><span class="o">/</span>
+    <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># re-exports for back-compat</span>
+    <span class="n">priors</span><span class="o">.</span><span class="n">py</span>              <span class="c1"># ~400 LOC: Parameter, PriorConfig, NoiseParameters,</span>
+                           <span class="c1">#           prior_cube_transform, numpyro_sample_from</span>
+    <span class="n">forward</span><span class="o">.</span><span class="n">py</span>             <span class="c1"># ~500 LOC: BayesianForwardModel, TwoZoneBayesianForwardModel,</span>
+                           <span class="c1">#           bayesian_model() NumPyro graph builder,</span>
+                           <span class="c1">#           AtomicDataArrays adapter from AtomicSnapshot</span>
+    <span class="n">samplers</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># ~700 LOC: Sampler protocol, NumPyroNUTSSampler (= MCMCSampler),</span>
+                           <span class="c1">#           DynestyNestedSampler (= NestedSampler),</span>
+                           <span class="c1">#           TwoZoneMCMCSampler, MCMCResult, NestedSamplingResult,</span>
+                           <span class="c1">#           run_mcmc convenience wrapper</span>
+
+<span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">bayesian</span><span class="o">.</span><span class="n">py</span>
+    <span class="c1"># unchanged shim: from cflibs.inversion.solve.bayesian import *</span>
+
+<span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">forward_models</span><span class="o">/</span>
+    <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>
+        <span class="c1"># FORWARD_MODELS registry</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">forward_models/__init__.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mapping</span><span class="p">,</span> <span class="n">Protocol</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.radiation.kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">forward_model</span> <span class="k">as</span> <span class="n">_single_zone_lte_kernel</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ForwardModelFn</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plasma_state</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">wavelength_grid</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span> <span class="o">...</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_hermann_two_region</span><span class="p">(</span><span class="o">...</span><span class="p">):</span> <span class="o">...</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_lte_with_self_absorption</span><span class="p">(</span><span class="n">plasma_state</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">wl</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">_single_zone_lte_kernel</span><span class="p">(</span><span class="n">plasma_state</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">wl</span><span class="p">,</span>
+                                   <span class="n">apply_self_absorption</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">)</span>
+
+<span class="n">FORWARD_MODELS</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ForwardModelFn</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;single_zone_lte&quot;</span><span class="p">:</span>          <span class="n">_single_zone_lte_kernel</span><span class="p">,</span>
+    <span class="s2">&quot;hermann_two_region&quot;</span><span class="p">:</span>       <span class="n">_hermann_two_region</span><span class="p">,</span>
+    <span class="s2">&quot;lte_with_self_absorption&quot;</span><span class="p">:</span> <span class="n">_lte_with_self_absorption</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get_forward_model</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ForwardModelFn</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">FORWARD_MODELS</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown forward model </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2">; available: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">FORWARD_MODELS</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">FORWARD_MODELS</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">bayesian/__init__.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">&quot;&quot;&quot;Bayesian sub-package — decomposed from legacy bayesian.py monolith.&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.priors</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Parameter</span><span class="p">,</span> <span class="n">PriorConfig</span><span class="p">,</span> <span class="n">NoiseParameters</span><span class="p">,</span>
+    <span class="n">create_temperature_prior</span><span class="p">,</span> <span class="n">create_density_prior</span><span class="p">,</span> <span class="n">create_concentration_prior</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.forward</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BayesianForwardModel</span><span class="p">,</span> <span class="n">TwoZoneBayesianForwardModel</span><span class="p">,</span>
+    <span class="n">AtomicDataArrays</span><span class="p">,</span> <span class="n">bayesian_model</span><span class="p">,</span> <span class="n">two_zone_bayesian_model</span><span class="p">,</span>
+    <span class="n">load_atomic_data</span><span class="p">,</span> <span class="n">partition_function</span><span class="p">,</span> <span class="n">mcwhirter_log_penalty</span><span class="p">,</span>
+    <span class="n">log_likelihood</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.samplers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Sampler</span><span class="p">,</span> <span class="n">SamplerResult</span><span class="p">,</span>
+    <span class="n">MCMCSampler</span><span class="p">,</span> <span class="n">NestedSampler</span><span class="p">,</span> <span class="n">TwoZoneMCMCSampler</span><span class="p">,</span>
+    <span class="n">MCMCResult</span><span class="p">,</span> <span class="n">NestedSamplingResult</span><span class="p">,</span> <span class="n">TwoZoneMCMCResult</span><span class="p">,</span>
+    <span class="n">ConvergenceStatus</span><span class="p">,</span> <span class="n">run_mcmc</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="parameter-dataclass-contract">
+<h2>3. <code class="docutils literal notranslate"><span class="pre">Parameter</span></code> dataclass contract<a class="headerlink" href="#parameter-dataclass-contract" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/priors.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpyro</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpyro.distributions</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dist</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">PriorKind</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;uniform&quot;</span><span class="p">,</span> <span class="s2">&quot;loguniform&quot;</span><span class="p">,</span> <span class="s2">&quot;normal&quot;</span><span class="p">,</span> <span class="s2">&quot;truncnormal&quot;</span><span class="p">,</span> <span class="s2">&quot;dirichlet&quot;</span><span class="p">]</span>
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Parameter</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Declarative parameter spec consumable by both NumPyro and nested samplers.&quot;&quot;&quot;</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">prior_low</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">prior_high</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">prior_kind</span><span class="p">:</span> <span class="n">PriorKind</span> <span class="o">=</span> <span class="s2">&quot;uniform&quot;</span>
+    <span class="n">vary</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">expr</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>         <span class="c1"># algebraic constraint, e.g. &quot;1 - C_Cr - C_Ni&quot;</span>
+    <span class="n">prior_mean</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span> <span class="c1"># used by normal/truncnormal</span>
+    <span class="n">prior_std</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">numpyro_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;jnp.ndarray&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit numpyro.sample(self.name, dist) and return draw.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">vary</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;uniform&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">numpyro</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dist</span><span class="o">.</span><span class="n">Uniform</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_high</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;loguniform&quot;</span><span class="p">:</span>
+            <span class="n">log_x</span> <span class="o">=</span> <span class="n">numpyro</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;_log&quot;</span><span class="p">,</span>
+                <span class="n">dist</span><span class="o">.</span><span class="n">Uniform</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_high</span><span class="p">)))</span>
+            <span class="k">return</span> <span class="n">numpyro</span><span class="o">.</span><span class="n">deterministic</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">log_x</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;normal&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">numpyro</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_std</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;truncnormal&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">numpyro</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">dist</span><span class="o">.</span><span class="n">TruncatedNormal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_std</span><span class="p">,</span>
+                                     <span class="n">low</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_high</span><span class="p">))</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported prior_kind: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">cube_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">u</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Adapter to nested-sampling unit-cube prior transform (dynesty).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">vary</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;uniform&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span> <span class="o">+</span> <span class="n">u</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_high</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;loguniform&quot;</span><span class="p">:</span>
+            <span class="n">log_lo</span><span class="p">,</span> <span class="n">log_hi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_high</span><span class="p">)</span>
+            <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="mf">10.0</span> <span class="o">**</span> <span class="p">(</span><span class="n">log_lo</span> <span class="o">+</span> <span class="n">u</span> <span class="o">*</span> <span class="p">(</span><span class="n">log_hi</span> <span class="o">-</span> <span class="n">log_lo</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;normal&quot;</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.stats</span><span class="w"> </span><span class="kn">import</span> <span class="n">norm</span>
+            <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">norm</span><span class="o">.</span><span class="n">ppf</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_std</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span> <span class="o">==</span> <span class="s2">&quot;truncnormal&quot;</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.stats</span><span class="w"> </span><span class="kn">import</span> <span class="n">truncnorm</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_low</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_std</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_high</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">prior_std</span>
+            <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">truncnorm</span><span class="o">.</span><span class="n">ppf</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_mean</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_std</span><span class="p">))</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported prior_kind: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">prior_kind</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">PriorConfig</span></code> (existing at <code class="docutils literal notranslate"><span class="pre">bayesian.py:589</span></code>) becomes a builder emitting a list of <code class="docutils literal notranslate"><span class="pre">Parameter</span></code> plus a Dirichlet special-case for the concentration simplex (Dirichlet doesn’t decompose cleanly into per-coord cube transforms — use dynesty stick-breaking already at <code class="docutils literal notranslate"><span class="pre">bayesian.py:2123-2149</span></code>).</p>
+</section>
+<section id="sampler-adapter-abc">
+<h2>4. <code class="docutils literal notranslate"><span class="pre">Sampler</span></code> adapter ABC<a class="headerlink" href="#sampler-adapter-abc" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/samplers.py</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Protocol</span><span class="p">,</span> <span class="n">runtime_checkable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SamplerResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Common result envelope across NumPyro and dynesty backends.&quot;&quot;&quot;</span>
+    <span class="n">posterior_samples</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>   <span class="c1"># {name: (n_samples,) or (n_samples, k)}</span>
+    <span class="n">log_evidence</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span>                 <span class="c1"># None for MCMC; finite for nested</span>
+    <span class="n">diagnostics</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]</span>             <span class="c1"># r_hat, ess, neff, n_iter, time_s, ...</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]</span>                <span class="c1"># sampler name, prior_config dict, ...</span>
+
+<span class="nd">@runtime_checkable</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Sampler</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Common interface for posterior-sampling backends.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="s2">&quot;BayesianForwardModel&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="s2">&quot;SpectrumData&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SamplerResult</span><span class="p">:</span> <span class="o">...</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">NumPyroNUTSSampler</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;NUTS via NumPyro. Replaces MCMCSampler (kept as alias).&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_warmup</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">num_samples</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">num_chains</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                 <span class="n">target_accept_prob</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">max_tree_depth</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">progress_bar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SamplerResult</span><span class="p">:</span> <span class="o">...</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DynestyNestedSampler</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Static + dynamic nested sampling via dynesty. Replaces NestedSampler.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nlive</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">dlogz</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="s2">&quot;multi&quot;</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="s2">&quot;rwalk&quot;</span><span class="p">):</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SamplerResult</span><span class="p">:</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>Legacy <code class="docutils literal notranslate"><span class="pre">MCMCSampler</span></code> (<code class="docutils literal notranslate"><span class="pre">bayesian.py:1490</span></code>) and <code class="docutils literal notranslate"><span class="pre">NestedSampler</span></code> (<code class="docutils literal notranslate"><span class="pre">bayesian.py:2065</span></code>) kept as subclasses/aliases. Their <code class="docutils literal notranslate"><span class="pre">run(...)</span></code> methods keep current signatures and return <code class="docutils literal notranslate"><span class="pre">MCMCResult</span></code>/<code class="docutils literal notranslate"><span class="pre">NestedSamplingResult</span></code> which gain <code class="docutils literal notranslate"><span class="pre">from_sampler_result()</span></code> constructors.</p>
+<p><code class="docutils literal notranslate"><span class="pre">SpectrumData</span> <span class="pre">=</span> <span class="pre">&#64;dataclass(frozen=True)</span> <span class="pre">class</span> <span class="pre">SpectrumData:</span> <span class="pre">wavelength:</span> <span class="pre">np.ndarray;</span> <span class="pre">flux:</span> <span class="pre">np.ndarray;</span> <span class="pre">noise_params:</span> <span class="pre">NoiseParameters</span> <span class="pre">=</span> <span class="pre">field(default_factory=NoiseParameters)</span></code>. Replaces bare <code class="docutils literal notranslate"><span class="pre">observed</span></code> array passed to <code class="docutils literal notranslate"><span class="pre">.run()</span></code>.</p>
+</section>
+<section id="backward-compat-plan">
+<h2>5. Backward-compat plan<a class="headerlink" href="#backward-compat-plan" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Shim preserves all current imports.</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/bayesian.py</span></code> continues <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.bayesian</span> <span class="pre">import</span> <span class="pre">*</span></code>. Because <code class="docutils literal notranslate"><span class="pre">bayesian/</span></code> is now a package (not module), <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code> re-exports cover every symbol.</p></li>
+<li><p><strong>No-rename guarantee.</strong> <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code>, <code class="docutils literal notranslate"><span class="pre">MCMCSampler</span></code>, <code class="docutils literal notranslate"><span class="pre">NestedSampler</span></code>, <code class="docutils literal notranslate"><span class="pre">TwoZoneBayesianForwardModel</span></code>, <code class="docutils literal notranslate"><span class="pre">TwoZoneMCMCSampler</span></code>, <code class="docutils literal notranslate"><span class="pre">MCMCResult</span></code>, <code class="docutils literal notranslate"><span class="pre">NestedSamplingResult</span></code>, <code class="docutils literal notranslate"><span class="pre">TwoZoneMCMCResult</span></code>, <code class="docutils literal notranslate"><span class="pre">PriorConfig</span></code>, <code class="docutils literal notranslate"><span class="pre">NoiseParameters</span></code>, <code class="docutils literal notranslate"><span class="pre">AtomicDataArrays</span></code>, <code class="docutils literal notranslate"><span class="pre">load_atomic_data</span></code>, <code class="docutils literal notranslate"><span class="pre">partition_function</span></code>, <code class="docutils literal notranslate"><span class="pre">mcwhirter_log_penalty</span></code>, <code class="docutils literal notranslate"><span class="pre">log_likelihood</span></code>, <code class="docutils literal notranslate"><span class="pre">bayesian_model</span></code>, <code class="docutils literal notranslate"><span class="pre">two_zone_bayesian_model</span></code>, <code class="docutils literal notranslate"><span class="pre">run_mcmc</span></code>, <code class="docutils literal notranslate"><span class="pre">create_temperature_prior</span></code>, <code class="docutils literal notranslate"><span class="pre">create_density_prior</span></code>, <code class="docutils literal notranslate"><span class="pre">create_concentration_prior</span></code>, <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code> — all keep names and module-relative paths through shim.</p></li>
+<li><p><strong>CLI/exporters keep working.</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:425</span></code> (<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.bayesian</span> <span class="pre">import</span> <span class="pre">BayesianForwardModel,</span> <span class="pre">MCMCSampler</span></code>) and <code class="docutils literal notranslate"><span class="pre">cflibs/io/exporters.py:42</span></code> (<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.bayesian</span> <span class="pre">import</span> <span class="pre">MCMCResult,</span> <span class="pre">NestedSamplingResult</span></code>) require zero edits.</p></li>
+<li><p><strong>Deprecation policy.</strong> New canonical path is <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.bayesian</span> <span class="pre">import</span> <span class="pre">...</span></code> (no <code class="docutils literal notranslate"><span class="pre">*</span></code>); new Protocol-based API (<code class="docutils literal notranslate"><span class="pre">Sampler</span></code>, <code class="docutils literal notranslate"><span class="pre">NumPyroNUTSSampler</span></code>, <code class="docutils literal notranslate"><span class="pre">SamplerResult</span></code>) is what new code uses. Legacy <code class="docutils literal notranslate"><span class="pre">MCMCSampler.run(observed,</span> <span class="pre">num_warmup=...)</span></code> kept indefinitely.</p></li>
+</ol>
+</section>
+<section id="acceptance-criteria">
+<h2>6. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.bayesian</span> <span class="pre">import</span> <span class="pre">BayesianForwardModel,</span> <span class="pre">MCMCSampler,</span> <span class="pre">NestedSampler,</span> <span class="pre">TwoZoneBayesianForwardModel,</span> <span class="pre">MCMCResult</span></code> all resolve.</p></li>
+<li><p>Every file under <code class="docutils literal notranslate"><span class="pre">bayesian/</span></code> &lt; 800 LOC (<code class="docutils literal notranslate"><span class="pre">wc</span> <span class="pre">-l</span> <span class="pre">cflibs/inversion/solve/bayesian/*.py</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bayesian/forward.py::BayesianForwardModel.forward</span></code> body imports and delegates to <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.kernels.forward_model</span></code> from T1-2. No re-implementation of Voigt/Saha-Boltzmann.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">FORWARD_MODELS</span></code> registry resolves <code class="docutils literal notranslate"><span class="pre">&quot;single_zone_lte&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;hermann_two_region&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;lte_with_self_absorption&quot;</span></code>.</p></li>
+<li><p>Physics-only constraint: no <code class="docutils literal notranslate"><span class="pre">flax</span></code>, <code class="docutils literal notranslate"><span class="pre">equinox</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>, <code class="docutils literal notranslate"><span class="pre">sklearn</span></code>, <code class="docutils literal notranslate"><span class="pre">torch</span></code>. Ruff TID251 passes.</p></li>
+<li><p>Public-API smoke test: every symbol from <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.bayesian</span></code> imports without <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code>.</p></li>
+</ul>
+</section>
+<section id="test-plan">
+<h2>7. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><strong>Existing tests</strong> (enumerated via <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">--collect-only</span> <span class="pre">tests/</span> <span class="pre">-k</span> <span class="pre">bayesian</span></code>): <code class="docutils literal notranslate"><span class="pre">tests/test_bayesian.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/test_distributed_mcmc.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_jax_workflows.py</span></code> — all unchanged.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_bayesian.py</span></code>: <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel(...).forward(T,</span> <span class="pre">log_ne,</span> <span class="pre">conc)</span></code> output matches pre-refactor at rtol=1e-10 (same kernel under hood after T1-2).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_distributed_mcmc.py</span></code>: MCMC parallelization unaffected.</p></li>
+</ul>
+<p><strong>New</strong> <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_priors.py</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_parameter_uniform_numpyro_adapter</span></code> — inside NumPyro trace, records <code class="docutils literal notranslate"><span class="pre">numpyro.sample</span></code> site with <code class="docutils literal notranslate"><span class="pre">dist.Uniform</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_parameter_loguniform_cube_transform</span></code> — <code class="docutils literal notranslate"><span class="pre">Parameter(&quot;ne&quot;,</span> <span class="pre">1e15,</span> <span class="pre">1e19,</span> <span class="pre">&quot;loguniform&quot;).cube_transform(0.5)</span></code> returns <code class="docutils literal notranslate"><span class="pre">10**17</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_parameter_truncnormal_cube_transform</span></code> — round-trip ppf at u=0.5 returns mean.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_parameter_frozen</span></code> — <code class="docutils literal notranslate"><span class="pre">FrozenInstanceError</span></code> on mutation.</p></li>
+</ul>
+<p><strong>New</strong> <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_samplers.py</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_sampler_protocol_runtime_check</span></code> — <code class="docutils literal notranslate"><span class="pre">isinstance(NumPyroNUTSSampler(...),</span> <span class="pre">Sampler)</span> <span class="pre">is</span> <span class="pre">True</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_sampler_swap</span></code> — same model + data → both samplers produce <code class="docutils literal notranslate"><span class="pre">SamplerResult</span></code> with comparable posterior medians for T_eV (within 2σ).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_legacy_MCMCSampler_run_signature</span></code> — <code class="docutils literal notranslate"><span class="pre">MCMCSampler(model).run(observed,</span> <span class="pre">num_warmup=100,</span> <span class="pre">num_samples=100)</span></code> returns <code class="docutils literal notranslate"><span class="pre">MCMCResult</span></code> with legacy attributes.</p></li>
+</ul>
+<p><strong>New</strong> <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_forward_models_registry.py</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_registry_keys</span></code> — <code class="docutils literal notranslate"><span class="pre">set(FORWARD_MODELS)</span> <span class="pre">==</span> <span class="pre">{&quot;single_zone_lte&quot;,</span> <span class="pre">&quot;hermann_two_region&quot;,</span> <span class="pre">&quot;lte_with_self_absorption&quot;}</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_get_forward_model_raises_unknown</span></code> — <code class="docutils literal notranslate"><span class="pre">KeyError</span></code> on bogus name.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_single_zone_lte_matches_kernel</span></code> — registry entry produces bitwise-identical output to <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.kernels.forward_model</span></code> on fixed input.</p></li>
+</ul>
+<p><strong>New</strong> <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_back_compat.py</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.bayesian</span> <span class="pre">import</span> <span class="pre">*</span></code> succeeds.</p></li>
+<li><p>All names in pre-refactor public API importable from both <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.bayesian</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve.bayesian</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs.cli.main</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs.io.exporters</span></code> import without error.</p></li>
+</ul>
+<p><strong>LOC gate</strong> in <code class="docutils literal notranslate"><span class="pre">tests/test_repo_health.py</span></code> (new or appended):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">glob</span><span class="p">(</span><span class="s2">&quot;cflibs/inversion/solve/bayesian/*.py&quot;</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">wc_l</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">800</span>
+</pre></div>
+</div>
+</section>
+<section id="dependencies">
+<h2>8. Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Hard dep T1-1</strong> (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>): <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>, pytree-registered <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code> + <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>, host/kernel split convention.</p></li>
+<li><p><strong>Hard dep T1-2</strong> (<code class="docutils literal notranslate"><span class="pre">swgm</span></code>): <code class="docutils literal notranslate"><span class="pre">bayesian/forward.py</span></code> imports <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.kernels.forward_model</span></code>. <code class="docutils literal notranslate"><span class="pre">forward.py</span></code> cannot land before T1-2 ships.</p></li>
+<li><p><strong>Sequence:</strong> T1-1 → T1-2 → T1-6. If splitting T1-6 into two PRs: PR-A <code class="docutils literal notranslate"><span class="pre">priors.py</span></code> + <code class="docutils literal notranslate"><span class="pre">samplers.py</span></code> (additive under existing monolith); PR-B <code class="docutils literal notranslate"><span class="pre">forward.py</span></code> + <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code> after T1-2 merges.</p></li>
+<li><p><strong>Coupling note to T1-2:</strong> Both reference shared <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> definition (in <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/snapshot.py</span></code> from T1-1). T1-6 inherits whatever T1-2 settled on.</p></li>
+</ul>
+</section>
+<section id="risks-rollback">
+<h2>9. Risks &amp; rollback<a class="headerlink" href="#risks-rollback" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Public API regression.</strong> Mitigation: <code class="docutils literal notranslate"><span class="pre">test_bayesian_back_compat.py</span></code> is the canary; any missing symbol blocks merge.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">AtomicDataArrays</span></code> shape divergence from <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>.</strong> Mitigation: adapt <code class="docutils literal notranslate"><span class="pre">AtomicDataArrays</span></code> to construct from <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> (add a <code class="docutils literal notranslate"><span class="pre">from_snapshot()</span></code> classmethod); document the contract.</p></li>
+<li><p><strong>NumPyro graph subtle changes</strong> if <code class="docutils literal notranslate"><span class="pre">Parameter.numpyro_sample</span></code> reorders sites. Mitigation: posterior-median parity test (<code class="docutils literal notranslate"><span class="pre">test_sampler_swap</span></code>) at 2σ; run on a fixed-seed fixture in CI.</p></li>
+<li><p><strong>Rollback:</strong> keep <code class="docutils literal notranslate"><span class="pre">bayesian.py</span></code> monolith alongside <code class="docutils literal notranslate"><span class="pre">bayesian/</span></code> package for one release cycle; flip the shim’s import line if regression surfaces.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

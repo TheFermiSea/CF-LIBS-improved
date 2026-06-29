@@ -1,0 +1,163 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J9 Implementation Spec — Batched Execution on V100S, LDM Validation, Cluster Discipline → Milestone M2 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J9 Implementation Spec — Batched Execution on V100S, LDM Validation, Cluster Discipline → Milestone M2</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J9-batched-cluster-m2.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j9-implementation-spec-batched-execution-on-v100s-ldm-validation-cluster-discipline-milestone-m2">
+<h1>J9 Implementation Spec — Batched Execution on V100S, LDM Validation, Cluster Discipline → Milestone M2<a class="headerlink" href="#j9-implementation-spec-batched-execution-on-v100s-ldm-validation-cluster-discipline-milestone-m2" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J9 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §5.2/§5.5, §8.2 (M2), risks R3/R4/R6 · <strong>Track:</strong> spine · <strong>Depends:</strong> J8 · <strong>Estimated effort:</strong> 4–6 pd / ~1 wk</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">run_batch(bucket)</span> <span class="pre">=</span> <span class="pre">jit(vmap(stage_chain,</span> <span class="pre">in_axes=(0,</span> <span class="pre">None,</span> <span class="pre">None)))</span></code> — the manifold pattern (<code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py:13,459</span></code>) generalized to the full graph; per-bucket fixed B; final partial batch padded with a spectrum-validity mask.</p></li>
+<li><p>Implement the bucket dispatcher over the 7 measured instrument grids (ADR-0004 §5.2 table; exact N_wl, zero wavelength padding) and the memory planner reusing <code class="docutils literal notranslate"><span class="pre">available_device_bytes</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/radiation/host.py:116-181</span></code>) + <code class="docutils literal notranslate"><span class="pre">plan_chunks</span></code> (<code class="docutils literal notranslate"><span class="pre">:189-226</span></code>) — monotone in budget, degrades gracefully off-GPU.</p></li>
+<li><p><strong>LDM real-data validation (risk R4, early in this bead):</strong> LDM (<code class="docutils literal notranslate"><span class="pre">cflibs/radiation/ldm.py</span></code>, n_sigma=24 at <code class="docutils literal notranslate"><span class="pre">:69</span></code>) is the batching enabler (B≈64–128 on silva2022 vs 8–16 chunked Voigt) but is default-OFF pending real-data validation (<code class="docutils literal notranslate"><span class="pre">ADR-0001-HANDOFF.md</span></code> T1-4). Run LDM-vs-PHYSICAL_DOPPLER parity + a scoreboard shadow on real datasets; record the adopt/fallback decision in the ledger. Fallback = chunked Voigt at B=8–16 — still orders of magnitude over the 0.4–5.1 s/spectrum CPU baseline.</p></li>
+<li><p>Memory hygiene: <code class="docutils literal notranslate"><span class="pre">donate_argnums</span></code> on the B×N_wl intensity buffers (none exists in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> today — free win); keep the chunked forward’s <code class="docutils literal notranslate"><span class="pre">jax.checkpoint</span></code> policy (<code class="docutils literal notranslate"><span class="pre">kernels.py:1055-1076</span></code>); remat the broadening stage for reverse-mode end-to-end gradients (J11 consumer).</p></li>
+<li><p>SLURM job assets: batched-inversion sbatch template and the 3-long-lived-worker campaign harness (queue-directory candidate pull; zero recompiles across candidates because continuous knobs are traced — ADR-0004 §5.5); AOT <code class="docutils literal notranslate"><span class="pre">jit.lower().compile()</span></code> for the campaign harness; warmup batch per bucket.</p></li>
+<li><p>Cluster discipline baked into every script: <code class="docutils literal notranslate"><span class="pre">--gpus-per-task=1</span> <span class="pre">--ntasks=1</span> <span class="pre">--cpus-per-task=4</span> <span class="pre">--mem=32G</span></code>, never <code class="docutils literal notranslate"><span class="pre">--nodelist</span></code>; explicit <code class="docutils literal notranslate"><span class="pre">export</span> <span class="pre">JAX_COMPILATION_CACHE_DIR=$HOME/jax-cache</span></code> (the shared-path uid-skew pathology — J0 fixed the code default, scripts must still be explicit); <code class="docutils literal notranslate"><span class="pre">JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0.5</span></code>; scored runs set <code class="docutils literal notranslate"><span class="pre">XLA_FLAGS=--xla_gpu_deterministic_ops=true</span></code>; <code class="docutils literal notranslate"><span class="pre">==</span></code>-pin jax/jaxlib in <code class="docutils literal notranslate"><span class="pre">[cluster]</span></code> (<code class="docutils literal notranslate"><span class="pre">pyproject.toml:41</span></code>).</p></li>
+</ul>
+</section>
+<section id="memory-envelope-to-enforce-design-to-16-gb-fp64-40-xla-headroom">
+<h2>2. Memory envelope to enforce (design to 16 GB, fp64, ~40 % XLA headroom)<a class="headerlink" href="#memory-envelope-to-enforce-design-to-16-gb-fp64-40-xla-headroom" title="Link to this heading"></a></h2>
+<p>Per ADR-0004 §5.2: dense Voigt forbidden on large grids (7.0 GB/spectrum on silva2022); chunked scan 537 MB live/chunk → B 8–16; LDM ≈60 MB (silva2022) → B 64–128, ≈8 MB (chemcam) → B 512+; identify + solve batch the whole registry. Sliding-median and RANSAC intermediates are row-/H-chunked upstream (J1/J2). An <strong>OOM-canary test</strong> asserts planned bytes &lt; 0.6× device bytes per bucket before launch.</p>
+</section>
+<section id="acceptance-criteria-milestone-m2-gate">
+<h2>3. Acceptance criteria — <strong>Milestone M2 gate</strong><a class="headerlink" href="#acceptance-criteria-milestone-m2-gate" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Throughput:</strong> ≥50 spectra/s end-to-end on one V100S, amortized over ≥1,000 spectra <strong>including compile</strong>; full corpus (~1,264 registered spectra) &lt; 60 s/GPU wall. (Promotion’s hard floor remains ≥10× the 0.4–5.1 s/spectrum baseline — ADR-0004 §3 C5; missing 50 but clearing 10× files a gap bead, does not block.)</p></li>
+<li><p>Per-bucket memory headroom documented in a committed artifact (planned vs measured peak bytes per bucket, both LDM and chunked paths).</p></li>
+<li><p>LDM decision recorded: parity numbers (existing rtol 1e-4 relaxation per ADR-0001 runbook §3 applies), shadow-board delta, adopt/fallback verdict.</p></li>
+<li><p>Batch-vs-single bit-consistency: <code class="docutils literal notranslate"><span class="pre">run_batch</span></code> output for spectrum i equals <code class="docutils literal notranslate"><span class="pre">run_one</span></code> on spectrum i (same bucket, deterministic ops) — the batching must add nothing but an axis.</p></li>
+<li><p>Padded partial batch correctness: validity-masked tail spectra produce no records and no NaN leakage.</p></li>
+<li><p>Determinism: two identical scored GPU runs produce identical board JSON (seeded sampling + deterministic ops).</p></li>
+<li><p>SLURM templates land in <code class="docutils literal notranslate"><span class="pre">scripts/jitpipe/</span></code> with warmup + private-cache exports; campaign-worker harness demonstrates ≥2 candidate evaluations with zero recompiles (cache-stats assert).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>4. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_batching.py</span></code> (batch-vs-single equality, partial-batch masks, OOM canary with a mocked budget); GPU acceptance runs on vasp nodes via sbatch (background from the parent session per CLAUDE.md watchdog rules; never inside a sub-agent). Timing artifacts committed under <code class="docutils literal notranslate"><span class="pre">docs/jitpipe/m2-throughput.md</span></code>.</p>
+</section>
+<section id="risks">
+<h2>5. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>R3 (memory blowup) — bounded by the canary + planner; R4 (LDM gap) — explicit early validation with a fallback that still meets the promotion floor; R6 (compile tax) — ≤7 buckets × few static variants, private cache, warmup; R10 (nondeterminism) — deterministic-ops flag + AC-6.</p>
+</section>
+<section id="dependencies-files">
+<h2>6. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J8. Enables J12; J10/J11 consume the batch harness opportunistically. Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/host.py</span></code> (planner/dispatcher), <code class="docutils literal notranslate"><span class="pre">scripts/jitpipe/*.sbatch</span></code>, tests, <code class="docutils literal notranslate"><span class="pre">docs/jitpipe/m2-throughput.md</span></code>. Reference untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

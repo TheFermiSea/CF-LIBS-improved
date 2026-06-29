@@ -1,0 +1,463 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Repo Cleanliness &amp; Engineering Health Audit &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Repo Cleanliness &amp; Engineering Health Audit</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/05-repo-cleanliness.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="repo-cleanliness-engineering-health-audit">
+<h1>Repo Cleanliness &amp; Engineering Health Audit<a class="headerlink" href="#repo-cleanliness-engineering-health-audit" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-09 · <strong>Scope:</strong> /home/brian/code/CF-LIBS-improved (main &#64; 6dd4045)
+<strong>Context:</strong> single maintainer, zero external users — aggressive deletion is acceptable.
+<strong>Method:</strong> read-only; full pytest suite NOT run (per watchdog policy); per-test targeted runs only.</p>
+<hr class="docutils" />
+<section id="headline-numbers">
+<h2>1. Headline numbers<a class="headerlink" href="#headline-numbers" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Metric</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Python LOC in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code></p></td>
+<td><p>~90,100</p></td>
+</tr>
+<tr class="row-odd"><td><p>Largest package</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/</span></code> (41,585) then <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code> (17,266)</p></td>
+</tr>
+<tr class="row-even"><td><p>Files &gt; 800 lines</p></td>
+<td><p><strong>33</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Tests collected</p></td>
+<td><p>3,004</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">check</span> <span class="pre">cflibs/</span></code></p></td>
+<td><p><strong>0 violations</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">complexipy</span> <span class="pre">cflibs/</span> <span class="pre">--max-complexity-allowed</span> <span class="pre">14</span></code></p></td>
+<td><p><strong>0 functions over</strong> (ngjd campaign held)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vulture</span> <span class="pre">cflibs/</span> <span class="pre">--min-confidence</span> <span class="pre">90</span></code></p></td>
+<td><p>26 hits (mostly <code class="docutils literal notranslate"><span class="pre">__exit__</span></code> false positives)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Local branches</p></td>
+<td><p><strong>115</strong> (~100 are squash-merged PR heads)</p></td>
+</tr>
+<tr class="row-even"><td><p>Remote branches</p></td>
+<td><p>55</p></td>
+</tr>
+<tr class="row-odd"><td><p>Open PRs</p></td>
+<td><p><strong>0</strong> (#220/#221/#222 CLOSED, #236 MERGED — nothing pending)</p></td>
+</tr>
+<tr class="row-even"><td><p>Worktrees</p></td>
+<td><p>10 (4 stale locked agent WTs, 5 wt-pf, 1 /tmp residual)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Top 15 largest files (lines):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="mi">4926</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">identify</span><span class="o">/</span><span class="n">alias</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">4391</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">benchmark</span><span class="o">/</span><span class="n">unified</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">3175</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">solve</span><span class="o">/</span><span class="n">iterative</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">2437</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">physics</span><span class="o">/</span><span class="n">self_absorption</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">2119</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">identify</span><span class="o">/</span><span class="n">line_detection</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1903</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">runtime</span><span class="o">/</span><span class="n">temporal</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1482</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">visualization</span><span class="o">/</span><span class="n">widgets</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1482</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">plasma</span><span class="o">/</span><span class="n">partition</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1373</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">identify</span><span class="o">/</span><span class="n">comb</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1368</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">manifold</span><span class="o">/</span><span class="n">generator</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1359</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">runtime</span><span class="o">/</span><span class="n">streaming</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1338</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">preprocess</span><span class="o">/</span><span class="n">wavelength_calibration</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1300</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">benchmark</span><span class="o">/</span><span class="n">dataset</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1259</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">inversion</span><span class="o">/</span><span class="n">physics</span><span class="o">/</span><span class="n">uncertainty</span><span class="o">.</span><span class="n">py</span>
+<span class="mi">1227</span> <span class="n">cflibs</span><span class="o">/</span><span class="n">io</span><span class="o">/</span><span class="n">exporters</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">alias.py</span></code>, <code class="docutils literal notranslate"><span class="pre">unified.py</span></code>, and <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> are the three sprawl hot-spots; everything else
+is tolerable. Lint/complexity baseline is excellent — sprawl, not mess, is the problem.</p>
+</section>
+<hr class="docutils" />
+<section id="fix-list-the-8-pre-existing-full-suite-failures-bead-cf-libs-improved-td8w">
+<h2>2. FIX list — the 8 pre-existing full-suite failures (bead CF-LIBS-improved-td8w)<a class="headerlink" href="#fix-list-the-8-pre-existing-full-suite-failures-bead-cf-libs-improved-td8w" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Test</p></th>
+<th class="head"><p>Verdict</p></th>
+<th class="head"><p>Disposition</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/cli/test_analyze_invert_no_drift.py:97</span></code> <code class="docutils literal notranslate"><span class="pre">test_analyze_and_invert_select_identical_lines</span></code></p></td>
+<td><p><strong>stale-test</strong> — pins the pre-PR#223 contract (<code class="docutils literal notranslate"><span class="pre">min_relative_intensity=100.0</span></code>); PR #223 retired the absolute floor (default now <code class="docutils literal notranslate"><span class="pre">None</span></code>, gA-Boltzmann top-K + shift-coherence veto replace it) and updated only the 2 unit tests, not the 2 <code class="docutils literal notranslate"><span class="pre">requires_db</span></code> integration tests</p></td>
+<td><p>A complete rewrite already exists <strong>uncommitted</strong> in <code class="docutils literal notranslate"><span class="pre">/home/brian/code/wt-pf/g2-cli-drift</span></code> — commit it</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/cli/test_analyze_invert_no_drift.py:147</span></code> <code class="docutils literal notranslate"><span class="pre">test_default_floor_kills_na_rydberg_blowup</span></code></p></td>
+<td><p><strong>stale-test</strong> — same root cause: asserts the deleted floor is the Na-Rydberg pruning mechanism</p></td>
+<td><p>Same g2 worktree diff covers it</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/parameter_sweep_server/test_e2e.py:381</span></code> <code class="docutils literal notranslate"><span class="pre">test_sweep_server_amortization</span></code></p></td>
+<td><p><strong>external-infra / flaky perf gate</strong> — asserts warm-server is &lt;1/4 wall time of 8 cold subprocesses; timing-environment dependent</p></td>
+<td><p>Mark <code class="docutils literal notranslate"><span class="pre">slow</span></code>+<code class="docutils literal notranslate"><span class="pre">benchmark</span></code> (exclude from default run) or relax ratio; not a code bug</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/scripts/test_bench_pause.py</span></code> <code class="docutils literal notranslate"><span class="pre">test_run_skips_when_flag_present</span></code></p></td>
+<td><p><strong>external-infra</strong> — un-stubbed run path resolves real <code class="docutils literal notranslate"><span class="pre">sbatch</span></code> and <strong>submitted live SLURM jobs 3083–3085</strong> during reproduction</p></td>
+<td><p>Hermetic fix (sbatch/ssh/rsync stubs + <code class="docutils literal notranslate"><span class="pre">BENCH_SKIP_SYNC</span></code> + xfail) drafted <strong>uncommitted</strong> in <code class="docutils literal notranslate"><span class="pre">/home/brian/code/wt-pf/g4-benchpause</span></code> — commit it</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/test_bayesian.py:~360</span></code> <code class="docutils literal notranslate"><span class="pre">TestBayesianForwardModel::test_forward_allows_decoupled_total_species_density</span></code></p></td>
+<td><p><strong>REAL BUG</strong> (verified by running today): spectra for <code class="docutils literal notranslate"><span class="pre">total_species_density_cm3=2.5e16</span></code> vs <code class="docutils literal notranslate"><span class="pre">2.5e17</span></code> are <strong>bit-identical</strong>. The param is plumbed through <code class="docutils literal notranslate"><span class="pre">forward.py:329→357</span></code> into <code class="docutils literal notranslate"><span class="pre">radiation.kernels.forward_model(...</span> <span class="pre">total_species_density_cm3=...)</span></code> but is silently ignored downstream — a physics parameter no-op introduced by the kernel migration</p></td>
+<td><p>Fix in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py</span></code> (wire the override into species densities) or delete the parameter and the contract</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/test_bayesian.py</span></code> <code class="docutils literal notranslate"><span class="pre">TestMCMCSampling::test_mcmc_result_correlation_matrix</span></code></p></td>
+<td><p><strong>stale/underpowered test + minor real gap</strong> (verified): with 10 warmup / 30 samples the T_eV chain has zero variance → correlation matrix row is NaN (<code class="docutils literal notranslate"><span class="pre">diag</span> <span class="pre">=</span> <span class="pre">[nan,1,1,1]</span></code>). Underpowered NUTS budget; <code class="docutils literal notranslate"><span class="pre">correlation_matrix()</span></code> also lacks a zero-variance guard</p></td>
+<td><p>Raise warmup/samples or fix seed; add NaN guard in <code class="docutils literal notranslate"><span class="pre">correlation_matrix()</span></code>. Related: bead 359q (bayesian pytest isolation)</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/test_bayesian.py:~910</span></code> <code class="docutils literal notranslate"><span class="pre">TestNestedSampling::test_nested_sampling_result_model_comparison</span></code></p></td>
+<td><p><strong>stale-test</strong> (verified): asserts literal <code class="docutils literal notranslate"><span class="pre">&quot;Δln(Z)&quot;</span></code> in the comparison report; report was reworded (“Bayesian Model Comparison … Interpretation: Very strong evidence for Model A”) — logic is correct</p></td>
+<td><p>One-line assert update</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/test_comb.py</span></code> <code class="docutils literal notranslate"><span class="pre">test_default_min_correlation_lowered</span></code></p></td>
+<td><p><strong>ALREADY FIXED</strong> (verified passing): renamed to <code class="docutils literal notranslate"><span class="pre">test_default_min_correlation_remains_benchmark_gated</span></code> (asserts 0.12) in commit 6dd4045 / PR #278</p></td>
+<td><p>Close out in bead td8w</p></td>
+</tr>
+</tbody>
+</table>
+<p>Net: 4 stale tests (2 with ready uncommitted fixes), 2 external-infra, <strong>1 real physics bug
+(#5)</strong>, 1 already fixed. None of the 8 indicates pipeline-accuracy regression.</p>
+</section>
+<hr class="docutils" />
+<section id="delete-list">
+<h2>3. DELETE list<a class="headerlink" href="#delete-list" title="Link to this heading"></a></h2>
+<section id="branches-100-of-115-local-55-remote-need-pruning">
+<h3>3.1 Branches (~100 of 115 local; 55 remote need pruning)<a class="headerlink" href="#branches-100-of-115-local-55-remote-need-pruning" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>DELETE — squash-merged PR heads, content fully on dev</strong> (verified by sampling
+<code class="docutils literal notranslate"><span class="pre">gh</span> <span class="pre">pr</span> <span class="pre">list</span> <span class="pre">--head</span></code>): all 81 <code class="docutils literal notranslate"><span class="pre">cx/ngjd-*</span></code>, <code class="docutils literal notranslate"><span class="pre">cx/wave1-*</span></code>…<code class="docutils literal notranslate"><span class="pre">cx/wave4-*</span></code>; all 5 <code class="docutils literal notranslate"><span class="pre">arch/c*</span></code>;
+<code class="docutils literal notranslate"><span class="pre">ngjd/tier-a</span></code>, <code class="docutils literal notranslate"><span class="pre">ngjd/tier-b</span></code>; <code class="docutils literal notranslate"><span class="pre">chore/wave2-audit-doc</span></code>; <code class="docutils literal notranslate"><span class="pre">docs/wave2-audit-grounding</span></code>;
+<code class="docutils literal notranslate"><span class="pre">fix/identifier-count-invariance</span></code> (#217), <code class="docutils literal notranslate"><span class="pre">fix/nnls-relative-coeff-recall</span></code> (#216),
+all <code class="docutils literal notranslate"><span class="pre">fix/wave2-*</span></code> / <code class="docutils literal notranslate"><span class="pre">fix/wave3-*</span></code> (merged #224–#269 series).
+One command after verification: <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">branch</span> <span class="pre">-D</span></code> the lot, <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">push</span> <span class="pre">origin</span> <span class="pre">--delete</span></code> /
+<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">fetch</span> <span class="pre">--prune</span></code> for remote.</p></li>
+<li><p><strong>DELETE — empty fix attempts</strong>: <code class="docutils literal notranslate"><span class="pre">fix/pre-g1-bayesian</span></code> … <code class="docutils literal notranslate"><span class="pre">fix/pre-g5-sweep</span></code> have <strong>zero
+commits</strong> over dev. BUT first salvage uncommitted diffs (see §3.2).</p></li>
+<li><p><strong>REVIEW THEN DELETE — unmerged content</strong> (do not bulk-delete):</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">fix/physics-audit-wave-1</span></code>: PR #212 merged, but tip commit <strong>33e24b0 “Refactor inversion
+import shims” is dated TODAY (2026-06-09 09:12) and unmerged</strong> — it retargets canonical
+imports across benchmark/cli/identify and looks like the in-progress bead <strong>38xr</strong> work.
+<strong>SALVAGE this commit</strong> (cherry-pick onto a fresh branch) before deleting.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">feat/fe-ti-intercept-residual</span></code> (13 commits, no PR, last 2026-06-04, worktree
+<code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-residual</span></code>): real fix commits (double-claimed flux guard, Poisson floor on
+Voigt area uncertainty, R²-gated T update, Boltzmann weight cap). Decide
+merge-or-abandon explicitly; several may already be superseded by #223/#236.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">fix/self-absorption-wiring-b1</span></code> (4 commits, no PR): its final commit re-imposes
+<code class="docutils literal notranslate"><span class="pre">min_relative_intensity=100</span></code> — <strong>contradicts the later PR #223 direction</strong>; likely
+superseded → delete after a 5-minute diff check.</p></li>
+</ul>
+</li>
+<li><p><strong>Worktrees</strong>: prune 4 stale locked <code class="docutils literal notranslate"><span class="pre">.claude/worktrees/agent-*</span></code> (based at 7043445,
+2026-05-08 — a month old; unlock+remove unless an agent is live); remove
+<code class="docutils literal notranslate"><span class="pre">/home/brian/code/wt-pf/g1..g5</span></code> after salvaging g2/g4 diffs; remove <code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-residual</span></code>
+after deciding on its branch. Each wt-pf worktree also has a stray untracked
+<code class="docutils literal notranslate"><span class="pre">ASD_da/ASD_da</span></code> artifact.</p></li>
+</ul>
+</section>
+<section id="salvage-before-delete-uncommitted-work-sitting-in-worktrees">
+<h3>3.2 Salvage-before-delete (uncommitted work sitting in worktrees)<a class="headerlink" href="#salvage-before-delete-uncommitted-work-sitting-in-worktrees" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/wt-pf/g2-cli-drift</span></code> — full rewrite of
+<code class="docutils literal notranslate"><span class="pre">tests/cli/test_analyze_invert_no_drift.py</span></code> to the post-#223 contract (fixes failures #1–2).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/wt-pf/g4-benchpause</span></code> — hermetic-env fix for <code class="docutils literal notranslate"><span class="pre">test_bench_pause.py</span></code>
+(fixes failure #4 and prevents accidental live SLURM submissions).</p></li>
+<li><p>Commit <code class="docutils literal notranslate"><span class="pre">33e24b0</span></code> on <code class="docutils literal notranslate"><span class="pre">fix/physics-audit-wave-1</span></code> — the shim-kill (bead 38xr) work.</p></li>
+</ol>
+</section>
+<section id="root-level-tracked-clutter">
+<h3>3.3 Root-level tracked clutter<a class="headerlink" href="#root-level-tracked-clutter" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Why delete</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fix_boltzmann.py</span></code></p></td>
+<td><p>One-off March script that repaired a file-corruption artifact (“[…417 lines truncated”) — job done, pure noise</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_submit.py</span></code></p></td>
+<td><p>Entire content: <code class="docutils literal notranslate"><span class="pre">print(&quot;Pretending</span> <span class="pre">to</span> <span class="pre">submit&quot;)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">line-identifier.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cf-libs-analyzer.py</span></code></p></td>
+<td><p>Pre-package standalone NNLS identifier prototypes; functionality lives in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">saha-eggert.py</span></code></p></td>
+<td><p>Pre-package prototype with its own duplicate constants table</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">manifold-generator.py</span></code></p></td>
+<td><p>Legacy; CLAUDE.md already warns “do not launch” — delete and drop the warning</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.adr-0001-baseline-cov.txt</span></code> (608 KB!), <code class="docutils literal notranslate"><span class="pre">.adr-0001-baseline.txt</span></code>, <code class="docutils literal notranslate"><span class="pre">.adr-0001-baseline-bench.json</span></code></p></td>
+<td><p>Tracked one-shot baseline artifacts; belong in <code class="docutils literal notranslate"><span class="pre">docs/adr/</span></code> or gone</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.swarm-progress.txt</span></code></p></td>
+<td><p>March swarm scratch file</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">datagen.py</span></code></p></td>
+<td><p>Legacy Colab notebook (ruff-excluded); move to <code class="docutils literal notranslate"><span class="pre">docs/archive/legacy/</span></code> per its own README, or delete — <code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code> is canonical</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/validation/validation/</span></code></p></td>
+<td><p>Accidentally committed nested duplicate of the validation tests + result JSONs; it’s the thing <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> ruff <code class="docutils literal notranslate"><span class="pre">extend-exclude</span></code> works around — delete dir AND the exclude</p></td>
+</tr>
+</tbody>
+</table>
+<p>Untracked-but-large (no git action, disk hygiene only): <code class="docutils literal notranslate"><span class="pre">output/</span></code> 1.4 GB, <code class="docutils literal notranslate"><span class="pre">data/</span></code> 11 GB,
+<code class="docutils literal notranslate"><span class="pre">spectral_manifold.h5</span></code>. <code class="docutils literal notranslate"><span class="pre">.gitignore</span></code> is adequate (minor: duplicate <code class="docutils literal notranslate"><span class="pre">target/</span></code> and
+<code class="docutils literal notranslate"><span class="pre">!ASD_da/libs_production.db</span></code> entries). No <code class="docutils literal notranslate"><span class="pre">.beadhub</span></code> remnants on disk or in the index.</p>
+</section>
+<section id="scripts-91-entries-in-scripts">
+<h3>3.4 Scripts (91 entries in <code class="docutils literal notranslate"><span class="pre">scripts/</span></code>)<a class="headerlink" href="#scripts-91-entries-in-scripts" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>KEEP — production workflow (~30)</strong>: <code class="docutils literal notranslate"><span class="pre">build_synthetic_id_corpus.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">benchmark_synthetic_identifiers.py</span></code>, <code class="docutils literal notranslate"><span class="pre">audit_synthetic_physics.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">validate_nist_parity.py</span></code>, <code class="docutils literal notranslate"><span class="pre">run_nist_validation.py</span></code>, <code class="docutils literal notranslate"><span class="pre">validate_real_data*.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">calibrate_alias.py</span></code>, <code class="docutils literal notranslate"><span class="pre">generate_model_library.py</span></code>, <code class="docutils literal notranslate"><span class="pre">parameter_sweep.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code>, <code class="docutils literal notranslate"><span class="pre">run_aalto_benchmark.py</span></code>, <code class="docutils literal notranslate"><span class="pre">run_vrabel2020_*</span></code>,
+<code class="docutils literal notranslate"><span class="pre">aggregate_shards.py</span></code>, <code class="docutils literal notranslate"><span class="pre">generate_bayesian_test_corpus.py</span></code>, <code class="docutils literal notranslate"><span class="pre">fetch/generate_nist_reference_spectra.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">benchmarks/</span></code>, <code class="docutils literal notranslate"><span class="pre">hpc/</span></code>, <code class="docutils literal notranslate"><span class="pre">bench-pause.sh</span></code>/<code class="docutils literal notranslate"><span class="pre">bench-resume.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">start_sweep_server.sh</span></code>,
+<code class="docutils literal notranslate"><span class="pre">orphan-claim-watchdog.{py,service,timer}</span></code>, telemetry trio, <code class="docutils literal notranslate"><span class="pre">element_confusion.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">failure_attribution.py</span></code>, <code class="docutils literal notranslate"><span class="pre">generate_benchmark_figures.py</span></code>, <code class="docutils literal notranslate"><span class="pre">generate_real_data_report.py</span></code>.</p></li>
+<li><p><strong>MOVE → <code class="docutils literal notranslate"><span class="pre">scripts/db_migrations/</span></code> (one-time DB builders, already applied; ~17)</strong>:
+<code class="docutils literal notranslate"><span class="pre">add_missing_*</span></code> (4), <code class="docutils literal notranslate"><span class="pre">add_mo_ii.py</span></code>, <code class="docutils literal notranslate"><span class="pre">add_pr_i_and_expand_nd_i.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cleanup_autoionizing_levels.py</span></code>, <code class="docutils literal notranslate"><span class="pre">expand_partition_functions.py</span></code>, <code class="docutils literal notranslate"><span class="pre">expand_stub_elements.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fill_stark_gaps.py</span></code>, <code class="docutils literal notranslate"><span class="pre">ingest_stark_b.py</span></code>, <code class="docutils literal notranslate"><span class="pre">migrate_add_broadening_columns.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">populate_*</span></code> (4), <code class="docutils literal notranslate"><span class="pre">regenerate_partition_functions.py</span></code>, <code class="docutils literal notranslate"><span class="pre">fit_partition_coefficients.py</span></code>.
+(Or delete outright — the built DB is committed at <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>.)</p></li>
+<li><p><strong>DELETE — one-off probes/experiments (~25)</strong>: <code class="docutils literal notranslate"><span class="pre">debug_recall.py</span></code>, entire <code class="docutils literal notranslate"><span class="pre">scripts/diag/</span></code>
+(<code class="docutils literal notranslate"><span class="pre">gate_diag2.py</span></code>, <code class="docutils literal notranslate"><span class="pre">gate_fix_test.py</span></code>, <code class="docutils literal notranslate"><span class="pre">kdet_why.py</span></code>…), <code class="docutils literal notranslate"><span class="pre">probe_*.py</span></code> (4),
+<code class="docutils literal notranslate"><span class="pre">keystone_*.py</span></code> (2), <code class="docutils literal notranslate"><span class="pre">measure_bhvo2_presence.py</span></code>, <code class="docutils literal notranslate"><span class="pre">sweep_alias_fixes.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sweep_boltzmann_r2_min.py</span></code>, <code class="docutils literal notranslate"><span class="pre">analyze_calibration_stress.py</span></code>, <code class="docutils literal notranslate"><span class="pre">analyze_threshold_pareto.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">plot_alias_diagnostics.py</span></code>, <code class="docutils literal notranslate"><span class="pre">compare_stark_vjbh.py</span></code>, <code class="docutils literal notranslate"><span class="pre">submit_post_alias_fix_benchmark.sh</span></code>,
+<code class="docutils literal notranslate"><span class="pre">submit_stark_vjbh_benchmark.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">exp001_dashboard.py</span></code>, <code class="docutils literal notranslate"><span class="pre">exp001_status.sh</span></code>,
+<code class="docutils literal notranslate"><span class="pre">exp003_launch.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">exp_chain.py</span></code>, <code class="docutils literal notranslate"><span class="pre">loop_24h_driver.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">loop_iteration.sh</span></code>,
+<code class="docutils literal notranslate"><span class="pre">run_cell.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">_report_data.py</span></code>, <code class="docutils literal notranslate"><span class="pre">report_aki_uncertainty_medians.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">diagnose_closure.py</span></code>, and keep only one of <code class="docutils literal notranslate"><span class="pre">verify_partition_functions.py</span></code> /
+<code class="docutils literal notranslate"><span class="pre">validate_partition_functions.py</span></code>.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="consolidate-list">
+<h2>4. CONSOLIDATE list<a class="headerlink" href="#consolidate-list" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Inversion flat shims (bead 38xr, in progress).</strong> 18 three-line shims remain at
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/{boltzmann_jax,daq_interface,deconvolution,hybrid,line_detection,</span> <span class="pre">line_selection,matrix_effects,model_selection,outliers,pca,quality,result_base,</span> <span class="pre">self_absorption,softmax_closure,spectral_refiner,streaming,temporal,</span> <span class="pre">wavelength_calibration}.py</span></code>. Internal <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> imports still routed through shims:
+<strong>13 sites</strong> — <code class="docutils literal notranslate"><span class="pre">cli/main.py</span></code> (×4: lines 253-254, 756-757), <code class="docutils literal notranslate"><span class="pre">benchmark/unified.py:1986</span></code>,
+<code class="docutils literal notranslate"><span class="pre">benchmark/synthetic_eval.py:43</span></code>, <code class="docutils literal notranslate"><span class="pre">manifold/vector_index.py:13</span></code>,
+<code class="docutils literal notranslate"><span class="pre">manifold/basis_index.py:387</span></code>, <code class="docutils literal notranslate"><span class="pre">inversion/runtime/streaming.py:79</span></code>,
+<code class="docutils literal notranslate"><span class="pre">inversion/identify/line_detection.py:15,588</span></code>, <code class="docutils literal notranslate"><span class="pre">inversion/solve/joint_optimizer.py:37</span></code>
+(+1 docstring). Tests/scripts: ~37 import sites. With zero users: retarget the 13+37
+sites, then <strong>delete all 18 shims</strong>. Note <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solver</span></code> is <em>already gone</em>
+(PR #210) and nothing broke — proof the rest can go. Commit 33e24b0 (§3.2) appears to
+already do much of this.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> (plural) deprecation package</strong> — 45 lines re-exporting
+<code class="docutils literal notranslate"><span class="pre">cflibs.benchmark</span></code>; 1 test imports it (incl. private <code class="docutils literal notranslate"><span class="pre">_KB_EV</span></code>/<code class="docutils literal notranslate"><span class="pre">_REFERENCE_LINES</span></code>).
+Retarget and delete the package.</p></li>
+<li><p><strong>Atomic-mass tables</strong> — canonical <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/masses.py</span></code> (+<code class="docutils literal notranslate"><span class="pre">resolve_element_mass</span></code>
+from arch/c3) exists, but four in-package copies remain:
+<code class="docutils literal notranslate"><span class="pre">radiation/kernels.py:91</span> <span class="pre">_FALLBACK_MASSES</span></code>, <code class="docutils literal notranslate"><span class="pre">radiation/spectrum_model.py:159</span> <span class="pre">_FALLBACK_MASSES</span></code> (copy of the copy), <code class="docutils literal notranslate"><span class="pre">inversion/physics/self_absorption.py:157</span> <span class="pre">_ATOMIC_MASS_AMU</span></code>, <code class="docutils literal notranslate"><span class="pre">benchmark/synthetic.py:42</span> <span class="pre">STANDARD_MASSES</span></code>; plus 3 script-local
+tables (<code class="docutils literal notranslate"><span class="pre">populate_vdw_and_self_broadening.py:186</span></code>, <code class="docutils literal notranslate"><span class="pre">populate_species_physics.py:215</span></code>,
+<code class="docutils literal notranslate"><span class="pre">run_accuracy_ablation.py:83</span></code>). Point all at <code class="docutils literal notranslate"><span class="pre">cflibs.atomic.masses</span></code>.</p></li>
+<li><p><strong>Constants</strong> — <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/corpus.py:131</span> <span class="pre">_KB_EV</span> <span class="pre">=</span> <span class="pre">8.617333262e-5</span></code> duplicates
+<code class="docutils literal notranslate"><span class="pre">cflibs/core/constants.py:16</span> <span class="pre">KB_EV</span></code>. Use <code class="docutils literal notranslate"><span class="pre">core.constants</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">alias.py</span></code> (4,926) / <code class="docutils literal notranslate"><span class="pre">unified.py</span></code> (4,391) / <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> (3,175)</strong> — candidates for
+sub-module splits in a future wave; not urgent given complexity gates pass.</p></li>
+<li><p><strong>Vulture true positives</strong> (small): <code class="docutils literal notranslate"><span class="pre">identify/alias.py:661</span> <span class="pre">estimated_T</span></code>,
+<code class="docutils literal notranslate"><span class="pre">identify/model_selection.py:211,407</span></code>, <code class="docutils literal notranslate"><span class="pre">physics/matrix_effects.py:960</span> <span class="pre">propagate_uncertainty</span></code> (accepted-but-unused arg), <code class="docutils literal notranslate"><span class="pre">solve/bayesian/samplers.py:407</span></code>,
+<code class="docutils literal notranslate"><span class="pre">manifold/batch_forward.py:59</span></code>.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="docs-claude-md-accuracy">
+<h2>5. Docs &amp; CLAUDE.md accuracy<a class="headerlink" href="#docs-claude-md-accuracy" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Stale (reference deleted <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solver</span></code> or pre-split layout; last touched
+2026-04-26/29):</strong> <code class="docutils literal notranslate"><span class="pre">docs/API_Reference.md</span></code>,
+<code class="docutils literal notranslate"><span class="pre">docs/CF-LIBS_Codebase_Technical_Documentation.md</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/user/Peak_Identification_Guide.md</span></code>,
+<code class="docutils literal notranslate"><span class="pre">docs/user/Quick_Start_Real_Data.md</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/physics/Equations.md</span></code> (import examples).
+Update import paths or delete the two big reference docs (Sphinx + code are the truth).</p></li>
+<li><p><strong>Archive candidates:</strong> 8+ one-off <code class="docutils literal notranslate"><span class="pre">*-consultation.md</span></code> files at <code class="docutils literal notranslate"><span class="pre">docs/</span></code> root
+(bandit-allocator, basis-libraries, dataset-sharding, jax-cache-and-pause,
+parameter-sweep ×2, parquet-results), <code class="docutils literal notranslate"><span class="pre">CODEEVOLVE_WAVE2_PLAN.md</span></code>, <code class="docutils literal notranslate"><span class="pre">exp001-autonomous-plan.md</span></code>
+→ <code class="docutils literal notranslate"><span class="pre">docs/archive/</span></code>. The <code class="docutils literal notranslate"><span class="pre">docs/architecture/</span></code> audit series is current — keep.</p></li>
+<li><p><strong>CLAUDE.md errors found:</strong> (1) “<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solver</span> <span class="pre">import</span> <span class="pre">X</span></code> still works” —
+<strong>false</strong>, raises <code class="docutils literal notranslate"><span class="pre">ModuleNotFoundError</span></code> (verified); (2) “Two approaches in
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/uncertainty.py</span></code>” and “<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/bayesian.py</span></code>” — both paths no
+longer exist (now <code class="docutils literal notranslate"><span class="pre">inversion/physics/uncertainty.py</span></code>, <code class="docutils literal notranslate"><span class="pre">inversion/solve/bayesian/</span></code>);
+(3) Setup says <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">venv</span> <span class="pre">--python</span> <span class="pre">3.12</span></code> but the working venv is Python 3.11.2.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="dependency-hygiene">
+<h2>6. Dependency hygiene<a class="headerlink" href="#dependency-hygiene" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Extras layout (<code class="docutils literal notranslate"><span class="pre">jax-cpu/metal/cuda</span></code>, <code class="docutils literal notranslate"><span class="pre">ci</span></code>, <code class="docutils literal notranslate"><span class="pre">local</span></code>, <code class="docutils literal notranslate"><span class="pre">cluster</span></code>) is sane and intentional.</p></li>
+<li><p><strong>Real findings (deptry 0.23 + inspection):</strong> <code class="docutils literal notranslate"><span class="pre">IPython</span></code> is imported by
+<code class="docutils literal notranslate"><span class="pre">cflibs/visualization/widgets.py:41</span></code> but not declared in the <code class="docutils literal notranslate"><span class="pre">widgets</span></code> extra — add it;
+<code class="docutils literal notranslate"><span class="pre">duckdb</span></code> is in <code class="docutils literal notranslate"><span class="pre">parquet</span></code>/<code class="docutils literal notranslate"><span class="pre">ci</span></code> extras but unused inside <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> (used by tests/analysis —
+documented rationale exists in pyproject; keep). The other ~580 deptry flags are
+dev-tool/extra noise.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mypy</span> <span class="pre">python_version</span> <span class="pre">=</span> <span class="pre">&quot;3.10&quot;</span></code> vs <code class="docutils literal notranslate"><span class="pre">requires-python</span> <span class="pre">=</span> <span class="pre">&quot;&gt;=3.11&quot;</span></code> — inconsistent; bump.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uv.lock</span></code> is gitignored (untracked) while <code class="docutils literal notranslate"><span class="pre">Cargo.lock</span></code> is tracked — intentional, fine.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="looks-dead-but-isn-t-keep">
+<h2>7. Looks dead but ISN’T — keep<a class="headerlink" href="#looks-dead-but-isn-t-keep" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/bandit/</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/observability/</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/parameter_sweep_server/</span></code> — small but
+wired into the sweep/benchmark workflow (tests exist).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> — physics-only blocklist enforcement; referenced by CLAUDE.md/CI.</p></li>
+<li><p>The 5–6 <strong>identifier implementations</strong> (alias/comb/correlation/spectral-NNLS/hybrid/
+hybrid-consensus) are deliberate competing algorithms benchmark-gated against each other —
+not copy-paste duplication.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scripts/orphan-claim-watchdog.*</span></code> systemd units, <code class="docutils literal notranslate"><span class="pre">bench-pause/resume.sh</span></code> — live ops tooling.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> (6 MB tracked) — deliberate (gitignore carve-out).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code> at root — canonical DB generator, referenced by CLAUDE.md; root location
+is fine (or move to <code class="docutils literal notranslate"><span class="pre">scripts/</span></code>, low value).</p></li>
+<li><p>The 4 <code class="docutils literal notranslate"><span class="pre">.claude/worktrees/agent-*</span></code> are <em>locked</em>; confirm no live agent before pruning.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="priority-order">
+<h2>8. Priority order<a class="headerlink" href="#priority-order" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Salvage</strong> g2/g4 worktree diffs + commit 33e24b0 (fixes 3 of 8 failures + closes 38xr).</p></li>
+<li><p><strong>Fix the real bug</strong> — <code class="docutils literal notranslate"><span class="pre">total_species_density_cm3</span></code> no-op in <code class="docutils literal notranslate"><span class="pre">radiation/kernels.py</span></code> (#5).</p></li>
+<li><p><strong>Branch massacre</strong> — delete ~100 squash-merged locals, prune remotes, remove worktrees.</p></li>
+<li><p><strong>Root clutter purge</strong> (§3.3) + <code class="docutils literal notranslate"><span class="pre">tests/validation/validation/</span></code> + ruff-exclude removal.</p></li>
+<li><p><strong>Shim kill</strong> (38xr) + <code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> + mass-table consolidation.</p></li>
+<li><p><strong>Scripts triage</strong> (§3.4) and docs archive/update + CLAUDE.md corrections (§5).</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

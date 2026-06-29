@@ -1,0 +1,412 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Literature State-of-the-Art Sweep &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Literature State-of-the-Art Sweep</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/06-literature-sota.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-literature-state-of-the-art-sweep">
+<h1>CF-LIBS Literature State-of-the-Art Sweep<a class="headerlink" href="#cf-libs-literature-state-of-the-art-sweep" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-09
+<strong>Purpose:</strong> Ground the CF-LIBS overhaul in the published state of the art: which algorithmic ingredients the best pipelines use, what this codebase lacks or implements differently, and what accuracy is realistically achievable. Current project best: <strong>4.03 wt% RMSE on BHVO-2 basalt (ChemCam data)</strong>; literature basalt claims of 1.3–3.5 wt% are examined critically in Q5.</p>
+<p><strong>Method note.</strong> All citations below were verified against live web search results or the project’s curated NotebookLM literature corpus (75-source CF-LIBS notebook) during this sweep. Where a number is known only second-hand (cited inside a review or another paper’s introduction), that is stated explicitly. No citation is from memory alone.</p>
+<p><strong>Key reviews anchoring this report:</strong></p>
+<ul class="simple">
+<li><p>Tognoni, Cristoforetti, Legnaioli, Palleschi, “Calibration-Free Laser-Induced Breakdown Spectroscopy: State of the Art,” <em>Spectrochim. Acta B</em> 65 (2010) 1–14, DOI 10.1016/j.sab.2009.11.006.</p></li>
+<li><p>Poggialini et al., “Catching up on calibration-free LIBS,” <em>J. Anal. At. Spectrom.</em> 38 (2023) 1751–1771, DOI 10.1039/D3JA00130J.</p></li>
+<li><p>Zhang et al., “A Brief Review of Calibration-Free Laser-Induced Breakdown Spectroscopy,” <em>Front. Phys.</em> 10 (2022) 887171, DOI 10.3389/fphy.2022.887171.</p></li>
+<li><p>Hermann et al., “Progress in calibration-free laser-induced breakdown spectroscopy,” <em>Spectrochim. Acta B</em> (2023) — critical review; verified via the reference list and discussion in Qiu et al. 2026 (below), which summarizes its thesis: residual plasma-parameter and spectral-modeling uncertainties propagate under the closure constraint and disproportionately corrupt low-abundance constituents.</p></li>
+</ul>
+<hr class="docutils" />
+<section id="q1-cf-libs-error-budget-ranked">
+<h2>Q1. CF-LIBS error budget — ranked<a class="headerlink" href="#q1-cf-libs-error-budget-ranked" title="Link to this heading"></a></h2>
+<p>Tognoni et al. 2010 established the canonical error-source list (LTE validity, optical thinness, partition functions, line data, detection-system response). The 2023 JAAS review (Poggialini et al.) does <strong>not</strong> give a single quantitative ranked budget — nobody does cleanly — but quantitative fragments across the literature support the following ranking:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rank</p></th>
+<th class="head"><p>Error source</p></th>
+<th class="head"><p>Quantitative contribution (published)</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><strong>Self-absorption</strong></p></td>
+<td><p>Binary Mg–Ca (50/50): 27% absolute concentration error with resonance lines included, → ~2% after excluding them; SA inflates Boltzmann T from 1.0 eV (true) to 1.48 eV for Ca II/Mg II in simulation. Steel: total Manhattan-distance error 5.07/3.93 wt% uncorrected → 1.65/0.94 wt% with PCT+OPC. Bulajic et al. report ~1 order of magnitude precision/accuracy improvement from COG correction.</p></td>
+<td><p>Simulation study in corpus (RSC, J. Anal. At. Spectrom.-family paper on SA in CF-LIBS); Qiu et al. 2026, DOI 10.1016/j.sab.2026.107520; Bulajic et al. 2002, <em>Spectrochim. Acta B</em> 57:339</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><strong>Temperature error → exponential propagation via exp(−E_k/kT) and U(T)</strong></p></td>
+<td><p>±500 K is typical for line-ratio T estimates; matrix-induced T variation 500–2000 K across matrices; T error is the limiting factor for sub-percent accuracy because it propagates exponentially into every species density and partition function. Völker &amp; Gornushkin: SA correction validity itself requires T known to ~1% RSD.</p></td>
+<td><p>corpus diagnostics KB (Aguilera &amp; Aragón 2004/2008 lineage); Völker &amp; Gornushkin 2023, DOI 10.1039/D2JA00352J</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><strong>Spectral response / intensity calibration</strong></p></td>
+<td><p>Wavelength-dependent detection efficiency E(λ) rotates the Boltzmann slope (lines span UV→NIR), corrupting T and intercepts; magnitude is instrument-specific and rarely quantified standalone. OPC was explicitly motivated as a correction for “errors due to uncertainties in detector efficiency” (Poggialini 2023).</p></td>
+<td><p>Zhang et al. 2022 (Front. Phys. review, Eq. I(λ)=I₀(λ)·E(λ)); Poggialini et al. 2023</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><strong>Non-LTE departures</strong></p></td>
+<td><p>LTE-vs-CR-model comparison (He plasma, 1–10 eV): deviations ~10% at n_e 10¹⁸–10¹⁹ cm⁻³, ~27% at 10¹⁷, ~42% at 10¹⁵ cm⁻³. McWhirter is necessary-not-sufficient; LTE typically valid only ~1–3 µs after ns ablation at n_e &gt; 10¹⁶–10¹⁷ cm⁻³.</p></td>
+<td><p>Barriga-Carrasco et al. 2018, <em>Phys. Plasmas</em>, DOI 10.1063/1.5050528; Cristoforetti et al. 2010, <em>Spectrochim. Acta B</em> 65:86–95</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><strong>A_ki uncertainties</strong></p></td>
+<td><p>NIST ASD grades: AAA ≤0.3% … B ≤10%, C ≤25%, D/E ≥50%. Lines with 25–50% A_ki error (e.g., Ca II 213.2 nm) propagate massive error into SA-coefficient and Boltzmann fits; recommended practice is accuracy-weighted fitting and rejecting low-grade lines.</p></td>
+<td><p>NIST ASD grade table; SA-coefficient propagation study in corpus (Zn/Mg/Ca simulation at 1 eV, 10¹⁷ cm⁻³)</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><strong>Plasma spatial inhomogeneity</strong></p></td>
+<td><p>Line-of-sight integration over a hot core + cool periphery systematically biases Boltzmann T and concentrations (the modeling demonstration is Gornushkin et al. 2010); it is also the root cause of severe self-reversal of resonance lines. The 2024 CSigma revision exists specifically to address it.</p></td>
+<td><p>Gornushkin et al., <em>J. Anal. At. Spectrom.</em> 25 (2010) 1643–1653, DOI 10.1039/C0JA00016G; Aguilera &amp; Aragón 2024 (SAB, PII S0584854724001137)</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p><strong>Time integration over transient plasma</strong></p></td>
+<td><p>A single Voigt cannot describe time-integrated Hα from a decaying plasma (n_e decay ~238 ns in their system); time-integrated spectra mix non-LTE early plasma and recombining late plasma.</p></td>
+<td><p>Dorval, Hamdan &amp; Stafford 2025, <em>Plasma Sources Sci. Technol.</em>, DOI 10.1088/1361-6595/ada8d7</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Takeaway for this codebase:</strong> items 1–3 are the levers. Item 1 is implemented but <strong>off by default</strong>; item 3 is absent from the inversion path (see Q4); item 2 argues for multi-element common-slope + CD-SB + Saha–Boltzmann (already present) plus full-spectrum fitting (Q8).</p>
+</section>
+<hr class="docutils" />
+<section id="q2-self-absorption-correction-method-comparison">
+<h2>Q2. Self-absorption correction — method comparison<a class="headerlink" href="#q2-self-absorption-correction-method-comparison" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Reference (verified)</p></th>
+<th class="head"><p>Mechanism</p></th>
+<th class="head"><p>Reported improvement</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Curve-of-growth (COG)</strong></p></td>
+<td><p>Bulajic, Corsi, Cristoforetti, Legnaioli, Palleschi, Salvetti, Tognoni, <em>Spectrochim. Acta B</em> 57 (2002) 339</p></td>
+<td><p>Iterative T/n_e/broadening/path-length reconstruction of true line profile</p></td>
+<td><p>“~1 order of magnitude” improvement in CF-LIBS precision and accuracy; Au917 ternary alloy: uncorrected CF fails (Au ~78 wt%), corrected converges to certified 91.7 wt%. Extended to oxide melts by Praher et al., <em>Spectrochim. Acta B</em> 65 (2010) 671–679</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Internal reference (IRSAC)</strong></p></td>
+<td><p>Sun &amp; Yu, <em>Talanta</em> 79 (2009) 388–395, DOI 10.1016/j.talanta.2009.03.066</p></td>
+<td><p>Scale absorbed lines against optically thin reference lines, iterate until Boltzmann R² converges</p></td>
+<td><p>Demonstrated on Al, Fe–Cr, Fe–Cr–Ni alloys (Boltzmann linearity restored). Descendants: IRESIC (Dong et al.), auto-selection of reference line (Yang et al., <em>Appl. Spectrosc.</em> 2018, DOI 10.1177/0003702817734293)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Columnar density Saha–Boltzmann (CD-SB)</strong></p></td>
+<td><p><strong>Cristoforetti &amp; Tognoni, <em>Spectrochim. Acta B</em> 79–80 (2013) 63–71</strong> (PII S0584854712003709)</p></td>
+<td><p>Use the self-absorbed lines themselves: compute ground-state columnar density nl from optical depth; plot vs lower level E_i; no thin-line requirement and no detector calibration needed</p></td>
+<td><p>Hu et al. 2021 (CD-SB + standard reference line, Al alloys): absolute error on majors ~3% → ~1% vs classical CF-LIBS (reported in Zhang et al. 2022 review). Lin et al. 2024 (<em>Anal. Lett.</em>, DOI 10.1080/00032719.2024.2400269): soil Cr R² 0.957→0.987</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Duplication mirror</strong></p></td>
+<td><p>Moon, Herrera, Omenetto, Smith, Winefordner, <em>Spectrochim. Acta B</em> 64 (2009) 702–713</p></td>
+<td><p>Spherical mirror doubles optical path; mirrored/unmirrored ratio measures SA directly, no Stark data needed</p></td>
+<td><p>Hardware method — directly applicable to the ps-LIBS instrument, not to archival ChemCam data</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Doublet/multiplet ratio</strong></p></td>
+<td><p>Doublet-ratio SA correction, <em>Spectrochim. Acta B</em> (2025, applied to bacterial quantification; verified in Qiu et al. reference list); concept also in El Sherbini et al., <em>Spectrochim. Acta B</em> 60 (2005) 1573–1579</p></td>
+<td><p>Fixed theoretical intensity ratio of same-multiplet lines → deviation = SA measure, T-independent</p></td>
+<td><p>Calibration-free, automatic; restores thin-limit intensities</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Planck-function / RTE closed form</strong></p></td>
+<td><p>Völker &amp; Gornushkin, <em>J. Anal. At. Spectrom.</em> (2023), DOI 10.1039/D2JA00352J</p></td>
+<td><p>I_thin = −B_λ ln(1 − I/B_λ) from the homogeneous-LTE RTE solution; iterate T</p></td>
+<td><p>On synthetic alloy spectra: T to 0.4% and n_e to 0.7% RSD after 4 iterations; valid for line-center τ₀ ≲ 2–3 (10% RSD budget); requires T known to ~1%</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Blackbody-reference (BRR-SAC)</strong></p></td>
+<td><p>Li et al., <em>Anal. Chim. Acta</em> (2019), DOI 10.1016/j.aca.2019.01.016</p></td>
+<td><p>Compare measured spectrum against theoretical blackbody limit; jointly retrieves collection efficiency and T</p></td>
+<td><p>Ti alloys: improved Boltzmann linearity and concentration accuracy vs COG-based correction; simpler, no Stark coefficients; <strong>also yields the optical collection efficiency</strong> (relevant to Q4)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Escape factor</strong></p></td>
+<td><p>Khan et al., <em>Anal. Lett.</em> (2024), DOI 10.1080/00032719.2024.2399178</p></td>
+<td><p>Escape-factor weighting of line intensities by optical thickness</p></td>
+<td><p>Laterite soil: restored linear signal–concentration relation; “significant improvement” vs ICP-MS validation</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Precomputed thick-to-thin (PCT) mapping + OPC</strong></p></td>
+<td><p>Qiu, Lu, Pu, Gornushkin, et al., <em>Spectrochim. Acta B</em> (2026), DOI 10.1016/j.sab.2026.107520</p></td>
+<td><p>Tabulated universal thick→thin mapping retrieving absorption path length from spectra alone (no Stark priors), coupled to one-point calibration</p></td>
+<td><p>Nuclear steels: total error 5.065→1.648 wt% (16MND5) and 3.932→0.935 wt% (42CrMo4) — <strong>best documented end-to-end improvement</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Verdict.</strong> The best <em>quantification</em> improvements come from (a) radiative-transfer-consistent correction applied to <strong>all</strong> usable lines (PCT, Planck-function, COG) rather than excluding lines, and (b) coupling SA correction with an intercept-alignment step (OPC) to stop closure error redistribution. CD-SB is the strongest <em>temperature</em> method when resonance lines dominate. All methods degrade above τ₀ ≈ 3 — beyond that, only inhomogeneous-plasma modeling (Q3) or line exclusion works.</p>
+</section>
+<hr class="docutils" />
+<section id="q3-closure-and-graph-variants-inhomogeneous-models">
+<h2>Q3. Closure and graph variants; inhomogeneous models<a class="headerlink" href="#q3-closure-and-graph-variants-inhomogeneous-models" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Standard multi-species Saha–Boltzmann graph + closure Σ C_s = 1</strong> (Ciucci et al. 1999 lineage per Tognoni 2010). Weakness highlighted by Hermann’s 2023 critical review (via Qiu et al. 2026): closure <strong>redistributes</strong> every uncorrected systematic error into the minor elements.</p></li>
+<li><p><strong>MESBP</strong> — multi-element Saha–Boltzmann plot (all elements on one graph through ionization-energy offsets): <em>J. Anal. At. Spectrom.</em> (2022), DOI 10.1039/D2JA00218C. Equivalent in spirit to this codebase’s multi-element common-slope fit.</p></li>
+<li><p><strong>CSigma (Cσ) graphs</strong> — Aragón &amp; Aguilera, <em>J. Quant. Spectrosc. Radiat. Transf.</em> (2014) (PII S002240731400332X): generalized curves of growth; many lines of several elements/charge states on one curve, with radiative transfer built in, so <strong>self-absorption is modeled, not excluded</strong>. Applied to rocks: Aragón &amp; Aguilera, <em>J. Anal. At. Spectrom.</em> (2017), DOI 10.1039/C6JA00360E — 8 elements (Si, Al, Ca, Mg, Fe, Ti, Mn, V) in rocks <strong>prepared as fused glass beads</strong>; the 2023 JAAS review tabulates “&lt;10% average relative error” for fused-glass Cσ work. <strong>Caveat:</strong> Cσ graphs are <em>constructed</em> from samples of known composition — it is a few-standards method, not strictly calibration-free. Inhomogeneity-corrected revision: Aguilera &amp; Aragón, <em>Spectrochim. Acta B</em> (2024), PII S0584854724001137.</p></li>
+<li><p><strong>One-point calibration (OPC)</strong> — Cavalcanti et al., <em>Spectrochim. Acta B</em> 87 (2013) 51–56: one known sample empirically corrects the Saha–Boltzmann intercepts (thus absorbing detector-efficiency, A_ki, and SA residuals). Poggialini 2023 reports OPC “better than 1 wt%” on Cu alloys, and 15% vs 53% uncertainty against the inverse method. Applications: Ca/P in hydroxyapatite consistent with XRF (Gomes et al., <em>Spectrochim. Acta B</em> 2021); Al–W–Mo fusion deposits (relative errors &lt;35% W, &lt;20% Mo); OPC+SA correction on Ti alloys: Ti 0.92%, V 3.86%, Al 16.47% relative error (Hu et al., reported in Qiu et al. 2026 introduction).</p></li>
+<li><p><strong>Hermann: full-spectrum fitting + two-zone non-uniform plasma.</strong> Hermann et al., <em>Anal. Chem.</em> 91 (2019) 2544–2550, DOI 10.1021/acs.analchem.8b05780: iterative fit of the <strong>calculated spectral radiance</strong> of a uniform LTE plasma (outer loop over T, n_e, plasma diameter L, n−1 element fractions; inner per-parameter optimization) — on a 150 nm Ni–Cr–Mo film, quantification “better than RBS and EDS.” For non-uniform plasmas, Hermann’s group uses <strong>two uniform zones (hot core + cold peripheral layer)</strong> with the analytical RTE solution for fast computation (described in the Frontiers 2022 review and in Gerhard &amp; Hermann, “LIBS Analysis of Optical Surfaces and Thin Films,” Wiley LIBS handbook chapter, DOI 10.1002/9781119758396.ch18; HAL hal-03855561). Glass bulk analysis: CF-LIBS fractions “in quite good accordance” with ICP-AES. Hermann’s 2023 SAB review (“Progress in calibration-free LIBS”) is the field’s current critical self-assessment.</p></li>
+<li><p><strong>What accurate geological CF work actually uses:</strong> fused-glass homogenization + Cσ (Aragón &amp; Aguilera 2017), or full-spectrum forward fitting (Hermann; Tan’s OPSIAL on ChemCam, arXiv:1802.01000), or escape-factor/CD-SB SA handling on soils (Khan 2024; Lin 2024) — and <strong>almost always at least one reference sample</strong> when wt%-level accuracy is claimed.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="q4-spectral-response-intensity-calibration">
+<h2>Q4. Spectral response / intensity calibration<a class="headerlink" href="#q4-spectral-response-intensity-calibration" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Physics: measured I(λ) = I₀(λ)·E(λ); E(λ) varies strongly across the UV–NIR span of a Boltzmann line set, so an uncalibrated system rotates the Boltzmann slope (T bias, exponentially propagated) and distorts species intercepts (composition bias). Spelled out in Zhang et al. 2022 (Front. Phys. 887171), with deuterium–halogen / Hg / scattered-laser lamps as standard calibration sources.</p></li>
+<li><p>Poggialini et al. 2023: OPC explicitly “corrects errors due to uncertainties in detector efficiency” — i.e., the field’s pragmatic answer when radiometric calibration is unavailable is a single standard sample.</p></li>
+<li><p><strong>Calibration without lamps (internal physics methods):</strong></p>
+<ul>
+<li><p>Branching-ratio method: argon branching ratios over 210–4591 nm (Whaling-lineage tables, <em>J. Quant. Spectrosc. Radiat. Transf.</em> 1993, PII 002240739390124Z); “Relative spectral response calibration of a spectrometer system for LIBS using the argon branching ratio method,” <em>J. Anal. At. Spectrom.</em> (2014), DOI 10.1039/C3JA50371B — agrees with halogen-lamp calibration above 350 nm.</p></li>
+<li><p>Laser-plasma-based echelle calibration: “Echelle spectrometer calibration by means of laser plasma,” <em>Spectrochim. Acta B</em> (2021), PII S0584854721000914.</p></li>
+<li><p>BRR-SAC (Li et al. 2019) retrieves collection efficiency as a by-product of blackbody-referenced SA correction.</p></li>
+</ul>
+</li>
+<li><p><strong>Codebase verification (done this sweep):</strong> the <em>forward</em> model applies an instrument response curve (<code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code> step 6, <code class="docutils literal notranslate"><span class="pre">instrument.apply_response</span></code>), but <strong>no inversion-path component corrects measured line intensities for E(λ)</strong>. The only “intensity calibration” in the inversion is the scalar <code class="docutils literal notranslate"><span class="pre">experimental_factor</span></code> F in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure.py</span></code> (~line 946) — a wavelength-independent scale, which cancels in closure and corrects nothing spectral. <code class="docutils literal notranslate"><span class="pre">cflibs/pds/chemcam.py</span></code> notes ChemCam CCS data arrive with “response correction already applied,” so <strong>this gap does not explain the BHVO-2 4.03 wt% result</strong>, but it will bite on the in-house ps-LIBS instrument unless a lamp- or branching-ratio-based E(λ) is added to the measured-intensity path.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="q5-best-published-geological-basalt-cf-libs-accuracies">
+<h2>Q5. Best published geological/basalt CF-LIBS accuracies<a class="headerlink" href="#q5-best-published-geological-basalt-cf-libs-accuracies" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Paper (verified)</p></th>
+<th class="head"><p>Sample</p></th>
+<th class="head"><p>Method ingredients</p></th>
+<th class="head"><p>Reported accuracy</p></th>
+<th class="head"><p>Caveats</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Aragón &amp; Aguilera, JAAS 2017 (DOI 10.1039/C6JA00360E); Poggialini 2023 table</p></td>
+<td><p>Rocks → <strong>fused glass beads</strong></p></td>
+<td><p>Cσ generalized COG, radiative transfer, LTE</p></td>
+<td><p>8 elements (Si, Al, Ca, Mg, Fe, Ti, Mn, V); “&lt;10% average relative error” (per Poggialini 2023 table)</p></td>
+<td><p>Fused-glass prep destroys matrix; Cσ graphs built from known samples (few-standards, not strictly CF)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Khan et al., <em>Anal. Lett.</em> 2024 (DOI 10.1080/00032719.2024.2399178)</p></td>
+<td><p>Laterite soil</p></td>
+<td><p>CF-LIBS + escape-factor SA correction, one-line CF</p></td>
+<td><p>“Significant improvement,” linear signal–concentration restored vs ICP-MS</p></td>
+<td><p>Relative concentrations; no wt% RMSE stated in abstract</p></td>
+</tr>
+<tr class="row-even"><td><p>Ahmad et al., <em>Appl. Sci.</em> 10 (2020) 6848</p></td>
+<td><p>Chalcopyrite ore</p></td>
+<td><p>Classical CF-LIBS, line-selection rules</p></td>
+<td><p>Cu 58.9 vs 58.1 (XRF), Fe 40.2 vs 35.4 wt%</p></td>
+<td><p>S unobservable (VUV); Na detected but unquantifiable; Si/Se/Ag missed entirely; renormalization hides missing elements</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fahad et al., <em>Laser Phys.</em> 2018 (via Zhang 2022 review)</p></td>
+<td><p>Limestone</p></td>
+<td><p>CF-LIBS Boltzmann plot</p></td>
+<td><p>“Good agreement” with SEM-EDS/EPMA; Poggialini table: columnar-density limestone Ca &lt;4% relative</p></td>
+<td><p>Major element only</p></td>
+</tr>
+<tr class="row-even"><td><p>Poggialini 2023 review table (self-calibrated LIBS)</p></td>
+<td><p>Meteorites</p></td>
+<td><p>Self-calibrated/CF</p></td>
+<td><p>“better than 5 wt%”</p></td>
+<td><p>Review-level summary</p></td>
+</tr>
+<tr class="row-odd"><td><p>Colgan et al., <em>Spectrochim. Acta B</em> 110 (2015) 20–30</p></td>
+<td><p><strong>Basalt BIR-1A</strong> (ChemCam standard)</p></td>
+<td><p>LANL ATOMIC code, full radiative modeling</p></td>
+<td><p>Forward simulation reproducing measured spectra</p></td>
+<td><p><strong>Not an inversion</strong> — composition was input, not retrieved</p></td>
+</tr>
+<tr class="row-even"><td><p>Tan, arXiv:1802.01000 (2018, OPSIAL)</p></td>
+<td><p>ChemCam Mars spectra</p></td>
+<td><p>Full RTE line-by-line spectral fitting</p></td>
+<td><p>Good spectral fits only after <strong>abandoning single-T LTE</strong>: T_exc = 13,500 K, T_ion = 9,000 K two-temperature model</p></td>
+<td><p>Plasma characterization + element ID; no wt% RMSE vs ground truth published</p></td>
+</tr>
+<tr class="row-odd"><td><p>Hébert et al., <em>Stat. Anal. Data Min.</em> 2021 (DOI 10.1002/sam.11503; arXiv:2008.04982) + arXiv:2004.04301</p></td>
+<td><p>Mars rocks/soils (ChemCam)</p></td>
+<td><p>Bayesian model calibration against ATOMIC forward model, scale-discrepancy term</p></td>
+<td><p>“Initial exploration” — feasibility, posterior widths, no headline RMSE</p></td>
+<td><p>Research direction, not production accuracy</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Contrast — multivariate (NOT CF):</strong> “Elemental analyses of feldspathic to basaltic soils and rocks on the Moon,” <em>Spectrochim. Acta B</em> (2024), PII S0584854724001939</p></td>
+<td><p>Lunar-analog basalt/anorthosite rocks &amp; powders</p></td>
+<td><p>PLS-type multivariate calibration on lab standards</p></td>
+<td><p>Rock chips: 3.1 (SiO₂), 2.2 (Al₂O₃), 2.5 (MgO), 2.0 (CaO), 2.1 (Fe₂O₃), 0.32 (TiO₂), 0.33 (Na₂O), 0.089 (K₂O) wt% RMSE; powders ~1.2–2.5 wt%</p></td>
+<td><p><strong>Calibrated with matched standards</strong> — this is the family the “1.3–3.5 wt%” basalt numbers come from</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Contrast — multivariate:</strong> Dyar et al., <em>Earth Space Sci.</em> (2024), DOI 10.1029/2024EA003635</p></td>
+<td><p>Lunar geochemistry by LIBS</p></td>
+<td><p>Multivariate, large standard suites</p></td>
+<td><p>wt%-level accuracies per oxide; spectral resolution identified as the dominant performance factor</p></td>
+<td><p>Same caveat</p></td>
+</tr>
+<tr class="row-even"><td><p>ChemCam/SuperCam production pipelines (e.g., pre-flight calibration paper, <em>Spectrochim. Acta B</em> 2013, PII S0584854713000505; <em>Minerals</em> 15 (2025) 882 review, DOI 10.3390/min15080882)</p></td>
+<td><p>Mars targets</p></td>
+<td><p>PLS/sub-model multivariate against 69→408 geostandards + onboard targets</p></td>
+<td><p>MOC-level wt% accuracies</p></td>
+<td><p>Entirely calibration-based; the teams moved <em>away</em> from CF</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Honest bottom line.</strong> No verified publication achieves 1.3–3.5 wt% RMSE on basalt <strong>calibration-free</strong>. Those numbers belong to multivariate pipelines trained on matched standards, or to physics methods anchored by at least one standard (OPC, Cσ) and/or fused-glass homogenization. General-purpose CF-LIBS sits at “±15–20% relative on some matrices” (Spectroscopy Online assessment of the field, consistent with Tognoni 2010 and Poggialini 2023), which on basalt’s 8–10-oxide budget is <strong>several wt% RMSE — i.e., the project’s 4.03 wt% on BHVO-2 is already near published strictly-CF SOTA</strong>. The literature-supported path below ~2 wt% without abandoning physics is: SA correction on all lines + non-uniform (two-zone) forward fitting + (optionally, if the constraint allows one standard) OPC — exactly the PCT+OPC recipe that took steels from 3.9–5.1 to 0.9–1.6 wt%.</p>
+</section>
+<hr class="docutils" />
+<section id="q6-ps-libs-specifics-1-ps-1040-nm-yb-fiber">
+<h2>Q6. ps-LIBS specifics (1 ps, 1040 nm Yb:fiber)<a class="headerlink" href="#q6-ps-libs-specifics-1-ps-1040-nm-yb-fiber" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>ps vs ns for CF-LIBS:</strong> Marín Roldán et al., “Calibration-free analysis of a tungsten-based target for diagnostics of relevant fusion materials comparing picosecond and nanosecond LIBS,” <em>Spectrochim. Acta B</em> (2021; PII S0584854720304948): ps (~30 ps) regime gave <strong>narrower lines, markedly better Saha–Boltzmann linearity, and less self-absorption of ionic lines</strong> than 5 ns pulses → more accurate T and better CF quantification. This is favorable for this project.</p></li>
+<li><p><strong>But SA does not vanish:</strong> “Self-absorption of emission lines in picosecond-laser-produced gold plasmas,” <em>Phys. Plasmas</em> 31 (2024) 043302 — SA remains significant in ps plasmas, delay-dependent, strongest for resonance lines.</p></li>
+<li><p><strong>LTE timing is earlier and shorter than ns-LIBS:</strong> “Investigation of thermodynamic properties in picosecond laser-produced plasmas on silicon,” <em>AIP Adv.</em> 13 (2023) 095002 — LTE satisfied only at <strong>delays ~180–300 ns</strong> and only in plasma regions away from the target (&gt;4 mm in their geometry); strong spatio-temporal LTE deviation otherwise. Morel et al., <em>Spectrochim. Acta B</em> 103 (2015) 112–123 (fs/ps Al plasma, collisional-radiative state-to-state model): early ultrashort-pulse plasma is <strong>violently out of equilibrium</strong>; equilibrium recovers at atmospheric pressure but CR modeling is mandatory at low pressure. Morel et al., <em>Phys. Scr.</em> T167 (2016) 014016 extends to ps-LIBS diagnostics for tokamak materials.</p></li>
+<li><p><strong>fs analogy for gating:</strong> fs studies report optimal acquisition at <strong>200–400 ns delay</strong> with line-intensity RSDs of 2–4% (ACS Omega 2020, DOI 10.1021/acsomega.0c03636); fs measurements are “less dependent on the chemical composition of the matrices” (de Carvalho et al., <em>Anal. Chim. Acta</em> 876 (2015) 26–38) — reduced matrix effects carry over to ps regime.</p></li>
+<li><p><strong>Continuum:</strong> weaker continuum and faster decay in ultrashort regimes (consistent across the ps/fs literature above) → earlier usable gates than the ns “1–3 µs LTE window” (Cristoforetti et al. 2010).</p></li>
+<li><p><strong>Recommended strategy at 1 ps / 1040 nm:</strong> gate delays of order <strong>100–400 ns</strong> with widths short relative to plasma decay (avoid integrating the recombining tail); verify LTE per-shot via multi-species Saha–Boltzmann consistency (T_atom ≈ T_ion within ~15%) rather than McWhirter alone; expect T ~0.5–1.3 eV and n_e 10¹⁶–10¹⁸ cm⁻³ to put you near the LTE boundary where the Barriga-Carrasco 2018 numbers warn of 10–27% LTE-model deviations — making the codebase’s LTE validator and consistency metrics load-bearing, not cosmetic.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="q7-line-selection-criteria-published-quantitative">
+<h2>Q7. Line selection criteria (published, quantitative)<a class="headerlink" href="#q7-line-selection-criteria-published-quantitative" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Exclude ground-state/resonance and low-E_i lines:</strong> Matsumura et al. 2024 (ACS Earth Space Chem., DOI 10.1021/acsearthspacechem.4c00067) excluded lines whose lower level is at/near ground (Al I 394.4, Fe I 386.0, Ca I 422.7, Cu I 324.8/327.4 nm). Fayyaz et al. 2023 (<em>Metals</em>, Cu–Fe alloys) give a hard threshold: <strong>drop E_i &lt; 6000 cm⁻¹ (~0.74 eV)</strong>.</p></li>
+<li><p><strong>Minimum transition probability:</strong> Fayyaz et al. 2023: <strong>drop A_ki &lt; ~10⁶ s⁻¹</strong> (emission timescale must be short vs plasma evolution).</p></li>
+<li><p><strong>A_ki accuracy grade:</strong> prefer NIST grades A/B; reject C/D/E for quantification; weight the Boltzmann regression by σ(A_ki) (grade table: AAA ≤0.3%, AA ≤1%, A ≤3%, B ≤10%, C ≤25%, D/E ≥50%). A 25–50% A_ki error dominates the SA-coefficient error budget for affected lines.</p></li>
+<li><p><strong>Upper-level energy span:</strong> wide ΔE_k is required for a usable slope lever arm; Zhang et al. 2022 note T accuracy “collapses” for small E_k spread (no universal number; practice in the corpus uses ≥1–2 eV span; Saha–Boltzmann plots extend the span by Eion).</p></li>
+<li><p><strong>Blending/isolation and SNR:</strong> isolation scoring and SNR floors (e.g., ALIAS uses an intensity threshold I_th and erf-based SNR confidence); the JAAS 2023 review adds: avoid lines with emission times comparable to plasma variation, avoid the highest-relative-intensity lines (SA risk), and treat all criteria as <strong>case-by-case, not generalizable</strong>.</p></li>
+<li><p><strong>Codebase status:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code> implements SNR × atomic-data-quality × isolation scoring with energy-spread requirement and resonance-line exclusion; <code class="docutils literal notranslate"><span class="pre">boltzmann.py</span></code> has <code class="docutils literal notranslate"><span class="pre">aki_uncertainty_weighting=True</span></code> with σ(A_ki) populated from NIST accuracy grades in the SQLite schema (<code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code>, <code class="docutils literal notranslate"><span class="pre">accuracy_grade</span></code> columns verified). This is <strong>aligned with published best practice</strong>; worth checking that the E_i &lt; 6000 cm⁻¹ and A_ki ≥ 10⁶ s⁻¹ thresholds are the defaults.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="q8-pure-physics-algorithmic-frontier-20202026">
+<h2>Q8. Pure-physics algorithmic frontier, 2020–2026<a class="headerlink" href="#q8-pure-physics-algorithmic-frontier-20202026" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Monte Carlo calibration-free (forward-fitting) — the intrinsic-accuracy benchmark:</strong> Gornushkin &amp; Völker, <em>Sensors</em> 22 (2022) 7149, DOI 10.3390/s22197149. Global stochastic optimization of a uniform-LTE radiative-transfer forward model over (T, plasma size, concentrations); synthetic 8-element slag: <strong>intrinsic accuracy ~1%</strong> (Ca 0.21%, Al 0.07%, Cr 0.73% relative), uniform across concentration ranges, GPU ~5 min/spectrum. Establishes that when the model matches reality, forward fitting beats Boltzmann-plot CF by an order of magnitude — remaining error in practice is model mismatch (inhomogeneity, non-LTE, response).</p></li>
+<li><p><strong>Hermann full-spectrum iterative fitting</strong> (Q3): Anal. Chem. 2019 — beats RBS/EDS on thin films; two-zone RTE for non-uniform plasmas; 2023 SAB critical review codifies the error-budget view.</p></li>
+<li><p><strong>Yaroshchyk et al. (2006) precedent</strong> for whole-spectrum standard-less fitting: bauxite/brass/minerals within ~25% of certified values — the historical baseline that modern forward fitting improves on.</p></li>
+<li><p><strong>Bayesian CF-LIBS with full forward model:</strong> Hébert et al. 2021 (Stat. Anal. Data Min., DOI 10.1002/sam.11503) and the companion scale-discrepancy work (arXiv:2004.04301) — Bayesian calibration of LANL’s ATOMIC forward model to ChemCam spectra with explicit nuisance/discrepancy terms; feasibility-stage, costly, no headline wt% RMSE yet. Dorval et al. 2025 (PSST, DOI 10.1088/1361-6595/ada8d7) demonstrate Bayesian nested sampling (dynesty) recovering <strong>time-resolved n_e from time-integrated spectra</strong> — directly relevant to gate-integrated CF-LIBS bias.</p></li>
+<li><p><strong>Planck-function SA correction</strong> (Völker &amp; Gornushkin JAAS 2023) and <strong>PCT+OPC</strong> (Qiu et al. SAB 2026) — closed-form/tabulated radiative-transfer corrections that remove the Stark-parameter dependency; PCT+OPC delivers the best published end-to-end wt% numbers (0.94–1.65 wt% total on steels).</p></li>
+<li><p><strong>Robust statistics in the physics pipeline:</strong> Matsumura et al. 2024 — sparsity-based baseline + denoising (spectrum-adapted ECM) and <strong>Student-t robust Boltzmann regression</strong> (outlier-resistant), validated on metals and rocks for deep-sea/planetary survey use. Fully physics+classical-statistics; directly compatible with this project’s constraint.</p></li>
+<li><p><strong>ML hybrids exist</strong> (e.g., “Towards real-time calibration-free LIBS supported by machine learning,” <em>Spectrochim. Acta B</em> (2024), PII S0584854724002271) — noted for completeness; excluded by this project’s physics-only constraint.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="top-10-literature-grounded-ingredients-ranked-by-expected-impact">
+<h2>TOP 10 LITERATURE-GROUNDED INGREDIENTS, RANKED BY EXPECTED IMPACT<a class="headerlink" href="#top-10-literature-grounded-ingredients-ranked-by-expected-impact" title="Link to this heading"></a></h2>
+<p>Status legend: <strong>MISSING</strong> / <strong>PRESENT-BUT-WRONG</strong> (or mis-defaulted) / <strong>PRESENT-AND-FINE</strong> (verified in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> this sweep).</p>
+<ol class="arabic simple">
+<li><p><strong>Self-absorption correction ON by default, radiative-transfer-consistent (Planck-function or PCT-style thick→thin mapping), applied to all lines instead of excluding them.</strong> — <strong>PRESENT-BUT-WRONG</strong>: rich machinery exists (<code class="docutils literal notranslate"><span class="pre">physics/self_absorption.py</span></code>: COG analyzer, doublet ratio, escape factor; <code class="docutils literal notranslate"><span class="pre">cdsb.py</span></code>), but <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver(apply_self_absorption=False)</span></code> is opt-in. Literature: the single largest error source; Bulajic 2002 (~10×), Mg–Ca 27%→2%, steels 5.1→1.6 wt% (Qiu 2026). Add the Völker–Gornushkin closed-form I_thin = −B_λ ln(1−I/B_λ) as the cheap default with τ₀&lt;3 guard.</p></li>
+<li><p><strong>Full-spectrum forward fitting as the primary solver (Hermann/MC-CF style), with the Boltzmann pipeline as initializer.</strong> — <strong>PRESENT-BUT-UNDERUSED</strong>: a JAX forward model, joint L-BFGS-B optimizer, Bayesian MCMC, and manifold NN search all exist, but the headline pipeline is line-based iterative CF. MC-CF shows intrinsic ~1% accuracy (Gornushkin &amp; Völker 2022); Hermann 2019 beats RBS/EDS. Biggest single algorithmic lever for the BHVO-2 gap.</p></li>
+<li><p><strong>Two-zone (core + peripheral absorber) plasma model in the deterministic path.</strong> — <strong>PARTIALLY PRESENT</strong>: <code class="docutils literal notranslate"><span class="pre">solve/bayesian/two_zone.py</span></code> exists in the Bayesian path only. Hermann’s analytic two-zone RTE is fast and is the published fix for resonance-line self-reversal and inhomogeneity bias (Gornushkin 2010 JAAS shows uniform-model bias is systematic). Promote to the standard solver.</p></li>
+<li><p><strong>One-point calibration (OPC) as an optional, honestly-labeled mode.</strong> — <strong>MISSING</strong> (no OPC anywhere in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion</span></code>). Cavalcanti 2013; OPC absorbs detector-efficiency + A_ki + residual SA bias in one intercept alignment; literature’s cheapest route from ~4 wt% to ~1 wt% (Qiu 2026, Poggialini 2023). Physics-compatible: it is classical bias correction, not a learned model. For ChemCam work the onboard calibration targets are a natural OPC reference.</p></li>
+<li><p><strong>Spectral response E(λ) correction of measured intensities in the inversion path, with branching-ratio internal calibration as the lamp-free fallback.</strong> — <strong>MISSING</strong> (verified: forward model applies a response curve; inversion path has only the scalar closure factor F; ChemCam CCS arrives pre-corrected, so this matters for the ps-LIBS instrument, not the BHVO-2 benchmark). Ar/Fe branching-ratio method (JAAS 2014, DOI 10.1039/C3JA50371B) gives E(λ) without a calibrated lamp.</p></li>
+<li><p><strong>Two-temperature / partial-LTE option (T_exc ≠ T_ion) for ChemCam-like ns time-integrated spectra.</strong> — <strong>MISSING</strong>: Tan’s OPSIAL needed T_exc=13,500 K vs T_ion=9,000 K to fit ChemCam Fe I/II; Barriga-Carrasco 2018 quantifies 10–27% LTE error at exactly this project’s n_e range. A two-T Saha–Boltzmann is a small generalization of the existing solver.</p></li>
+<li><p><strong>CD-SB columnar-density temperature from the self-absorbed lines themselves.</strong> — <strong>PRESENT-AND-FINE</strong> (<code class="docutils literal notranslate"><span class="pre">physics/cdsb.py</span></code>; Cristoforetti &amp; Tognoni 2013). Verify it is preferred automatically when resonance lines dominate (late gates, high concentration), per Safi/Hu applications.</p></li>
+<li><p><strong>Line-selection thresholds matched to published numbers.</strong> — <strong>PRESENT-AND-FINE</strong> (scoring = SNR × atomic-quality × isolation; resonance exclusion; energy-spread requirement; A_ki-uncertainty-weighted Boltzmann fits with NIST accuracy grades in the DB schema — all verified). Action: confirm defaults include E_i &lt; 6000 cm⁻¹ exclusion and A_ki ≥ 10⁶ s⁻¹ (Fayyaz 2023), and Student-t robust regression as in Matsumura 2024.</p></li>
+<li><p><strong>LTE validity gating beyond McWhirter, wired into solver weighting.</strong> — <strong>PRESENT</strong> (<code class="docutils literal notranslate"><span class="pre">plasma/lte_validator.py</span></code>, quality consistency checks, temporal optimizer): ensure the Cristoforetti-2010 time/space criteria and multi-species T agreement (≤15%) actually gate or down-weight results, especially for ps-LIBS where the LTE window is ~180–300 ns (AIP Adv. 2023).</p></li>
+<li><p><strong>Closure-error containment: keep Dirichlet-residual/ILR closure, add intercept-alignment diagnostics.</strong> — <strong>PRESENT-AND-FINE</strong> (standard/matrix/oxide/ILR + Dirichlet residual closure), and the literature (Hermann 2023 via Qiu 2026) confirms why it matters: closure redistributes systematic error into trace elements. Pair with #1/#4 so there is less error to redistribute; report per-element error bars from the existing UQ machinery so trace-element blow-up is visible, not silent.</p></li>
+</ol>
+<p><strong>Realistic accuracy expectations (literature-grounded):</strong> strictly calibration-free on geological matrices: ~10–20% relative on majors ⇒ ~3–5 wt% RMSE on basalt (the project’s 4.03 wt% is at SOTA). With SA-on-by-default + two-zone forward fitting: published evidence supports ~2× improvement (→ ~2 wt%). Adding OPC against a single standard (or ChemCam onboard targets): ~1 wt%-class totals (Qiu 2026 steels, Poggialini 2023 Cu alloys). The 1.3–3.5 wt% basalt numbers in the literature are multivariate-calibrated and are not a fair CF benchmark.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

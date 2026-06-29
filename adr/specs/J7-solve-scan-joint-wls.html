@@ -1,0 +1,196 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J7 Implementation Spec — Solve: Fixed-K Scan Initializer + Joint WLS Production Estimator &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J7 Implementation Spec — Solve: Fixed-K Scan Initializer + Joint WLS Production Estimator</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J7-solve-scan-joint-wls.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j7-implementation-spec-solve-fixed-k-scan-initializer-joint-wls-production-estimator">
+<h1>J7 Implementation Spec — Solve: Fixed-K Scan Initializer + Joint WLS Production Estimator<a class="headerlink" href="#j7-implementation-spec-solve-fixed-k-scan-initializer-joint-wls-production-estimator" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J7 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §4 row 10, §3 C4, §6.1 · <strong>Track:</strong> B · <strong>Depends:</strong> J0, J4, J6 · <strong>Estimated effort:</strong> 10–15 pd (scan extensions ≈1 wk; joint WLS ≈1–2 wk; overlaps)</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Implement <code class="docutils literal notranslate"><span class="pre">jitpipe/solve.py</span></code> per ADR-0004 §3 C4: <strong>extend the lax path’s component kernels verbatim; re-derive the production estimator.</strong> Two layers:</p>
+<ol class="arabic simple">
+<li><p><strong>Fixed-K scan initializer</strong> — the existing lax loop body, completed (SB-graph, Stark n_e, native ILR, in-body keystone gate, unified IPD, corona weighting) and converted from dynamic <code class="docutils literal notranslate"><span class="pre">lax.while_loop</span></code> to a fixed-iteration <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> (max_iterations=20, <code class="docutils literal notranslate"><span class="pre">iterative.py:882</span></code>) with converged-state freezing (<code class="docutils literal notranslate"><span class="pre">where(converged,</span> <span class="pre">prev,</span> <span class="pre">new)</span></code>) — bit-compatible with the while loop at the fixed point, reverse-differentiable, vmappable.</p></li>
+<li><p><strong>Joint WLS Gauss–Newton/LM estimator</strong> — the production solve, whose <strong>GN step 0 is algebraically the SB-graph closed form</strong> (J4’s Schur identity): the exact parity anchor and warm start.</p></li>
+</ol>
+</section>
+<section id="the-honest-gap-list-being-closed-file-line-solve-iterative-py">
+<h2>2. The honest gap list being closed (file:line; <code class="docutils literal notranslate"><span class="pre">solve/iterative.py</span></code>)<a class="headerlink" href="#the-honest-gap-list-being-closed-file-line-solve-iterative-py" title="Link to this heading"></a></h2>
+<p>(i) routing: SB-graph or Stark diagnostics force <code class="docutils literal notranslate"><span class="pre">_solve_python</span></code> (<code class="docutils literal notranslate"><span class="pre">:1592-1613</span></code>) — production never reaches the lax path; (ii) ILR — the constructor default (<code class="docutils literal notranslate"><span class="pre">:1046-1050</span></code>) — and pwlr/dirichlet route through <code class="docutils literal notranslate"><span class="pre">jax.pure_callback</span></code> (<code class="docutils literal notranslate"><span class="pre">:614-655</span></code>): serial under vmap, non-differentiable; (iii) lax n_e is pressure-balance only, <code class="docutils literal notranslate"><span class="pre">ne_from_stark</span></code> hardwired False (<code class="docutils literal notranslate"><span class="pre">:2358-2364</span></code>); (iv) keystone gate + quality metrics host-side post-loop (<code class="docutils literal notranslate"><span class="pre">:2344-2365</span></code>, <code class="docutils literal notranslate"><span class="pre">:1997-2070</span></code>); (v) two-region corona weighting deferred in the lax body (<code class="docutils literal notranslate"><span class="pre">:810-818</span></code>) — lax ≠ Python when <code class="docutils literal notranslate"><span class="pre">two_region=True</span></code> with corona-sensitive elements ({Si,Fe,Ca,Al,Mg} weighting at <code class="docutils literal notranslate"><span class="pre">:1121-1156</span></code>); (vi) IPD formula drift: lax inlines Debye–Hückel (<code class="docutils literal notranslate"><span class="pre">:778-781</span></code>) while Python calls <code class="docutils literal notranslate"><span class="pre">ionization_potential_lowering</span></code> (<code class="docutils literal notranslate"><span class="pre">:1224-1226</span></code>, <code class="docutils literal notranslate"><span class="pre">plasma/saha_boltzmann.py:542+</span></code>) — unify into one jittable function (matters only when <code class="docutils literal notranslate"><span class="pre">apply_ipd=True</span></code>, default False <code class="docutils literal notranslate"><span class="pre">:886</span></code>); (vii) dynamic-trip <code class="docutils literal notranslate"><span class="pre">while_loop</span></code> is not reverse-differentiable; the grad test is try/except smoke (<code class="docutils literal notranslate"><span class="pre">tests/inversion/test_iterative_lax.py:297-363</span></code>); T4-1 <code class="docutils literal notranslate"><span class="pre">custom_root</span></code> never landed (<code class="docutils literal notranslate"><span class="pre">specs/T1-3-lax-while-iterative.md:155,181,190</span></code>); (viii) <code class="docutils literal notranslate"><span class="pre">_LaxFallback</span></code> raise/catch (<code class="docutils literal notranslate"><span class="pre">:213-220,2259-2270</span></code>) → per-spectrum validity flags.</p>
+<p><strong>Reuse verbatim (trivially batched):</strong> <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code>+<code class="docutils literal notranslate"><span class="pre">reorder</span></code> (<code class="docutils literal notranslate"><span class="pre">:381-540</span></code>, via J0’s <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> bridge), <code class="docutils literal notranslate"><span class="pre">_build_padded_arrays_from_obs</span></code> (<code class="docutils literal notranslate"><span class="pre">:2986-3020</span></code>), <code class="docutils literal notranslate"><span class="pre">_eval_partition_jax</span></code> (<code class="docutils literal notranslate"><span class="pre">:658-706</span></code>), <code class="docutils literal notranslate"><span class="pre">_saha_ratio_per_element</span></code> (<code class="docutils literal notranslate"><span class="pre">:709-718</span></code>), <code class="docutils literal notranslate"><span class="pre">_saha_correct_kernel</span></code> (<code class="docutils literal notranslate"><span class="pre">:2675-2696</span></code>), <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code> (<code class="docutils literal notranslate"><span class="pre">:2698-2773</span></code>), <code class="docutils literal notranslate"><span class="pre">batched_boltzmann_fit</span></code> (<code class="docutils literal notranslate"><span class="pre">boltzmann_jax.py:111-200</span></code>), degeneracy/keystone gates in numeric form (<code class="docutils literal notranslate"><span class="pre">:804-806</span></code>, <code class="docutils literal notranslate"><span class="pre">closure.py:495-535</span></code>), quality-metrics assembly seam (host, <code class="docutils literal notranslate"><span class="pre">:1997-2070</span></code>). <strong>Discard:</strong> dynamic while_loop as production estimator; <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code> closures; the <code class="docutils literal notranslate"><span class="pre">_LaxFallback</span></code> exception protocol.</p>
+</section>
+<section id="the-joint-wls-formulation-adr-0004-6-1">
+<h2>3. The joint WLS formulation (ADR-0004 §6.1)<a class="headerlink" href="#the-joint-wls-formulation-adr-0004-6-1" title="Link to this heading"></a></h2>
+<p>minimize over θ = (ln T, α ∈ R^{E−1}, β), n_e <strong>pinned to the J6 Stark measurement</strong> (audit F2) with a penalty from its MAD scatter when D&gt;1 (pressure balance only as flagged fallback):</p>
+<p>Σ_l w_l · [ y_l − ( −E_l/(k_B T) + ln C_{s(l)}(α) − ln U_{s(l)}(T) − ln M_{s(l)}(T,n_e) + β + saha_shift_l(T,n_e) ) ]²</p>
+<p>fixed-K GN/LM on ≤(E+2) parameters (≈20×20 normal systems), vmapped over B. The numpy precursor is <code class="docutils literal notranslate"><span class="pre">ClosedFormILRSolver</span></code> (<code class="docutils literal notranslate"><span class="pre">solve/closed_form.py:1-19,220-302,305-329</span></code>) which must freeze U_s(T), M_s(T,n_e) and bolt on 1–2 Saha passes (<code class="docutils literal notranslate"><span class="pre">:71,105</span></code>); autodiff removes exactly that limitation. Closure modes enter as the map α→C (standard/ILR identical; oxide = factor-weighted normalization inside ln C; matrix = one pinned coordinate). Initialization: scan-initializer output (or SB-graph closed form directly). Optional extension behind a flag: per-line COG escape-factor term f(τ_l(θ)) from J5 — audit F10’s “fold COG into the regression”.</p>
+</section>
+<section id="tolerance-contracts">
+<h2>4. Tolerance contracts<a class="headerlink" href="#tolerance-contracts" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer</p></th>
+<th class="head"><p>Contract</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Scan initializer vs <code class="docutils literal notranslate"><span class="pre">_solve_python</span></code></p></td>
+<td><p>inherit rtol 1e-5 (T atol 1e-3 K, conc atol 1e-7) across all six closure modes (<code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py:183-204</span></code>) <strong>including SB-graph + oxide + Stark configurations the current lax tests cannot cover</strong>; iteration count within 1; iteration-freeze idempotence test</p></td>
+</tr>
+<tr class="row-odd"><td><p>GN step 0</p></td>
+<td><p>≡ SB-graph closed form, rtol 1e-10 (exact algebraic anchor)</p></td>
+</tr>
+<tr class="row-even"><td><p>Joint converged (T, C) vs reference pipeline</p></td>
+<td><p>on the 10 scoreboard datasets: T rtol 1e-3; per-element C atol 0.5 wt % on converged solves</p></td>
+</tr>
+<tr class="row-odd"><td><p>Covariance</p></td>
+<td><p>vs finite-difference Hessian rtol 1e-4</p></td>
+</tr>
+<tr class="row-even"><td><p>Gradients</p></td>
+<td><p>finite and FD-verified — <strong>hard asserts</strong>, no try/except (supersedes the smoke test)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Class-level floor</p></td>
+<td><p>rtol 1e-3 / atol 1e-4 (<code class="docutils literal notranslate"><span class="pre">test_solver_jax_parity.py:5,208-256</span></code>)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="acceptance-criteria">
+<h2>5. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>New <code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_solve.py</span></code> mirroring <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py</span></code> structure, plus vmap batch=16 and grad-finiteness as hard asserts; all six closure modes parametrized; SB-graph + oxide + Stark production configuration covered for the first time.</p></li>
+<li><p>GN-step-0 anchor test green (rtol 1e-10).</p></li>
+<li><p>Joint solve ≤ iterative round-trip error on the golden set (<code class="docutils literal notranslate"><span class="pre">cflibs/validation/round_trip.py</span></code>); converged-fraction ≥ reference on the 10 datasets; non-converged spectra carry validity flags (never exceptions).</p></li>
+<li><p>Corona-weighting and IPD-unification parity fixtures (<code class="docutils literal notranslate"><span class="pre">two_region=True</span></code> with {Si,Fe,Ca,Al,Mg}; <code class="docutils literal notranslate"><span class="pre">apply_ipd=True</span></code>) — lax-vs-Python equivalence restored where it is currently documented-divergent.</p></li>
+<li><p>ILR/PWLR/Dirichlet native (no <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code> in <code class="docutils literal notranslate"><span class="pre">jitpipe/</span></code>); keystone gate in-body; n_e Stark-primary with flagged pressure-balance fallback.</p></li>
+<li><p>Host wrapper reconstitutes <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:81</span></code>) including quality metrics assembled host-side.</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>6. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">test_parity_solve.py</span></code> (scan layer), <code class="docutils literal notranslate"><span class="pre">test_joint_wls.py</span></code> (anchor, covariance-vs-FD, golden round-trip, scoreboard-input golden tests). Convergence-freeze idempotence: run scan at K and K+5, assert identical frozen output. CPU x64; narrow subsets per watchdog rules.</p>
+</section>
+<section id="risks">
+<h2>7. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>MED: convergence-freezing semantics (idempotence test); optimizer robustness across 10 datasets (LM damping schedule fixed-K; fall back to returning the initializer result with a flag when GN fails its own gates); corona/IPD unification changes answers in configs that currently silently diverge between paths — fixtures make this explicit; covariance validation (FD comparisons are noisy — use well-conditioned golden fixtures).</p>
+</section>
+<section id="dependencies-files">
+<h2>8. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0 (snapshot), J4 (fit/closure kernels), J6 (Stark coupling). Enables J8, J11. Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/solve.py</span></code>, tests. Reference untouched; the existing <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> is neither modified nor deleted (it remains the reference-side lax path until Stage-C deprecation).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

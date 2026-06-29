@@ -1,0 +1,308 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Audit: Line Emissivity, Doppler Width, Voigt/Olivero &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Audit: Line Emissivity, Doppler Width, Voigt/Olivero</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/emissivity-doppler-voigt.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-audit-line-emissivity-doppler-width-voigt-olivero">
+<h1>Adversarial Audit: Line Emissivity, Doppler Width, Voigt/Olivero<a class="headerlink" href="#adversarial-audit-line-emissivity-doppler-width-voigt-olivero" title="Link to this heading"></a></h1>
+<section id="verdict">
+<h2>VERDICT<a class="headerlink" href="#verdict" title="Link to this heading"></a></h2>
+<p><strong>correct</strong> — severity: <strong>low</strong></p>
+<p>All three core physics implementations are correct. The emissivity formula <code class="docutils literal notranslate"><span class="pre">ε</span> <span class="pre">=</span> <span class="pre">hc/(4πλ)</span> <span class="pre">A_ki</span> <span class="pre">n_k</span></code> is exact (constants match CODATA 2018 to machine precision, cm⁻³→m⁻³ conversion <code class="docutils literal notranslate"><span class="pre">×1e6</span></code> is correct). The Doppler sigma <code class="docutils literal notranslate"><span class="pre">σ</span> <span class="pre">=</span> <span class="pre">λ</span> <span class="pre">sqrt(kT/mc²)</span></code> matches the astropy/CODATA derivation to &lt;1e-6 relative error. The production Voigt profile (scipy <code class="docutils literal notranslate"><span class="pre">wofz</span></code>) matches the analytic Faddeeva function with zero error. The one minor imprecision is cosmetic: <code class="docutils literal notranslate"><span class="pre">doppler_width()</span></code> uses the rounded factor <code class="docutils literal notranslate"><span class="pre">2.355</span></code> (vs exact <code class="docutils literal notranslate"><span class="pre">2*sqrt(2</span> <span class="pre">ln</span> <span class="pre">2)</span> <span class="pre">=</span> <span class="pre">2.35482…</span></code>) introducing 0.0076% error in the FWHM <em>return value</em> — but this function is used only for window sizing and isolation criteria, never directly as a broadening sigma in the spectrum kernel.</p>
+</section>
+<hr class="docutils" />
+<section id="ground-truth">
+<h2>GROUND TRUTH<a class="headerlink" href="#ground-truth" title="Link to this heading"></a></h2>
+<section id="line-emissivity">
+<h3>1. Line Emissivity<a class="headerlink" href="#line-emissivity" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">ε</span> <span class="pre">=</span> <span class="pre">(hc</span> <span class="pre">/</span> <span class="pre">4πλ)</span> <span class="pre">·</span> <span class="pre">A_ki</span> <span class="pre">·</span> <span class="pre">n_k</span></code>  [W m⁻³ sr⁻¹]</p>
+<p>Source: Griem, H.R. (1997) <em>Principles of Plasma Spectroscopy</em>, Cambridge Univ. Press, §4.1 Eq. (4.1); also Cristoforetti et al. (2010) “Local Thermodynamic Equilibrium in Laser-Induced Breakdown Spectroscopy experiments”, <em>Spectrochimica Acta B</em> 65, 86–95. DOI: 10.1016/j.sab.2009.11.005.</p>
+<p>Constants verified against NIST CODATA 2018:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">h</span> <span class="pre">=</span> <span class="pre">6.62607015×10⁻³⁴</span> <span class="pre">J·s</span></code> (exact, CODATA 2018)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">c</span> <span class="pre">=</span> <span class="pre">2.99792458×10⁸</span> <span class="pre">m/s</span></code> (exact, CODATA 2018)</p></li>
+<li><p>cm⁻³ → m⁻³: <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">cm⁻³</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">cm⁻³</span> <span class="pre">×</span> <span class="pre">(1e2</span> <span class="pre">m/cm)³</span> <span class="pre">=</span> <span class="pre">1e6</span> <span class="pre">m⁻³</span></code> ✓</p></li>
+</ul>
+</section>
+<section id="doppler-width">
+<h3>2. Doppler Width<a class="headerlink" href="#doppler-width" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">σ_Doppler</span> <span class="pre">=</span> <span class="pre">(λ/c)</span> <span class="pre">sqrt(k_B</span> <span class="pre">T</span> <span class="pre">/</span> <span class="pre">m)</span> <span class="pre">=</span> <span class="pre">λ</span> <span class="pre">sqrt(k_B</span> <span class="pre">T</span> <span class="pre">/</span> <span class="pre">mc²)</span></code></p>
+<p>Source: Thorne, Litzén, Johansson (1999) <em>Spectrophysics: Principles and Applications</em>, Springer, §3.2 Eq. (3.13). Also: Olivero, J.J. &amp; Longbothum, R.L. (1977) “Empirical fits to the Voigt line width: a brief review”, <em>J. Quant. Spectrosc. Radiat. Transfer</em> <strong>17</strong>, 233–236. DOI: 10.1016/0022-4073(77)90161-3.</p>
+<p>The Maxwell-Boltzmann 1D standard deviation is <code class="docutils literal notranslate"><span class="pre">v_σ</span> <span class="pre">=</span> <span class="pre">sqrt(k_B</span> <span class="pre">T</span> <span class="pre">/</span> <span class="pre">m)</span></code>. The factor <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">sqrt(2</span> <span class="pre">ln</span> <span class="pre">2)</span> <span class="pre">=</span> <span class="pre">2.3548200450…</span></code> converts σ to FWHM.</p>
+</section>
+<section id="olivero-1977-pseudo-voigt-fwhm">
+<h3>3. Olivero (1977) Pseudo-Voigt FWHM<a class="headerlink" href="#olivero-1977-pseudo-voigt-fwhm" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">f_V</span> <span class="pre">≈</span> <span class="pre">0.5346</span> <span class="pre">f_L</span> <span class="pre">+</span> <span class="pre">sqrt(0.2166</span> <span class="pre">f_L²</span> <span class="pre">+</span> <span class="pre">f_G²)</span></code></p>
+<p>Source: Olivero, J.J. &amp; Longbothum, R.L. (1977), ibid. The constants <code class="docutils literal notranslate"><span class="pre">0.5346</span></code> and <code class="docutils literal notranslate"><span class="pre">0.2166</span></code> are the values published in the original paper. Claimed accuracy: 0.02%.</p>
+<p>Alternative (<code class="docutils literal notranslate"><span class="pre">0.5343</span> <span class="pre">/</span> <span class="pre">0.2169</span></code>) appears in later works (e.g., Ida, Ando, Toraya (2000) <em>J. Appl. Crystallogr.</em> 33, 1311). Neither is significantly more accurate.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="code-value-numerical">
+<h2>CODE VALUE (numerical)<a class="headerlink" href="#code-value-numerical" title="Link to this heading"></a></h2>
+<section id="emissivity">
+<h3>Emissivity<a class="headerlink" href="#emissivity" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> \
+<span class="n">PYTHONPATH</span><span class="o">=/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="n">JAX_PLATFORMS</span><span class="o">=</span><span class="n">cpu</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">astropy</span><span class="w"> </span><span class="kn">import</span> <span class="n">constants</span> <span class="k">as</span> <span class="n">const</span>
+<span class="n">H_PLANCK</span> <span class="o">=</span> <span class="mf">6.62607015e-34</span><span class="p">;</span> <span class="n">C_LIGHT</span> <span class="o">=</span> <span class="mf">2.99792458e8</span>
+<span class="n">h</span> <span class="o">=</span> <span class="n">const</span><span class="o">.</span><span class="n">h</span><span class="o">.</span><span class="n">value</span><span class="p">;</span> <span class="n">c</span> <span class="o">=</span> <span class="n">const</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">value</span>
+<span class="n">lam_m</span> <span class="o">=</span> <span class="mf">404.58e-9</span><span class="p">;</span> <span class="n">A_ki</span> <span class="o">=</span> <span class="mf">5e7</span><span class="p">;</span> <span class="n">n_k_m3</span> <span class="o">=</span> <span class="mf">1e10</span> <span class="o">*</span> <span class="mf">1e6</span>
+<span class="n">eps_code</span> <span class="o">=</span> <span class="p">(</span><span class="n">H_PLANCK</span> <span class="o">*</span> <span class="n">C_LIGHT</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">lam_m</span><span class="p">))</span> <span class="o">*</span> <span class="n">A_ki</span> <span class="o">*</span> <span class="n">n_k_m3</span>
+<span class="n">eps_ref</span>  <span class="o">=</span> <span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">c</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">lam_m</span><span class="p">))</span> <span class="o">*</span> <span class="n">A_ki</span> <span class="o">*</span> <span class="n">n_k_m3</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;eps_code=</span><span class="si">{</span><span class="n">eps_code</span><span class="si">:</span><span class="s1">.6e</span><span class="si">}</span><span class="s1">, eps_ref=</span><span class="si">{</span><span class="n">eps_ref</span><span class="si">:</span><span class="s1">.6e</span><span class="si">}</span><span class="s1">, ratio=</span><span class="si">{</span><span class="n">eps_code</span><span class="o">/</span><span class="n">eps_ref</span><span class="si">:</span><span class="s1">.12f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">eps_code=1.953586e+04,</span> <span class="pre">eps_ref=1.953586e+04,</span> <span class="pre">ratio=1.000000000000</span></code></p>
+</section>
+<section id="id1">
+<h3>Doppler Width<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">PYTHONPATH</span><span class="o">=...</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">astropy</span><span class="w"> </span><span class="kn">import</span> <span class="n">constants</span> <span class="k">as</span> <span class="n">const</span>
+<span class="n">k_B</span><span class="o">=</span><span class="n">const</span><span class="o">.</span><span class="n">k_B</span><span class="o">.</span><span class="n">value</span><span class="p">;</span> <span class="n">m_p</span><span class="o">=</span><span class="n">const</span><span class="o">.</span><span class="n">m_p</span><span class="o">.</span><span class="n">value</span><span class="p">;</span> <span class="n">c</span><span class="o">=</span><span class="n">const</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">value</span>
+<span class="n">EV_TO_J</span><span class="o">=</span><span class="mf">1.602176634e-19</span><span class="p">;</span> <span class="n">M_PROTON</span><span class="o">=</span><span class="mf">1.67262192369e-27</span><span class="p">;</span> <span class="n">C_LIGHT</span><span class="o">=</span><span class="mf">2.99792458e8</span>
+<span class="n">lam_nm</span><span class="o">=</span><span class="mf">404.58</span><span class="p">;</span> <span class="n">T_eV</span><span class="o">=</span><span class="mf">0.86</span><span class="p">;</span> <span class="n">mass_amu</span><span class="o">=</span><span class="mf">55.845</span>
+<span class="n">T_J</span><span class="o">=</span><span class="n">T_eV</span><span class="o">*</span><span class="n">EV_TO_J</span><span class="p">;</span> <span class="n">mass_kg</span><span class="o">=</span><span class="n">mass_amu</span><span class="o">*</span><span class="n">M_PROTON</span>
+<span class="n">sigma_code</span> <span class="o">=</span> <span class="n">lam_nm</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">T_J</span> <span class="o">/</span> <span class="p">(</span><span class="n">mass_kg</span> <span class="o">*</span> <span class="n">C_LIGHT</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+<span class="n">T_K</span><span class="o">=</span><span class="n">T_eV</span><span class="o">*</span><span class="mf">11604.52</span>
+<span class="n">sigma_ref</span> <span class="o">=</span> <span class="n">lam_nm</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">k_B</span> <span class="o">*</span> <span class="n">T_K</span> <span class="o">/</span> <span class="p">(</span><span class="n">mass_amu</span><span class="o">*</span><span class="n">m_p</span> <span class="o">*</span> <span class="n">c</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;sigma_code=</span><span class="si">{</span><span class="n">sigma_code</span><span class="si">:</span><span class="s1">.8e</span><span class="si">}</span><span class="s1">, sigma_ref=</span><span class="si">{</span><span class="n">sigma_ref</span><span class="si">:</span><span class="s1">.8e</span><span class="si">}</span><span class="s1">, ratio=</span><span class="si">{</span><span class="n">sigma_code</span><span class="o">/</span><span class="n">sigma_ref</span><span class="si">:</span><span class="s1">.10f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">sigma_code=1.63906800e-03,</span> <span class="pre">sigma_ref=1.63906919e-03,</span> <span class="pre">ratio=0.9999999191</span></code>
+(sub-ppm discrepancy from proton-mass rounding; negligible)</p>
+</section>
+<section id="fwhm-factor">
+<h3>FWHM factor<a class="headerlink" href="#fwhm-factor" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="n">exact</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;exact=</span><span class="si">{</span><span class="n">exact</span><span class="si">:</span><span class="s1">.10f</span><span class="si">}</span><span class="s1">, code_doppler=2.355 (err </span><span class="si">{</span><span class="p">(</span><span class="mf">2.355</span><span class="o">/</span><span class="n">exact</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s1">.5f</span><span class="si">}</span><span class="s1">%), code_voigt=2.35482 (err </span><span class="si">{</span><span class="p">(</span><span class="mf">2.35482</span><span class="o">/</span><span class="n">exact</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s1">.7f</span><span class="si">}</span><span class="s1">%)&#39;</span><span class="p">)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">exact=2.3548200450,</span> <span class="pre">code_doppler=2.355</span> <span class="pre">(err</span> <span class="pre">0.00764%),</span> <span class="pre">code_voigt=2.35482</span> <span class="pre">(err</span> <span class="pre">-0.0000008%)</span></code></p>
+</section>
+<section id="olivero-constants">
+<h3>Olivero constants<a class="headerlink" href="#olivero-constants" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.special</span><span class="w"> </span><span class="kn">import</span> <span class="n">wofz</span><span class="p">;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="c1"># Systematic test over 200 eta values (sigma=1, gamma=tan(pi/2*eta))</span>
+<span class="o">...</span><span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<ul class="simple">
+<li><p>Code (<code class="docutils literal notranslate"><span class="pre">0.5346/0.2166</span></code>): max abs error = <strong>0.02367%</strong>, mean = 0.01325%</p></li>
+<li><p>Alt (<code class="docutils literal notranslate"><span class="pre">0.5343/0.2169</span></code>): max abs error = 0.02320%, mean = 0.01273%</p></li>
+<li><p>Neither achieves Olivero’s claimed 0.02% over all profiles; both equivalent.</p></li>
+</ul>
+</section>
+<section id="voigt-profile-normalization">
+<h3>Voigt profile normalization<a class="headerlink" href="#voigt-profile-normalization" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.radiation.profiles</span><span class="w"> </span><span class="kn">import</span> <span class="n">voigt_profile</span>
+<span class="c1"># sigma=0.3, gamma=0.2, range=5000*sigma</span>
+<span class="n">area</span> <span class="o">=</span> <span class="mf">0.99991512</span>  <span class="c1"># converges to 1.0 as range -&gt; infinity</span>
+<span class="c1"># cflibs voigt = scipy wofz exactly: max relative error = 0.0</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: cflibs <code class="docutils literal notranslate"><span class="pre">voigt_profile</span></code> matches scipy <code class="docutils literal notranslate"><span class="pre">wofz</span></code> with <strong>zero numerical difference</strong> (max rel error = 0.0).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="delta-interpretation">
+<h2>DELTA &amp; INTERPRETATION<a class="headerlink" href="#delta-interpretation" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Check</p></th>
+<th class="head"><p>Ground truth</p></th>
+<th class="head"><p>Code value</p></th>
+<th class="head"><p>Δ</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Emissivity formula</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">hc/(4πλ)</span> <span class="pre">A_ki</span> <span class="pre">n_k</span></code></p></td>
+<td><p>Same</p></td>
+<td><p>0%</p></td>
+</tr>
+<tr class="row-odd"><td><p>cm⁻³ → m⁻³</p></td>
+<td><p>×10⁶</p></td>
+<td><p>×10⁶ (line 49 emissivity.py, line 871 kernels.py)</p></td>
+<td><p>0%</p></td>
+</tr>
+<tr class="row-even"><td><p>Doppler sigma</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">λ</span> <span class="pre">sqrt(kT/mc²)</span></code></p></td>
+<td><p>Same</p></td>
+<td><p>&lt;1 ppm</p></td>
+</tr>
+<tr class="row-odd"><td><p>FWHM factor (spectrum kernel)</p></td>
+<td><p>— (sigma used directly)</p></td>
+<td><p>— (sigma used directly)</p></td>
+<td><p>0%</p></td>
+</tr>
+<tr class="row-even"><td><p>FWHM factor in <code class="docutils literal notranslate"><span class="pre">doppler_width()</span></code></p></td>
+<td><p>2.35482</p></td>
+<td><p>2.355</p></td>
+<td><p><strong>0.0076%</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Olivero c₁</p></td>
+<td><p>0.5346 (paper)</p></td>
+<td><p>0.5346</p></td>
+<td><p>0%</p></td>
+</tr>
+<tr class="row-even"><td><p>Olivero c₂</p></td>
+<td><p>0.2166 (paper)</p></td>
+<td><p>0.2166</p></td>
+<td><p>0%</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">voigt_profile</span></code> vs <code class="docutils literal notranslate"><span class="pre">wofz</span></code></p></td>
+<td><p>exact</p></td>
+<td><p>exact</p></td>
+<td><p>0</p></td>
+</tr>
+</tbody>
+</table>
+<p>The <code class="docutils literal notranslate"><span class="pre">doppler_width()</span></code> 0.0076% FWHM error propagates to two places:</p>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">stark_ne.py</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">gauss</span> <span class="pre">=</span> <span class="pre">hypot(instr,</span> <span class="pre">dopp)</span></code> used for window sizing and isolation filtering. Effect: window narrowed/widened by &lt;0.01% relative to exact. No impact on the Lorentzian FWHM that feeds <code class="docutils literal notranslate"><span class="pre">n_e</span></code> inversion.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">basis_library.py</span></code></strong> — converts back with exact factor <code class="docutils literal notranslate"><span class="pre">2.35482</span></code>, so the sigma error is 0.0076%. This is a non-production manifold-library path.</p></li>
+</ol>
+<p>Neither path is in the primary spectrum emission calculation. The actual spectrum kernel (<code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py</span></code>, <code class="docutils literal notranslate"><span class="pre">_per_line_doppler_sigma</span></code>) uses sigma directly and has zero rounding error.</p>
+<p>The pseudo-Voigt (<code class="docutils literal notranslate"><span class="pre">voigt_fwhm</span></code> + no-scipy fallback) exceeds Olivero’s claimed 0.02% accuracy (max observed: 0.024%). However, this path is only active when <code class="docutils literal notranslate"><span class="pre">scipy</span></code> is absent; the production numpy path uses <code class="docutils literal notranslate"><span class="pre">scipy.special.wofz</span></code> (exact Faddeeva) and the JAX path uses Weideman-36 (≥15 digits float64). The pseudo-Voigt approximation never affects production spectra.</p>
+</section>
+<hr class="docutils" />
+<section id="fix">
+<h2>FIX<a class="headerlink" href="#fix" title="Link to this heading"></a></h2>
+<p>No critical fix required. The code is correct on all production paths.</p>
+<p><strong>Optional low-priority improvement</strong>: replace <code class="docutils literal notranslate"><span class="pre">2.355</span></code> with <code class="docutils literal notranslate"><span class="pre">2.3548200450309493</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py:231</span></code> (the <code class="docutils literal notranslate"><span class="pre">doppler_width()</span></code> return value). This would eliminate the 0.0076% systematic in the FWHM return value used by <code class="docutils literal notranslate"><span class="pre">stark_ne.py</span></code> and <code class="docutils literal notranslate"><span class="pre">basis_library.py</span></code>. The impact is physically negligible (&lt;0.01% on line width estimates).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/radiation/profiles.py line 231 — current:</span>
+<span class="n">fwhm</span> <span class="o">=</span> <span class="mf">2.355</span> <span class="o">*</span> <span class="n">sigma</span>
+<span class="c1"># Replace with:</span>
+<span class="n">fwhm</span> <span class="o">=</span> <span class="mf">2.3548200450309493</span> <span class="o">*</span> <span class="n">sigma</span>   <span class="c1"># exact 2*sqrt(2*ln2)</span>
+</pre></div>
+</div>
+<p>For the pseudo-Voigt (<code class="docutils literal notranslate"><span class="pre">voigt_fwhm</span></code>), consider also adopting the more accurate Thompson, Cox &amp; Hastings (1987) five-coefficient form — but the current Olivero 1977 constants <code class="docutils literal notranslate"><span class="pre">0.5346/0.2166</span></code> are the original paper values, not corrupted.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

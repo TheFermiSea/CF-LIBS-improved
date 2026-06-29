@@ -1,0 +1,166 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J10 Implementation Spec — Forward-Fitting Identification on the Jit Stack (Campaign-3 GPU Evaluator) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J10 Implementation Spec — Forward-Fitting Identification on the Jit Stack (Campaign-3 GPU Evaluator)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J10-forward-fitting-identification.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j10-implementation-spec-forward-fitting-identification-on-the-jit-stack-campaign-3-gpu-evaluator">
+<h1>J10 Implementation Spec — Forward-Fitting Identification on the Jit Stack (Campaign-3 GPU Evaluator)<a class="headerlink" href="#j10-implementation-spec-forward-fitting-identification-on-the-jit-stack-campaign-3-gpu-evaluator" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J10 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §1.2 motivation 2, §8.1 track C, §9 (MC-CF-LIBS precedent) · <strong>Track:</strong> C (research; deliberately depends only on J0 + already-merged kernels so it is NOT blocked behind the front-end grind) · <strong>Depends:</strong> J0 (+ <code class="docutils literal notranslate"><span class="pre">radiation/kernels.py</span></code>; integrates with J8 later) · <strong>Estimated effort:</strong> 10–15 pd / 2–3 wk (research-flavored)</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Implement Gornushkin-style <strong>population forward fitting</strong> for element identification: vmap 10³–10⁴ candidate configurations (T, n_e, path length, candidate-element concentration vectors) through <code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py:1205</span></code>) per spectrum; element-weighted full-spectrum correlation/coherence cost; presence decided by model comparison (BIC over element subsets — extends <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/model_selection.py</span></code>); optional gradient polish of (T, n_e, C) per surviving candidate (which the MC-CF prior art lacks entirely).</p></li>
+<li><p>This implements the audit’s missing “multi-line intensity-coherence test” (<code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-09-overhaul/03-identification.md:19,102</span></code>) at full-physics fidelity, attacking the binding scoreboard constraint: recall 0.27–0.58 vs precision 0.89–1.00 (<code class="docutils literal notranslate"><span class="pre">SCOREBOARD-2026-06-10-baseline.md:16-27</span></code>).</p></li>
+<li><p>Prior-art anchor (ADR-0004 §9): Gornushkin &amp; Völker 2022 (PMC9573556; building on Demidov et al. 2016) ran 2.5×10⁷ forward evals/spectrum at ~1 % relative error on 8 elements in ~5 min on a 2013 Tesla K40 in MATLAB. A V100S (~6× K40 fp64) + XLA fusion + gradient refinement should beat 5 min/spectrum by 1–2 orders of magnitude; budget: 10⁴ evals/spectrum ≈ 10–100 ms at 10⁵–10⁶ fused evals/s.</p></li>
+</ul>
+</section>
+<section id="design-constraints">
+<h2>2. Design constraints<a class="headerlink" href="#design-constraints" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Inputs phase 1:</strong> reference-pipeline peaks/observations via <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> adapters (no J1–J3 dependency); <strong>phase 2:</strong> J8’s ObservationBatch when available.</p></li>
+<li><p>Candidate-population design: stratified over the preset T/n_e ranges and ILR-coordinate composition simplex, counter-based <code class="docutils literal notranslate"><span class="pre">jax.random</span></code>, fixed population shape (no data-dependent control flow); element subsets as masks over the bucket superset snapshot (no per-subset recompiles).</p></li>
+<li><p>Cost: masked element-weighted correlation between synthetic and measured spectra (continuum-removed; reuse J1’s baseline kernel or its host fallback in phase 1), plus per-element marginal-evidence scoring for the BIC subset comparison.</p></li>
+<li><p>Memory: forward working set ≈ (B_eval, N_wl) f64 — ≈131 KB/eval at N_wl=16,384; ~10⁴ concurrent evals ≈ 1.3 GB, &lt;10 % of HBM (ADR-0004 §5.1.2 budget). Chunk over the eval axis with <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> when N_wl is large (silva2022).</p></li>
+<li><p>fp64 for populations/Saha; the profile-matrix fp32 island (§5.3) may be evaluated here under its Tier-B gate — this is the stage that runs thousands of evaluations per spectrum and benefits most.</p></li>
+<li><p><strong>Dataset policy:</strong> obeys the holdout/vault split (<code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-10-goalfirst/optimization-program-design.md:72-73</span></code>); development only on the optimization tier.</p></li>
+<li><p>Physics-only: population search + BIC are physics/statistics; no banned imports (ruff TID251 applies).</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria">
+<h2>3. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Recall-driven F1 gain: micro-F1 ≥ +0.03 vs the reference identifier on the optimization split, with precision loss ≤ 0.02</strong> (protects the zero-FP precision asset). This is the payoff threshold of ADR-0004 §8.3 item 3 — if not met, the bead concludes with a negative-result report and the program’s accuracy case is re-evaluated.</p></li>
+<li><p>Runtime ≤1 s/spectrum on one V100S at the 10³–10⁴ eval budget.</p></li>
+<li><p>Accuracy sanity vs prior art: on the golden synthetic corpus, recovered major-element concentrations within ~1 % relative (the MC-CF benchmark) for converged candidates.</p></li>
+<li><p>Determinism per (seed, SHA); benchmark-gated per project memory (PR #229 precedent) — shadow-board run before any campaign adoption.</p></li>
+<li><p>Exposed as a Campaign-3 evaluator entry point (callable from <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> and the campaign harness; runs on GPUs while campaigns hold CPUs — <code class="docutils literal notranslate"><span class="pre">optimization-program-design.md:476</span></code>).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>4. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_forward_fitting.py</span></code>: synthetic-corpus identification round-trip (known truth, confounder panel); BIC subset-selection unit tests; eval-budget/memory canary; seed determinism. Scoring runs via the J8 shadow harness on the optimization split only.</p>
+</section>
+<section id="risks">
+<h2>5. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>Research-flavored variance (the largest in the program, ADR-0004 §8.3); cost-function design dominates outcome — start from the prior art’s element-weighted correlation and iterate against the optimization split; risk of overfitting the split — vault datasets stay untouched; if a cheaper coherence heuristic on the reference pipeline closes the recall gap first (start-criterion 2), descope to the throughput/evaluator role.</p>
+</section>
+<section id="dependencies-files">
+<h2>6. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0 + merged kernels only. Integrates with J8 (phase 2) and J9 (batch harness). Feeds J12 (M3 requires the integrated identifier). Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/identify.py</span></code> (forward-fit scorer section) or <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/forward_fit.py</span></code>, tests. Reference untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

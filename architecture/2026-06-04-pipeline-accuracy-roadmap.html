@@ -1,0 +1,523 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Pipeline Accuracy Roadmap — BHVO-2 Basalt North-Star &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Pipeline Accuracy Roadmap — BHVO-2 Basalt North-Star</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/2026-06-04-pipeline-accuracy-roadmap.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-pipeline-accuracy-roadmap-bhvo-2-basalt-north-star">
+<h1>CF-LIBS Pipeline Accuracy Roadmap — BHVO-2 Basalt North-Star<a class="headerlink" href="#cf-libs-pipeline-accuracy-roadmap-bhvo-2-basalt-north-star" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-04
+<strong>Branch / HEAD:</strong> <code class="docutils literal notranslate"><span class="pre">7aae680</span></code> (<code class="docutils literal notranslate"><span class="pre">fix(identify):</span> <span class="pre">default</span> <span class="pre">invert</span> <span class="pre">min_relative_intensity</span> <span class="pre">floor</span> <span class="pre">to</span> <span class="pre">100</span></code>)
+<strong>North-star sample:</strong> USGS BHVO-2 basalt, ChemCam spectra <code class="docutils literal notranslate"><span class="pre">data/bhvo2_usgs/chemcam_bhvo2_loc{1,2,3}_spectrum.csv</span></code>
+<strong>Certified truth:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/reference_compositions.py:56</span></code> <code class="docutils literal notranslate"><span class="pre">BHVO2_BASALT_USGS</span></code>, renormalized to the 10 cations (O omitted), sum = 1.
+<strong>Goal:</strong> measured composition error on a certified geostandard at or below the literature “good CF-LIBS” band (≤10 % average relative error on majors, Safi 2019).</p>
+<hr class="docutils" />
+<section id="north-star-bhvo-2-composition-error-before-and-after-this-pass">
+<h2>1. North-Star: BHVO-2 Composition Error, Before and After This Pass<a class="headerlink" href="#north-star-bhvo-2-composition-error-before-and-after-this-pass" title="Link to this heading"></a></h2>
+<p>The single number that defines success is the per-element composition error on real BHVO-2 ChemCam spectra, run through the production pipeline (<code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span></code> / <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">invert</span></code> → <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> → <code class="docutils literal notranslate"><span class="pre">LineSelector().select</span></code> → <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver.solve</span></code>). Per-element values are wt % over the 10-cation basis renormalized to 100, mean over loc1/loc2/loc3.</p>
+<section id="critical-caveat-two-cli-entry-points-diverged-this-pass">
+<h3>CRITICAL CAVEAT — two CLI entry points diverged this pass<a class="headerlink" href="#critical-caveat-two-cli-entry-points-diverged-this-pass" title="Link to this heading"></a></h3>
+<p>The fixes landed <strong>only in <code class="docutils literal notranslate"><span class="pre">invert_cmd</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:161</span></code>), <strong>not in <code class="docutils literal notranslate"><span class="pre">analyze_cmd</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:326</span></code>), which is the path that produced the baseline. Re-running the exact baseline measurement at HEAD is <strong>byte-identical</strong> to the baseline — RMSE 33.69, MAE 18.99, Na 97.90 %. <code class="docutils literal notranslate"><span class="pre">analyze_cmd</span></code> still calls <code class="docutils literal notranslate"><span class="pre">detect_line_observations(...)</span></code> with the <code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code> default (<code class="docutils literal notranslate"><span class="pre">main.py:347</span></code>, no floor) and a bare <code class="docutils literal notranslate"><span class="pre">LineSelector()</span></code> (<code class="docutils literal notranslate"><span class="pre">main.py:357</span></code>), so none of the IDENT-RYDBERG / SA fixes touch it. The improvement is real but is gated behind the <code class="docutils literal notranslate"><span class="pre">invert</span></code> entry point.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head text-right"><p>Certified (10-cation wt%)</p></th>
+<th class="head text-right"><p>BEFORE (analyze_cmd)</p></th>
+<th class="head text-right"><p>AFTER (invert, SA off)</p></th>
+<th class="head text-right"><p>AFTER (invert, SA on)</p></th>
+<th class="head"><p>Verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Si</p></td>
+<td class="text-right"><p>41.99</p></td>
+<td class="text-right"><p><strong>1.11</strong> (drop)</p></td>
+<td class="text-right"><p>21.45</p></td>
+<td class="text-right"><p>26.79</p></td>
+<td><p>recovered, still low</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti</p></td>
+<td class="text-right"><p>2.95</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p>10.89</p></td>
+<td class="text-right"><p>19.48</p></td>
+<td><p>recovered but over-predicted</p></td>
+</tr>
+<tr class="row-even"><td><p>Al</p></td>
+<td class="text-right"><p>12.85</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td><p>STILL DROPPED</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fe</p></td>
+<td class="text-right"><p>15.50</p></td>
+<td class="text-right"><p><strong>0.66</strong></p></td>
+<td class="text-right"><p>21.61</p></td>
+<td class="text-right"><p>26.40</p></td>
+<td><p>recovered, now slightly over</p></td>
+</tr>
+<tr class="row-even"><td><p>Mn</p></td>
+<td class="text-right"><p>0.23</p></td>
+<td class="text-right"><p>0.28</p></td>
+<td class="text-right"><p><strong>37.65</strong></p></td>
+<td class="text-right"><p>22.16</p></td>
+<td><p>REGRESSED (minor blows up)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg</p></td>
+<td class="text-right"><p>7.85</p></td>
+<td class="text-right"><p><strong>0.06</strong></p></td>
+<td class="text-right"><p><strong>0.00</strong></p></td>
+<td class="text-right"><p><strong>0.00</strong></p></td>
+<td><p>STILL DROPPED</p></td>
+</tr>
+<tr class="row-even"><td><p>Ca</p></td>
+<td class="text-right"><p>14.67</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p>8.39</p></td>
+<td class="text-right"><p>5.16</p></td>
+<td><p>recovered, still low</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na</p></td>
+<td class="text-right"><p>2.97</p></td>
+<td class="text-right"><p><strong>97.90</strong> (blowup)</p></td>
+<td class="text-right"><p><strong>0.00</strong></p></td>
+<td class="text-right"><p><strong>0.00</strong></p></td>
+<td><p>blowup KILLED (now zero)</p></td>
+</tr>
+<tr class="row-even"><td><p>K</p></td>
+<td class="text-right"><p>0.78</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td><p>STILL DROPPED</p></td>
+</tr>
+<tr class="row-odd"><td><p>P</p></td>
+<td class="text-right"><p>0.21</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td class="text-right"><p><strong>0.00</strong> (drop)</p></td>
+<td><p>STILL DROPPED</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Aggregate north-star (RMSE / MAE, apples-to-apples across both reports):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Metric</p></th>
+<th class="head text-right"><p>BEFORE (analyze_cmd, baseline)</p></th>
+<th class="head text-right"><p>AFTER (invert, SA off)</p></th>
+<th class="head text-right"><p>AFTER (invert, SA on)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>RMSE (wt%)</p></td>
+<td class="text-right"><p><strong>33.69</strong></p></td>
+<td class="text-right"><p>14.83</p></td>
+<td class="text-right"><p><strong>11.97</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>MAE (wt%)</p></td>
+<td class="text-right"><p><strong>18.99</strong></p></td>
+<td class="text-right"><p>10.29</p></td>
+<td class="text-right"><p><strong>9.87</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>T (kK)</p></td>
+<td class="text-right"><p>14.2–14.4</p></td>
+<td class="text-right"><p>10.9</p></td>
+<td class="text-right"><p>10.3</p></td>
+</tr>
+<tr class="row-odd"><td><p>n_e (cm⁻³)</p></td>
+<td class="text-right"><p>2.5e17</p></td>
+<td class="text-right"><p>3.0e17</p></td>
+<td class="text-right"><p>2.8e17</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>Aitchison distance is NOT apples-to-apples</strong> between the two reports (baseline harness reported 15.5; re-measure harness computes 43.28 on the byte-identical baseline result — different ε/basis instantiation). It is dominated by the 3–4 hard-zero elements and barely moves; disregard it as a cross-report metric. RMSE/MAE and the per-element table reproduce exactly.</p>
+</div></blockquote>
+<p><strong>Bottom line:</strong> On the <em>intended</em> path (<code class="docutils literal notranslate"><span class="pre">invert</span></code>), RMSE dropped from <strong>33.69 → 11.97 wt%</strong> (~2.8×). The degenerate Na-dominated non-answer is gone — the result is now a noisy-but-balanced estimate, the qualitative shape the project wanted. On the <em>baseline</em> path (<code class="docutils literal notranslate"><span class="pre">analyze</span></code>), the number is <strong>unchanged</strong>. The single highest-leverage remaining action is structural: make the two CLI entry points agree.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="what-was-fixed-this-pass-and-the-accuracy-delta">
+<h2>2. What Was Fixed This Pass, and the Accuracy Delta<a class="headerlink" href="#what-was-fixed-this-pass-and-the-accuracy-delta" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Fix</p></th>
+<th class="head"><p>File:line</p></th>
+<th class="head"><p>What it does</p></th>
+<th class="head"><p>Delta on north-star</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>IDENT-RYDBERG / DET-2</strong> — Na Rydberg pruning</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:231</span></code> (invert path)</p></td>
+<td><p>Default <code class="docutils literal notranslate"><span class="pre">min_relative_intensity=100.0</span></code> (was <code class="docutils literal notranslate"><span class="pre">None</span></code>) prunes the spurious high-lying Na I 413–421 nm Rydberg lines (A_ki ~1e5, unobservable at 1.2 eV) that drove Na to 98 %.</p></td>
+<td><p><strong>Na 97.90 → 0.00</strong>. The dominant baseline error (absErr 94.9) is eliminated. Biggest single win.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>B1</strong> — wire SelfAbsorptionCorrector into solver</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:790-797</span></code>, <code class="docutils literal notranslate"><span class="pre">:1006</span></code> <code class="docutils literal notranslate"><span class="pre">_apply_self_absorption_correction</span></code></p></td>
+<td><p>Outer Bulajic-2002 recursion: recompute τ from current plasma state each iteration, divide observed intensities by the curve-of-growth escape factor before Boltzmann/closure fit. Was 3000 LOC of dead code (zero callers).</p></td>
+<td><p>RMSE 14.83 → <strong>11.97</strong> on real BHVO-2 (tamps Mn 37.65 → 22.16, nudges Si/Fe up).</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>B1 safety</strong> — opt-in + caps</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py:718</span></code> (<code class="docutils literal notranslate"><span class="pre">apply_self_absorption=False</span></code> default), <code class="docutils literal notranslate"><span class="pre">:721</span></code> <code class="docutils literal notranslate"><span class="pre">tau_cap=10.0</span></code>, <code class="docutils literal notranslate"><span class="pre">:769</span></code> high <code class="docutils literal notranslate"><span class="pre">mask_threshold</span></code></p></td>
+<td><p>Made correction <strong>default-off</strong> after it over-corrected optically-thin synthetic spectra; bounded I/f(τ) boost to ~10× literature regime; strong major lines corrected not dropped.</p></td>
+<td><p>Prevents thin-data false positives; net-positive on thick BHVO-2.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>B3</strong> — CDSB τ uses species density</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/cdsb.py:267,288,333</span></code> (<code class="docutils literal notranslate"><span class="pre">number_densities</span></code> arg)</p></td>
+<td><p>Initial τ now scales with absorbing-species number density (n_species·L) not n_e (was under-estimating τ ~40–70× for matrix majors).</p></td>
+<td><p>Enables B1 to converge to “thick” not “everything thin”.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>B2</strong> — retain resonance lines when SA on</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:264</span></code> (<code class="docutils literal notranslate"><span class="pre">exclude_resonance</span> <span class="pre">=</span> <span class="pre">not</span> <span class="pre">apply_self_absorption</span></code>), <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code></p></td>
+<td><p>When SA enabled, retain low-E_i resonance lines (Ca II H/K, Na D, Mg I 285, Al I 396) and <strong>correct</strong> them rather than drop them (Aragón &amp; Aguilera 2008).</p></td>
+<td><p>Lets optically-thick majors reach the Boltzmann plot.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>aki_uncertainty weighting</strong> (landed PR #215)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann.py:119</span></code> (<code class="docutils literal notranslate"><span class="pre">aki_uncertainty_weighting=True</span></code> default)</p></td>
+<td><p>Inverse-variance Boltzmann weighting by NIST A_ki grade. Already on by default.</p></td>
+<td><p>Improves T accuracy / uncertainty calibration on D/E-grade alkalis.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Net:</strong> Two of the three baseline failure modes are addressed — the Na blowup (killed) and Ca/Si/Fe/Ti drop (partially recovered). The <strong>element-drop of Al/K/P/Mg</strong> and a <strong>new Mn/Ti over-attribution</strong> remain. The B1 physics fix is now wired and demonstrably net-positive on real thick spectra, reversing its synthetic over-correction.</p>
+</section>
+<hr class="docutils" />
+<section id="ranked-remaining-pipeline-issues-blocking-the-goal">
+<h2>3. Ranked Remaining Pipeline Issues (Blocking the Goal)<a class="headerlink" href="#ranked-remaining-pipeline-issues-blocking-the-goal" title="Link to this heading"></a></h2>
+<p>Ranked by <strong>expected composition-accuracy lift ÷ effort</strong>. Each is a candidate bead. Stage tags: DET = detection, ID = identification, CF = CF-LIBS physics, COMP = composition/closure, PROD = productionization.</p>
+<section id="rank-1-unify-analyze-cmd-with-invert-cmd-prod-det-id">
+<h3>Rank 1 — Unify <code class="docutils literal notranslate"><span class="pre">analyze_cmd</span></code> with <code class="docutils literal notranslate"><span class="pre">invert_cmd</span></code> (PROD / DET / ID)<a class="headerlink" href="#rank-1-unify-analyze-cmd-with-invert-cmd-prod-det-id" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:347</span></code> (bare <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>, no <code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code>), <code class="docutils literal notranslate"><span class="pre">:357</span></code> (bare <code class="docutils literal notranslate"><span class="pre">LineSelector()</span></code>). Contrast <code class="docutils literal notranslate"><span class="pre">invert_cmd</span></code> <code class="docutils literal notranslate"><span class="pre">:231</span></code>, <code class="docutils literal notranslate"><span class="pre">:265-272</span></code>.</p></li>
+<li><p><strong>kind:</strong> productionization / entry-point divergence.</p></li>
+<li><p><strong>lift:</strong> RMSE <strong>33.69 → 11.97</strong> on the default path — the entire delta of this pass is currently stranded behind <code class="docutils literal notranslate"><span class="pre">invert</span></code>. Single largest available lift.</p></li>
+<li><p><strong>effort:</strong> trivial (port the IDENT-RYDBERG floor + tuned <code class="docutils literal notranslate"><span class="pre">LineSelector(min_snr,</span> <span class="pre">exclude_resonance,</span> <span class="pre">…)</span></code> + <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code> plumbing from <code class="docutils literal notranslate"><span class="pre">invert_cmd</span></code> to <code class="docutils literal notranslate"><span class="pre">analyze_cmd</span></code>).</p></li>
+<li><p><strong>literature:</strong> N/A (internal consistency); validated by the byte-identical-baseline measurement above.</p></li>
+</ul>
+</section>
+<section id="rank-2-recover-dropped-majors-al-k-p-det-id">
+<h3>Rank 2 — Recover dropped majors Al / K / P (DET / ID)<a class="headerlink" href="#rank-2-recover-dropped-majors-al-k-p-det-id" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:453-456</span></code> comb gates (<code class="docutils literal notranslate"><span class="pre">comb_min_matches=3</span></code>, <code class="docutils literal notranslate"><span class="pre">comb_min_precision=0.02</span></code>, <code class="docutils literal notranslate"><span class="pre">comb_max_missing_fraction=0.85</span></code>); element prefilter <code class="docutils literal notranslate"><span class="pre">_kdet_filter_elements</span></code> at <code class="docutils literal notranslate"><span class="pre">line_detection.py:~1290-1325</span></code> (<code class="docutils literal notranslate"><span class="pre">kdet_min_score</span></code>/<code class="docutils literal notranslate"><span class="pre">kdet_min_candidates</span></code>, warning <code class="docutils literal notranslate"><span class="pre">&quot;kdet_filtered_elements&quot;</span></code>).</p></li>
+<li><p><strong>kind:</strong> over-strict detection/identification gating.</p></li>
+<li><p><strong>lift:</strong> <strong>HIGH.</strong> Al (12.85), K (0.78), P (0.21), Mg (7.85) are still hard-zero. Al + Mg alone are ~21 wt% of unrecoverable error; the RMSE floor cannot fall below ~10 wt% while they are dropped. Relax <code class="docutils literal notranslate"><span class="pre">comb_min_precision</span> <span class="pre">0.02→0.01</span></code>, <code class="docutils literal notranslate"><span class="pre">comb_max_missing_fraction</span> <span class="pre">0.85→0.95</span></code>, and <code class="docutils literal notranslate"><span class="pre">comb_min_matches</span> <span class="pre">3→2</span></code> (DET-1, IDENT-COMB-MATCHED-THRESHOLD-4 — recovers K I 766.5/769.9 and Na D doublets).</p></li>
+<li><p><strong>effort:</strong> small (threshold changes + kdet score relaxation).</p></li>
+<li><p><strong>literature:</strong> Safi 2019 (&lt;10 % only if majors are present); De Giacomo 2007 (&lt;5 % meteorite majors). Recovering majors is the precondition for any literature-band result.</p></li>
+</ul>
+</section>
+<section id="rank-3-fix-mn-ti-over-attribution-id-cf">
+<h3>Rank 3 — Fix Mn / Ti over-attribution (ID / CF)<a class="headerlink" href="#rank-3-fix-mn-ti-over-attribution-id-cf" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py</span></code> comb scoring (no resonance-preference / E_k physical reject); <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure.py</span></code> (closure normalizes any degenerate population).</p></li>
+<li><p><strong>kind:</strong> misassignment — Mn (cert 0.23) predicted 22–38 %; Ti (cert 2.95) over-predicted 11–19 %. The Na degeneracy was replaced by a milder Mn/Ti one, not cured.</p></li>
+<li><p><strong>lift:</strong> MEDIUM-HIGH. Mn alone is +22–37 wt% absolute error post-fix. Add an upper-level energy reject (E_k &gt; kT + margin) mirroring the Na Rydberg fix, and a closure sanity guard that flags single-element-dominated populations (no guard caught Na=98 % or Mn=38 %).</p></li>
+<li><p><strong>effort:</strong> small–medium.</p></li>
+<li><p><strong>literature:</strong> De Giacomo 2007 (exclude ground-state-terminating + slow-emission lines, via Poggialini 2023); same physical filter that fixed Na generalizes to Mn/Ti.</p></li>
+</ul>
+</section>
+<section id="rank-4-si-locked-to-wrong-ionization-stage-id-cf">
+<h3>Rank 4 — Si locked to wrong ionization stage (ID / CF)<a class="headerlink" href="#rank-4-si-locked-to-wrong-ionization-stage-id-cf" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code> ALIAS / comb stage handling (IDENT-ALIAS-SI-IONIZATION-STAGE-8, DET-8); ion-stage pooling in <code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> comb scoring.</p></li>
+<li><p><strong>kind:</strong> wrong ionization stage — Si identified only as Si II (6 weak high-lying lines at 244/250/272 nm), Si I 288.2 nm (SNR ~51, the <em>correct</em> stage) missed. Corrupts the Saha ion→neutral mapping for the largest cation (Si, cert 41.99).</p></li>
+<li><p><strong>lift:</strong> MEDIUM-HIGH (Si is 42 % of the basis; it currently tops out at 27 % even after fixes). Don’t let high-lying weak lines win a stage when a strong resonance/low-E line of the other stage is present.</p></li>
+<li><p><strong>effort:</strong> small.</p></li>
+<li><p><strong>literature:</strong> physically impossible to be Si-II-dominant at 1.2 eV; Aguilera &amp; Aragón 2004 Saha-Boltzmann self-consistency requires correct stage assignment.</p></li>
+</ul>
+</section>
+<section id="rank-5-enforce-charge-balance-wire-anderson-solver-cf">
+<h3>Rank 5 — Enforce charge balance (wire Anderson solver) (CF)<a class="headerlink" href="#rank-5-enforce-charge-balance-wire-anderson-solver-cf" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/anderson_solver.py</span></code> exists but is <strong>not</strong> wired into <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py</span></code> (saha solve consumes n_e as a free input, does not close n_e = Σ ion charges).</p></li>
+<li><p><strong>kind:</strong> missing physics constraint — n_e is a free parameter, not closed by charge neutrality.</p></li>
+<li><p><strong>lift:</strong> MEDIUM. Removes a degree of freedom and stabilizes the Saha ion→neutral correction that B1 self-absorption now depends on. Prerequisite for a <em>trustworthy</em> Saha mapping.</p></li>
+<li><p><strong>effort:</strong> medium.</p></li>
+<li><p><strong>literature:</strong> Tognoni 2010 Spectrochim. Acta B 65, 1 §2.2/3.4 (CF-LIBS requires simultaneous Saha + charge neutrality); Ciucci 1999 Appl. Spectrosc. 53, 960.</p></li>
+</ul>
+</section>
+<section id="rank-6-stark-width-convention-20-mismatch-on-jax-forward-paths-cf-comp">
+<h3>Rank 6 — Stark-width convention 20× mismatch on JAX/forward paths (CF / COMP)<a class="headerlink" href="#rank-6-stark-width-convention-20-mismatch-on-jax-forward-paths-cf-comp" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> (FWHM/HWHM and 1e16/1e17 reference handling); DB stores FWHM&#64;1e17, runtime consumers treat as HWHM&#64;1e16 (A4-CONV-2).</p></li>
+<li><p><strong>kind:</strong> unit-convention bug — every Stark width inflated ~20× on manifold/Bayesian/forward paths (e.g. Al I 396.15: 4.5 pm stored → 90 pm runtime). Default CPU solver partially immune (alias passes <code class="docutils literal notranslate"><span class="pre">transition=None</span></code>, <code class="docutils literal notranslate"><span class="pre">omega_stark=0</span></code>).</p></li>
+<li><p><strong>lift:</strong> ~0 on the default solver; real composition bias on JAX/Bayesian/forward composition paths and any n_e-from-Stark diagnostic. Prerequisite for n_e-from-Stark.</p></li>
+<li><p><strong>effort:</strong> small–medium.</p></li>
+<li><p><strong>literature:</strong> El Sherbini 2005 Spectrochim. Acta B 60, 1573 (Δλ₀ = w_s·n_e); IRSAC RSC Adv. 2026 D6RA01889K (Ca II 393 Stark n_e).</p></li>
+</ul>
+</section>
+<section id="rank-7-fix-polyfit-quartic-weighting-bug-cf">
+<h3>Rank 7 — Fix <code class="docutils literal notranslate"><span class="pre">polyfit</span></code> quartic-weighting bug (CF)<a class="headerlink" href="#rank-7-fix-polyfit-quartic-weighting-bug-cf" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann.py:~890-895</span></code> (<code class="docutils literal notranslate"><span class="pre">np.polyfit(w=1/σ²)</span></code> squares weights → effective 1/σ⁴; JAX path made bug-compatible).</p></li>
+<li><p><strong>kind:</strong> numerical correctness — weights passed to <code class="docutils literal notranslate"><span class="pre">polyfit</span></code> must be 1/σ, not 1/σ².</p></li>
+<li><p><strong>lift:</strong> LOW-MEDIUM. Mainly improves T accuracy + uncertainty calibration on D/E-grade alkalis (Na/K), feeding the Saha correction. Cheap, removes a real correctness bug.</p></li>
+<li><p><strong>effort:</strong> trivial.</p></li>
+<li><p><strong>literature:</strong> Tognoni 2010 Eq. 5 (WLS form); Kramida 2024 NIST EPJ D (uncertainty protocol).</p></li>
+</ul>
+</section>
+<section id="rank-8-wire-alias-per-ionization-stage-boltzmann-r2-id">
+<h3>Rank 8 — Wire ALIAS per-ionization-stage Boltzmann R² (ID)<a class="headerlink" href="#rank-8-wire-alias-per-ionization-stage-boltzmann-r2-id" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code> ALIAS Boltzmann fit (pools all ion stages into one regression → pooled R² collapses ~0.012 while per-stage is 0.997/0.999); fixed <code class="docutils literal notranslate"><span class="pre">R²</span> <span class="pre">≥</span> <span class="pre">0.85</span></code> hard gate then rejects valid ps-LIBS fits (ALIAS-BOLTZ-IONMIX-1 / ALIAS-R2GATE-2, 2026-06-03 diagnosis).</p></li>
+<li><p><strong>kind:</strong> wrong-denominator gate — fixed R² threshold with no literature basis collapses valid multi-stage fits.</p></li>
+<li><p><strong>lift:</strong> MEDIUM (recall-bound). +0.05–0.12 alias macro-F1; gates whether Fe-group elements survive identification at all.</p></li>
+<li><p><strong>effort:</strong> small–medium.</p></li>
+<li><p><strong>literature:</strong> literature uses physical line-selection + WLS, not a blanket R² reject (Poggialini 2023 JAAS D3JA00130J).</p></li>
+</ul>
+</section>
+<section id="rank-9-closure-sanity-guard-degeneracy-detector-comp">
+<h3>Rank 9 — Closure sanity guard / degeneracy detector (COMP)<a class="headerlink" href="#rank-9-closure-sanity-guard-degeneracy-detector-comp" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure.py</span></code>; <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver.solve</span></code> quality metrics (<code class="docutils literal notranslate"><span class="pre">quality_metrics['boltzmann_r_squared']</span></code> and <code class="docutils literal notranslate"><span class="pre">n_elements_fit</span></code> return <code class="docutils literal notranslate"><span class="pre">None</span></code>).</p></li>
+<li><p><strong>kind:</strong> missing guard / uninformative metrics — solver reports <code class="docutils literal notranslate"><span class="pre">converged=True</span></code>, <code class="docutils literal notranslate"><span class="pre">lte_mcwhirter_satisfied=True</span></code> on a garbage single-element-dominated answer (Q5-Metrics).</p></li>
+<li><p><strong>lift:</strong> LOW direct composition lift, HIGH diagnostic value — would have caught Na=98 % and Mn=38 % automatically and is the acceptance-gate infrastructure for everything else.</p></li>
+<li><p><strong>effort:</strong> small.</p></li>
+<li><p><strong>literature:</strong> von Toussaint 2018 arXiv:1805.08301 (validation must be non-tautological).</p></li>
+</ul>
+</section>
+<section id="rank-10-wavelength-calibration-baseline-propagation-into-matching-det">
+<h3>Rank 10 — Wavelength calibration + baseline propagation into matching (DET)<a class="headerlink" href="#rank-10-wavelength-calibration-baseline-propagation-into-matching-det" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/</span></code> (wavelength calibration not run before detection — DET-4); baseline subtraction in peak detection not propagated to line-matching (DET-3).</p></li>
+<li><p><strong>kind:</strong> preprocessing gaps — uncorrected spectrometer drift propagates into all matches; baseline-embedded noise peaks matched as transitions.</p></li>
+<li><p><strong>lift:</strong> LOW-MEDIUM (matrix-dependent; reduces spurious matches feeding Mn/Ti over-attribution).</p></li>
+<li><p><strong>effort:</strong> small.</p></li>
+<li><p><strong>literature:</strong> standard LIBS preprocessing (Poggialini 2023 review).</p></li>
+</ul>
+</section>
+<section id="rank-11-hermann-two-region-core-corona-solverstrategy-cf">
+<h3>Rank 11 — Hermann two-region (core + corona) SolverStrategy (CF)<a class="headerlink" href="#rank-11-hermann-two-region-core-corona-solverstrategy-cf" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> Bayesian <code class="docutils literal notranslate"><span class="pre">TwoZoneBayesianForwardModel</span></code> at <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian.py:2408</span></code> exists; deterministic Hermann two-region <code class="docutils literal notranslate"><span class="pre">SolverStrategy</span></code> <strong>not</strong> implemented (CF-LIBS-improved-mgp5). Production solver is single-zone.</p></li>
+<li><p><strong>kind:</strong> missing physics model — single-zone ignores the cool absorbing border that self-absorbs major resonance lines.</p></li>
+<li><p><strong>lift:</strong> ~2× oxide improvement reported, but <strong>heavily overlaps B1 self-absorption</strong> (both model the cool border). Defer: single-zone + SA captures most of the gradient-border error first.</p></li>
+<li><p><strong>effort:</strong> LARGE (forward-model rewrite + nonlinear fit).</p></li>
+<li><p><strong>literature:</strong> Hermann 2010/2014 Spectrochim. Acta B 100, 189 (~2× oxide); Anderson 2021 Spectrochim. Acta B 188, 106347 (SuperCam basalt).</p></li>
+</ul>
+</section>
+<section id="rank-12-continuum-emission-bremsstrahlung-free-bound-cf">
+<h3>Rank 12 — Continuum emission (bremsstrahlung + free-bound) (CF)<a class="headerlink" href="#rank-12-continuum-emission-bremsstrahlung-free-bound-cf" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> forward model <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/</span></code> and inversion loop have no continuum term (DET-5 / D2-CONTINUUM-EMISSION).</p></li>
+<li><p><strong>kind:</strong> missing physics — violates energy-balance closure in high-density regions; baseline noise masquerades as line intensity.</p></li>
+<li><p><strong>lift:</strong> MEDIUM but matrix/density-dependent; mostly a forward-model fidelity / round-trip concern.</p></li>
+<li><p><strong>effort:</strong> LARGE.</p></li>
+<li><p><strong>literature:</strong> standard plasma-emission modeling; Poggialini 2023.</p></li>
+</ul>
+</section>
+<section id="rank-13-partition-function-regen-for-fe-ti-cr-cf">
+<h3>Rank 13 — Partition-function regen for Fe/Ti/Cr (CF)<a class="headerlink" href="#rank-13-partition-function-regen-for-fe-ti-cr-cf" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/partition_functions.py</span></code> polynomial U(T) is 1.7–2.6× too low at LIBS T for Fe/Ti/Cr (defect C), skewing inter-element ratios −31 %/+60 % on JAX/Bayesian/forward paths.</p></li>
+<li><p><strong>kind:</strong> atomic-data error — affects JAX paths only (default CPU solver is direct-sum-immune).</p></li>
+<li><p><strong>lift:</strong> ~0 F1 on default path; composition-correctness on JAX paths only.</p></li>
+<li><p><strong>effort:</strong> medium (ingest Barklem &amp; Collet 2016).</p></li>
+<li><p><strong>literature:</strong> Barklem &amp; Collet 2016 A&amp;A 588, A96.</p></li>
+</ul>
+</section>
+<section id="rank-14-cflibs-analyze-format-json-crash-prod">
+<h3>Rank 14 — <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span> <span class="pre">--format</span> <span class="pre">json</span></code> crash (PROD)<a class="headerlink" href="#rank-14-cflibs-analyze-format-json-crash-prod" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>file:line:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:412</span></code> (<code class="docutils literal notranslate"><span class="pre">json.dumps(output,</span> <span class="pre">indent=2)</span></code> with no numpy-bool coercion; a numpy-bool in <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code> is not JSON-serializable → “Object of type bool is not JSON serializable”).</p></li>
+<li><p><strong>kind:</strong> productionization bug — table/csv paths work, json crashes.</p></li>
+<li><p><strong>lift:</strong> ~0 on accuracy, but blocks machine-readable output / regression harnessing.</p></li>
+<li><p><strong>effort:</strong> trivial (custom <code class="docutils literal notranslate"><span class="pre">default=</span></code> encoder or coerce numpy scalars).</p></li>
+<li><p><strong>literature:</strong> N/A.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="literature-target-and-our-gap">
+<h2>4. Literature Target and Our Gap<a class="headerlink" href="#literature-target-and-our-gap" title="Link to this heading"></a></h2>
+<p><strong>What good CF-LIBS achieves on basalts / geostandards (by tier):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tier</p></th>
+<th class="head"><p>Result</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Best-case majors</p></td>
+<td><p>trueness “better than 5 wt%” on majors</p></td>
+<td><p>De Giacomo 2007 (meteorites)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Best-case majors</p></td>
+<td><p>“better than 1 wt%” on a major</p></td>
+<td><p>Cavalcanti OPC 2013</p></td>
+</tr>
+<tr class="row-even"><td><p>Realistic target</p></td>
+<td><p>average relative error <strong>&lt; 10 %</strong> on fused glass</p></td>
+<td><p>Safi 2019 (extended C-σ)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Synthetic floor</p></td>
+<td><p>~1 % rel. (Si worst at 3.74 %) — authors warn real is worse</p></td>
+<td><p>Demidov 2022 PMC9573556</p></td>
+</tr>
+<tr class="row-even"><td><p>Uncorrected SA</p></td>
+<td><p>30–250 % when SA neglected</p></td>
+<td><p>Aragón (Al-into-vacuum)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Self-absorption prize</p></td>
+<td><p>Mg-Ca 50:50: <strong>27 % → 2 %</strong> absolute when SA corrected</p></td>
+<td><p>John &amp; Anoop 2023 RSC Adv. 13, 29613</p></td>
+</tr>
+<tr class="row-even"><td><p>Production reality</p></td>
+<td><p>ChemCam/SuperCam use <strong>calibration models</strong> (69→408 standards), not pure CF-LIBS</p></td>
+<td><p>Clegg 2017 SAB 129, 64; Anderson 2021 SAB 188, 106347</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>North-star target:</strong> ≤ <strong>10 %</strong> average relative error on majors (Safi 2019); aspirational ≤ 5 % (De Giacomo 2007). Adopt the <strong>John &amp; Anoop Mg-Ca 50:50 → 2 %</strong> synthetic regression and a <strong>BHVO-2 ≤ 10 % avg relative</strong> real-sample regression as acceptance gates.</p>
+<p><strong>Our gap:</strong></p>
+<ul class="simple">
+<li><p>BEFORE (analyze_cmd baseline): <strong>RMSE 33.69 wt%</strong> — far outside any literature-acceptable band; a degenerate Na=98 % non-answer (uncorrected-SA regime, 30–250 %, Aragón).</p></li>
+<li><p>AFTER (invert, SA on): <strong>RMSE 11.97 wt%</strong> — now within striking distance of the band but not there; ~1.2× over the 10 % target <em>and only on majors that survived detection</em>. Al/K/P/Mg are still hard-zero, so the true gap is larger than RMSE alone shows.</p></li>
+<li><p>The realistic literature floor on actual geostandards (well-tuned pure CF-LIBS) is <strong>10–20 % relative on majors</strong>, with <strong>Si the perennial worst performer</strong> (self-absorption + A_ki grade) — exactly our pattern (Si tops out at 27 % vs cert 42 %). Closing the last gap to ≤10 % requires Ranks 1–4 (recover dropped majors + fix Si stage + Mn/Ti over-attribution), then Ranks 5–7 (Saha/charge-balance correctness) to push surviving majors toward the 5–10 % floor.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="what-was-checked-and-found-ok">
+<h2>5. What Was Checked and Found OK<a class="headerlink" href="#what-was-checked-and-found-ok" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Plasma parameters are sane.</strong> T ~10.3–14.4 kK (0.9–1.24 eV), n_e ~2.5–3.0e17 cm⁻³ — both physically plausible for ps-LIBS. Solver converges in 3–6 iterations; <code class="docutils literal notranslate"><span class="pre">lte_mcwhirter_satisfied=True</span></code>. <strong>The Saha/Boltzmann math is not the problem</strong> — the failure is upstream in detection/identification (and partially in misassignment), not in the core inversion solver.</p></li>
+<li><p><strong>The B1 self-absorption wiring is correct and net-positive on real thick data.</strong> SA-on improves RMSE 14.83 → 11.97 on BHVO-2 (opposite of its over-correction on thin synthetic data, consistent with the authors’ thin-data caveat). Bulajic-2002 recursion recomputes τ from plasma state each iteration (<code class="docutils literal notranslate"><span class="pre">iterative.py:1006</span></code>).</p></li>
+<li><p><strong>B3 / B2 fixes verified present.</strong> CDSB <code class="docutils literal notranslate"><span class="pre">number_densities</span></code> arg wired (<code class="docutils literal notranslate"><span class="pre">cdsb.py:267,333</span></code>); resonance retention coupled to <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code> (<code class="docutils literal notranslate"><span class="pre">main.py:264</span></code>).</p></li>
+<li><p><strong>aki_uncertainty inverse-variance Boltzmann weighting is on by default</strong> (<code class="docutils literal notranslate"><span class="pre">boltzmann.py:119</span></code>), already addressing part of literature item “Boltzmann weighting”.</p></li>
+<li><p><strong>Pipeline runs end-to-end with no crash</strong> on all 3 spectra via the table/direct path. Only <code class="docutils literal notranslate"><span class="pre">--format</span> <span class="pre">json</span></code> crashes (Rank 14), which does not block obtaining the composition.</p></li>
+<li><p><strong>Self-absorption is NOT the binding constraint at the baseline.</strong> The pipeline never gets far enough for SA to matter when 5 of 10 elements are dropped at detection — confirming the audit ordering: detection/ID first (Ranks 1–4), physics second.</p></li>
+<li><p><strong>The Na blowup root cause is confirmed and fixed.</strong> Spurious high-lying Na I 413–421 nm Rydberg lines (A_ki ~1e5) were claiming bright peaks; the <code class="docutils literal notranslate"><span class="pre">min_relative_intensity=100</span></code> floor prunes them exactly as designed (Na 97.90 → 0.00).</p></li>
+</ul>
+<hr class="docutils" />
+<section id="acceptance-gates-to-adopt">
+<h3>Acceptance gates to adopt<a class="headerlink" href="#acceptance-gates-to-adopt" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>BHVO-2 real-sample regression:</strong> ≤ 10 % avg relative error on majors (Safi 2019) on <code class="docutils literal notranslate"><span class="pre">data/bhvo2_usgs/chemcam_bhvo2_loc{1,2,3}</span></code> via the unified CLI path.</p></li>
+<li><p><strong>John &amp; Anoop Mg-Ca 50:50 synthetic regression:</strong> corrected composition within 2 % absolute (validates B1 SA without thin-data over-correction).</p></li>
+<li><p><strong>No-degeneracy guard:</strong> no single element &gt; 80 % unless certified (would have caught Na=98 %, Mn=38 %).</p></li>
+</ol>
+</section>
+<section id="citation-index">
+<h3>Citation index<a class="headerlink" href="#citation-index" title="Link to this heading"></a></h3>
+<p>Bulajic 2002 SAB 57, 339 (DOI 10.1016/S0584-8547(01)00398-6) · El Sherbini 2005 SAB 60, 1573 · Pace 2025 SAB (doublet-ratio) · John &amp; Anoop 2023 RSC Adv. 13, 29613 · Poggialini/Palleschi 2023 JAAS D3JA00130J · IRSAC RSC Adv. 2026 D6RA01889K · Tognoni 2010 SAB 65, 1 · Aguilera &amp; Aragón 2004 SAB 59, 1861 · Ciucci 1999 Appl. Spectrosc. 53, 960 · Hermann 2010/2014 SAB 100, 189 · De Giacomo 2007 · Cavalcanti OPC 2013 · Safi 2019 · Demidov 2022 PMC9573556 · Clegg 2017 SAB 129, 64 · Anderson 2021 SAB 188, 106347 · Kramida 2024 NIST EPJ D · Wiese &amp; Fuhr 2009 JPCRD 38, 565 · Barklem &amp; Collet 2016 A&amp;A 588, A96 · von Toussaint 2018 arXiv:1805.08301.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

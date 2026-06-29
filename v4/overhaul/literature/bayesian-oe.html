@@ -1,0 +1,609 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bayesian and Optimal-Estimation Retrieval for CF-LIBS Plasma Spectroscopy &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Bayesian and Optimal-Estimation Retrieval for CF-LIBS Plasma Spectroscopy</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/literature/bayesian-oe.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="bayesian-and-optimal-estimation-retrieval-for-cf-libs-plasma-spectroscopy">
+<h1>Bayesian and Optimal-Estimation Retrieval for CF-LIBS Plasma Spectroscopy<a class="headerlink" href="#bayesian-and-optimal-estimation-retrieval-for-cf-libs-plasma-spectroscopy" title="Link to this heading"></a></h1>
+<p><strong>Topic:</strong> bayesian-oe — Bayesian / optimal-estimation (Rodgers) retrieval of plasma parameters
+and composition from spectra; NUTS/HMC for spectral fitting; Dirichlet / simplex priors for
+composition; Poisson + readout noise models for CCD/ICCD detectors.</p>
+<hr class="docutils" />
+<section id="governing-equations-canonical-forms">
+<h2>1. Governing Equations — Canonical Forms<a class="headerlink" href="#governing-equations-canonical-forms" title="Link to this heading"></a></h2>
+<section id="the-bayesian-retrieval-problem">
+<h3>1.1 The Bayesian Retrieval Problem<a class="headerlink" href="#the-bayesian-retrieval-problem" title="Link to this heading"></a></h3>
+<p>Given measured spectrum <strong>y</strong> (N-vector, counts or intensity), find the posterior over state
+vector <strong>x</strong> = (T, nₑ, C₁, …, Cₛ, …):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>p(x | y) ∝ p(y | x) · p(x)          [Bayes&#39; theorem]
+</pre></div>
+</div>
+<p>The state vector for CF-LIBS is typically:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>x = { T [K],  nₑ [cm⁻³],  C_s [mol. fraction, s=1..S],
+      possible nuisance: instrumental width Δλ, baseline coefficients b_k }
+</pre></div>
+</div>
+<p>Constraints: all Cₛ ≥ 0, ΣCₛ = 1 (composition lives on the S-1 simplex).</p>
+</section>
+<hr class="docutils" />
+<section id="rodgers-optimal-estimation-oe-map-gaussnewton-framework">
+<h3>1.2 Rodgers Optimal Estimation (OE) — MAP / Gauss–Newton Framework<a class="headerlink" href="#rodgers-optimal-estimation-oe-map-gaussnewton-framework" title="Link to this heading"></a></h3>
+<p><strong>Reference:</strong> Rodgers, C. D. (2000). <em>Inverse Methods for Atmospheric Sounding: Theory and
+Practice.</em> World Scientific. (The canonical reference for OE retrievals.)</p>
+<p>The <strong>forward model</strong> maps state to spectrum:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">y</span> <span class="o">=</span> <span class="n">F</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">ε</span><span class="p">,</span>    <span class="n">ε</span> <span class="o">~</span> <span class="n">N</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">Sₑ</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where Sₑ is the measurement-error covariance (N×N).</p>
+<p><strong>A priori:</strong> x ~ N(xₐ, Sₐ), where xₐ is the prior mean and Sₐ is prior covariance.</p>
+<p><strong>Cost function (MAP for Gaussian prior + Gaussian noise):</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>J(x) = ½ (y − F(x))ᵀ Sₑ⁻¹ (y − F(x))  +  ½ (x − xₐ)ᵀ Sₐ⁻¹ (x − xₐ)
+</pre></div>
+</div>
+<p><strong>Gauss–Newton iteration</strong> (linearised update, Rodgers eq. 5.8):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>xᵢ₊₁ = xₐ + Sₐ Kᵢᵀ (Kᵢ Sₐ Kᵢᵀ + Sₑ)⁻¹ (y − F(xᵢ) + Kᵢ(xᵢ − xₐ))
+</pre></div>
+</div>
+<p>where <strong>K</strong> = ∂F/∂x|_{xᵢ} is the Jacobian (N×M), evaluated at current iterate.</p>
+<p>Equivalent form (avoids large matrix inverse for M ≪ N):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>xᵢ₊₁ = xₐ + (Kᵢᵀ Sₑ⁻¹ Kᵢ + Sₐ⁻¹)⁻¹ Kᵢᵀ Sₑ⁻¹ (y − F(xᵢ) + Kᵢ(xᵢ − xₐ))
+</pre></div>
+</div>
+<p><strong>Posterior covariance</strong> at convergence (linear approximation):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Ŝ = (Kᵀ Sₑ⁻¹ K + Sₐ⁻¹)⁻¹          [Rodgers eq. 5.9]
+</pre></div>
+</div>
+<p><strong>Averaging kernel</strong> (how well the retrieval resolves information):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>A = Ŝ Kᵀ Sₑ⁻¹ K = I − Ŝ Sₐ⁻¹      [Rodgers eq. 5.10]
+</pre></div>
+</div>
+<p>Degrees of freedom for signal: d_s = tr(A).</p>
+<p><strong>Symbol conventions (Rodgers standard):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>Meaning</p></th>
+<th class="head"><p>Units</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>y</p></td>
+<td><p>measured spectrum</p></td>
+<td><p>[counts or W m⁻² sr⁻¹ nm⁻¹]</p></td>
+</tr>
+<tr class="row-odd"><td><p>x</p></td>
+<td><p>state vector</p></td>
+<td><p>various</p></td>
+</tr>
+<tr class="row-even"><td><p>xₐ</p></td>
+<td><p>prior/a priori state</p></td>
+<td><p>same as x</p></td>
+</tr>
+<tr class="row-odd"><td><p>F(x)</p></td>
+<td><p>forward model</p></td>
+<td><p>same as y</p></td>
+</tr>
+<tr class="row-even"><td><p>K</p></td>
+<td><p>Jacobian ∂F/∂x</p></td>
+<td><p>[y-units / x-units]</p></td>
+</tr>
+<tr class="row-odd"><td><p>Sₑ</p></td>
+<td><p>measurement error covariance</p></td>
+<td><p>[y-units²]</p></td>
+</tr>
+<tr class="row-even"><td><p>Sₐ</p></td>
+<td><p>a priori covariance</p></td>
+<td><p>[x-units²]</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ŝ</p></td>
+<td><p>posterior covariance</p></td>
+<td><p>[x-units²]</p></td>
+</tr>
+<tr class="row-even"><td><p>A</p></td>
+<td><p>averaging kernel matrix</p></td>
+<td><p>dimensionless</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Common factor-of-2 pitfall:</strong> J has the ½ prefactor; the Hessian of J is (KᵀSₑ⁻¹K + Sₐ⁻¹),
+not 2× that. Dropping the ½ shifts the MAP but not the Gauss–Newton convergence direction;
+it does shift the uncertainty estimate Ŝ by a factor of 2 if naively inverted from the
+(un-halved) Hessian.</p>
+</section>
+<hr class="docutils" />
+<section id="full-bayesian-posterior-mcmc-nuts-hmc">
+<h3>1.3 Full Bayesian Posterior — MCMC / NUTS / HMC<a class="headerlink" href="#full-bayesian-posterior-mcmc-nuts-hmc" title="Link to this heading"></a></h3>
+<p>When the forward model F is nonlinear and the Gaussian linearisation is inaccurate (common
+for CF-LIBS where T enters exponentially via Boltzmann factor), the full posterior must be
+sampled:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">log</span> <span class="n">p</span><span class="p">(</span><span class="n">x</span> <span class="o">|</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">log</span> <span class="n">p</span><span class="p">(</span><span class="n">y</span> <span class="o">|</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">log</span> <span class="n">p</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">const</span>
+</pre></div>
+</div>
+<p>For Gaussian noise likelihood + log-normal or normal prior:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>log p(y | x) = −½ (y − F(x))ᵀ Sₑ⁻¹ (y − F(x)) − ½ log det(2π Sₑ)
+</pre></div>
+</div>
+<p><strong>Hamiltonian Monte Carlo (HMC):</strong><br />
+Augment state with momentum p ~ N(0, M) (mass matrix M). Hamiltonian:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>H(x, p) = −log p(x | y) + ½ pᵀ M⁻¹ p
+</pre></div>
+</div>
+<p>Leapfrog integration of Hamilton’s equations for L steps of size ε. The gradient
+∇_x log p(x|y) = −∇_x J(x) must be computed; JAX autodiff provides this for free.</p>
+<p><strong>NUTS (No-U-Turn Sampler)</strong> (Hoffman &amp; Gelman, 2014):<br />
+Eliminates the L hyperparameter by recursively doubling the trajectory until a “U-turn”
+condition is triggered. Uses slice sampling within the candidate tree for reversibility.
+U-turn condition: (θ⁺ − θ⁻) · r⁻ &lt; 0  OR  (θ⁺ − θ⁻) · r⁺ &lt; 0, where r±  are the
+endpoint momenta.</p>
+<p><strong>Dual averaging (Nesterov) step-size adaptation</strong> during warm-up automatically tunes ε to
+target acceptance probability δ ≈ 0.65–0.85.</p>
+</section>
+<hr class="docutils" />
+<section id="detector-noise-models">
+<h3>1.4 Detector Noise Models<a class="headerlink" href="#detector-noise-models" title="Link to this heading"></a></h3>
+<section id="ideal-poisson-shot-noise-limited">
+<h4>1.4.1 Ideal Poisson (shot-noise limited)<a class="headerlink" href="#ideal-poisson-shot-noise-limited" title="Link to this heading"></a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>yₖ ~ Poisson(λₖ)    where λₖ = g · Iₖ(x) · t_exp + b_dark
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>g = detector gain [counts/photon or ADU/electron]</p></li>
+<li><p>Iₖ(x) = model photon flux at pixel k</p></li>
+<li><p>t_exp = exposure / gate time</p></li>
+<li><p>b_dark = dark current contribution</p></li>
+</ul>
+<p>Log-likelihood:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>log p(y | x) = Σₖ [ yₖ log λₖ(x) − λₖ(x) − log(yₖ!) ]
+</pre></div>
+</div>
+<p>For high counts (yₖ ≫ 1) Poisson → Gaussian with σₖ² = λₖ (Anscombe approximation also used).</p>
+</section>
+<section id="poisson-gaussian-readout-standard-ccd-iccd">
+<h4>1.4.2 Poisson + Gaussian Readout (standard CCD/ICCD)<a class="headerlink" href="#poisson-gaussian-readout-standard-ccd-iccd" title="Link to this heading"></a></h4>
+<p>Each pixel k is independently:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>yₖ = Poisson(λₖ) convolved with N(0, σ_RON²)
+</pre></div>
+</div>
+<p>Exact likelihood requires sum-over-hidden-photon-counts; practically approximated as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>yₖ ~ N( λₖ,  λₖ + σ_RON² )     [Poisson variance + readout variance]
+</pre></div>
+</div>
+<p>This is valid when λₖ is not near zero. Likelihood:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>log p(y | x) = −½ Σₖ [(yₖ − λₖ(x))² / (λₖ(x) + σ_RON²) + log(λₖ(x) + σ_RON²)]
+</pre></div>
+</div>
+<p>Note: the denominator is <em>pixel-dependent</em> and must be re-evaluated at each MCMC step when
+using this signal-dependent variance. Omitting this (fixing σ² to its mean) biases the
+uncertainty estimates.</p>
+<p><strong>ICCD-specific notes:</strong></p>
+<ul class="simple">
+<li><p>Intensifier gain G ≫ 1 multiplies photon shot noise: effective variance ≈ G² λₖ/QE</p></li>
+<li><p>Clock-induced charge (CIC) and gating transients add non-Poissonian backgrounds</p></li>
+<li><p>Dark frame subtraction before inference shifts the Poisson mean to a possibly negative value;
+truncated Poisson or background subtraction needs care in the likelihood.</p></li>
+</ul>
+</section>
+<section id="simplified-homoscedastic-gaussian-common-in-plasma-bayesian-literature">
+<h4>1.4.3 Simplified Homoscedastic Gaussian (common in plasma Bayesian literature)<a class="headerlink" href="#simplified-homoscedastic-gaussian-common-in-plasma-bayesian-literature" title="Link to this heading"></a></h4>
+<p>Many plasma spectroscopy papers (e.g., Kasim et al. 2019, Bowman et al. 2024) simply use:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>yₖ ~ N( Fₖ(x),  σ² )      with σ common or per-region
+</pre></div>
+</div>
+<p>This is accurate only in the high-count, readout-dominated regime. It is the same as
+minimising χ² = Σ(yₖ − Fₖ)²/σ² with uniform σ. Fine for T/nₑ estimation from strong lines;
+inaccurate for faint lines or Poisson-limited LIBS transients.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="composition-priors-simplex-constraints">
+<h3>1.5 Composition Priors — Simplex Constraints<a class="headerlink" href="#composition-priors-simplex-constraints" title="Link to this heading"></a></h3>
+<section id="dirichlet-prior-conjugate-for-multinomial">
+<h4>1.5.1 Dirichlet Prior (conjugate for Multinomial)<a class="headerlink" href="#dirichlet-prior-conjugate-for-multinomial" title="Link to this heading"></a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>C = (C₁, …, Cₛ) ~ Dir(α₁, …, αₛ)
+</pre></div>
+</div>
+<p>PDF on the S-1 simplex:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>p(C | α) = Γ(Σαₛ) / [Π Γ(αₛ)] · Π Cₛ^(αₛ−1)
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Symmetric uniform: αₛ = 1 for all s → flat on the simplex</p></li>
+<li><p>Sparse prior: αₛ = ½ → Jeffreys prior for multinomials, favours corners</p></li>
+<li><p>Informative: αₛ = α₀ Cₛ^(prior) where α₀ is precision</p></li>
+</ul>
+<p><strong>Pitfall:</strong> The Dirichlet forces sub-compositional independence (neutral compositions,
+Aitchison 1986). It cannot model positive correlations between elements that co-occur (e.g.,
+Fe/Ni in steel).</p>
+</section>
+<section id="logistic-normal-ilr-prior-aitchison-geometry">
+<h4>1.5.2 Logistic-Normal / ILR Prior (Aitchison geometry)<a class="headerlink" href="#logistic-normal-ilr-prior-aitchison-geometry" title="Link to this heading"></a></h4>
+<p>More flexible: apply isometric log-ratio (ILR) transform to map simplex → ℝˢ⁻¹, then place
+multivariate normal prior:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>η = ILR(C) ~ N(μ_η, Σ_η)
+C = ILR⁻¹(η)   (softmax-like inversion through successive binary partitions)
+</pre></div>
+</div>
+<p>ILR transform (Egozcue et al. 2003): for a sequential binary partition with basis ψₖ:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ηₖ = √(rₖ⁺ rₖ⁻ / (rₖ⁺ + rₖ⁻)) · log( geometric_mean(C_in_ₖ) / geometric_mean(C_out_ₖ) )
+</pre></div>
+</div>
+<p>where rₖ⁺ and rₖ⁻ are the numbers of components in each partition at level k.</p>
+<p>In practice for MCMC, the additive log-ratio (ALR) is simpler:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ηₛ = log(Cₛ / Cₛ₀)  for s = 1, …, S−1  (ₛ₀ is reference element)
+Cₛ = exp(ηₛ) / (1 + Σ exp(ηₛ))
+Cₛ₀ = 1 / (1 + Σ exp(ηₛ))
+</pre></div>
+</div>
+<p>MCMC runs unconstrained over η ∈ ℝˢ⁻¹; closure is automatic.</p>
+<p><strong>NumPyro pattern:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># ALR reparameterization — unconstrained MCMC, simplex closure guaranteed</span>
+<span class="n">eta</span> <span class="o">=</span> <span class="n">numpyro</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="s2">&quot;eta&quot;</span><span class="p">,</span> <span class="n">dist</span><span class="o">.</span><span class="n">Normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">([</span><span class="n">S</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>   <span class="c1"># log-ratios</span>
+<span class="n">C_raw</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">eta</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.0</span><span class="p">])])</span>
+<span class="n">C</span> <span class="o">=</span> <span class="n">C_raw</span> <span class="o">/</span> <span class="n">C_raw</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>   <span class="c1"># softmax closure</span>
+</pre></div>
+</div>
+<p>Or using NumPyro’s built-in Dirichlet:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">C</span> <span class="o">=</span> <span class="n">numpyro</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="s2">&quot;C&quot;</span><span class="p">,</span> <span class="n">dist</span><span class="o">.</span><span class="n">Dirichlet</span><span class="p">(</span><span class="n">alpha</span> <span class="o">*</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">S</span><span class="p">)))</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="common-implementation-pitfalls-and-correct-treatment">
+<h2>2. Common Implementation Pitfalls and Correct Treatment<a class="headerlink" href="#common-implementation-pitfalls-and-correct-treatment" title="Link to this heading"></a></h2>
+<section id="exponential-sensitivity-in-the-boltzmann-saha-forward-model">
+<h3>2.1 Exponential Sensitivity in the Boltzmann/Saha Forward Model<a class="headerlink" href="#exponential-sensitivity-in-the-boltzmann-saha-forward-model" title="Link to this heading"></a></h3>
+<p>The emission intensity is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Iₗ ∝ Cₛ · Aₖᵢ gₖ / U(T) · exp(−Eₖ / kT) · (transition-specific factors)
+</pre></div>
+</div>
+<p>The ∂I/∂T gradient is ∝ Eₖ/(kT²), which varies by a factor of ~10 across the UV-NIR range
+and becomes very large at low T. This means:</p>
+<ul class="simple">
+<li><p>The posterior is highly non-Gaussian in T; NUTS is much safer than Laplace / OE.</p></li>
+<li><p>HMC step size ε must account for the varying scale: use a dense mass matrix or diagonal
+M⁻¹ = diag(Var(T), Var(nₑ), Var(C₁), …).</p></li>
+<li><p>ALR-transformed concentrations remove the 0–1 hard boundary but do not remove scale
+mismatch: T ~ 10⁴ K while η ~ 0±2; use separate mass matrix entries.</p></li>
+</ul>
+</section>
+<section id="degeneracy-between-t-and-cs-at-fixed-f-x">
+<h3>2.2 Degeneracy Between T and Cₛ at Fixed F(x)<a class="headerlink" href="#degeneracy-between-t-and-cs-at-fixed-f-x" title="Link to this heading"></a></h3>
+<p>In CF-LIBS, lowering T can be compensated by raising the total number density (i.e., plasma
+depth L or ΣCₛ nₑ). This degeneracy is only broken by including multiple ionisation stages
+(Saha), which gives a distinct T dependence. If only neutral lines are used, the posterior is
+a ridge; NUTS will explore it but mixing will be slow.</p>
+<p><strong>Fix:</strong> Include at least one ionic line per element when available; parameterize (T, nₑ)
+jointly; set informative prior on nₑ from Stark width measurement.</p>
+</section>
+<section id="closure-constraint-handling">
+<h3>2.3 Closure Constraint Handling<a class="headerlink" href="#closure-constraint-handling" title="Link to this heading"></a></h3>
+<p>Three correct approaches (in order of MCMC efficiency):</p>
+<ol class="arabic simple">
+<li><p><strong>ALR / ILR reparameterization</strong> (recommended): unconstrained η ∈ ℝˢ⁻¹; no boundary
+issues; best mixing for NUTS.</p></li>
+<li><p><strong>Dirichlet with concentration = 1</strong>: flat on simplex; NUTS must remain inside simplex
+(NumPyro handles this automatically via <code class="docutils literal notranslate"><span class="pre">dist.Dirichlet</span></code>).</p></li>
+<li><p><strong>Softmax of unconstrained logits</strong>: equivalent to ALR with reference = log-sum-exp
+normaliser; slightly less numerically stable but common in deep-learning frameworks.</p></li>
+</ol>
+<p><strong>Do NOT:</strong> constrain one element as <code class="docutils literal notranslate"><span class="pre">Cₛ₀</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">−</span> <span class="pre">ΣCₛ</span></code> and place independent uniform [0,1]
+priors on each other element. This creates incorrect geometry (non-uniform on simplex),
+truncation artefacts, and poor HMC mixing.</p>
+</section>
+<section id="signal-dependent-vs-fixed-noise-variance">
+<h3>2.4 Signal-Dependent vs. Fixed Noise Variance<a class="headerlink" href="#signal-dependent-vs-fixed-noise-variance" title="Link to this heading"></a></h3>
+<p>Using a fixed σ in a Poisson-limited regime biases the fit toward strong lines (which have
+smaller relative noise) and over-weights faint lines (which have larger relative noise).</p>
+<p>Correct Poisson-Gaussian likelihood weight:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>wₖ = 1 / (λₖ(x) + σ_RON²)    [heteroscedastic, must update at each step]
+</pre></div>
+</div>
+<p>This is more expensive but necessary when SNR &lt; 100 on any line used in the fit.</p>
+</section>
+<section id="log-likelihood-normalisation-constants">
+<h3>2.5 Log-Likelihood Normalisation Constants<a class="headerlink" href="#log-likelihood-normalisation-constants" title="Link to this heading"></a></h3>
+<p>For the Gaussian likelihood with signal-dependent variance:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>log p(y|x) = −½ Σₖ [(yₖ − λₖ)²/(λₖ + σ_RON²) + log(λₖ + σ_RON²)] − (N/2)log(2π)
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">log(λₖ</span> <span class="pre">+</span> <span class="pre">σ_RON²)</span></code> term is often dropped in LS fitting but matters for model comparison
+(WAIC, LOO-CV) and for evidence estimation. Include it.</p>
+</section>
+<section id="prior-on-temperature-log-scale-vs-linear-scale">
+<h3>2.6 Prior on Temperature: Log-Scale vs. Linear Scale<a class="headerlink" href="#prior-on-temperature-log-scale-vs-linear-scale" title="Link to this heading"></a></h3>
+<p>T enters the Boltzmann exponential; a uniform prior on log(T) (i.e., Jeffreys-style) is
+typically more appropriate than uniform on T, since information about T is extracted from
+line ratios (intrinsically log-scale quantities). In practice:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>log T ~ N(log T_prior, σ_logT)   with σ_logT ≈ 0.2–0.5
+</pre></div>
+</div>
+</section>
+<section id="nuts-warm-up-step-size-tuning">
+<h3>2.7 NUTS Warm-Up / Step-Size Tuning<a class="headerlink" href="#nuts-warm-up-step-size-tuning" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Target acceptance probability δ = 0.65–0.85 for NUTS (higher δ → shorter steps → slower
+but more reliable; Betancourt 2017 recommends δ ≈ 0.8).</p></li>
+<li><p>Warm-up should be ≥ 500 steps for plasma retrievals with 5–15 parameters; use 1000 if
+the model includes &gt; 10 elements.</p></li>
+<li><p>Check: effective sample size (ESS) per chain &gt; 100, R̂ &lt; 1.01 for all parameters.</p></li>
+<li><p>If R̂ diverges or ESS is tiny, suspect: (a) label switching in multi-zone model, (b)
+strong T–nₑ degeneracy, (c) inadequate mass matrix adaptation.</p></li>
+</ul>
+</section>
+<section id="rodgers-oe-when-to-use-vs-full-mcmc">
+<h3>2.8 Rodgers OE — When to Use vs. Full MCMC<a class="headerlink" href="#rodgers-oe-when-to-use-vs-full-mcmc" title="Link to this heading"></a></h3>
+<p>OE (Gauss–Newton) is appropriate when:</p>
+<ul class="simple">
+<li><p>The forward model is weakly nonlinear in x (Jacobian K approximately constant).</p></li>
+<li><p>Gaussian noise is an adequate approximation.</p></li>
+<li><p>Speed is critical (OE converges in 3–5 iterations vs. thousands of MCMC steps).</p></li>
+</ul>
+<p>Use MCMC when:</p>
+<ul class="simple">
+<li><p>Strong nonlinearity (T enters exponentially; Saha has T^(5/2) / exp(χ/kT)).</p></li>
+<li><p>Non-Gaussian posterior (multi-modal, ridge-shaped due to T/nₑ degeneracy).</p></li>
+<li><p>Uncertainty is of primary interest (OE posterior covariance is only a linearised
+approximation).</p></li>
+<li><p>Model comparison via log marginal likelihood is needed.</p></li>
+</ul>
+<p>For CF-LIBS: MCMC (NUTS via NumPyro) is the rigorous choice for final uncertainty
+quantification; OE (or the classical iterative CF-LIBS loop) can be used as a fast
+first-pass initialiser.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-references">
+<h2>3. Key References<a class="headerlink" href="#key-references" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Rodgers, C. D. (2000).</strong> <em>Inverse Methods for Atmospheric Sounding: Theory and Practice.</em>
+World Scientific, Singapore. ISBN 981-02-2740-X.
+— The canonical MAP / OE reference. Equations 5.8–5.10 define the Gauss–Newton iterate,
+posterior covariance, and averaging kernel in the standard notation used by all atmospheric
+retrieval codes.</p></li>
+<li><p><strong>Hoffman, M. D. &amp; Gelman, A. (2014).</strong> The No-U-Turn Sampler: Adaptively Setting Path
+Lengths in Hamiltonian Monte Carlo. <em>Journal of Machine Learning Research</em>, 15(47),
+1593–1623. https://jmlr.org/papers/v15/hoffman14a.html
+— The NUTS paper. Defines the recursive doubling tree, U-turn stopping criterion, and
+dual-averaging step-size adaptation. The standard algorithm implemented in NumPyro,
+Stan, and PyMC.</p></li>
+<li><p><strong>Neal, R. M. (2011).</strong> MCMC Using Hamiltonian Dynamics. In <em>Handbook of Markov Chain
+Monte Carlo</em> (Brooks, Gelman, Jones, Meng, eds.), Chapter 5, pp. 113–162. CRC Press.
+arXiv:1206.1901.
+— Comprehensive derivation of HMC leapfrog integration, mass matrix role, step-size
+sensitivity, and connection to molecular dynamics. Essential background for NUTS.</p></li>
+<li><p><strong>Phan, D., Pradhan, N. &amp; Jankowiak, M. (2019).</strong> Composable Effects for Flexible and
+Accelerated Probabilistic Programming in NumPyro. arXiv:1912.11554.
+https://arxiv.org/abs/1912.11554
+— NumPyro paper. Describes the JIT-compiled iterative NUTS implementation, effect
+handlers, and JAX integration. The practical reference for CF-LIBS Bayesian code using
+NumPyro + JAX.</p></li>
+<li><p><strong>Aitchison, J. (1982).</strong> The statistical analysis of compositional data (with discussion).
+<em>Journal of the Royal Statistical Society Series B</em>, 44(2), 139–177.
+DOI: 10.1111/j.2517-6161.1982.tb01195.x
+— Introduces log-ratio transforms for compositional data; establishes that the simplex
+has a natural Euclidean structure in log-ratio coordinates. Foundation for ALR/ILR
+reparameterization of composition priors in MCMC.</p></li>
+<li><p><strong>Egozcue, J. J., Pawlowsky-Glahn, V., Mateu-Figueras, G. &amp; Barceló-Vidal, C. (2003).</strong>
+Isometric Logratio Transformations for Compositional Data Analysis.
+<em>Mathematical Geology</em>, 35(3), 279–300. DOI: 10.1023/A:1023818214614
+— Defines the ILR transform (the isometric version of the log-ratio family) preserving
+Aitchison distances. Used for ILR-based Bayesian priors that are orthonormal on the
+simplex.</p></li>
+<li><p><strong>Bowman, C., Mildner, J. M., Pasley, J. &amp; Wilson, S. R. (2024).</strong> Automated Bayesian
+high-throughput estimation of plasma temperature and density from emission spectroscopy.
+<em>Review of Scientific Instruments</em>, 95, 073520.
+DOI: 10.1063/5.0190924. arXiv:2312.12674
+— Demonstrates Bayesian framework (Gaussian likelihood, grid-based posterior) for plasma
+T and nₑ from emission spectroscopy; addresses systematic line-parameter uncertainties
+explicitly via Gaussian-process likelihood.</p></li>
+<li><p><strong>Kruger, S. E. (2024).</strong> Thinking Bayesian for plasma physicists.
+<em>Physics of Plasmas</em>, 31, 050901. DOI: 10.1063/5.0200608
+— Tutorial review of Bayesian methods written for the plasma physics community. Covers
+prior specification, likelihood construction, Gaussian process regression, and inverse
+problem framing; good entry point.</p></li>
+<li><p><strong>Kasim, M. F. et al. (2019).</strong> Quantitative single shot and spatially resolved plasma
+fluorescence spectra with a Bayesian approach. <em>Physical Review E</em>, 100, 033302.
+DOI: 10.1103/PhysRevE.100.033302
+— Bayesian fit of plasma emission spectra including fully propagated uncertainties;
+Gaussian likelihood with per-line noise estimates; MCMC via emcee; directly analogous
+to LIBS application.</p></li>
+<li><p><strong>Ciucci, A., Corsi, M., Palleschi, V., Salvetti, A. &amp; Tognoni, E. (1999).</strong> New
+Procedure for Quantitative Elemental Analysis by Laser-Induced Plasma Spectroscopy.
+<em>Applied Spectroscopy</em>, 53(8), 960–964. DOI: 10.1366/0003702991947612
+— Original CF-LIBS paper. Derives the closure equation (ΣCₛ = 1) and the self-absorption
+correction that any Bayesian forward model for LIBS must implement in F(x).</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="what-correct-code-must-do-checklist">
+<h2>4. “What Correct Code MUST Do” Checklist<a class="headerlink" href="#what-correct-code-must-do-checklist" title="Link to this heading"></a></h2>
+<section id="likelihood">
+<h3>Likelihood<a class="headerlink" href="#likelihood" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Use signal-dependent noise</strong>: <code class="docutils literal notranslate"><span class="pre">σₖ²(x)</span> <span class="pre">=</span> <span class="pre">λₖ(x)</span> <span class="pre">+</span> <span class="pre">σ_RON²</span></code> for each pixel k; do NOT
+use a single fixed σ across all pixels when LIBS signals span &gt; 2 decades in intensity.</p></li>
+<li><p>[ ] <strong>Include the log(σₖ²) normalisation term</strong> in log-likelihood if computing WAIC, LOO,
+or Bayes factors (model comparison).</p></li>
+<li><p>[ ] <strong>For Poisson-limited ICCD</strong>: use proper Poisson log-likelihood (<code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">log</span> <span class="pre">λ</span> <span class="pre">−</span> <span class="pre">λ</span></code>) or the
+Poisson-Gaussian approximation; do not silently fall back to χ².</p></li>
+</ul>
+</section>
+<section id="forward-model-integration">
+<h3>Forward Model Integration<a class="headerlink" href="#forward-model-integration" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>CF-LIBS closure inside the forward model</strong>: <code class="docutils literal notranslate"><span class="pre">F(x)</span></code> must enforce ΣCₛ = 1 at every
+evaluation; the Bayesian code must not allow non-physical (negative or sum &gt; 1)
+compositions to enter likelihood evaluation.</p></li>
+<li><p>[ ] <strong>Saha ionisation balance</strong>: the forward model must include all observed ionisation
+stages (I, II at minimum); using only neutral lines removes the nₑ–T diagnostic leverage
+and produces a degenerate posterior.</p></li>
+<li><p>[ ] <strong>Partition functions U(T)</strong>: must be evaluated at each T proposal, not fixed at the
+prior T; they enter the Boltzmann factor and affect both intensities and the OE Jacobian K.</p></li>
+</ul>
+</section>
+<section id="composition-prior-and-parameterization">
+<h3>Composition Prior and Parameterization<a class="headerlink" href="#composition-prior-and-parameterization" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Use ALR or ILR reparameterization</strong> (unconstrained η ∈ ℝˢ⁻¹) for NUTS, OR
+<code class="docutils literal notranslate"><span class="pre">dist.Dirichlet</span></code> in NumPyro (which handles the simplex boundary automatically).</p></li>
+<li><p>[ ] <strong>Do NOT</strong> place independent Beta or Uniform[0,1] priors on each Cₛ independently;
+this violates the sum-to-one constraint and creates incorrect geometry.</p></li>
+<li><p>[ ] <strong>Set concentration scale</strong>: for Dirichlet, α = 1 (flat) is often too uninformative;
+α = (prior_mean * precision) where precision ~ 5–20 encodes compositional scale.</p></li>
+</ul>
+</section>
+<section id="temperature-and-density-priors">
+<h3>Temperature and Density Priors<a class="headerlink" href="#temperature-and-density-priors" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Use log-scale prior on T</strong>: <code class="docutils literal notranslate"><span class="pre">log</span> <span class="pre">T</span> <span class="pre">~</span> <span class="pre">Normal(μ,</span> <span class="pre">σ)</span></code> with σ ≈ 0.3–0.5 in natural log;
+uniform on T creates a prior that is heavily weighted toward high T.</p></li>
+<li><p>[ ] <strong>Use log-scale prior on nₑ</strong>: electron density spans 10¹⁶–10¹⁸ cm⁻³; uniform in
+log-space is appropriate; constrain using Stark FWHM measurement as informative prior.</p></li>
+</ul>
+</section>
+<section id="nuts-hmc-configuration-numpyro">
+<h3>NUTS / HMC Configuration (NumPyro)<a class="headerlink" href="#nuts-hmc-configuration-numpyro" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Warm-up ≥ 500 steps</strong> with dual-averaging adaptation (<code class="docutils literal notranslate"><span class="pre">target_accept_prob=0.80</span></code>).</p></li>
+<li><p>[ ] <strong>Mass matrix initialisation</strong>: use <code class="docutils literal notranslate"><span class="pre">init_to_value</span></code> with MAP estimate (from classical
+CF-LIBS solver or OE iterate) as starting point to speed up warm-up convergence.</p></li>
+<li><p>[ ] <strong>Diagnose convergence</strong>: compute R̂ and ESS for all parameters; flag R̂ &gt; 1.05 or
+ESS &lt; 50 as convergence failures; do NOT report posteriors from unconverged chains.</p></li>
+<li><p>[ ] <strong>Report credible intervals</strong>: use 68% or 95% HPD / equal-tailed intervals from the
+posterior samples, NOT just the MAP point estimate; this is the primary value of MCMC.</p></li>
+</ul>
+</section>
+<section id="rodgers-oe-when-used-as-fast-first-pass">
+<h3>Rodgers OE (when used as fast first-pass)<a class="headerlink" href="#rodgers-oe-when-used-as-fast-first-pass" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Jacobian K = ∂F/∂x</strong> must be computed at current iterate, not fixed at prior xₐ;
+for CF-LIBS the Boltzmann/Saha K has strong T-dependence.</p></li>
+<li><p>[ ] <strong>Include Sₐ regularisation</strong>: pure LS (Sₐ → ∞) is ill-conditioned for CF-LIBS due
+to near-degenerate line ratios; always include a finite prior covariance.</p></li>
+<li><p>[ ] <strong>Check averaging kernel A = Ŝ Kᵀ Sₑ⁻¹ K</strong>: d_s = tr(A) &lt; S (number of elements)
+warns that some composition components are unconstrained; do not report those as
+accurate retrievals.</p></li>
+<li><p>[ ] <strong>Do NOT conflate posterior covariance Ŝ with measurement uncertainty</strong>: Ŝ is the
+combined measurement + prior uncertainty; quote both the measurement contribution
+and the prior contribution separately for interpretability.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

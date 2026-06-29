@@ -1,0 +1,302 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Boltzmann-Plot Ordinate Convention: Literature-Grounded Verdict &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Boltzmann-Plot Ordinate Convention: Literature-Grounded Verdict</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/M-spec-boltzmann-convention-literature-verdict.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <p>This is a synthesis task. The three audits are unanimous and well-cited. Let me write the verdict directly.</p>
+<section id="cf-libs-boltzmann-plot-ordinate-convention-literature-grounded-verdict">
+<h1>CF-LIBS Boltzmann-Plot Ordinate Convention: Literature-Grounded Verdict<a class="headerlink" href="#cf-libs-boltzmann-plot-ordinate-convention-literature-grounded-verdict" title="Link to this heading"></a></h1>
+<section id="verdict-which-ordinate-is-the-standard-and-is-either-repo-wrong">
+<h2>1. Verdict — which ordinate is the standard, and is either repo <em>wrong</em>?<a class="headerlink" href="#verdict-which-ordinate-is-the-standard-and-is-either-repo-wrong" title="Link to this heading"></a></h2>
+<p><strong>Our numerical pipeline — <code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">ln(I·λ</span> <span class="pre">/</span> <span class="pre">(g_k·A_ki))</span></code> vs <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">E_k</span></code> — is the literature-standard CF-LIBS Boltzmann/Saha-Boltzmann ordinate. CORRECT.</strong></p>
+<p>This is not a judgment call; the standard form is printed verbatim across independent foundational and recent sources, all in agreement that the λ belongs in the numerator <em>whenever <code class="docutils literal notranslate"><span class="pre">I</span></code> is a measured energy/radiance quantity</em> (which is what every real spectrometer integrates):</p>
+<ul class="simple">
+<li><p><strong>Aragón &amp; Aguilera, <em>Spectrochim. Acta B</em> 63 (2008) 893–916</strong> — the canonical Saha-Boltzmann-plot review. Line intensity in <strong>energy units</strong> with the per-photon <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code> factor; ordinate <code class="docutils literal notranslate"><span class="pre">ln(I</span> <span class="pre">λ</span> <span class="pre">/</span> <span class="pre">(g_k</span> <span class="pre">A_ki))</span></code> vs <code class="docutils literal notranslate"><span class="pre">E_k</span></code>, slope <code class="docutils literal notranslate"><span class="pre">−1/k_BT</span></code>.</p></li>
+<li><p><strong>Alrebdi et al., <em>Molecules</em> (2022), PMC9229630</strong> — prints the working ordinate <strong>verbatim</strong>: <code class="docutils literal notranslate"><span class="pre">ln(I_ij·λ_ij</span> <span class="pre">/</span> <span class="pre">(h</span> <span class="pre">c</span> <span class="pre">A_ij</span> <span class="pre">g_i))</span> <span class="pre">=</span> <span class="pre">−E_k/(k_B</span> <span class="pre">T_e)</span> <span class="pre">+</span> <span class="pre">ln(N/U(T)…)</span></code>. λ explicitly in the numerator; <code class="docutils literal notranslate"><span class="pre">hc</span></code> explicit.</p></li>
+<li><p><strong>Khelladi et al., <em>EPJ Appl. Phys.</em> 101 (2023) ap230072</strong> — integrated intensity <code class="docutils literal notranslate"><span class="pre">J_tot</span> <span class="pre">=</span> <span class="pre">n_i·A_ij·(hc/λ)/(4π)</span></code>, Boltzmann plot <code class="docutils literal notranslate"><span class="pre">ln(J_tot·λ/(A_ij·g_i))</span> <span class="pre">=</span> <span class="pre">ln(hc/(4π·n·Z))</span> <span class="pre">−</span> <span class="pre">E_i/(kT)</span></code>. The λ multiplies <code class="docutils literal notranslate"><span class="pre">J</span></code> <strong>precisely to cancel the <code class="docutils literal notranslate"><span class="pre">1/λ</span></code> photon-energy factor</strong> — this is exactly our pipeline’s form, shown explicitly.</p></li>
+<li><p><strong>NIST Atomic Spectroscopy compendium</strong> — line radiance <code class="docutils literal notranslate"><span class="pre">I</span> <span class="pre">=</span> <span class="pre">(1/4π)(hc/λ₀)</span> <span class="pre">A_ki</span> <span class="pre">N_k</span> <span class="pre">ℓ</span></code>; the <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code> is per-photon energy × spontaneous-emission rate. <code class="docutils literal notranslate"><span class="pre">ln(I·λ/(g_k</span> <span class="pre">A_ki))</span></code> removes the <code class="docutils literal notranslate"><span class="pre">1/λ</span></code> and yields the affine-in-<code class="docutils literal notranslate"><span class="pre">E_k</span></code> line.</p></li>
+<li><p><strong>“Importance of physical units in the Boltzmann plot method,” <em>J. Anal. At. Spectrom.</em> (2022) DOI 10.1039/D2JA00241H</strong> — decisive on units: intensity must be in <strong>energy-flux (W m⁻²)</strong>; the per-photon <code class="docutils literal notranslate"><span class="pre">hc/λ_ki</span></code> factor is present in Eq. (1).</p></li>
+<li><p>Original <strong>Ciucci et al., <em>Appl. Spectrosc.</em> 53 (1999) 960</strong> and the <strong>Tognoni et al. <em>Spectrochim. Acta B</em> 65 (2010) 1</strong> review are consistent with all of the above.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">ASSERT_CONVENTION</span></code> markers in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann.py</span></code> (lines 56, 123, 689, 1400) and <code class="docutils literal notranslate"><span class="pre">boltzmann_jax.py:11</span></code> enforce the correct form. <strong>No change to the shipped pipeline.</strong></p>
+<p><strong>The Lean spec — <code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">ln(I</span> <span class="pre">/</span> <span class="pre">(g·A))</span></code>, λ absorbed into <code class="docutils literal notranslate"><span class="pre">Fcal</span></code> — is a VALID UNIT-REDUCED FORM, NOT an error.</strong> The reviewer’s “fundamental error” flag is a <strong>FALSE POSITIVE</strong>.</p>
+<p>The spec adopts a <strong>photon-rate</strong> (or <code class="docutils literal notranslate"><span class="pre">F</span></code>-absorbed) convention: <code class="docutils literal notranslate"><span class="pre">I</span> <span class="pre">=</span> <span class="pre">Fcal·A_k·n_k</span></code>. This is <em>structurally identical</em> to the canonical CF-LIBS forward model in <strong>Tognoni et al. (2010)</strong>: <code class="docutils literal notranslate"><span class="pre">I_ij</span> <span class="pre">=</span> <span class="pre">F·n_i^s·A_ij</span> <span class="pre">=</span> <span class="pre">F·(A_ij</span> <span class="pre">g_i/U^s(T))·n^s·exp(−E_i/kT)</span></code>, where <code class="docutils literal notranslate"><span class="pre">F</span></code> is the “experimental parameter accounting for optical collection efficiency, plasma number density, and plasma volume” — the same lumped <code class="docutils literal notranslate"><span class="pre">F</span></code> the original <strong>Ciucci et al. (1999)</strong> procedure uses. In that convention the ordinate is <code class="docutils literal notranslate"><span class="pre">ln(I/(g·A))</span></code> with <strong>no explicit λ</strong>, because λ has been folded into <code class="docutils literal notranslate"><span class="pre">F</span></code>. The spec is therefore internally self-consistent: it folds λ into <code class="docutils literal notranslate"><span class="pre">Fcal</span></code> in the forward map <em>and</em> drops λ from the ordinate, so <code class="docutils literal notranslate"><span class="pre">Fcal</span></code> cancels in the two-line slope regardless of its contents. Its theorems <code class="docutils literal notranslate"><span class="pre">boltzmann_plot_intensity</span></code> and <code class="docutils literal notranslate"><span class="pre">temperature_from_two_lines</span></code> are <strong>logically sound and proof-valid as stated</strong>.</p>
+<p><strong>Unambiguous bottom line on physics errors: NEITHER repo contains a physics error.</strong> The pipeline uses the measurement-standard energy ordinate; the spec uses a self-consistent photon-rate reduction. The <em>only</em> defensible criticism is <strong>documentation</strong>, not mathematics: the <code class="docutils literal notranslate"><span class="pre">ForwardMap.lean</span></code> docstring claims a <strong>scalar</strong> <code class="docutils literal notranslate"><span class="pre">Fcal</span> <span class="pre">:</span> <span class="pre">ℝ</span></code> “absorbs <code class="docutils literal notranslate"><span class="pre">hc/4π</span> <span class="pre">λ_ki</span></code>.” That phrasing is <em>physically loose</em> because <code class="docutils literal notranslate"><span class="pre">λ_ki</span></code> is per-line, not line-independent — a single scalar cannot literally carry a per-line quantity. But the spec never co-plots distinct-λ lines against a λ-dependent <code class="docutils literal notranslate"><span class="pre">F</span></code>, so this looseness <strong>falsifies no theorem</strong>; it is a latent interpretation gap at the data interface, not a broken proof.</p>
+</section>
+<hr class="docutils" />
+<section id="when-the-two-conventions-agree-vs-diverge-does-matter-for-t-and-composition">
+<h2>2. When the two conventions agree vs diverge — does λ matter for T and composition?<a class="headerlink" href="#when-the-two-conventions-agree-vs-diverge-does-matter-for-t-and-composition" title="Link to this heading"></a></h2>
+<p>The two ordinates differ <strong>line-by-line</strong> by <code class="docutils literal notranslate"><span class="pre">ln(λ_ki)</span> <span class="pre">+</span> <span class="pre">const</span></code>. Decompose the difference: <code class="docutils literal notranslate"><span class="pre">hc</span></code> and <code class="docutils literal notranslate"><span class="pre">4π</span></code> are global constants (cancel in slope-differencing and in the <code class="docutils literal notranslate"><span class="pre">Σ</span> <span class="pre">C_s</span> <span class="pre">=</span> <span class="pre">1</span></code> closure ratio), but <strong><code class="docutils literal notranslate"><span class="pre">λ_ki</span></code> is per-line and correlates with <code class="docutils literal notranslate"><span class="pre">E_k</span></code></strong> across a real species line set.</p>
+<p><strong>They AGREE (λ is harmless) when:</strong></p>
+<ul class="simple">
+<li><p>λ is <strong>constant</strong> across all fitted lines, <strong>OR</strong></p></li>
+<li><p>intensity is <strong>truly photon-rate</strong> (<code class="docutils literal notranslate"><span class="pre">I</span> <span class="pre">∝</span> <span class="pre">A_ki</span> <span class="pre">n_k</span></code>, no <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code>), <strong>OR</strong></p></li>
+<li><p>comparisons are restricted to lines sharing the same λ.</p></li>
+</ul>
+<p>In these cases <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code> is a single global constant → it cancels exactly in the slope (→ T) and in the closure (→ composition). A <strong>uniform global λ-rescale</strong> (e.g. every λ in metres instead of nm, consistently) is verified invariant in slope <strong>and</strong> intercept to 1e-12 — it is absorbed into <code class="docutils literal notranslate"><span class="pre">Fcal</span></code>/<code class="docutils literal notranslate"><span class="pre">F</span></code> and is observationally indistinguishable. This is an <em>intended, harmless blind spot</em>, consistent with the D2JA00241H ruling that a <strong>constant</strong> factor “without changing the slope … will shift its intersection with the y-axis.”</p>
+<p><strong>They DIVERGE (λ is load-bearing) when — the real CF-LIBS case — <code class="docutils literal notranslate"><span class="pre">λ_ki</span></code> VARIES across the multi-line fit:</strong></p>
+<p>The per-line <code class="docutils literal notranslate"><span class="pre">−ln</span> <span class="pre">λ_ki</span></code> term does <strong>not</strong> cancel. Because λ correlates with <code class="docutils literal notranslate"><span class="pre">E_k</span></code> across a species’ line set, dropping it <strong>biases BOTH the slope (temperature) AND the intercept (composition)</strong>, not just the intercept. The D2JA00241H “constant-factor shifts intercept only” rule does <strong>not</strong> apply here — that rule is explicitly about <em>constant</em> factors, whereas <code class="docutils literal notranslate"><span class="pre">λ_ki</span></code> is a per-line, <code class="docutils literal notranslate"><span class="pre">E_k</span></code>-correlated term.</p>
+<p><strong>Quantification:</strong></p>
+<ul class="simple">
+<li><p>For a line set spanning <strong>240 nm to 660 nm</strong>, <code class="docutils literal notranslate"><span class="pre">ln(λ)</span></code> differs by <code class="docutils literal notranslate"><span class="pre">ln(660/240)</span> <span class="pre">≈</span> <span class="pre">1.01</span></code> across the fit — a ~1.0 spread in the ordinate that maps directly onto a tilted slope.</p></li>
+<li><p>The numerical bridge experiment makes the slope bias concrete: a λ-drop bug yields <strong>slope −0.689 vs the correct spec slope −0.419</strong> — a gross temperature error, not a rounding effect.</p></li>
+<li><p>The error is <strong>largest when the line set spans a wide wavelength range and λ correlates with E_k</strong> — i.e. precisely the multi-element, wide-window CF-LIBS regime this codebase targets.</p></li>
+</ul>
+<p>So: <strong>for any real multi-line fit, the λ matters for both T and composition, and the energy ordinate (our pipeline) is mandatory.</strong> The spec’s reduced ordinate is correct only because it never feeds itself distinct-λ energy data.</p>
+</section>
+<hr class="docutils" />
+<section id="the-other-three-spec-formulas-correct-reduced-error">
+<h2>3. The other three spec formulas — correct / reduced / error<a class="headerlink" href="#the-other-three-spec-formulas-correct-reduced-error" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Spec formula</p></th>
+<th class="head"><p>Location</p></th>
+<th class="head"><p>Status</p></th>
+<th class="head"><p>Basis</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Forward intensity</strong> <code class="docutils literal notranslate"><span class="pre">I</span> <span class="pre">=</span> <span class="pre">Fcal·A_k·n_k</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ForwardMap.lean:56</span></code></p></td>
+<td><p><strong>REDUCED</strong> (not error)</p></td>
+<td><p>Structurally identical to Tognoni 2010 <code class="docutils literal notranslate"><span class="pre">I_ij</span> <span class="pre">=</span> <span class="pre">F·(A_ij</span> <span class="pre">g_i/U)·n·exp(−E_i/kT)</span></code>. Same single root cause as the λ flag: photon-rate convention, λ folded into <code class="docutils literal notranslate"><span class="pre">Fcal</span></code>. Internally proof-valid; diverges from the measurement-standard <code class="docutils literal notranslate"><span class="pre">ln(Iλ/gA)</span></code> ordinate only at the data interface. Every prefactor (<code class="docutils literal notranslate"><span class="pre">hc</span></code>, <code class="docutils literal notranslate"><span class="pre">4π</span></code>, path length <code class="docutils literal notranslate"><span class="pre">L</span></code>, solid-angle/efficiency) <strong>is</strong> line-independent and legitimately collapsible; <code class="docutils literal notranslate"><span class="pre">λ_ki</span></code> is the <strong>sole exception</strong> because <code class="docutils literal notranslate"><span class="pre">hc/λ_ki</span> <span class="pre">=</span> <span class="pre">E_k</span> <span class="pre">−</span> <span class="pre">E_i</span></code> is energy-dependent.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Saha factor</strong> <code class="docutils literal notranslate"><span class="pre">S(T)</span> <span class="pre">=</span> <span class="pre">2·(U_{z+1}/U_z)·(2π</span> <span class="pre">m_e</span> <span class="pre">k_B</span> <span class="pre">T/h²)^{3/2}·exp(−χ/k_B</span> <span class="pre">T)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Saha.lean:68</span></code></p></td>
+<td><p><strong>CORRECT</strong></p></td>
+<td><p>Matches the Saha–Eggert equation in Griem, <em>Principles of Plasma Spectroscopy</em>, and the standard astrophysics/LIBS form <code class="docutils literal notranslate"><span class="pre">n_e·n_{z+1}/n_z</span> <span class="pre">=</span> <span class="pre">2(U_{z+1}/U_z)(2π</span> <span class="pre">m_e</span> <span class="pre">k_B</span> <span class="pre">T/h²)^{3/2}</span> <span class="pre">exp(−χ/kT)</span></code>. Factor-by-factor: leading <strong>2</strong> = electron spin statistical weight <code class="docutils literal notranslate"><span class="pre">2g_e</span></code> (<code class="docutils literal notranslate"><span class="pre">g_e=1</span></code>); <code class="docutils literal notranslate"><span class="pre">(2π</span> <span class="pre">m_e</span> <span class="pre">k_B</span> <span class="pre">T/h²)^{3/2}</span></code> = inverse-cube thermal de Broglie wavelength, dimensionally <code class="docutils literal notranslate"><span class="pre">m⁻³</span></code> (correct number-density dimension); U-ratio orientation (higher stage in numerator) correct; <code class="docutils literal notranslate"><span class="pre">exp(−χ/kT)</span></code> sign correct (ionization costs energy → suppresses higher stage). The cleanest of the three — no missing or wrong factor.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Self-absorption</strong> <code class="docutils literal notranslate"><span class="pre">SA(τ)</span> <span class="pre">=</span> <span class="pre">(1</span> <span class="pre">−</span> <span class="pre">e^{−τ})/τ</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SelfAbsorption.lean:52</span></code></p></td>
+<td><p><strong>CORRECT</strong>, and unusually well-derived</p></td>
+<td><p>Standard <strong>line-integrated homogeneous-slab curve-of-growth escape factor</strong>: from radiative transfer <code class="docutils literal notranslate"><span class="pre">I</span> <span class="pre">=</span> <span class="pre">S(1−e^{−τ})</span> <span class="pre">→</span> <span class="pre">Sτ</span></code> (thin), so dimming relative to thin emission is <code class="docutils literal notranslate"><span class="pre">(1−e^{−τ})/τ</span></code> (→1 as τ→0, →1/τ as τ→∞). Notably the spec does <strong>not assume</strong> SA — it defines <code class="docutils literal notranslate"><span class="pre">slabIntensity</span> <span class="pre">S</span> <span class="pre">τ</span> <span class="pre">=</span> <span class="pre">S(1−e^{−τ})</span></code> from radiative transfer and <strong>proves</strong> <code class="docutils literal notranslate"><span class="pre">slabIntensity_eq_thin_mul_SA</span></code>, i.e. SA is <em>derived</em> as the genuine emergent/thin ratio. Also proves SA ∈ (0,1], the downward composition-bias direction, and exact left-invertibility <code class="docutils literal notranslate"><span class="pre">I_thin</span> <span class="pre">=</span> <span class="pre">I_meas/SA(τ)</span></code>. Citations: Tatum <em>Stellar Atmospheres</em> Ch.11 (Curve of Growth); ADAS escape-factor formalism; Aragón &amp; Aguilera (2008) growth-curve. <strong>Caveat (modeling-fidelity note, not an error):</strong> <code class="docutils literal notranslate"><span class="pre">(1−e^{−τ})/τ</span></code> is the line-integrated <em>uniform-slab, flat-line</em> escape factor — a homogeneous-plasma idealization, distinct from the wavelength-resolved <code class="docutils literal notranslate"><span class="pre">τ(λ)</span></code> Aguilera–Aragón / duplicating-mirror growth curve (whose core saturates as <code class="docutils literal notranslate"><span class="pre">√(ln</span> <span class="pre">τ)</span></code>, not <code class="docutils literal notranslate"><span class="pre">1/τ</span></code>). That is the textbook leading-order optically-thick correction, not a mistake.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Cross-cutting conclusion:</strong> Of the four audited formulas, <strong>only the forward-intensity λ-handling shares the flagged issue</strong>, and even there it is an internally-consistent convention choice that keeps every verified theorem valid. Saha is correct; self-absorption is correct and well-derived. <strong>No broken theorem exists in the spec.</strong></p>
+</section>
+<hr class="docutils" />
+<section id="the-fixes">
+<h2>4. The fixes<a class="headerlink" href="#the-fixes" title="Link to this heading"></a></h2>
+<section id="a-test-bridge-i-our-i-spec-with-distinct-per-line-confirmed-correct-and-sensitive">
+<h3>(a) Test bridge — <code class="docutils literal notranslate"><span class="pre">I_our</span> <span class="pre">=</span> <span class="pre">I_spec</span> <span class="pre">/</span> <span class="pre">λ</span></code> with <strong>distinct</strong> per-line λ — CONFIRMED CORRECT and λ-sensitive<a class="headerlink" href="#a-test-bridge-i-our-i-spec-with-distinct-per-line-confirmed-correct-and-sensitive" title="Link to this heading"></a></h3>
+<p>To regression-test the pipeline (energy convention, <code class="docutils literal notranslate"><span class="pre">ln(Iλ/gA)</span></code>) against the spec’s reduced fixtures (photon-rate, <code class="docutils literal notranslate"><span class="pre">ln(I/gA)</span></code>), convert via <code class="docutils literal notranslate"><span class="pre">I_our</span> <span class="pre">=</span> <span class="pre">I_spec</span> <span class="pre">/</span> <span class="pre">λ</span></code> with <strong>distinct per-line λ</strong>.</p>
+<p><strong>Why it is exact (algebraic identity, not a tolerance match):</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ln(I_our·λ/(gA)) = ln((I_spec/λ)·λ/(gA)) = ln(I_spec/(gA))
+</pre></div>
+</div>
+<p>The λ cancels point-by-point for <strong>any</strong> λ vector, so slope (→T), intercept (→N/U→concentration), and composition are reproduced <strong>EXACTLY</strong> (verified to 1e-12). <code class="docutils literal notranslate"><span class="pre">hc/4π</span></code> lives in <code class="docutils literal notranslate"><span class="pre">Fcal</span></code>/<code class="docutils literal notranslate"><span class="pre">F</span></code> and cancels in both slope and closure, so it never appears in the bridge.</p>
+<p><strong>Why distinct λ is load-bearing (verified numerically):</strong></p>
+<ul class="simple">
+<li><p><strong>λ-drop bug</strong> (pipeline forgets the λ factor): ordinate gains a λ-dependent <code class="docutils literal notranslate"><span class="pre">−ln</span> <span class="pre">λ</span></code> term that, since λ correlates with <code class="docutils literal notranslate"><span class="pre">E_k</span></code>, <strong>tilts the slope</strong> → wrong T. <strong>CAUGHT</strong> (slope −0.689 vs spec −0.419).</p></li>
+<li><p><strong>λ² bug</strong> (<code class="docutils literal notranslate"><span class="pre">I·λ²/gA</span></code>): extra <code class="docutils literal notranslate"><span class="pre">+ln</span> <span class="pre">λ</span></code> → slope biased → <strong>CAUGHT</strong>.</p></li>
+<li><p><strong>per-line wrong-units bug</strong> (nm vs m mismatched between intensity-conversion and ordinate): breaks per-line cancellation → <strong>CAUGHT</strong>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">λ</span> <span class="pre">=</span> <span class="pre">1</span></code> (uniform) fixtures are BLIND</strong> to all of the above — every λ-bug cancels uniformly and the test passes spuriously. <strong>Fixtures must carry distinct, realistic, E_k-correlated per-line λ — never λ=1.</strong></p></li>
+</ul>
+<p><strong>Test-design refinements (both required):</strong></p>
+<ol class="arabic simple">
+<li><p>Assert against <strong>slope/T, intercept, AND recovered composition</strong> — not slope alone. A self-cancelling bug (divide input by λ <em>and</em> multiply ordinate by λ) is slope-invariant but is caught by the intercept/composition leg (already pinned by the spec’s <code class="docutils literal notranslate"><span class="pre">closure</span></code>/<code class="docutils literal notranslate"><span class="pre">ols</span></code> fixtures).</p></li>
+<li><p>Document the <strong>uniform global λ-rescale as an intended, uncatchable blind spot</strong> — it is absorbed into <code class="docutils literal notranslate"><span class="pre">Fcal</span></code> and cancels in closure (<code class="docutils literal notranslate"><span class="pre">Σ</span> <span class="pre">C_s</span> <span class="pre">=</span> <span class="pre">1</span></code>); analytically harmless, not a test gap.</p></li>
+</ol>
+<p><strong>Insertion point:</strong> the oracle’s <code class="docutils literal notranslate"><span class="pre">oracle/check_fixtures.py</span></code> IMPL block. Swap <code class="docutils literal notranslate"><span class="pre">recover_T</span></code>, <code class="docutils literal notranslate"><span class="pre">ols_density</span></code>, <code class="docutils literal notranslate"><span class="pre">classic_density</span></code> to call the pipeline with <code class="docutils literal notranslate"><span class="pre">I_our[k]</span> <span class="pre">=</span> <span class="pre">I_spec[k]/λ[k]</span></code>; add a per-element <code class="docutils literal notranslate"><span class="pre">&quot;lambda&quot;</span></code> array (distinct, E_k-correlated) to <code class="docutils literal notranslate"><span class="pre">oracle/fixtures.json</span></code> if absent; assert against the same fixture targets at <code class="docutils literal notranslate"><span class="pre">rtol</span> <span class="pre">1e-6</span></code>.</p>
+</section>
+<section id="b-should-the-spec-add-an-energy-intensity-forward-variant-yes-lightweight-recommended">
+<h3>(b) Should the spec add an energy-intensity forward variant? — YES (lightweight, recommended)<a class="headerlink" href="#b-should-the-spec-add-an-energy-intensity-forward-variant-yes-lightweight-recommended" title="Link to this heading"></a></h3>
+<p>The spec is <strong>acceptable as-is for correctness</strong> — its inverse theorems are dimensionless and the test bridge alone closes the loop. But adding a thin <strong>energy-intensity sibling</strong> is recommended because it (i) permanently removes the reviewer’s false-positive by making <code class="docutils literal notranslate"><span class="pre">hc/4πλ</span></code> explicit and machine-proving the λ-form Boltzmann plot is the <em>same</em> affine line; (ii) is ~30 lines reusing <code class="docutils literal notranslate"><span class="pre">population</span></code> verbatim with <strong>no new axioms</strong> (pure <code class="docutils literal notranslate"><span class="pre">log</span></code>/<code class="docutils literal notranslate"><span class="pre">ring</span></code>, preserving <code class="docutils literal notranslate"><span class="pre">{propext,</span> <span class="pre">Classical.choice,</span> <span class="pre">Quot.sound}</span></code>); (iii) documents <em>in machine-checked form why the two conventions agree</em> — the exact artifact this review exists to produce. <strong>Do not rewrite the core</strong> <code class="docutils literal notranslate"><span class="pre">lineIntensity</span> <span class="pre">=</span> <span class="pre">Fcal·A·n</span></code> — every downstream theorem rests on it; add the energy form as a <em>sibling</em> (<code class="docutils literal notranslate"><span class="pre">ForwardMapEnergy.lean</span></code> or a new section) that reduces to it.</p>
+<p><strong>Prompt-ready addendum for the cflibs-formal agent:</strong></p>
+<blockquote>
+<div><p>Add an energy-intensity forward variant that makes the <code class="docutils literal notranslate"><span class="pre">hc/4πλ</span></code> photon-energy factor explicit and proves the wavelength-form Boltzmann plot agrees with the existing reduced (Fcal-absorbed) one. This closes a reviewer flag that the spec’s <code class="docutils literal notranslate"><span class="pre">ln(I/(g·A))</span></code> ordinate “omits λ” — it doesn’t (λ is inside <code class="docutils literal notranslate"><span class="pre">Fcal</span></code>), but make it explicit and machine-checked. Keep the existing <code class="docutils literal notranslate"><span class="pre">lineIntensity</span> <span class="pre">=</span> <span class="pre">Fcal·A·n</span></code> as the canonical map; add the energy variant as a sibling that reduces to it. <strong>No new axioms; pure <code class="docutils literal notranslate"><span class="pre">log</span></code>/<code class="docutils literal notranslate"><span class="pre">ring</span></code>.</strong></p>
+<div class="highlight-lean notranslate"><div class="highlight"><pre><span></span><span class="sd">/-- Energy-intensity forward map: I = (hc/(4π·λ))·A_k·n_k·Fgeo, with explicit</span>
+<span class="sd">    per-line wavelength λ : ι → ℝ and geometry/calibration Fgeo (NO λ inside). -/</span>
+<span class="kd">noncomputable</span><span class="w"> </span><span class="kd">def</span><span class="w"> </span><span class="n">lineIntensityEnergy</span><span class="w"> </span><span class="o">(</span><span class="n">hc</span><span class="w"> </span><span class="n">fourPi</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ℝ</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="n">Fgeo</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ℝ</span><span class="o">)</span>
+<span class="w">    </span><span class="o">(</span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ι</span><span class="w"> </span><span class="bp">→</span><span class="w"> </span><span class="n">ℝ</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">k</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ι</span><span class="o">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ℝ</span><span class="w"> </span><span class="o">:=</span>
+<span class="w">  </span><span class="o">(</span><span class="n">hc</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">fourPi</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">k</span><span class="o">))</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">population</span><span class="w"> </span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">Fgeo</span>
+
+<span class="sd">/-- Reduction: with Fcal := hc·Fgeo/(4π·λ_k) (PER-LINE), lineIntensityEnergy = lineIntensity. -/</span>
+<span class="kd">theorem</span><span class="w"> </span><span class="n">lineIntensityEnergy_eq_lineIntensity</span>
+<span class="w">    </span><span class="o">(</span><span class="n">hc</span><span class="w"> </span><span class="n">fourPi</span><span class="w"> </span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="n">Fgeo</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ℝ</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ι</span><span class="w"> </span><span class="bp">→</span><span class="w"> </span><span class="n">ℝ</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">k</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ι</span><span class="o">)</span>
+<span class="w">    </span><span class="o">(</span><span class="n">h</span><span class="bp">λ</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">k</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">hfp</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">fourPi</span><span class="o">)</span><span class="w"> </span><span class="o">:</span>
+<span class="w">    </span><span class="n">lineIntensityEnergy</span><span class="w"> </span><span class="n">hc</span><span class="w"> </span><span class="n">fourPi</span><span class="w"> </span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="n">Fgeo</span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="bp">=</span><span class="w"> </span><span class="n">lineIntensity</span><span class="w"> </span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="o">(</span><span class="n">hc</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">Fgeo</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">fourPi</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">k</span><span class="o">))</span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="kd">by</span>
+<span class="w">  </span><span class="n">unfold</span><span class="w"> </span><span class="n">lineIntensityEnergy</span><span class="w"> </span><span class="n">lineIntensity</span><span class="bp">;</span><span class="w"> </span><span class="n">field_simp</span><span class="bp">;</span><span class="w"> </span><span class="n">ring</span>
+
+<span class="sd">/-- WAVELENGTH-FORM Boltzmann plot: ln(I·λ/(g·A)) is affine in E_k with slope −1/(kB·T),</span>
+<span class="sd">    intercept ln(hc·Fgeo·N/(4π·U)). The explicit λ cancels the 1/λ photon-energy factor —</span>
+<span class="sd">    the real-LIBS / energy form, matching the CF-LIBS-improved pipeline y = ln(I·λ/(g·A)). -/</span>
+<span class="kd">theorem</span><span class="w"> </span><span class="n">boltzmann_plot_intensity_wavelength</span><span class="w"> </span><span class="o">[</span><span class="n">Nonempty</span><span class="w"> </span><span class="n">ι</span><span class="o">]</span>
+<span class="w">    </span><span class="o">{</span><span class="n">hc</span><span class="w"> </span><span class="n">fourPi</span><span class="w"> </span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="n">Fgeo</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ℝ</span><span class="o">}</span><span class="w"> </span><span class="o">{</span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ι</span><span class="w"> </span><span class="bp">→</span><span class="w"> </span><span class="n">ℝ</span><span class="o">}</span>
+<span class="w">    </span><span class="o">(</span><span class="n">hg</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="bp">∀</span><span class="w"> </span><span class="n">k</span><span class="o">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="n">k</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">hN</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">N</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">hhc</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">hc</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">hfp</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">fourPi</span><span class="o">)</span>
+<span class="w">    </span><span class="o">(</span><span class="n">hFgeo</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">Fgeo</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">hA</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="bp">∀</span><span class="w"> </span><span class="n">k</span><span class="o">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">k</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">h</span><span class="bp">λ</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="bp">∀</span><span class="w"> </span><span class="n">k</span><span class="o">,</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="bp">&lt;</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">k</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">k</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ι</span><span class="o">)</span><span class="w"> </span><span class="o">:</span>
+<span class="w">    </span><span class="n">Real.log</span><span class="w"> </span><span class="o">(</span><span class="n">lineIntensityEnergy</span><span class="w"> </span><span class="n">hc</span><span class="w"> </span><span class="n">fourPi</span><span class="w"> </span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="n">Fgeo</span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">g</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">k</span><span class="o">))</span>
+<span class="w">      </span><span class="bp">=</span><span class="w"> </span><span class="n">Real.log</span><span class="w"> </span><span class="o">(</span><span class="n">hc</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">Fgeo</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">N</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">fourPi</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">partitionFunction</span><span class="w"> </span><span class="n">kB</span><span class="w"> </span><span class="n">T</span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="n">E</span><span class="o">))</span><span class="w"> </span><span class="bp">−</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">kB</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">T</span><span class="o">)</span>
+<span class="c1">-- NOTE: λ does NOT cancel here (Fcal carries 1/λ). Expand directly: I·λ = (hc·Fgeo/4π)·A·n,</span>
+<span class="c1">-- then mirror boltzmann_plot_intensity (field_simp; Real.log_mul; Real.log_exp; ring).</span>
+
+<span class="sd">/-- Temperature from two lines, wavelength form: slope of ln(I·λ/(g·A)) vs E recovers</span>
+<span class="sd">    1/(kB·T) exactly; hc, Fgeo, λ, N, U, g, A all cancel. -/</span>
+<span class="kd">theorem</span><span class="w"> </span><span class="n">temperature_from_two_lines_wavelength</span><span class="w"> </span><span class="o">[</span><span class="n">Nonempty</span><span class="w"> </span><span class="n">ι</span><span class="o">]</span><span class="w"> </span><span class="o">(</span><span class="c">/-</span><span class="cm"> same hyps -/</span><span class="o">)</span>
+<span class="w">    </span><span class="o">(</span><span class="n">i</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">ι</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="n">hE</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="bp">≠</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">j</span><span class="o">)</span><span class="w"> </span><span class="o">:</span>
+<span class="w">    </span><span class="o">(</span><span class="n">Real.log</span><span class="w"> </span><span class="o">(</span><span class="n">lineIntensityEnergy</span><span class="w"> </span><span class="c">/-</span><span class="cm">…-/</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">g</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">j</span><span class="o">))</span>
+<span class="w">       </span><span class="bp">−</span><span class="w"> </span><span class="n">Real.log</span><span class="w"> </span><span class="o">(</span><span class="n">lineIntensityEnergy</span><span class="w"> </span><span class="c">/-</span><span class="cm">…-/</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">lam</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">g</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">A</span><span class="w"> </span><span class="n">i</span><span class="o">)))</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">E</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="bp">−</span><span class="w"> </span><span class="n">E</span><span class="w"> </span><span class="n">j</span><span class="o">)</span>
+<span class="w">      </span><span class="bp">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="bp">/</span><span class="w"> </span><span class="o">(</span><span class="n">kB</span><span class="w"> </span><span class="bp">*</span><span class="w"> </span><span class="n">T</span><span class="o">)</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="kd">by</span>
+<span class="w">  </span><span class="n">rw</span><span class="w"> </span><span class="o">[</span><span class="n">boltzmann_plot_intensity_wavelength</span><span class="w"> </span><span class="c">/-</span><span class="cm">…-/</span><span class="o">]</span><span class="bp">;</span><span class="w"> </span><span class="n">field_simp</span><span class="bp">;</span><span class="w"> </span><span class="n">ring</span>
+</pre></div>
+</div>
+<p>Then: (1) update the <code class="docutils literal notranslate"><span class="pre">ForwardMap.lean</span></code> docstring and <code class="docutils literal notranslate"><span class="pre">CONTEXT.md</span></code> “Boltzmann plot” domain line to document <strong>both</strong> conventions, citing <strong>Khelladi et al., EPJ AP 101 (2023) ap230072</strong> (λ-form) and <strong>Ciucci et al., Appl. Spectrosc. 53 (1999) 960</strong> (F-absorbed form); delete/repair the loose claim that a <em>scalar</em> <code class="docutils literal notranslate"><span class="pre">Fcal</span></code> “absorbs <code class="docutils literal notranslate"><span class="pre">hc/4π</span> <span class="pre">λ_ki</span></code>” — state plainly that the per-line <code class="docutils literal notranslate"><span class="pre">λ_ki</span></code> is the load-bearing term that cancels only when λ is constant across the fitted line set. (2) Add an oracle fixture instantiating <code class="docutils literal notranslate"><span class="pre">temperature_from_two_lines_wavelength</span></code> with <strong>distinct per-line λ</strong> so the numerical bridge regression-tests against a <em>proven</em> λ-form theorem, not just the reduced one.</p>
+</div></blockquote>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Item</p></th>
+<th class="head"><p>Verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Pipeline <code class="docutils literal notranslate"><span class="pre">ln(Iλ/gA)</span></code></p></td>
+<td><p><strong>CORRECT</strong> — literature standard (Aragón &amp; Aguilera 2008; Alrebdi 2022; Khelladi/EPJ AP 2023; D2JA00241H 2022). No change.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Spec <code class="docutils literal notranslate"><span class="pre">ln(I/gA)</span></code></p></td>
+<td><p><strong>VALID UNIT-REDUCED FORM, NOT an error.</strong> Reviewer’s “fundamental error” flag is a <strong>FALSE POSITIVE</strong>. Photon-rate / F-absorbed convention (Ciucci 1999; Tognoni 2010); proof-valid.</p></td>
+</tr>
+<tr class="row-even"><td><p>Physics error?</p></td>
+<td><p><strong>NEITHER repo.</strong> Spec’s only defect is a <em>loose docstring</em> (scalar Fcal “absorbs hc/4πλ_ki”), which breaks no theorem.</p></td>
+</tr>
+<tr class="row-odd"><td><p>λ matters for T &amp; composition?</p></td>
+<td><p><strong>YES, for both</strong>, whenever λ varies across the fit (the real multi-line case). ~1.0 ln(λ) spread over 240–660 nm; bias tilts slope (T) AND intercept (composition). Cancels only for constant-λ / photon-rate / uniform global rescale.</p></td>
+</tr>
+<tr class="row-even"><td><p>Saha factor</p></td>
+<td><p><strong>CORRECT</strong> (Saha–Eggert; Griem).</p></td>
+</tr>
+<tr class="row-odd"><td><p>Self-absorption <code class="docutils literal notranslate"><span class="pre">(1−e^{−τ})/τ</span></code></p></td>
+<td><p><strong>CORRECT</strong>, derived not assumed; uniform-slab idealization (documented scope).</p></td>
+</tr>
+<tr class="row-even"><td><p>Test bridge</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">I_our</span> <span class="pre">=</span> <span class="pre">I_spec/λ</span></code>, <strong>distinct E_k-correlated per-line λ (never λ=1)</strong>, assert slope+intercept+composition. Exact (1e-12) and λ-bug-sensitive.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Spec energy variant</p></td>
+<td><p><strong>Recommended</strong>, lightweight (~30 lines, no new axioms). Prompt-ready addendum above.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Relevant paths: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann.py</span></code> (lines 56, 123, 689, 1400), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann_jax.py:11</span></code>, <code class="docutils literal notranslate"><span class="pre">/home/brian/code/cflibs-formal/CflibsFormal/ForwardMap.lean</span></code>, <code class="docutils literal notranslate"><span class="pre">/home/brian/code/cflibs-formal/CflibsFormal/Saha.lean</span></code>, <code class="docutils literal notranslate"><span class="pre">/home/brian/code/cflibs-formal/CflibsFormal/SelfAbsorption.lean</span></code>, <code class="docutils literal notranslate"><span class="pre">/home/brian/code/cflibs-formal/oracle/check_fixtures.py</span></code>, <code class="docutils literal notranslate"><span class="pre">/home/brian/code/cflibs-formal/oracle/fixtures.json</span></code>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

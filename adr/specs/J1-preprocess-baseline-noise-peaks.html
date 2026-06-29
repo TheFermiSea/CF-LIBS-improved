@@ -1,0 +1,194 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J1 Implementation Spec — Jittable Baseline, Noise, and Exact Peak Detection &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J1 Implementation Spec — Jittable Baseline, Noise, and Exact Peak Detection</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J1-preprocess-baseline-noise-peaks.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j1-implementation-spec-jittable-baseline-noise-and-exact-peak-detection">
+<h1>J1 Implementation Spec — Jittable Baseline, Noise, and Exact Peak Detection<a class="headerlink" href="#j1-implementation-spec-jittable-baseline-noise-and-exact-peak-detection" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J1 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §4 rows 1–2, §3 C1 · <strong>Track:</strong> A (front-end) · <strong>Depends:</strong> J0 · <strong>Estimated effort:</strong> 9–12 pd (baselines 3–4, noise 0.5, exact find_peaks 5–7, integration + dual-detector parity 1)</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Port <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/preprocessing.py</span></code> (748 lines) — baseline estimation (4 methods + AUTO), noise estimation, and peak detection — into <code class="docutils literal notranslate"><span class="pre">jitpipe/preprocess.py</span></code> + <code class="docutils literal notranslate"><span class="pre">jitpipe/detect.py</span></code> as fixed-shape fp64 kernels.</p></li>
+<li><p><strong>One exact-<code class="docutils literal notranslate"><span class="pre">find_peaks</span></code> kernel, two parameterizations.</strong> The front-end currently runs <em>two different</em> peak detectors: calibration uses noise-calibrated <code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code> (<code class="docutils literal notranslate"><span class="pre">preprocessing.py:619</span></code>); line matching uses the max-normalized <code class="docutils literal notranslate"><span class="pre">_find_peaks</span></code> (<code class="docutils literal notranslate"><span class="pre">identify/line_detection.py:2424</span></code>, <code class="docutils literal notranslate"><span class="pre">prominence=threshold/2</span></code> at <code class="docutils literal notranslate"><span class="pre">:2459</span></code>). The rewrite implements scipy’s semantics once and instantiates both.</p></li>
+<li><p>Per ADR-0004 §3 C1: <strong>exact scipy semantics, byte-identical peak index lists</strong> — not the vision-NMS approximation. Every downstream stage keys off peak identity.</p></li>
+</ul>
+</section>
+<section id="current-algorithm-and-jit-breakers-file-line">
+<h2>2. Current algorithm and jit-breakers (file:line)<a class="headerlink" href="#current-algorithm-and-jit-breakers-file-line" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code> (<code class="docutils literal notranslate"><span class="pre">preprocessing.py:619</span></code>): enum dispatch on <code class="docutils literal notranslate"><span class="pre">BaselineMethod</span></code> (<code class="docutils literal notranslate"><span class="pre">:684-698</span></code>; AUTO probe at <code class="docutils literal notranslate"><span class="pre">:363-414</span></code>) → baselines: MEDIAN = <code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code>, window from <code class="docutils literal notranslate"><span class="pre">window_nm/median(diff(wl))</span></code> forced odd (<code class="docutils literal notranslate"><span class="pre">:48-57</span></code>); SNIP = LLS transform + fixed 40-iteration clipping (<code class="docutils literal notranslate"><span class="pre">:157-170</span></code>) + inverse (<code class="docutils literal notranslate"><span class="pre">:175-180</span></code>); ALS = <code class="docutils literal notranslate"><span class="pre">scipy.sparse</span></code> IRLS <code class="docutils literal notranslate"><span class="pre">spsolve(W</span> <span class="pre">+</span> <span class="pre">λDᵀD)</span></code>, ≤20 iterations with convergence break (<code class="docutils literal notranslate"><span class="pre">:261-277</span></code>); PERCENTILE = <code class="docutils literal notranslate"><span class="pre">percentile_filter</span></code> (<code class="docutils literal notranslate"><span class="pre">:317</span></code>) → <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code> (<code class="docutils literal notranslate"><span class="pre">:320</span></code>): 3-iteration sigma-clipped MAD with early breaks and a <strong>shrinking residual array</strong> (<code class="docutils literal notranslate"><span class="pre">:340-349</span></code>) + percentile floor (<code class="docutils literal notranslate"><span class="pre">:357-358</span></code>) → <code class="docutils literal notranslate"><span class="pre">detect_peaks</span></code> (<code class="docutils literal notranslate"><span class="pre">:524</span></code>): <code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks(height=noise*4,</span> <span class="pre">prominence=noise*1.5,</span> <span class="pre">distance=...)</span></code> (<code class="docutils literal notranslate"><span class="pre">:595-600</span></code>), distance from resolving power or 3 px (<code class="docutils literal notranslate"><span class="pre">:417-449</span></code>) → cosmic-ray FWHM filter via <code class="docutils literal notranslate"><span class="pre">peak_widths(rel_height=0.5)</span></code> with try/except fallback (<code class="docutils literal notranslate"><span class="pre">:452-481</span></code>) → optional second-derivative confirmation, Python per-peak loop (<code class="docutils literal notranslate"><span class="pre">:484-521</span></code>).</p>
+<p>Breakers: the four scipy/C routines; ALS early-break (<code class="docutils literal notranslate"><span class="pre">:272</span></code>); shrinking arrays under boolean indexing (<code class="docutils literal notranslate"><span class="pre">:349</span></code>); <code class="docutils literal notranslate"><span class="pre">find_peaks</span></code> variable-length output, <strong>non-local prominence</strong>, <strong>greedy height-order distance-NMS</strong>, plateau-midpoint indices (all three named the canonical JAX trap in <code class="docutils literal notranslate"><span class="pre">docs/jax-port/line-detection-consultation.md:119-123</span></code>); per-peak Python loops. Non-breakers in disguise: window sizes derived from <code class="docutils literal notranslate"><span class="pre">median(diff(wl))</span></code> (<code class="docutils literal notranslate"><span class="pre">:48-56</span></code>) and SNIP pad <code class="docutils literal notranslate"><span class="pre">min(40,</span> <span class="pre">len-1)</span></code> (<code class="docutils literal notranslate"><span class="pre">:163</span></code>) — the wavelength axis is constant per bucket (ADR-0004 §5.2), so these are host-computed static ints.</p>
+</section>
+<section id="redesign">
+<h2>3. Redesign<a class="headerlink" href="#redesign" title="Link to this heading"></a></h2>
+<p><strong>Baselines (<code class="docutils literal notranslate"><span class="pre">jitpipe/preprocess.py</span></code>):</strong></p>
+<ul class="simple">
+<li><p>SNIP: direct port — fixed 40 iterations of <code class="docutils literal notranslate"><span class="pre">v</span> <span class="pre">=</span> <span class="pre">min(v,</span> <span class="pre">(v[i−p]+v[i+p])/2)</span></code> with reflect pad; already pure vector ops; the canonical jit baseline.</p></li>
+<li><p>MEDIAN / PERCENTILE: sliding-window gather (N, W) + <code class="docutils literal notranslate"><span class="pre">jnp.sort</span></code> + gather at the median/percentile rank, row-chunked via <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> (caps the silva2022 worst case 53,717×1,001×8 B = 430 MB at ~33 MB live).</p></li>
+<li><p>ALS: fixed 20 IRLS iterations; early-break → converged-flag <code class="docutils literal notranslate"><span class="pre">where</span></code>-freeze (identical converged result); inner solve of the <strong>pentadiagonal</strong> SPD system <code class="docutils literal notranslate"><span class="pre">(W</span> <span class="pre">+</span> <span class="pre">λDᵀD)</span> <span class="pre">z</span> <span class="pre">=</span> <span class="pre">Wy</span></code> via banded LDLᵀ forward/back substitution as a <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> recurrence — exact and deterministic; sequential in N but B-wide under vmap. (Matrix-free CG rejected: λ=1e6 is too ill-conditioned for a fixed small iteration count.)</p></li>
+<li><p>AUTO: probe runs unconditionally; MEDIAN/ALS choice is a branchless <code class="docutils literal notranslate"><span class="pre">where</span></code> (or resolved host-side per dataset).</p></li>
+<li><p>Response-curve multiply: host loads/interpolates (<code class="docutils literal notranslate"><span class="pre">preprocess/response_correction.py</span></code>); kernel sees the per-channel multiplier array only.</p></li>
+</ul>
+<p><strong>Noise:</strong> masked sigma-clip — fixed 3 iterations over an (N,) keep-mask; masked median via +inf-pad sort + gather at <code class="docutils literal notranslate"><span class="pre">(count−1)//2</span></code>; break conditions freeze the mask via <code class="docutils literal notranslate"><span class="pre">where</span></code>. Exact parity.</p>
+<p><strong>Peak detection (<code class="docutils literal notranslate"><span class="pre">jitpipe/detect.py</span></code>) — exact <code class="docutils literal notranslate"><span class="pre">find_peaks</span></code> semantics, fixed shape:</strong></p>
+<ul class="simple">
+<li><p>local maxima with scipy plateau semantics (left strictly smaller; first differing right value smaller; plateau-midpoint index): run-boundary ids via <code class="docutils literal notranslate"><span class="pre">cumsum(x[i]≠x[i+1])</span></code> + per-run edge gathers;</p></li>
+<li><p>height/threshold: masks;</p></li>
+<li><p><strong>prominence (wlen=None), exact:</strong> two precomputed range-query sparse tables (prefix max + min, (N, ⌈log2 N⌉) ≈ 7 MB at N=53,717); per candidate, binary-search the nearest strictly-higher sample each side via range-max queries (≤17 fixed steps); range-min over the enclosed interval gives the exact scipy base; fully vmapped over fixed candidate slots;</p></li>
+<li><p><strong>distance:</strong> scipy’s <code class="docutils literal notranslate"><span class="pre">_select_by_peak_distance</span></code> is exactly greedy keep/suppress in descending height order — port as a <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> over <code class="docutils literal notranslate"><span class="pre">P_cand_max=8192</span></code> height-sorted slots carrying a keep mask; exact, deterministic, B-wide under vmap;</p></li>
+<li><p>FWHM filter / <code class="docutils literal notranslate"><span class="pre">peak_widths(rel_height=0.5)</span></code>: bases from the prominence computation define the exact search ranges; first half-height crossing each side via boolean-cummax + linear interpolation — exact;</p></li>
+<li><p>second-derivative confirm: <code class="docutils literal notranslate"><span class="pre">np.gradient</span></code> = central differences; ±2 px window max — trivially vectorized;</p></li>
+<li><p>output: <code class="docutils literal notranslate"><span class="pre">(P_max,)</span></code> padded indices + validity mask + count + truncation flag (P_max = 2,048 calibration / 2,560 detection; observed maxima 1,412 / 2,350 — ADR-0004 §5.2).</p></li>
+</ul>
+</section>
+<section id="tolerance-contract">
+<h2>4. Tolerance contract<a class="headerlink" href="#tolerance-contract" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Baselines: SNIP/MEDIAN/PERCENTILE elementwise rtol 1e-12 (identical arithmetic; sort-based medians exact). ALS: <code class="docutils literal notranslate"><span class="pre">max|Δz|</span> <span class="pre">≤</span> <span class="pre">1e-6·scale(y)</span></code> (LDLᵀ vs spsolve round-off + frozen-iteration difference on early-converged spectra).</p></li>
+<li><p>Noise: exact (rtol 1e-12).</p></li>
+<li><p>Peak sets: <strong>byte-identical index lists</strong> vs scipy on the 32-spectrum corpus and randomized property tests, for both detector parameterizations, including plateau/tie corners. Documented fallback only if a corner survives: per-spectrum Jaccard ≥ 0.995 with each diff individually triaged.</p></li>
+<li><p>Downstream guard: scoreboard |ΔF1| ≤ 0.005 (via J8’s shadow harness once available).</p></li>
+<li><p>fp64 mandatory for this stage — the LLS exp/log round-trip and the λ=1e6 ALS Gram are the sensitive spots (ADR-0004 §5.3).</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria">
+<h2>5. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>All four baseline methods + AUTO at their contracts on the corpus fixtures; ALS frozen-iteration idempotence test.</p></li>
+<li><p>Peak-list equality (both parameterizations) on all 32 corpus spectra + ≥1,000 randomized property cases incl. crafted plateaus, equal-height ties, distance-suppression chains.</p></li>
+<li><p>jit + vmap (B=16) smoke; padding invariance (next pad size bit-identical on valid region); no-SQLite guard trivially green (stage takes arrays only).</p></li>
+<li><p>Truncation-flag behaviour verified by synthetic overflow fixture (&gt;P_max peaks).</p></li>
+<li><p>Performance note recorded: sequential NMS scan + ALS scan are the only O(N)-depth components — amortized at B≥16; single-spectrum-latency use stays on the reference path.</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>6. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_preprocess.py</span></code> (baselines + noise vs <code class="docutils literal notranslate"><span class="pre">preprocessing.py</span></code> on committed <code class="docutils literal notranslate"><span class="pre">.npz</span></code> fixtures, one per dataset + edge cases) and <code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_detect.py</span></code> (peak equality vs <code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> + <code class="docutils literal notranslate"><span class="pre">peak_widths</span></code>; property tests with hypothesis-style randomized inputs at fixed seeds; dual-parameterization parametrize). CPU x64, subsets &lt; 60 s.</p>
+</section>
+<section id="risks">
+<h2>7. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Plateau/tie semantics</strong> — the classic silent-divergence trap (consultation doc); mitigated by the exactness contract + property tests (the design implements scipy’s documented semantics, not an approximation).</p></li>
+<li><p>ALS banded-LDLᵀ scan is the long pole; validate against <code class="docutils literal notranslate"><span class="pre">spsolve</span></code> on random pentadiagonal SPD systems first.</p></li>
+</ul>
+</section>
+<section id="dependencies-files">
+<h2>8. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0 (snapshot/params/buckets). Enables J2 (calibration consumes the calibration-parameterized detector) and J3 (detection-parameterized). Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/preprocess.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/detect.py</span></code>, tests above. Reference files untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

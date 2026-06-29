@@ -1,0 +1,176 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J4 Implementation Spec — Fit Kernels: Line Selection, Boltzmann/SB-Graph, Closure &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J4 Implementation Spec — Fit Kernels: Line Selection, Boltzmann/SB-Graph, Closure</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J4-fit-kernels-selection-boltzmann-closure.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j4-implementation-spec-fit-kernels-line-selection-boltzmann-sb-graph-closure">
+<h1>J4 Implementation Spec — Fit Kernels: Line Selection, Boltzmann/SB-Graph, Closure<a class="headerlink" href="#j4-implementation-spec-fit-kernels-line-selection-boltzmann-sb-graph-closure" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J4 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §4 rows 5/6/9 · <strong>Track:</strong> B (back-end) · <strong>Depends:</strong> J0 · <strong>Estimated effort:</strong> 5–9 pd (selection 1–2, Boltzmann + SB-graph 3–5 incl. the Schur-equivalence property proof, closure 1–2)</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Implement <code class="docutils literal notranslate"><span class="pre">jitpipe/fit.py</span></code>: the three pure-algebra back-end stages as batched masked kernels over <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">E,</span> <span class="pre">N)</span></code> padded arrays (E ≤ E_max=32 elements, N ≤ 20 lines/element after selection per <code class="docutils literal notranslate"><span class="pre">physics/line_selection.py:146</span></code>). Reuse the existing bit-exact JAX twins verbatim where they exist; prove and exploit the SB-graph ≡ common-slope identity so <strong>no general lstsq is needed on device</strong>.</p>
+</section>
+<section id="line-selection-cflibs-inversion-physics-line-selection-py">
+<h2>2. Line selection (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code>)<a class="headerlink" href="#line-selection-cflibs-inversion-physics-line-selection-py" title="Link to this heading"></a></h2>
+<p><strong>Reference:</strong> <code class="docutils literal notranslate"><span class="pre">LineSelector.select</span></code> (<code class="docutils literal notranslate"><span class="pre">:176-239</span></code>): score = SNR × (1/σ_atomic) × isolation (<code class="docutils literal notranslate"><span class="pre">:322-360</span></code>); isolation <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">−</span> <span class="pre">exp(−Δλ_min/0.1</span> <span class="pre">nm)</span></code> from an O(L²) Python loop (<code class="docutils literal notranslate"><span class="pre">:362-389</span></code>); sequential gates (<code class="docutils literal notranslate"><span class="pre">:241-264</span></code>): SNR &lt; min_snr; resonance (default off, <code class="docutils literal notranslate"><span class="pre">:118-121,143</span></code>); isolation &lt; 0.5; per-element stable sort + top-K=20 truncation (<code class="docutils literal notranslate"><span class="pre">:266-290</span></code>); energy-spread/min-lines are warning strings only (<code class="docutils literal notranslate"><span class="pre">:292-320</span></code>). Breakers: variable-length lists, dict grouping (<code class="docutils literal notranslate"><span class="pre">:217-219</span></code>), Python sort whose stable-tie order feeds truncation (<code class="docutils literal notranslate"><span class="pre">:276</span></code>), reason strings, resonance-key sets (<code class="docutils literal notranslate"><span class="pre">:337,344</span></code>).</p>
+<p><strong>Redesign:</strong> pure mask transform on <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">L)</span></code> arrays (wl, I, σ_I, E_k, element-idx, resonance, σ_atomic from snapshot). Isolation = masked pairwise |Δλ| min (L is a few hundred) or sort-based neighbour diff. Gates = boolean AND. Per-element top-K via <code class="docutils literal notranslate"><span class="pre">jax.lax.top_k</span></code> with static K=20 producing a fixed <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">E,</span> <span class="pre">N)</span></code> selection mask consumed directly by the fit (the list form is never materialised). Reasons → uint8 codes decoded host-side; energy-spread/min-lines → numeric per-element diagnostics (<code class="docutils literal notranslate"><span class="pre">spread_ev</span> <span class="pre">(B,E)</span></code>, <code class="docutils literal notranslate"><span class="pre">n_valid</span> <span class="pre">(B,E)</span></code>) thresholded host-side.</p>
+<p><strong>Contract:</strong> exact selected-set equality for tie-free inputs; deterministic tiebreak for ties = lower original index wins (matches Python stable sort), encoded by lexicographic packing (score, −index); scores rtol 1e-12.</p>
+</section>
+<section id="boltzmann-fitters-sb-graph">
+<h2>3. Boltzmann fitters + SB-graph<a class="headerlink" href="#boltzmann-fitters-sb-graph" title="Link to this heading"></a></h2>
+<p><strong>Reference layers:</strong> (a) per-element robust fitters, <code class="docutils literal notranslate"><span class="pre">physics/boltzmann.py</span></code>: sigma-clip (<code class="docutils literal notranslate"><span class="pre">:326-413</span></code>, ≤10 iterations, mask shrinkage <code class="docutils literal notranslate"><span class="pre">:347-349</span></code>, early breaks <code class="docutils literal notranslate"><span class="pre">:387-393</span></code>); <code class="docutils literal notranslate"><span class="pre">_fit_sigma_clip_jax</span></code> (<code class="docutils literal notranslate"><span class="pre">:415-535</span></code>) already delegates the inner WLS to the fully-jitted <code class="docutils literal notranslate"><span class="pre">batched_boltzmann_fit</span></code> (<code class="docutils literal notranslate"><span class="pre">physics/boltzmann_jax.py:111-200</span></code>) — the right inner kernel; RANSAC (<code class="docutils literal notranslate"><span class="pre">:630-732</span></code>, <code class="docutils literal notranslate"><span class="pre">default_rng(42)</span></code>, 100 sequential trials, MAD threshold <code class="docutils literal notranslate"><span class="pre">:657-667</span></code>, degenerate-sample <code class="docutils literal notranslate"><span class="pre">continue</span></code> <code class="docutils literal notranslate"><span class="pre">:681-687</span></code>); Huber IRLS (<code class="docutils literal notranslate"><span class="pre">:734-842</span></code>, convergence break <code class="docutils literal notranslate"><span class="pre">:796</span></code>); multiplet aggregation (<code class="docutils literal notranslate"><span class="pre">:205-324</span></code>). (b) The default pooled per-element-centered common-slope plane <code class="docutils literal notranslate"><span class="pre">_fit_common_boltzmann_plane</span></code> (<code class="docutils literal notranslate"><span class="pre">solve/iterative.py:1349-1452</span></code>) with weight cap <code class="docutils literal notranslate"><span class="pre">_cap_boltzmann_weights</span></code> (<code class="docutils literal notranslate"><span class="pre">:2911-2944</span></code>, clip at K×masked-median) — <strong>bit-exact JAX twins exist</strong>: <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code> (<code class="docutils literal notranslate"><span class="pre">:2698-2773</span></code>), <code class="docutils literal notranslate"><span class="pre">_saha_correct_kernel</span></code> (<code class="docutils literal notranslate"><span class="pre">:2675-2696</span></code>). (c) The <em>production</em> estimator (geological preset): pooled SB-graph <code class="docutils literal notranslate"><span class="pre">_fit_saha_boltzmann_graph</span></code> (<code class="docutils literal notranslate"><span class="pre">:1454-1539</span></code>) — ion-shifted rows with <strong>unit weights by design</strong> (<code class="docutils literal notranslate"><span class="pre">:2776-2815</span></code>; the docstring records that inverse-variance weighting re-creates Fe over-attribution) solved via <code class="docutils literal notranslate"><span class="pre">np.linalg.lstsq</span></code> on a dynamic <code class="docutils literal notranslate"><span class="pre">(N_rows,</span> <span class="pre">1+E)</span></code> design (<code class="docutils literal notranslate"><span class="pre">:2818-2886</span></code>).</p>
+<p><strong>Redesign:</strong></p>
+<ul class="simple">
+<li><p>sigma-clip → fixed-K=10 <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> of masked reweighting (weight × inlier indicator <code class="docutils literal notranslate"><span class="pre">|r|</span> <span class="pre">≤</span> <span class="pre">2.5·σ_r(masked)</span></code>), carrying fixed-shape <code class="docutils literal notranslate"><span class="pre">(w,</span> <span class="pre">mask)</span></code>; CPU early termination = idempotent fixed point ⇒ identical result; the rare <code class="docutils literal notranslate"><span class="pre">std_res==0</span></code> break becomes a <code class="docutils literal notranslate"><span class="pre">where</span></code>. Inner solve = <code class="docutils literal notranslate"><span class="pre">batched_boltzmann_fit</span></code>.</p></li>
+<li><p>Huber → fixed-K IRLS with sort-based masked-MAD scale; 1e-8 break = fixed-point idempotence.</p></li>
+<li><p>RANSAC → vectorized trials: pre-draw all <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">2)</span></code> index pairs with counter-based <code class="docutils literal notranslate"><span class="pre">jax.random</span></code>; evaluate in parallel; argmax inliers with first-max tie = lowest trial index (matches the strictly-greater sequential update <code class="docutils literal notranslate"><span class="pre">:694-696</span></code>). <strong>RNG streams cannot match <code class="docutils literal notranslate"><span class="pre">np.random.default_rng(42)</span></code> bit-for-bit — contract is fixed-seed self-regression + statistical parity.</strong></p></li>
+<li><p>Common-slope plane: reuse <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code> verbatim with one extra vmap axis → <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">E,</span> <span class="pre">N)</span></code>.</p></li>
+<li><p><strong>SB-graph without lstsq:</strong> with unit weights the <code class="docutils literal notranslate"><span class="pre">(1+E)×(1+E)</span></code> normal matrix is arrow-shaped (dense slope column, diagonal intercept block); the Schur complement reduces it to slope = Σ_s Σ_l (x−x̄_s)(y−ȳ_s) / Σ_s Σ_l (x−x̄_s)², q_s = ȳ_s − m·x̄_s — i.e. <strong>the SB-graph with unit weights IS the centered common-slope kernel with w=1 on ion-shifted coordinates</strong> (independently confirmed by audit Q2, <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-09-overhaul/02-inversion-solver.md:378</span></code>). Implement as <code class="docutils literal notranslate"><span class="pre">_saha_correct_kernel</span></code> → <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code>(w=mask) + closed-form slope-variance (<code class="docutils literal notranslate"><span class="pre">inv(AᵀA)·σ²</span></code> equivalent, cf. <code class="docutils literal notranslate"><span class="pre">:2873-2883</span></code>) and global R² from the same sums. Validity screen (<code class="docutils literal notranslate"><span class="pre">:2803</span></code>: A_ki≤0 | g_k≤0 | I≤0) → mask; under-determined <code class="docutils literal notranslate"><span class="pre">None</span></code> (n_rows &lt; 1+E, <code class="docutils literal notranslate"><span class="pre">:1524-1525,2844-2846</span></code>) → per-spectrum validity flag.</p></li>
+<li><p>Masked median helper (shared with weight cap, J5, J6): sort with +inf fill, gather <code class="docutils literal notranslate"><span class="pre">(n−1)//2</span></code> and <code class="docutils literal notranslate"><span class="pre">n//2</span></code>, average — exact <code class="docutils literal notranslate"><span class="pre">np.median</span></code> for both parities.</p></li>
+</ul>
+<p><strong>Contract:</strong> SB-graph slope/intercepts rtol 1e-10 vs <code class="docutils literal notranslate"><span class="pre">np.linalg.lstsq</span></code> on identical rows (linear-algebra identity; property-tested over randomized fixtures <strong>including collinear-x and all-equal-weight degenerate cases</strong>); T rtol 1e-8; sigma-clip final inlier mask bit-equal when no residual is within 1e-9·σ of the boundary, slope rtol 1e-8 (existing precedent <code class="docutils literal notranslate"><span class="pre">boltzmann.py:433-437</span></code>); Huber rtol 1e-8; RANSAC self-regression only.</p>
+</section>
+<section id="closure-six-modes-keystone-gate">
+<h2>4. Closure (six modes) + keystone gate<a class="headerlink" href="#closure-six-modes-keystone-gate" title="Link to this heading"></a></h2>
+<p><strong>Reference:</strong> <code class="docutils literal notranslate"><span class="pre">physics/closure.py</span></code> — standard (<code class="docutils literal notranslate"><span class="pre">:537-593</span></code>), matrix w/ missing-element fallback (<code class="docutils literal notranslate"><span class="pre">:595-660,629-635</span></code>), oxide with <code class="docutils literal notranslate"><span class="pre">OXIDE_OXYGEN_PER_CATION</span></code> (<code class="docutils literal notranslate"><span class="pre">:662-727</span></code>, table <code class="docutils literal notranslate"><span class="pre">:62-73</span></code>, default 1.0 <code class="docutils literal notranslate"><span class="pre">:712</span></code>), ILR (<code class="docutils literal notranslate"><span class="pre">:729-801</span></code>) — <strong>an identity round-trip</strong> (audit: “they change conditioning, not physics”, <code class="docutils literal notranslate"><span class="pre">02-inversion-solver.md:364-365</span></code>) differing from standard only via the <code class="docutils literal notranslate"><span class="pre">LOGRATIO_CLIP_FLOOR=1e-10</span></code> clip (<code class="docutils literal notranslate"><span class="pre">:34,158</span></code>) and <code class="docutils literal notranslate"><span class="pre">sorted(intercepts)</span></code> ordering (<code class="docutils literal notranslate"><span class="pre">:769</span></code>); PWLR adaptive-ridge (<code class="docutils literal notranslate"><span class="pre">:803-890,384-418</span></code>); Dirichlet-residual branch (<code class="docutils literal notranslate"><span class="pre">:892-1033,1004-1019</span></code>); keystone gate <code class="docutils literal notranslate"><span class="pre">validate_degeneracy</span></code> (<code class="docutils literal notranslate"><span class="pre">:495-535</span></code>). In the lax path standard/matrix/oxide are already pure JAX (<code class="docutils literal notranslate"><span class="pre">solve/iterative.py:567-612</span></code>); <strong>ilr/pwlr/dirichlet go through <code class="docutils literal notranslate"><span class="pre">jax.pure_callback</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">:614-655</span></code>) — serial under vmap, non-differentiable, and ILR is the constructor default (<code class="docutils literal notranslate"><span class="pre">:1046-1050</span></code>).</p>
+<p><strong>Redesign:</strong> masked linear algebra over <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">E)</span></code>: lift the existing lax closures one batch axis; oxide factors = <code class="docutils literal notranslate"><span class="pre">(E,)</span></code> snapshot vector; missing-U elements = mask zeros (≡ the <code class="docutils literal notranslate"><span class="pre">continue</span></code> at <code class="docutils literal notranslate"><span class="pre">:570-571,704-705</span></code>); matrix-element-missing resolves statically at array build (as <code class="docutils literal notranslate"><span class="pre">:579-587</span></code> already does). <strong>ILR implemented as standard closure</strong> with the 1e-10 clip for exact parity; keep the explicit Helmert algebra (<code class="docutils literal notranslate"><span class="pre">:117-140</span></code>, static <code class="docutils literal notranslate"><span class="pre">(E,</span> <span class="pre">E−1)</span></code> matrix) available because J7 parameterises composition in ILR coordinates. PWLR closed-form (target = Ψ·log, λ from masked min, diagonal shrink, inverse via Ψᵀ + normalize; pivot argmax is a dynamic gather — jit-fine). Dirichlet = <code class="docutils literal notranslate"><span class="pre">jnp.where</span></code> over branches. Keystone gate in-body: <code class="docutils literal notranslate"><span class="pre">(max(C)</span> <span class="pre">&gt;</span> <span class="pre">0.8)</span> <span class="pre">&amp;</span> <span class="pre">(n_valid</span> <span class="pre">≥</span> <span class="pre">4)</span></code> — closes lax seam (iv) of ADR-0004 §4 row 10.</p>
+<p><strong>Contract:</strong> standard/matrix/oxide rtol 1e-12 vs the dict implementation; ilr/pwlr rtol 1e-10 + a documented ILR≡standard equivalence property on strictly-positive compositions; degeneracy flag exact.</p>
+</section>
+<section id="acceptance-criteria">
+<h2>5. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>All contracts above green via direct A/B vs the reference functions on randomized + scoreboard-derived fixtures.</p></li>
+<li><p>Schur-equivalence property test: 1,000 random (rows, E≤20) systems, jit SB-graph vs <code class="docutils literal notranslate"><span class="pre">np.linalg.lstsq</span></code>, rtol 1e-10, including degenerate fixtures (collinear x; single-element; n_rows = 1+E exactly; n_rows &lt; 1+E → validity flag).</p></li>
+<li><p>jit + vmap (B=16) + padding invariance + grad-finite (hard assert — these kernels sit inside J7’s differentiated region).</p></li>
+<li><p>Selection tie property test vs Python stable sort.</p></li>
+<li><p>No <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code> anywhere in <code class="docutils literal notranslate"><span class="pre">jitpipe/fit.py</span></code>.</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>6. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_fit.py</span></code> — three test classes (selection / boltzmann / closure), fixture style of <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py:79-121</span></code>; adversarial degenerate fixtures explicitly listed in AC-2.</p>
+</section>
+<section id="risks">
+<h2>7. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>LOW–MED: silent divergence on degenerate fixtures (collinear x, equal weights) — covered by AC-2; RANSAC RNG non-parity is by construction and documented; ILR clip/order parity is a one-line trap covered by the equivalence property.</p>
+</section>
+<section id="dependencies-files">
+<h2>8. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0. Enables J5 (masked-median helper + array conventions), J7 (all kernels). Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/fit.py</span></code>, tests. Reference untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

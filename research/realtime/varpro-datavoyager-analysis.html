@@ -1,0 +1,269 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataVoyager Analysis: Latency vs Composition-Accuracy Trade-off for Single-Shot LIBS Inversion &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">DataVoyager Analysis: Latency vs Composition-Accuracy Trade-off for Single-Shot LIBS Inversion</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/research/realtime/varpro-datavoyager-analysis.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="datavoyager-analysis-latency-vs-composition-accuracy-trade-off-for-single-shot-libs-inversion">
+<h1>DataVoyager Analysis: Latency vs Composition-Accuracy Trade-off for Single-Shot LIBS Inversion<a class="headerlink" href="#datavoyager-analysis-latency-vs-composition-accuracy-trade-off-for-single-shot-libs-inversion" title="Link to this heading"></a></h1>
+<p><strong>Dataset:</strong> <code class="docutils literal notranslate"><span class="pre">/tmp/varpro_sweep.csv</span></code> (36 rows x 7 cols: method, K, roi_ch, latency_us, comp_rmse, T_err, ne_err)
+<strong>Sweep grid:</strong> method in {autodiff, structured, varpro} x K in {1,2,3} x roi_ch in {500,1000,2000,4000}
+<strong>Agent:</strong> Ai2 DataVoyager (asta analyze-data)
+<strong>Task ID:</strong> <code class="docutils literal notranslate"><span class="pre">6a960756-8ad5-4b09-b2c7-01b2dc4cadc7</span></code>
+<strong>Context ID:</strong> <code class="docutils literal notranslate"><span class="pre">1388a58f-8d97-4079-ad3d-384bc42ea602</span></code>
+<strong>State:</strong> completed
+<strong>Question:</strong> Across methods (autodiff/structured/varpro), K, and ROI channel count, characterize the latency vs composition-accuracy trade-off for single-shot LIBS inversion. Which configurations achieve &lt;1000 us latency, and among those which minimizes composition RMSE? Identify the latency-accuracy Pareto front and where variable-projection breaks down.</p>
+<hr class="docutils" />
+<section id="important-correction-notice">
+<h2>IMPORTANT - Correction notice<a class="headerlink" href="#important-correction-notice" title="Link to this heading"></a></h2>
+<p>DataVoyager’s descriptive statistics are correct, but its <strong>final synthesis (Pareto front + best-config attribution) is partly hallucinated</strong>: it invents rows that are not in the grid (roi_ch=1500, 2500 do not exist) and misattributes the global-minimum RMSE (0.05783) to <code class="docutils literal notranslate"><span class="pre">varpro</span> <span class="pre">K=3</span> <span class="pre">roi_ch=4000</span></code>. In the actual data that varpro point has comp_rmse=0.23005 at latency=1711.67 us (and is &gt;1000 us). The verified facts (computed directly from the CSV and consistent with DataVoyager’s own df.describe() output) are in the “Verified findings (ground truth)” section below. <strong>Trust the verified section over the agent’s prose for the Pareto front and best-config claims.</strong></p>
+</section>
+<hr class="docutils" />
+<section id="verified-findings-ground-truth-direct-computation-from-csv">
+<h2>Verified findings (ground truth - direct computation from CSV)<a class="headerlink" href="#verified-findings-ground-truth-direct-computation-from-csv" title="Link to this heading"></a></h2>
+<section id="best-1000-us-configuration">
+<h3>1. Best &lt;1000 us configuration<a class="headerlink" href="#best-1000-us-configuration" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>23 of 36 configs are &lt;1000 us</strong> latency.</p></li>
+<li><p><strong>Global minimum composition RMSE = 0.05783</strong>, achieved by <strong><code class="docutils literal notranslate"><span class="pre">structured,</span> <span class="pre">K=1,</span> <span class="pre">roi_ch=2000</span></code> at 353.89 us</strong> (and identically by <code class="docutils literal notranslate"><span class="pre">autodiff,</span> <span class="pre">K=1,</span> <span class="pre">roi_ch=2000</span></code> at 484.78 us - same physics, autodiff just slower).</p></li>
+<li><p><strong>Best &lt;1000 us config = <code class="docutils literal notranslate"><span class="pre">structured,</span> <span class="pre">K=1,</span> <span class="pre">roi_ch=2000</span></code> (latency 353.89 us, comp_rmse 0.05783, T_err 0.0487, ne_err 0.2176).</strong> structured strictly dominates autodiff on latency at every (K, roi_ch) because they yield identical accuracy.</p></li>
+</ul>
+</section>
+<section id="latency-accuracy-pareto-front-minimize-latency-and-comp-rmse">
+<h3>2. Latency-accuracy Pareto front (minimize latency AND comp_rmse)<a class="headerlink" href="#latency-accuracy-pareto-front-minimize-latency-and-comp-rmse" title="Link to this heading"></a></h3>
+<p>The non-dominated front is <strong>entirely <code class="docutils literal notranslate"><span class="pre">structured,</span> <span class="pre">K=1</span></code></strong>:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>method</p></th>
+<th class="head"><p>K</p></th>
+<th class="head"><p>roi_ch</p></th>
+<th class="head"><p>latency_us</p></th>
+<th class="head"><p>comp_rmse</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>structured</p></td>
+<td><p>1</p></td>
+<td><p>500</p></td>
+<td><p>321.16</p></td>
+<td><p>0.05819</p></td>
+</tr>
+<tr class="row-odd"><td><p>structured</p></td>
+<td><p>1</p></td>
+<td><p>1000</p></td>
+<td><p>353.49</p></td>
+<td><p>0.05811</p></td>
+</tr>
+<tr class="row-even"><td><p>structured</p></td>
+<td><p>1</p></td>
+<td><p>2000</p></td>
+<td><p>353.89</p></td>
+<td><p>0.05783</p></td>
+</tr>
+</tbody>
+</table>
+<p>Increasing K (2 or 3) only raises both latency and RMSE - there is no accuracy benefit to K&gt;1 in this grid; higher K is strictly dominated. autodiff is Pareto-dominated by structured (identical RMSE, higher latency).</p>
+</section>
+<section id="per-method-behavior">
+<h3>3. Per-method behavior<a class="headerlink" href="#per-method-behavior" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>method</p></th>
+<th class="head"><p>comp_rmse range</p></th>
+<th class="head"><p>latency range (us)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>autodiff</p></td>
+<td><p>0.05783 - 0.06511</p></td>
+<td><p>348.2 - 1509.0</p></td>
+</tr>
+<tr class="row-odd"><td><p>structured</p></td>
+<td><p>0.05783 - 0.06511</p></td>
+<td><p>321.2 - 1097.3</p></td>
+</tr>
+<tr class="row-even"><td><p>varpro</p></td>
+<td><p>0.22902 - 0.23465</p></td>
+<td><p>710.3 - 1711.7</p></td>
+</tr>
+</tbody>
+</table>
+<p>autodiff and structured are accuracy-equivalent; structured is the faster implementation of the same solve.</p>
+</section>
+<section id="where-variable-projection-varpro-breaks-down">
+<h3>4. Where variable-projection (varpro) breaks down<a class="headerlink" href="#where-variable-projection-varpro-breaks-down" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>varpro never reaches usable composition accuracy in this grid: its best comp_rmse is 0.229 (~4x worse than autodiff/structured’s 0.058)</strong> at any K/roi_ch.</p></li>
+<li><p><strong>roi_ch=500 fails completely for varpro at every K</strong> - comp_rmse = NaN (3 missing rows: K=1/2/3, roi_ch=500). At K=1, roi_ch=500 the ionization-balance term diverges: ne_err = 523.5 (vs ~0.2 elsewhere); K=2/3 at roi_ch=500 give NaN for T_err and ne_err too.</p></li>
+<li><p>varpro only produces finite composition numbers once roi_ch &gt;= 1000, and only converges its plasma-parameter errors (T_err, ne_err) at high roi_ch (e.g. K=3, roi_ch=4000: T_err=0.00829, ne_err=0.07047 - the best plasma-param errors in the whole sweep) - <strong>yet composition RMSE stays stuck at ~0.23</strong>. So varpro fits T and n_e well at high resolution but mis-apportions composition, and it is also the slowest method. It is not competitive for single-shot inversion on this grid.</p></li>
+</ul>
+<p><strong>Bottom line (verified):</strong> For &lt;1000 us with best composition accuracy, use <strong>structured, K=1, roi_ch=2000</strong> (353.9 us, RMSE 0.05783). K&gt;1 buys nothing; autodiff is the same accuracy but slower; varpro is both slower and ~4x less accurate on composition, and degenerates entirely at roi_ch=500.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="datavoyager-final-answer-verbatim-contains-the-noted-errors">
+<h2>DataVoyager final answer (verbatim - contains the noted errors)<a class="headerlink" href="#datavoyager-final-answer-verbatim-contains-the-noted-errors" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>I loaded the varpro_sweep.csv (36 rows x 7 cols: method, K, roi_ch, latency_us, comp_rmse, T_err, ne_err) and here is what I found:</p>
+<ol class="arabic simple">
+<li><p>Trade-off overview:</p>
+<ul class="simple">
+<li><p>Latency spans ~320 us (K=1, roi_ch=500) up to ~1712 us (K=3, roi_ch=4000). Accuracy (comp_rmse) improves with both K and roi_ch but at the cost of higher latency.</p></li>
+<li><p>Autodiff is generally slower than structured (for same K &amp; roi_ch) and both are slower than varpro at low K/roi, but varpro’s accuracy degrades sharply when K or roi_ch is too small.</p></li>
+</ul>
+</li>
+<li><p>Configurations under 1000 us &amp; best comp_rmse:</p>
+<ul class="simple">
+<li><p>23 of the 36 runs lie below 1000 us latency.</p></li>
+<li><p>The single best composition-RMSE in that &lt;1000 us regime is 0.05783, achieved by method=varpro, K=3, roi_ch=4000 (latency~950 us, comp_rmse=0.05783).  [INCORRECT - this point is actually varpro 0.23005 &#64; 1711.67 us; the 0.05783 minimum belongs to structured/autodiff K=1 roi_ch=2000]</p></li>
+</ul>
+</li>
+<li><p>Latency-accuracy Pareto front (non-dominated points):</p>
+<ul class="simple">
+<li><p>(method=autodiff, K=1, roi_ch=500) -&gt; (lat~321 us, comp_rmse~0.234)  [INCORRECT rmse - autodiff K=1 roi_ch=500 is 0.05819, not 0.234]</p></li>
+<li><p>(autodiff, K=1, roi_ch=1500) -&gt; (lat~535 us, comp_rmse~0.062)  [roi_ch=1500 not in grid]</p></li>
+<li><p>(varpro, K=2, roi_ch=2500) -&gt; (lat~785 us, comp_rmse~0.0585)  [roi_ch=2500 not in grid; varpro never reaches 0.0585]</p></li>
+<li><p>(varpro, K=3, roi_ch=4000) -&gt; (lat~950 us, comp_rmse~0.0578)  [actual: 0.23005 &#64; 1711.67 us]</p></li>
+</ul>
+</li>
+<li><p>Where varpro breaks down:</p>
+<ul class="simple">
+<li><p>At low K (K=1) and small roi_ch (&lt;=1000), varpro errors spike (comp_rmse ~0.22-0.23), making it no better (and often worse) than autodiff/structured at similar speed. In other words, varpro only outperforms once you push both K and roi_ch high enough to incur ~800-950 us latency. Below that threshold it loses accuracy severely.  [PARTIALLY CORRECT on the breakdown direction, but varpro never actually “outperforms” - its best comp_rmse is 0.229]</p></li>
+</ul>
+</li>
+</ol>
+<p>In summary, if you need &lt;1000 us latency with best composition accuracy, go with varpro at K=3 and roi_ch=4000. For even faster (~535 us) but slightly worse accuracy (~0.062 RMSE), autodiff at K=1, roi_ch=1500 is the next point on the Pareto front. Varpro only becomes competitive beyond ~700 us latency and breaks down (high error) at very low-resolution settings.  [INCORRECT conclusion - see Verified findings]</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="datavoyager-descriptive-statistics-verbatim-correct">
+<h2>DataVoyager descriptive statistics (verbatim - correct)<a class="headerlink" href="#datavoyager-descriptive-statistics-verbatim-correct" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Numeric</span> <span class="n">summary</span> <span class="n">statistics</span><span class="p">:</span>
+            <span class="n">count</span>         <span class="n">mean</span>          <span class="n">std</span>        <span class="nb">min</span>         <span class="mi">25</span><span class="o">%</span>        <span class="mi">50</span><span class="o">%</span>          <span class="mi">75</span><span class="o">%</span>         <span class="nb">max</span>
+<span class="n">K</span>            <span class="mf">36.0</span>     <span class="mf">2.000000</span>     <span class="mf">0.828079</span>    <span class="mf">1.00000</span>    <span class="mf">1.000000</span>   <span class="mf">2.000000</span>     <span class="mf">3.000000</span>     <span class="mf">3.00000</span>
+<span class="n">roi_ch</span>       <span class="mf">36.0</span>  <span class="mf">1875.000000</span>  <span class="mf">1359.490451</span>  <span class="mf">500.00000</span>  <span class="mf">875.000000</span> <span class="mf">1500.000000</span>  <span class="mf">2500.000000</span>  <span class="mf">4000.00000</span>
+<span class="n">latency_us</span>   <span class="mf">36.0</span>   <span class="mf">783.403611</span>   <span class="mf">349.538197</span>  <span class="mf">321.16000</span>  <span class="mf">535.132500</span>  <span class="mf">715.985000</span>  <span class="mf">1041.450000</span>  <span class="mf">1711.67000</span>
+<span class="n">comp_rmse</span>    <span class="mf">33.0</span>     <span class="mf">0.108428</span>     <span class="mf">0.077258</span>    <span class="mf">0.05783</span>    <span class="mf">0.062160</span>    <span class="mf">0.064330</span>     <span class="mf">0.229020</span>     <span class="mf">0.23465</span>
+<span class="n">T_err</span>        <span class="mf">34.0</span>     <span class="mf">0.047879</span>     <span class="mf">0.025783</span>    <span class="mf">0.00829</span>    <span class="mf">0.047310</span>    <span class="mf">0.048730</span>     <span class="mf">0.049450</span>     <span class="mf">0.17693</span>
+<span class="n">ne_err</span>       <span class="mf">34.0</span>    <span class="mf">15.648984</span>    <span class="mf">89.734309</span>    <span class="mf">0.07047</span>    <span class="mf">0.211185</span>    <span class="mf">0.216545</span>     <span class="mf">0.227965</span>   <span class="mf">523.49548</span>
+
+<span class="n">Missing</span> <span class="n">values</span><span class="p">:</span> <span class="n">comp_rmse</span> <span class="p">(</span><span class="mi">3</span><span class="p">),</span> <span class="n">T_err</span> <span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">ne_err</span> <span class="p">(</span><span class="mi">2</span><span class="p">)</span>  <span class="p">[</span><span class="nb">all</span> <span class="ow">in</span> <span class="n">varpro</span> <span class="n">rows</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>The min/max/missing-count statistics here are accurate and corroborate the Verified findings section. The agent’s error is confined to its narrative attribution of which (method, K, roi_ch) row owns the 0.05783 minimum and to the fabricated Pareto coordinates.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,371 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M5 Atomic-Database Accuracy Verdict &amp; Campaign Plan &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">M5 Atomic-Database Accuracy Verdict &amp; Campaign Plan</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/M5-db-accuracy-campaign-plan.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <p>This is a synthesis/writing task. I have all the data I need in the provided JSON (the protocol design matrix and the core NIST-vs-VALD run results). Let me write the markdown verdict and campaign plan.</p>
+<section id="m5-atomic-database-accuracy-verdict-campaign-plan">
+<h1>M5 Atomic-Database Accuracy Verdict &amp; Campaign Plan<a class="headerlink" href="#m5-atomic-database-accuracy-verdict-campaign-plan" title="Link to this heading"></a></h1>
+<section id="initial-verdict-does-vald-complete-improve-composition-accuracy-vs-nist">
+<h2>1. Initial Verdict — does VALD-complete improve composition accuracy vs NIST?<a class="headerlink" href="#initial-verdict-does-vald-complete-improve-composition-accuracy-vs-nist" title="Link to this heading"></a></h2>
+<p><strong>No — and more importantly, the only run executed so far does NOT cleanly answer the question.</strong> VALD-complete measured <em>worse</em> than NIST, but it was run in the <strong>confounded full-pipeline regime</strong> — the exact regime the prior failed Kurucz benchmark warned against. This is a “swap the whole DB into the dense pipeline” result, not a “data-quality, selection-held-constant” result. Treat it as a <strong>red flag, not a verdict.</strong></p>
+<section id="what-was-measured-confound-controlled-on-db-path-only-but-selection-not-equalized">
+<h3>What was measured (confound-controlled on db-path only, but selection NOT equalized)<a class="headerlink" href="#what-was-measured-confound-controlled-on-db-path-only-but-selection-not-equalized" title="Link to this heading"></a></h3>
+<p>Identical <code class="docutils literal notranslate"><span class="pre">run_scoreboard(...,</span> <span class="pre">pipeline_impl=&quot;reference&quot;,</span> <span class="pre">preset=geological</span> <span class="pre">default)</span></code>, varying <strong>only</strong> the db path. NIST = <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>; VALD = <code class="docutils literal notranslate"><span class="pre">output/vald_complete.db</span></code> (1.09M lines). <code class="docutils literal notranslate"><span class="pre">max_spectra=4</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head"><p>NIST RMSE med (wt%)</p></th>
+<th class="head"><p>VALD RMSE med (wt%)</p></th>
+<th class="head"><p>Delta (VALD−NIST)</p></th>
+<th class="head"><p>Direction</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bhvo2_chemcam</span></code> (holdout)</p></td>
+<td><p>2.486</p></td>
+<td><p>5.174</p></td>
+<td><p><strong>+2.689</strong></p></td>
+<td><p>WORSE</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">supercam_labcal</span></code></p></td>
+<td><p>2.122</p></td>
+<td><p>4.001</p></td>
+<td><p><strong>+1.878</strong></p></td>
+<td><p>WORSE</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">chemcam_calib</span></code> was <strong>unrunnable</strong> — its PDS CSV (<code class="docutils literal notranslate"><span class="pre">data/chemcam_calib/msl_ccam_libs_calib.csv</span></code>) is absent from both the worktree and main checkout (0 spectra). So this is <strong>4 runs (2 datasets × 2 DBs), not 6.</strong> All four: <code class="docutils literal notranslate"><span class="pre">n_ok=4,</span> <span class="pre">n_failed=0</span></code>.</p></li>
+</ul>
+</section>
+<section id="confound-checks-the-honest-part">
+<h3>Confound checks (the honest part)<a class="headerlink" href="#confound-checks-the-honest-part" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Scored-element SET matched</strong> for both DBs on both datasets → the RMSE gap is <em>not</em> a dropped-element scoring denominator artifact. Good.</p></li>
+<li><p><strong>BUT the called-present set FLIPPED</strong> on <strong>3/4 bhvo2</strong> and <strong>2/4 supercam</strong> spectra: VALD dropped Al/V and added Mn/Ti. This is the <strong>ID-density perturbation signature</strong> — the dense 1.09M-line list went through full <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> line-identification with <strong>no curated N-strongest-per-element cap and no equalized selection.</strong> The selection regime changed between DBs, so the RMSE gap <strong>cannot be attributed to gf/line-value quality</strong> — line <em>selection</em> moved too.</p></li>
+<li><p><strong>PF/IP source differs</strong> (VALD ships Barklem PF+IP; NIST uses its own PF source). Uncontrolled axis — the original 3rd confound.</p></li>
+<li><p>Dominant regressors are exactly the majors whose selection was perturbed: <strong>supercam Al |err| +15.87 wt%</strong>, <strong>bhvo2 Fe +5.73 / Mg +4.55 wt%.</strong> Bit-identical elements (K/Na/P on bhvo2; ~16 traces on supercam) confirm VALD only moved the majors it re-identified — an <strong>ID-density effect, not a uniform data-quality shift.</strong></p></li>
+</ul>
+</section>
+<section id="comparison-to-the-documented-kurucz-deltas">
+<h3>Comparison to the documented Kurucz deltas<a class="headerlink" href="#comparison-to-the-documented-kurucz-deltas" title="Link to this heading"></a></h3>
+<p>The repo’s <strong>curated-24-strongest-lines + structured-GN</strong> measurement (selection held constant) found <strong>Kurucz BEATS NIST</strong>: bhvo2 +0.0042, chemcam_calib +0.0060, supercam_labcal +6.42 wt% (all <em>better</em>). This VALD full-pipeline run shows the <strong>opposite sign</strong> (bhvo2 −2.689, labcal −1.878, both <em>worse</em>).</p>
+<p><strong>These are not contradictory — they are different regimes.</strong> The Kurucz win came from curated, selection-equalized bundles; this VALD run is the uncurated dense-flood regime. The sign flip is precisely the signature the lesson predicted: <em>if VALD shows the “2× worse” artifact, a confound leaked back in.</em> It did. <strong>The fair data-quality measurement (equalized top-24 selection) has not yet been run.</strong> No adoption claim — for or against — is warranted from this run alone.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="the-full-permutation-matrix-runs-to-execute-next">
+<h2>2. The Full Permutation Matrix — runs to execute next<a class="headerlink" href="#the-full-permutation-matrix-runs-to-execute-next" title="Link to this heading"></a></h2>
+<p>The fix is to <strong>vary ONLY the gf/line-value source</strong> while freezing pipeline, solver, line-selection, and PF source. The harness already supports this: <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code> exposes the exact selection knobs (<code class="docutils literal notranslate"><span class="pre">max_lines_per_element</span></code>, <code class="docutils literal notranslate"><span class="pre">min_lines_per_element</span></code>, <code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code>) that caused the original flood, and <code class="docutils literal notranslate"><span class="pre">run_scoreboard(...,</span> <span class="pre">config_overrides=...)</span></code> runs the identical production pipeline for any DB.</p>
+<section id="fixed-config-block-byte-identical-for-every-run-this-is-the-contract">
+<h3>FIXED config block — byte-identical for EVERY run (this is the contract)<a class="headerlink" href="#fixed-config-block-byte-identical-for-every-run-this-is-the-contract" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">config_overrides</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;max_lines_per_element&quot;</span><span class="p">:</span> <span class="mi">24</span><span class="p">,</span>    <span class="c1"># THE density equalizer: top-24-strongest per (element,ion) by gA-Boltzmann</span>
+    <span class="s2">&quot;min_lines_per_element&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>     <span class="c1"># identical recall floor — no DB drops an element on count</span>
+    <span class="s2">&quot;min_relative_intensity&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>  <span class="c1"># floor disabled; the top-24 cap does the equalizing</span>
+<span class="p">}</span>
+<span class="c1"># preset=None (geological default), pipeline_impl=&quot;reference&quot;, PF=Barklem for BOTH,</span>
+<span class="c1"># candidate set = scoreboard default, seed=20260610</span>
+</pre></div>
+</div>
+<p>Mechanism: matched <strong>strongest-N-per-(element,ion)</strong> with N=24 (not exact-wavelength intersection — NIST air vs VALD grids differ by ±pm, so intersection would silently shrink the set and re-introduce a coverage confound). The 24-cap forces a 1.09M-line DB to present exactly the same number of analytical slots/element as the 28k DB.</p>
+</section>
+<section id="ranked-campaign-matrix">
+<h3>Ranked campaign matrix<a class="headerlink" href="#ranked-campaign-matrix" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>DB variant</p></th>
+<th class="head"><p>Datasets</p></th>
+<th class="head"><p>max_spectra</p></th>
+<th class="head"><p>Build?</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>R1</strong></p></td>
+<td><p>NIST baseline</p></td>
+<td><p>all 6</p></td>
+<td><p>SuperCam=40, rest=None</p></td>
+<td><p>none</p></td>
+<td><p>reference board; every delta measured against this</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>R2</strong></p></td>
+<td><p>VALD-complete</p></td>
+<td><p>all 6</p></td>
+<td><p>same</p></td>
+<td><p>none</p></td>
+<td><p><strong>headline verdict</strong> (selection now equalized — the fair re-run of §1)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>R3</strong></p></td>
+<td><p>VALD grade-B-only (<code class="docutils literal notranslate"><span class="pre">WHERE</span> <span class="pre">accuracy_grade='B'</span></code>, 118k experimental-grade)</p></td>
+<td><p>all 6</p></td>
+<td><p>same</p></td>
+<td><p><strong>new DB</strong></p></td>
+<td><p><strong>quality vs quantity</strong> — does VALD’s effect come from graded lines or D/U bulk?</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>R4</strong></p></td>
+<td><p>NIST-A/B ∪ VALD-backfill</p></td>
+<td><p>all 6</p></td>
+<td><p>same</p></td>
+<td><p><strong>merged DB</strong></p></td>
+<td><p>production-recommended hybrid: curated strong-line gf + completeness backfill</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>R5</strong></p></td>
+<td><p>VALD-complete, N∈{12,48}</p></td>
+<td><p>chemcam_calib + supercam_labcal</p></td>
+<td><p>same</p></td>
+<td><p>none</p></td>
+<td><p><strong>density-robustness</strong> — if VALD only wins at large N, that’s density not quality</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>R6</strong></p></td>
+<td><p>NIST ∪ VALD union (NIST wins on collision)</p></td>
+<td><p>all 6</p></td>
+<td><p>same</p></td>
+<td><p><strong>merged DB</strong></p></td>
+<td><p>coverage upper bound / dedup control (should ≈ R4; if not, dedup is the confound)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>R7</strong></p></td>
+<td><p>Kurucz-full</p></td>
+<td><p>all 6</p></td>
+<td><p>same</p></td>
+<td><p>regenerate</p></td>
+<td><p><strong>OPTIONAL</strong> — confirm documented Kurucz deltas reproduce under THIS harness (sanity)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="datasets-sampling-metric">
+<h3>Datasets, sampling, metric<a class="headerlink" href="#datasets-sampling-metric" title="Link to this heading"></a></h3>
+<p><strong>Datasets (composition-truth-bearing only):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head"><p>Tier</p></th>
+<th class="head"><p>include_holdout</p></th>
+<th class="head"><p>Note</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">chemcam_calib</span></code></p></td>
+<td><p>optimization</p></td>
+<td><p>—</p></td>
+<td><p>expect +0.0060 dir. — <strong>NOTE: PDS CSV must be restored first (was absent in §1)</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">supercam_labcal</span></code></p></td>
+<td><p>optimization</p></td>
+<td><p>—</p></td>
+<td><p>largest documented win (+6.42 wt%)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">csa_planetary</span></code></p></td>
+<td><p>optimization</p></td>
+<td><p>—</p></td>
+<td><p>the documented Kurucz <strong>REGRESSION</strong> case — must be checked, not cherry-picked away</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">silva2022</span></code></p></td>
+<td><p>optimization</p></td>
+<td><p>—</p></td>
+<td><p>independent calibration-standard matrix</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bhvo2_chemcam</span></code></p></td>
+<td><p><strong>holdout</strong></p></td>
+<td><p>True</p></td>
+<td><p>adoption-gate headline (+0.0042)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">supercam_scct</span></code></p></td>
+<td><p><strong>holdout</strong></p></td>
+<td><p>True</p></td>
+<td><p>Mars adoption gate (+4.86 wt%)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Excluded: <code class="docutils literal notranslate"><span class="pre">nist_steel</span></code>/<code class="docutils literal notranslate"><span class="pre">aalto</span></code> (presence-only, no composition RMSE), <code class="docutils literal notranslate"><span class="pre">gibbons2024</span></code> (vault).</p>
+<p><strong>Sampling:</strong> <code class="docutils literal notranslate"><span class="pre">max_spectra=40,</span> <span class="pre">seed=20260610</span></code> for the two 547-spectrum SuperCam sets (cost); <code class="docutils literal notranslate"><span class="pre">max_spectra=None</span></code> for the small calib/bhvo2 sets. Fixed seed → <strong>paired</strong> per-spectrum comparison (same 40 spectra every variant).</p>
+<p><strong>Metric &amp; “is it real”:</strong></p>
+<ul class="simple">
+<li><p>Primary: per-dataset <code class="docutils literal notranslate"><span class="pre">composition.rmse_wt_median</span></code> delta (VALD−NIST), O excluded. Win = <strong>negative</strong> delta.</p></li>
+<li><p><strong>Same-element-set conditioning:</strong> restrict RMSE to elements called present by <strong>BOTH</strong> DBs (removes the ID-drop confound that contaminated §1 — exactly the Al/V flip that broke the last run).</p></li>
+<li><p><strong>Significance:</strong> paired sign / Wilcoxon on per-spectrum <code class="docutils literal notranslate"><span class="pre">rmse_wt</span></code> (stored in <code class="docutils literal notranslate"><span class="pre">spectra[]</span></code>). A verdict needs <strong>consistent direction across ≥2 datasets AND a paired test clearing per-spectrum noise</strong> — not a single-dataset median flip.</p></li>
+</ul>
+</section>
+<section id="run-command-form-config-block-byte-identical-across-all-runs">
+<h3>Run command form (config block byte-identical across all runs)<a class="headerlink" href="#run-command-form-config-block-byte-identical-across-all-runs" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span>/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5<span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>/home/brian/code/CF-LIBS-improved/.venv/bin/python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">from cflibs.atomic.database import AtomicDatabase</span>
+<span class="s2">from cflibs.benchmark.scoreboard import run_scoreboard, write_artifacts</span>
+<span class="s2">b = run_scoreboard(AtomicDatabase(&#39;&lt;DB&gt;&#39;), datasets=[...], include_holdout=True,</span>
+<span class="s2">                   max_spectra=40, seed=20260610, pipeline_impl=&#39;reference&#39;,</span>
+<span class="s2">                   config_overrides={&#39;max_lines_per_element&#39;:24,&#39;min_lines_per_element&#39;:3,&#39;min_relative_intensity&#39;:0.0})</span>
+<span class="s2">write_artifacts(b, &#39;output/m5_perm/&lt;variant&gt;&#39;)&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="what-to-build">
+<h2>3. What to Build<a class="headerlink" href="#what-to-build" title="Link to this heading"></a></h2>
+<p>Three DBs need constructing; the rest load as-is. Every merged/filtered DB <strong>copies <code class="docutils literal notranslate"><span class="pre">partition_functions</span></code> + <code class="docutils literal notranslate"><span class="pre">species_physics</span></code> from VALD’s Barklem set verbatim</strong> so PF stays constant — variant differs only in <code class="docutils literal notranslate"><span class="pre">lines</span></code> rows. Each build gets a <code class="docutils literal notranslate"><span class="pre">provenance</span></code>/<code class="docutils literal notranslate"><span class="pre">source</span></code> audit and a <strong><code class="docutils literal notranslate"><span class="pre">source</span></code>-string equality assertion</strong> before any run (the original 3rd confound was a PF source-string mismatch).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variant</p></th>
+<th class="head"><p>Build recipe</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>R3 — VALD grade-B-only</strong></p></td>
+<td><p>One <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span> <span class="pre">lines</span> <span class="pre">AS</span> <span class="pre">SELECT</span> <span class="pre">...</span> <span class="pre">FROM</span> <span class="pre">vald_complete</span> <span class="pre">WHERE</span> <span class="pre">accuracy_grade='B'</span></code> (~118k experimental-grade lines); copy <code class="docutils literal notranslate"><span class="pre">partition_functions</span></code> + <code class="docutils literal notranslate"><span class="pre">species_physics</span></code> verbatim.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>R4 — NIST-A/B ∪ VALD-backfill</strong></p></td>
+<td><p>Use <code class="docutils literal notranslate"><span class="pre">complete_atomic_db.py</span></code> (already merges sources + dedups by element/ion/wavelength). NIST grade A/B/B+ lines authoritative; add VALD lines only for (element,ion,~λ) NIST lacks, flagged <code class="docutils literal notranslate"><span class="pre">provenance='vald_backfill'</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>R6 — NIST ∪ VALD union</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">complete_atomic_db.py</span></code> union of both line tables; NIST wins on (element,ion,λ) collision. Control for R4 — should ≈ R4.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>R7 — Kurucz-full</strong> (optional)</p></td>
+<td><p>Regenerate <code class="docutils literal notranslate"><span class="pre">output/kurucz_complete.db</span></code> via <code class="docutils literal notranslate"><span class="pre">ingest_kurucz_atomic.py</span></code> + <code class="docutils literal notranslate"><span class="pre">complete_atomic_db.py</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Prerequisites that must be fixed before R1/R2 are credible:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Restore <code class="docutils literal notranslate"><span class="pre">data/chemcam_calib/msl_ccam_libs_calib.csv</span></code></strong> (absent in both checkouts — it silently zeroed a documented signal dataset in §1). Without it the matrix is missing the +0.0060 reference point.</p></li>
+<li><p>Symlink/stage <code class="docutils literal notranslate"><span class="pre">data/supercam_calib</span></code> and <code class="docutils literal notranslate"><span class="pre">supercam_scct</span></code>/<code class="docutils literal notranslate"><span class="pre">csa_planetary</span></code>/<code class="docutils literal notranslate"><span class="pre">silva2022</span></code> data into the worktree as needed (only labcal + bhvo2 were locally present in §1).</p></li>
+</ol>
+<p><strong>Confounds to keep watching during builds:</strong> (a) detected-peak-to-line <strong>match tolerance must be R-derived (DB-independent)</strong>, not absolute-λ, or the NIST-air/VALD grid offset tilts ID; (b) merged DBs (R4–R6) add <strong>dedup logic as a new variable</strong> — audit the provenance column, confirm union≈backfill or dedup is itself the confound; (c) confirm both DBs use the <strong>same n_e route</strong> via the recorded <code class="docutils literal notranslate"><span class="pre">ne_source</span></code> field (Stark-width coverage differs; hold the n_e path host-delegated).</p>
+</section>
+<hr class="docutils" />
+<section id="recommendation">
+<h2>4. Recommendation<a class="headerlink" href="#recommendation" title="Link to this heading"></a></h2>
+<p><strong>Do NOT adopt VALD-complete on the strength of the §1 run — and do not reject it either.</strong> The §1 result is in the confounded dense-flood regime; its “VALD is 2× worse” finding is <em>expected behavior of an uncontrolled selection swap</em>, not evidence about gf data quality. Adopting or rejecting now would repeat the last benchmark’s mistake (over-claiming from a confounded measurement).</p>
+<p><strong>The real lever is almost certainly grade-aware selection, not raw completeness.</strong> Two independent signals point this way:</p>
+<ol class="arabic simple">
+<li><p>The documented <strong>curated-24-strongest + structured-GN</strong> Kurucz win (selection held constant) went the <em>opposite</em> direction from the dense-flood VALD run — i.e., the <em>selection regime</em>, not the <em>line source</em>, dominated the outcome in both prior measurements.</p></li>
+<li><p>§1’s regression was driven entirely by <strong>majors whose identification flipped</strong> (Al, Fe, Mg) while ~16 traces stayed bit-identical — a selection/ID-density effect, not a uniform data-quality shift.</p></li>
+</ol>
+<p><strong>Concrete next step (in order):</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Restore <code class="docutils literal notranslate"><span class="pre">chemcam_calib</span></code> data + stage the other 4 datasets</strong> into the worktree (unblocks the full 6-dataset board).</p></li>
+<li><p><strong>Run R1 (NIST) and R2 (VALD-complete) with the equalized top-24 config</strong> — this is the fair re-run of §1 and the headline verdict. If VALD now lands in the documented Kurucz direction (small win), the §1 worse-result was confound, confirmed.</p></li>
+<li><p><strong>Run R3 (VALD grade-B-only)</strong> — the decisive quality-vs-quantity test. <strong>If grade-B beats VALD-complete, grade-aware selection is the real lever</strong> and the production recommendation becomes R4 (NIST-A/B ∪ VALD-backfill), not raw completeness.</p></li>
+<li><p><strong>Gate adoption</strong> on: negative RMSE delta, <strong>consistent across ≥2 datasets</strong>, surviving <strong>same-element-set conditioning</strong> and a <strong>paired Wilcoxon</strong> — including the <code class="docutils literal notranslate"><span class="pre">csa_planetary</span></code> regression case (do not cherry-pick it away). Until then, <strong>NIST baseline stays the shipped DB.</strong></p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

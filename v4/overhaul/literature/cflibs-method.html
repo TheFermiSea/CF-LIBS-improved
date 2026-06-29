@@ -1,0 +1,616 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Method: Canonical Formulation and Key References &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Method: Canonical Formulation and Key References</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/literature/cflibs-method.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-method-canonical-formulation-and-key-references">
+<h1>CF-LIBS Method: Canonical Formulation and Key References<a class="headerlink" href="#cf-libs-method-canonical-formulation-and-key-references" title="Link to this heading"></a></h1>
+<p><strong>Topic:</strong> Calibration-Free LIBS (Ciucci 1999 / Tognoni 2010 / Aragón-Aguilera): Boltzmann plot,
+Saha-Boltzmann plane, one-point/closure, internal reference; common-slope multi-element fits;
+matrix/oxide closure.</p>
+<p><strong>Note on sources:</strong> Web searches and HTML full-texts were used. PDFs were binary-only and
+unreadable by WebFetch; the equations below are drawn from accessible HTML versions of primary
+papers and reviews (Frontiers 2022 review, RSC 2023 review, RSC 2024 Völker, A&amp;A 2018 Ferus,
+RSC Advances 2026 self-absorption paper) plus search-result abstracts of the Ciucci 1999,
+Tognoni 2010, Aguilera/Aragón 2007, and Cristoforetti 2010 papers. All are cross-checked against
+multiple independent sources.</p>
+<hr class="docutils" />
+<section id="governing-equations-canonical-forms">
+<h2>1. Governing Equations — Canonical Forms<a class="headerlink" href="#governing-equations-canonical-forms" title="Link to this heading"></a></h2>
+<section id="fundamental-line-intensity-optically-thin-lte-homogeneous-plasma">
+<h3>1.1 Fundamental Line Intensity (Optically Thin, LTE, Homogeneous Plasma)<a class="headerlink" href="#fundamental-line-intensity-optically-thin-lte-homogeneous-plasma" title="Link to this heading"></a></h3>
+<p>The integrated intensity of emission line k→i for species s (neutral or ion) is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_{ki} = F · (hc / 4π λ_{ki}) · C_s · (A_{ki} g_k) / U_s(T) · exp(-E_k / k_B T)
+</pre></div>
+</div>
+<p>or equivalently (using frequency ν_{ki}):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_{ki} = F · C_s · A_{ki} g_k · (h ν_{ki} / 4π) / U_s(T) · exp(-E_k / k_B T)
+</pre></div>
+</div>
+<p><strong>Symbol definitions:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>Meaning</p></th>
+<th class="head"><p>Canonical units</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>I_{ki}</p></td>
+<td><p>Integrated spectral line intensity</p></td>
+<td><p>W sr⁻¹ m⁻³ (or arbitrary, internally consistent)</p></td>
+</tr>
+<tr class="row-odd"><td><p>F</p></td>
+<td><p>Experimental factor: optical collection efficiency × plasma column density × 1/(4π sr) geometric factor</p></td>
+<td><p>depends on normalization</p></td>
+</tr>
+<tr class="row-even"><td><p>h</p></td>
+<td><p>Planck constant</p></td>
+<td><p>J·s</p></td>
+</tr>
+<tr class="row-odd"><td><p>c</p></td>
+<td><p>Speed of light</p></td>
+<td><p>m/s</p></td>
+</tr>
+<tr class="row-even"><td><p>λ_{ki}</p></td>
+<td><p>Transition wavelength (vacuum)</p></td>
+<td><p>m (or nm consistently)</p></td>
+</tr>
+<tr class="row-odd"><td><p>C_s</p></td>
+<td><p>Number fraction (mole fraction) of emitting species s</p></td>
+<td><p>dimensionless, Σ C_s = 1</p></td>
+</tr>
+<tr class="row-even"><td><p>A_{ki}</p></td>
+<td><p>Einstein spontaneous-emission coefficient (transition probability)</p></td>
+<td><p>s⁻¹</p></td>
+</tr>
+<tr class="row-odd"><td><p>g_k</p></td>
+<td><p>Statistical weight (degeneracy) of upper level k: g_k = 2J_k + 1</p></td>
+<td><p>dimensionless</p></td>
+</tr>
+<tr class="row-even"><td><p>U_s(T)</p></td>
+<td><p>Partition function of species s at temperature T: U_s(T) = Σ_i g_i exp(-E_i/k_B T)</p></td>
+<td><p>dimensionless</p></td>
+</tr>
+<tr class="row-odd"><td><p>E_k</p></td>
+<td><p>Energy of upper level k (from ground state of same species)</p></td>
+<td><p>eV or cm⁻¹ (be consistent with k_B T units)</p></td>
+</tr>
+<tr class="row-even"><td><p>k_B</p></td>
+<td><p>Boltzmann constant</p></td>
+<td><p>eV/K if E in eV, or J/K if E in J</p></td>
+</tr>
+<tr class="row-odd"><td><p>T</p></td>
+<td><p>Plasma (excitation) temperature</p></td>
+<td><p>K</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Critical notes on F:</strong></p>
+<ul class="simple">
+<li><p>F absorbs: detector quantum efficiency, spectrometer throughput, fiber/lens solid angle, plasma
+volume, and the 1/(4π) steradians factor from isotropic emission.</p></li>
+<li><p>F is the SAME for all lines in a single spectrum acquisition (same optics, same plasma event).</p></li>
+<li><p>F is determined by the closure equation (Sec. 1.4); it is NOT measured independently.</p></li>
+</ul>
+<p><strong>Alternative notation used in some papers:</strong> Some papers write this as
+<code class="docutils literal notranslate"><span class="pre">I_{ki}</span> <span class="pre">=</span> <span class="pre">F_s</span> <span class="pre">·</span> <span class="pre">N_s</span> <span class="pre">·</span> <span class="pre">(A_{ki}</span> <span class="pre">g_k</span> <span class="pre">/</span> <span class="pre">U_s(T))</span> <span class="pre">·</span> <span class="pre">exp(-E_k</span> <span class="pre">/</span> <span class="pre">k_B</span> <span class="pre">T)</span></code> where F_s absorbs hc/4πλ and
+optical factors, and N_s is species number density. In practice, F_s = F (same for all s) in an
+optically thin, stoichiometric-ablation plasma. Verify which formulation your code uses.</p>
+</section>
+<hr class="docutils" />
+<section id="boltzmann-plot-linearization">
+<h3>1.2 Boltzmann Plot Linearization<a class="headerlink" href="#boltzmann-plot-linearization" title="Link to this heading"></a></h3>
+<p>Taking the natural log of eq. (1.1):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ln</span><span class="p">(</span> <span class="n">I_</span><span class="p">{</span><span class="n">ki</span><span class="p">}</span> <span class="n">λ_</span><span class="p">{</span><span class="n">ki</span><span class="p">}</span> <span class="o">/</span> <span class="p">(</span><span class="n">A_</span><span class="p">{</span><span class="n">ki</span><span class="p">}</span> <span class="n">g_k</span><span class="p">)</span> <span class="p">)</span> <span class="o">=</span> <span class="o">-</span><span class="n">E_k</span> <span class="o">/</span> <span class="p">(</span><span class="n">k_B</span> <span class="n">T</span><span class="p">)</span>  <span class="o">+</span>  <span class="n">ln</span><span class="p">(</span> <span class="n">F</span> <span class="n">C_s</span> <span class="n">h</span> <span class="n">c</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span><span class="n">π</span> <span class="n">U_s</span><span class="p">(</span><span class="n">T</span><span class="p">))</span> <span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Y-axis:</strong>  <code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">ln(</span> <span class="pre">I_{ki}</span> <span class="pre">λ_{ki}</span> <span class="pre">/</span> <span class="pre">(A_{ki}</span> <span class="pre">g_k)</span> <span class="pre">)</span></code></p>
+<p><strong>X-axis:</strong>  <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">E_k</span></code>   (upper-level energy, eV or cm⁻¹)</p>
+<p><strong>Slope:</strong>   <code class="docutils literal notranslate"><span class="pre">m</span> <span class="pre">=</span> <span class="pre">-1</span> <span class="pre">/</span> <span class="pre">(k_B</span> <span class="pre">T)</span></code>  →  <code class="docutils literal notranslate"><span class="pre">T</span> <span class="pre">=</span> <span class="pre">-1</span> <span class="pre">/</span> <span class="pre">(k_B</span> <span class="pre">m)</span></code></p>
+<p><strong>Intercept (y-intercept, at E_k = 0):</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">b_s</span> <span class="o">=</span> <span class="n">ln</span><span class="p">(</span> <span class="n">F</span> <span class="n">C_s</span> <span class="n">h</span> <span class="n">c</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span><span class="n">π</span> <span class="n">U_s</span><span class="p">(</span><span class="n">T</span><span class="p">))</span> <span class="p">)</span>
+</pre></div>
+</div>
+<p>From which: <code class="docutils literal notranslate"><span class="pre">C_s</span> <span class="pre">=</span> <span class="pre">(U_s(T)</span> <span class="pre">/</span> <span class="pre">(F</span> <span class="pre">h</span> <span class="pre">c</span> <span class="pre">/</span> <span class="pre">4π))</span> <span class="pre">·</span> <span class="pre">exp(b_s)</span></code></p>
+<p><strong>Key properties under ideal LTE:</strong></p>
+<ul class="simple">
+<li><p>All lines from the SAME species (same ionization stage) lie on a SINGLE straight line.</p></li>
+<li><p>All species present yield the SAME slope (same temperature T).</p></li>
+<li><p>Different species (different s) have parallel lines, offset by their different ln(F C_s / U_s(T)).</p></li>
+</ul>
+<p><strong>Common notation variant:</strong> some papers write y = ln(I/gA) (absorbing λ into F or using
+wavenumber units where ν̃ = 1/λ). Always check what the y-axis actually contains.</p>
+</section>
+<hr class="docutils" />
+<section id="saha-eggert-equation-and-the-saha-boltzmann-plane">
+<h3>1.3 Saha-Eggert Equation and the Saha-Boltzmann Plane<a class="headerlink" href="#saha-eggert-equation-and-the-saha-boltzmann-plane" title="Link to this heading"></a></h3>
+<p>The Saha-Eggert equation gives the ratio of singly-ionized (z=1) to neutral (z=0) number density:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>N_{s,1} / N_{s,0} = (2 / n_e) · (U_{s,1}(T) / U_{s,0}(T)) · (2π m_e k_B T / h²)^(3/2) · exp(-χ_s / k_B T)
+</pre></div>
+</div>
+<p>Where:</p>
+<ul class="simple">
+<li><p>N_{s,1}, N_{s,0}: number densities of ion and neutral of element s</p></li>
+<li><p>n_e: electron number density (cm⁻³ or m⁻³; be consistent)</p></li>
+<li><p>U_{s,1}(T), U_{s,0}(T): partition functions of ion and neutral</p></li>
+<li><p>m_e: electron mass</p></li>
+<li><p>χ_s: first ionization energy of element s (eV; reduced by Δχ for plasma screening, usually small)</p></li>
+<li><p>Factor of 2: electron spin degeneracy (from electron partition function = 2)</p></li>
+</ul>
+<p><strong>The (2πm_e k_B T/h²)^(3/2) factor in CGS:</strong> = 4.829 × 10¹⁵ T^(3/2) cm⁻³ (Griem 1964)</p>
+<p><strong>Mapping ionic lines onto the Saha-Boltzmann (neutral) plane:</strong></p>
+<p>For an ionic line (z=1) of element s with upper-level energy E_k^(ion) above the ion ground state,
+the combined Boltzmann + Saha treatment gives:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ln</span><span class="p">(</span> <span class="n">I_</span><span class="p">{</span><span class="n">ki</span><span class="p">}</span><span class="o">^</span><span class="p">(</span><span class="n">ion</span><span class="p">)</span> <span class="n">λ_</span><span class="p">{</span><span class="n">ki</span><span class="p">}</span> <span class="o">/</span> <span class="p">(</span><span class="n">A_</span><span class="p">{</span><span class="n">ki</span><span class="p">}</span> <span class="n">g_k</span><span class="p">)</span> <span class="p">)</span>  <span class="o">+</span>  <span class="n">correction_term</span>
+     <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">E_k</span><span class="o">^</span><span class="p">(</span><span class="n">ion</span><span class="p">)</span> <span class="o">+</span> <span class="n">χ_s</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">k_B</span> <span class="n">T</span><span class="p">)</span>  <span class="o">+</span>  <span class="n">intercept_term</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">correction_term</span> <span class="pre">=</span> <span class="pre">ln(</span> <span class="pre">n_e</span> <span class="pre">/</span> <span class="pre">2</span> <span class="pre">·</span> <span class="pre">(h²/(2π</span> <span class="pre">m_e</span> <span class="pre">k_B</span> <span class="pre">T))^(3/2)</span> <span class="pre">)</span></code> captures the Saha factor.</p>
+<p>The effective x-axis energy for ionic lines on the combined Saha-Boltzmann plot is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">E_k</span><span class="o">^</span><span class="p">(</span><span class="n">eff</span><span class="p">)</span> <span class="o">=</span> <span class="n">E_k</span><span class="o">^</span><span class="p">(</span><span class="n">ion</span><span class="p">)</span> <span class="o">+</span> <span class="n">χ_s</span>
+</pre></div>
+</div>
+<p>This “shifts” ionic line data to higher energies so they can be plotted on the same axes as neutral
+lines, still yielding the same temperature slope (−1/k_B T).</p>
+<p><strong>Aguilera &amp; Aragón (2007) multi-element Saha-Boltzmann plot:</strong> All lines (neutrals and ions, all
+elements) appear on a single plot. Temperature is determined from the common slope. Concentrations
+of each element are determined from the parallel intercepts. This is the canonical ME-SB approach.</p>
+</section>
+<hr class="docutils" />
+<section id="closure-equation-and-the-f-factor">
+<h3>1.4 Closure Equation and the F Factor<a class="headerlink" href="#closure-equation-and-the-f-factor" title="Link to this heading"></a></h3>
+<p>The sum of mole fractions of ALL emitting species must equal unity:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Σ_</span><span class="p">{</span><span class="n">s</span><span class="p">}</span> <span class="n">C_s</span> <span class="o">=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>where the sum runs over ALL elements detected (each summed over ionization stages via Saha if both
+are measured). Since <code class="docutils literal notranslate"><span class="pre">C_s</span> <span class="pre">=</span> <span class="pre">(U_s(T)</span> <span class="pre">·</span> <span class="pre">exp(b_s))</span> <span class="pre">/</span> <span class="pre">(F</span> <span class="pre">·</span> <span class="pre">h</span> <span class="pre">c</span> <span class="pre">/</span> <span class="pre">4π)</span></code>, setting the sum to 1 gives:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>F = (h c / 4π) · Σ_s (U_s(T) · exp(b_s)) / 1
+</pre></div>
+</div>
+<p>More compactly: once the Boltzmann-plot intercepts b_s are fit for each species, F is determined
+by:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>F = Σ_s [ U_s(T) · exp(b_s) / (h c / 4π) ]
+</pre></div>
+</div>
+<p>and each concentration follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>C_s = U_s(T) · exp(b_s) / (F · h c / 4π)
+</pre></div>
+</div>
+<p><strong>Mole fraction vs. mass fraction:</strong> CF-LIBS yields MOLE fractions (number fractions). Conversion
+to mass (weight) fractions requires:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>w_s = (C_s · M_s) / Σ_j (C_j · M_j)
+</pre></div>
+</div>
+<p>where M_s is the molar mass (g/mol). Omitting this conversion causes systematic errors proportional
+to the deviation from average molar mass — errors up to 353% reported for carbon in steel
+(Völker 2024). This is one of the most frequently omitted steps in published CF-LIBS code.</p>
+</section>
+<hr class="docutils" />
+<section id="iterative-cf-libs-algorithm-ciucci-1999-tognoni-2010-standard">
+<h3>1.5 Iterative CF-LIBS Algorithm (Ciucci 1999 / Tognoni 2010 standard)<a class="headerlink" href="#iterative-cf-libs-algorithm-ciucci-1999-tognoni-2010-standard" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Peak identification and integration:</strong> Measure I_{ki} for a set of spectral lines; identify
+species (s, k→i), extract A_{ki}, g_k, E_k from atomic databases (NIST ASD or Kurucz).</p></li>
+<li><p><strong>Initial temperature estimate:</strong> Construct a Boltzmann plot for a single element with many
+lines spanning a wide E_k range (often Fe I or Fe II). Fit slope → T_0.</p></li>
+<li><p><strong>Electron density n_e:</strong> Measure Stark broadening of a suitable line (e.g., Hα 656 nm FWHM,
+or a known Stark-broadened metal line). Or estimate from Saha self-consistency. Typical LIBS
+values: 10^16–10^17 cm⁻³.</p></li>
+<li><p><strong>Multi-element Saha-Boltzmann plot:</strong> For all detected lines (neutral + ion), plot y_i vs
+x_i with ionic lines shifted by χ_s. Fit a common slope → refined T. Fit element intercepts
+b_s.</p></li>
+<li><p><strong>Concentrations from intercepts:</strong> Use closure (Sec. 1.4) to determine F and all C_s.</p></li>
+<li><p><strong>Saha correction loop:</strong> Update ionic/neutral concentration ratio using new T and n_e. Check
+charge balance (n_e = Σ_s C_s z_s N_total). Refit. Repeat until T and n_e converge (typically
+3–10 iterations).</p></li>
+<li><p><strong>Output:</strong> T, n_e, {C_s} as mole fractions → convert to mass fractions if needed.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="one-point-recalibration-internal-reference-opc-method">
+<h3>1.6 One-Point Recalibration (Internal Reference / OPC Method)<a class="headerlink" href="#one-point-recalibration-internal-reference-opc-method" title="Link to this heading"></a></h3>
+<p>When only one element has a known concentration C_ref (internal reference or one-point calibration):</p>
+<ol class="arabic simple">
+<li><p>Determine T from Boltzmann plot of the reference element.</p></li>
+<li><p>Use known C_ref to fix F from the reference element intercept alone: F = U_ref(T)·exp(b_ref) / (C_ref · hc/4π).</p></li>
+<li><p>All other concentrations follow from their Boltzmann-plot intercepts and this F.</p></li>
+</ol>
+<p>This relaxes the full-closure requirement but still requires LTE and optically-thin conditions.
+The “one-point Saha-Boltzmann” variant (e.g., Yalcin et al. 1999) uses one reference line of
+each ionization stage to cross-calibrate T and n_e simultaneously.</p>
+</section>
+<hr class="docutils" />
+<section id="oxide-matrix-closure-for-non-metal-samples">
+<h3>1.7 Oxide / Matrix Closure for Non-Metal Samples<a class="headerlink" href="#oxide-matrix-closure-for-non-metal-samples" title="Link to this heading"></a></h3>
+<p>For geological/mineral samples (rocks, soils, ceramics), oxygen is ubiquitous but LIBS lines
+for O are weak or absent from the main spectrum window. Common approaches:</p>
+<ol class="arabic simple">
+<li><p><strong>Oxide closure model:</strong> Assume all detected metals M exist as their most stable oxide (SiO₂,
+Al₂O₃, Fe₂O₃, MgO, CaO, TiO₂, etc.). Mass balance: Σ_{oxides} w_oxide = 1, where
+w_oxide = w_M · (M_oxide / M_M). This over-constrains the system but enables oxygen-inclusive
+normalization.</p></li>
+<li><p><strong>Stoichiometric correction:</strong> Known oxide stoichiometry fixes n_O / n_M ratios; the closure
+then sums elemental + calculated oxygen. This was used in ChemCam / SuperCam (Mars) CF-LIBS
+(Wiens et al. 2013, Clegg et al. 2017).</p></li>
+<li><p><strong>Mole-fraction oxide closure variant:</strong> Σ C_s = 1 includes C_O calculated from oxide
+stoichiometries. This changes the denominator of the closure and must be handled consistently.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="mcwhirter-criterion-for-lte">
+<h3>1.8 McWhirter Criterion for LTE<a class="headerlink" href="#mcwhirter-criterion-for-lte" title="Link to this heading"></a></h3>
+<p><strong>Necessary condition (McWhirter 1962):</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_e ≥ 1.6 × 10¹² · T^(1/2) · (ΔE)³   [cm⁻³]
+</pre></div>
+</div>
+<p>where T is in K and ΔE is the energy gap of the most sensitive transition (eV), typically the
+resonance-line energy of the dominant species.</p>
+<p><strong>Important:</strong> This criterion is necessary but NOT sufficient for transient, inhomogeneous LIBS
+plasmas. Cristoforetti et al. (2010) showed that an additional relaxation time condition must
+hold: the plasma relaxation time must be short relative to the observation time (τ_relax &lt;&lt; t_obs).</p>
+<p>Typical LIBS plasma at ~10,000–20,000 K requires n_e ≥ 10^16–10^17 cm⁻³ for LTE validity;
+this is usually satisfied at early delays (&lt; 2 µs) but the plasma may be still optically thick.
+The trade-off: early times → LTE but self-absorption; late times → optically thin but non-LTE.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="common-implementation-pitfalls-and-correct-treatment">
+<h2>2. Common Implementation Pitfalls and Correct Treatment<a class="headerlink" href="#common-implementation-pitfalls-and-correct-treatment" title="Link to this heading"></a></h2>
+<section id="p1-wrong-y-axis-in-boltzmann-plot">
+<h3>P1: Wrong y-axis in Boltzmann plot<a class="headerlink" href="#p1-wrong-y-axis-in-boltzmann-plot" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Wrong:</strong> ln(I / (g_k A_{ki})) — omits λ_{ki}</p></li>
+<li><p><strong>Correct:</strong> ln(I λ_{ki} / (g_k A_{ki})) when using the hc/λ form of the energy.</p></li>
+<li><p><strong>Why it matters:</strong> Omitting λ introduces a systematic energy-dependent bias in both the slope
+(temperature error) and intercepts (concentration error), especially if lines span a wide
+wavelength range.</p></li>
+</ul>
+</section>
+<section id="p2-energy-units-inconsistency">
+<h3>P2: Energy units inconsistency<a class="headerlink" href="#p2-energy-units-inconsistency" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Common error:</strong> Mixing eV for E_k with k_B in J/K (or cm⁻¹ with wrong conversion).</p></li>
+<li><p><strong>Correct:</strong> If E_k in eV, use k_B = 8.617333 × 10⁻⁵ eV/K. If E_k in cm⁻¹, use
+k_B T in cm⁻¹ units: k_B = 0.6950356 cm⁻¹/K.</p></li>
+<li><p><strong>Check:</strong> The Boltzmann plot slope should be ~−1/(0.862 eV) × (1/T) at T = 10,000 K ≈ −1.16.</p></li>
+</ul>
+</section>
+<section id="p3-degeneracy-g-k-confusion">
+<h3>P3: Degeneracy g_k confusion<a class="headerlink" href="#p3-degeneracy-g-k-confusion" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>g_k = 2J_k + 1 where J_k is the total angular momentum quantum number of the UPPER level.</p></li>
+<li><p><strong>NOT</strong> the lower level g_i; <strong>NOT</strong> 2l+1 or 2S+1 alone (those are for LS-coupled sub-levels).</p></li>
+<li><p>Many databases list g_k directly; always verify against the NIST level entry.</p></li>
+</ul>
+</section>
+<section id="p4-partition-function-at-wrong-temperature-truncated-sum">
+<h3>P4: Partition function at wrong temperature / truncated sum<a class="headerlink" href="#p4-partition-function-at-wrong-temperature-truncated-sum" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>U_s(T) must be evaluated at the current iteration’s temperature T, not at a fixed value.</p></li>
+<li><p>The sum U_s(T) = Σ_i g_i exp(-E_i/k_B T) should include all energy levels up to the
+ionization limit. Truncating at a fixed maximum energy causes systematic underestimation,
+especially at high T.</p></li>
+<li><p><strong>Best practice:</strong> Use tabulated partition functions from Irwin (1981), NIST, or Kurucz, fitted
+to a polynomial: log U = Σ a_n (log T)^n (e.g., Griem, or the 5th-order polynomial from NIST).</p></li>
+</ul>
+</section>
+<section id="p5-mole-fractions-reported-as-mass-fractions">
+<h3>P5: Mole fractions reported as mass fractions<a class="headerlink" href="#p5-mole-fractions-reported-as-mass-fractions" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>CF-LIBS closure gives C_s = mole (number) fractions. All reported comparisons to nominal
+composition must use the SAME basis.</p></li>
+<li><p>Völker (2024) quantified errors up to 353% from omitting the M_s-weighted conversion.</p></li>
+</ul>
+</section>
+<section id="p6-saha-equation-factor-of-2-error">
+<h3>P6: Saha equation factor-of-2 error<a class="headerlink" href="#p6-saha-equation-factor-of-2-error" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The factor of 2 in the Saha equation <code class="docutils literal notranslate"><span class="pre">N_{s,1}/N_{s,0}</span> <span class="pre">=</span> <span class="pre">(2/n_e)</span> <span class="pre">·</span> <span class="pre">...</span></code> comes from the electron
+partition function (spin degeneracy = 2). Some texts write <code class="docutils literal notranslate"><span class="pre">(1/n_e)</span></code> and absorb the 2 into U;
+verify which convention your source uses.</p></li>
+<li><p>Some formulations use CGS (n_e in cm⁻³) with the constant 4.829 × 10¹⁵ T^(3/2); others use
+SI (n_e in m⁻³). A factor-of-10⁶ error in n_e (unit mismatch) shifts all ionic/neutral ratios
+dramatically.</p></li>
+</ul>
+</section>
+<section id="p7-ionic-line-energy-shift-on-the-saha-boltzmann-plot">
+<h3>P7: Ionic line energy shift on the Saha-Boltzmann plot<a class="headerlink" href="#p7-ionic-line-energy-shift-on-the-saha-boltzmann-plot" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Ionic lines must use E_k^(eff) = E_k^(ion) + χ_s (ionization energy added to all ionic
+upper-level energies).</p></li>
+<li><p>Failure to add χ_s places ionic lines at wrong x-axis positions → wrong slope → wrong T.</p></li>
+<li><p>χ_s should be the first-ionization potential in the SAME energy units as E_k^(ion).</p></li>
+<li><p>For higher ions (z=2), add χ_s,1 + χ_s,2 to the upper-level energy.</p></li>
+</ul>
+</section>
+<section id="p8-stoichiometric-ablation-assumption">
+<h3>P8: Stoichiometric ablation assumption<a class="headerlink" href="#p8-stoichiometric-ablation-assumption" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>CF-LIBS assumes laser ablation produces a plasma whose elemental composition equals the bulk
+sample. This is violated for multi-phase, highly volatile, or heterogeneous samples.</p></li>
+<li><p>No algorithmic correction exists for non-stoichiometric ablation; it is a fundamental limit.</p></li>
+</ul>
+</section>
+<section id="p9-self-absorption-in-boltzmann-plot-lines">
+<h3>P9: Self-absorption in Boltzmann plot lines<a class="headerlink" href="#p9-self-absorption-in-boltzmann-plot-lines" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Optically thick lines appear weaker than their true intensity → Boltzmann plot points scatter
+below the true line → temperature overestimated (apparent slope less steep).</p></li>
+<li><p>Preferred fix: use lines with low transition probability and high excitation energy (less prone
+to self-absorption). Validate with doublet-ratio test: I(λ₁)/I(λ₂) should match g₁A₁/g₂A₂.</p></li>
+</ul>
+</section>
+<section id="p10-f-factor-sign-convention-intercept-extraction">
+<h3>P10: F factor sign convention / intercept extraction<a class="headerlink" href="#p10-f-factor-sign-convention-intercept-extraction" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The Boltzmann plot intercept b_s involves ln(F C_s / U_s(T)) (plus constant terms from hc/4π).
+When F is extracted from the closure sum, the same constant must be consistently included or
+excluded from b_s. Any reformulation of the y-axis must propagate the constant correctly.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-references">
+<h2>3. Key References<a class="headerlink" href="#key-references" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Ciucci A., Corsi M., Palleschi V., Rastelli S., Salvetti A., Tognoni E. (1999)</strong>
+“New Procedure for Quantitative Elemental Analysis by Laser-Induced Plasma Spectroscopy.”
+<em>Applied Spectroscopy</em> 53(8), 960–964. DOI: 10.1366/0003702991947612
+— <strong>The original CF-LIBS paper.</strong> Introduces the method, three core assumptions
+(stoichiometric ablation, LTE, optical thinness), and the closure normalization.</p></li>
+<li><p><strong>Tognoni E., Cristoforetti G., Legnaioli S., Palleschi V. (2010)</strong>
+“Calibration-Free Laser-Induced Breakdown Spectroscopy: State of the art.”
+<em>Spectrochimica Acta Part B</em> 65(1), 1–14. DOI: 10.1016/j.sab.2009.11.006
+— <strong>The definitive review.</strong> Critical assessment of accuracy, error sources, and limits of
+CF-LIBS; comprehensive equation set; summary of ~50 experimental results in the literature.</p></li>
+<li><p><strong>Aguilera J.A., Aragón C. (2007)</strong>
+“Multi-element Saha–Boltzmann and Boltzmann plots in laser-induced plasmas.”
+<em>Spectrochimica Acta Part B</em> 62, 378–385. DOI: 10.1016/j.sab.2007.03.003
+— <strong>Canonical multi-element Saha-Boltzmann plot method.</strong> Common-slope fit across neutral
+and ionic lines of multiple elements; intercepts give relative concentrations.</p></li>
+<li><p><strong>Aragón C., Aguilera J.A. (2008)</strong>
+“Characterization of laser induced plasmas by optical emission spectroscopy: A review of
+experiments and methods.”
+<em>Spectrochimica Acta Part B</em> 63(9), 893–916. DOI: 10.1016/j.sab.2008.05.010
+— Comprehensive treatment of plasma diagnostics including Boltzmann/Saha-Boltzmann
+methodology, electron density measurement, and spatially resolved measurements.</p></li>
+<li><p><strong>Cristoforetti G., De Giacomo A., Dell’Aglio M., Legnaioli S., Tognoni E., Palleschi V.,
+Omenetto N. (2010)</strong>
+“Local Thermodynamic Equilibrium in Laser-Induced Breakdown Spectroscopy: Beyond the
+McWhirter Criterion.”
+<em>Spectrochimica Acta Part B</em> 65, 86–95. DOI: 10.1016/j.sab.2009.11.005
+— <strong>Authoritative LTE validity paper.</strong> Shows McWhirter alone is insufficient; gives the
+relaxation-time criterion; quantifies when LIBS plasmas satisfy LTE.</p></li>
+<li><p><strong>Tognoni E., Cristoforetti G., Legnaioli S., Palleschi V., Salvetti A., Müller M.,
+Panne U., Gornushkin I. (2007)</strong>
+“A numerical study of expected accuracy and precision in Calibration-Free LIBS in the
+assumption of ideal analytical plasma.”
+<em>Spectrochimica Acta Part B</em> 62(12), 1287–1302. DOI: 10.1016/j.sab.2007.10.005
+— Systematic error analysis of CF-LIBS; quantifies sensitivity to temperature error,
+partition function errors, n_e errors, and line selection.</p></li>
+<li><p><strong>Völker T. (2024)</strong>
+“Mass and mole fractions in calibration-free LIBS.”
+<em>J. Analytical Atomic Spectrometry</em> (RSC). DOI: 10.1039/D4JA00028E
+— <strong>Essential correction paper.</strong> Proves CF-LIBS closure gives mole fractions, not mass
+fractions; shows errors up to 353% from omitting molar-mass conversion; gives explicit
+conversion formulas.</p></li>
+<li><p><strong>Cristoforetti G., Tognoni E. (2013)</strong>
+“Calculation of elemental columnar density from self-absorbed lines in laser-induced breakdown
+spectroscopy: a resource for quantitative analysis.”
+<em>Spectrochimica Acta Part B</em> 79–80, 63–71. DOI: 10.1016/j.sab.2012.11.010
+— Column-density Saha-Boltzmann (CD-SB) method for self-absorbed lines; allows CF-LIBS
+without requiring optically-thin lines.</p></li>
+<li><p><strong>Ferus M. et al. (2018)</strong>
+“Calibration-free quantitative elemental analysis of meteor plasma using reference LIBS of
+meteorite samples.”
+<em>Astronomy &amp; Astrophysics</em> 610, A73. DOI: 10.1051/0004-6361/201629950
+— Good worked example of full CF-LIBS pipeline with explicit equations (in accessible HTML);
+demonstrates the Saha-Boltzmann ionic line shift; uses meteor plasma as test case.</p></li>
+<li><p><strong>Völker (RSC Adv. 2023 review) — “Catching up on calibration-free LIBS”</strong>
+<em>J. Analytical Atomic Spectrometry</em> (RSC). DOI: 10.1039/D3JA00130J
+— Up-to-date critical review of CF-LIBS variants: CD-SB, C-Sigma, one-point calibration,
+self-absorption correction methods; best current synthesis of the field.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="what-correct-code-must-do-checklist">
+<h2>4. What Correct Code MUST Do — Checklist<a class="headerlink" href="#what-correct-code-must-do-checklist" title="Link to this heading"></a></h2>
+<section id="data-preparation">
+<h3>Data preparation<a class="headerlink" href="#data-preparation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Integrate spectral lines to get I_{ki} (area under peak, not peak height, unless Gaussian
+profile and FWHM is constant — peak height is acceptable if all lines have same lineshape
+and FWHM across the spectrum, rarely true).</p></li>
+<li><p>[ ] Apply detector spectral response / throughput calibration before using line intensities.</p></li>
+<li><p>[ ] Verify optical thinness for each line used (doublet ratio test or self-absorption coefficient).</p></li>
+</ul>
+</section>
+<section id="boltzmann-plot">
+<h3>Boltzmann plot<a class="headerlink" href="#boltzmann-plot" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Y-axis: <code class="docutils literal notranslate"><span class="pre">ln(I_{ki}</span> <span class="pre">*</span> <span class="pre">lambda_{ki}</span> <span class="pre">/</span> <span class="pre">(A_{ki}</span> <span class="pre">*</span> <span class="pre">g_k))</span></code> — must include λ.</p></li>
+<li><p>[ ] X-axis: <code class="docutils literal notranslate"><span class="pre">E_k</span></code> in eV (or wavenumbers) — upper level energy above GROUND STATE of that species.</p></li>
+<li><p>[ ] Energy units: check k_B units match E_k units (eV/K vs J/K; NOT mixed).</p></li>
+<li><p>[ ] g_k = 2J_k + 1 for the UPPER level; fetch from atomic database, not derived from scratch.</p></li>
+</ul>
+</section>
+<section id="saha-boltzmann-for-ionic-lines">
+<h3>Saha-Boltzmann for ionic lines<a class="headerlink" href="#saha-boltzmann-for-ionic-lines" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Shift ionic lines to x-axis value <code class="docutils literal notranslate"><span class="pre">E_k^(ion)</span> <span class="pre">+</span> <span class="pre">chi_s</span></code> (ionization energy in same units).</p></li>
+<li><p>[ ] Apply the Saha correction term to the y-axis (involves n_e, T, m_e, h).</p></li>
+<li><p>[ ] Use n_e from Stark broadening measurement or iterative Saha self-consistency.</p></li>
+<li><p>[ ] Factor of 2 in Saha: <code class="docutils literal notranslate"><span class="pre">(2/n_e)</span> <span class="pre">*</span> <span class="pre">(2</span> <span class="pre">pi</span> <span class="pre">m_e</span> <span class="pre">k_B</span> <span class="pre">T</span> <span class="pre">/</span> <span class="pre">h^2)^(3/2)</span></code> — verify your source’s convention.</p></li>
+<li><p>[ ] Ionization energy chi_s: use NIST value; apply ionization-potential lowering Δchi only if n_e &gt; ~10^17 cm^-3 (usually &lt; 0.1 eV in typical LIBS, often neglected).</p></li>
+</ul>
+</section>
+<section id="partition-functions">
+<h3>Partition functions<a class="headerlink" href="#partition-functions" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] U_s(T) evaluated at current T in the iteration, not at a fixed temperature.</p></li>
+<li><p>[ ] Include sufficient energy levels up to the ionization limit (truncation causes error at high T).</p></li>
+<li><p>[ ] Use polynomial fits (e.g., 5th-order in log T) from validated tables, not on-the-fly sums
+unless the full NIST level list is available.</p></li>
+</ul>
+</section>
+<section id="closure-and-concentration">
+<h3>Closure and concentration<a class="headerlink" href="#closure-and-concentration" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Sum C_s = 1 over ALL detected elements (both ionization stages combined if both measured).</p></li>
+<li><p>[ ] Account for all elements: missing elements lead to over-concentration of detected ones.</p></li>
+<li><p>[ ] F is determined PURELY from the closure — never from external calibration in CF-LIBS.</p></li>
+<li><p>[ ] Convert mole fractions to mass fractions via w_s = (C_s * M_s) / sum_j(C_j * M_j) before
+comparing to nominal wt% compositions.</p></li>
+</ul>
+</section>
+<section id="iteration">
+<h3>Iteration<a class="headerlink" href="#iteration" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Iterate until both T and n_e converge (|ΔT/T| &lt; 0.1% and |Δn_e/n_e| &lt; 1% typical tolerance).</p></li>
+<li><p>[ ] Check charge neutrality: n_e ≈ Σ_s C_s * z_s * N_total (verify within ~factor of 2).</p></li>
+<li><p>[ ] Do NOT assume n_e = 0 or n_e = constant; both introduce systematic errors in Saha balance.</p></li>
+</ul>
+</section>
+<section id="lte-validity">
+<h3>LTE validity<a class="headerlink" href="#lte-validity" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Verify McWhirter: n_e &gt;= 1.6e12 * T^0.5 * (ΔE)^3 [cm^-3] where ΔE is the resonance-line
+energy of the dominant species (NOT adjacent-gap; NOT max(E_k)).</p></li>
+<li><p>[ ] Check observation time window: LTE is most reliable at 0.5–2 µs after pulse (before plasma
+cools below LTE threshold; after optically-thick early phase).</p></li>
+</ul>
+</section>
+<section id="oxide-geological-closure">
+<h3>Oxide/geological closure<a class="headerlink" href="#oxide-geological-closure" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] For mineral/geological samples: decide whether to apply oxide closure model or standard
+elemental closure. Document the choice and which elements are included.</p></li>
+<li><p>[ ] If oxygen is inferred from oxide stoichiometry, include its contribution to the closure sum
+and clearly label output as oxide-normalized.</p></li>
+</ul>
+<hr class="docutils" />
+<p><em>Sources accessed: Frontiers Physics 2022 (doi 10.3389/fphy.2022.887171), RSC JAAS 2023
+(doi 10.1039/D3JA00130J), RSC JAAS 2024 (doi 10.1039/D4JA00028E), A&amp;A 2018 Ferus et al.
+(doi 10.1051/0004-6361/201629950), RSC Advances 2026 (doi 10.1039/D6RA01889K), ADS abstract
+for Tognoni 2010 (Spec. Acta B 65:1), Aguilera/Aragón 2007 IAEA INIS record, LibreTexts Saha
+equation (Tatum stellar atmospheres), Cristoforetti 2010 ADS abstract.</em></p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,682 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Physics + Algorithm Audit — 2026-05-27 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Physics + Algorithm Audit — 2026-05-27</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/2026-05-27-physics-audit.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-physics-algorithm-audit-2026-05-27">
+<h1>CF-LIBS Physics + Algorithm Audit — 2026-05-27<a class="headerlink" href="#cf-libs-physics-algorithm-audit-2026-05-27" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> Two-phase audit complete. Phase 1 = parallel code inspection by six area-specialist subagents. Phase 2 = literature validation of the strongest hypotheses via Asta literature search + targeted web/PDF retrieval. All quantitative claims are citation-grounded; no invention.</p>
+<p><strong>Trigger:</strong> macro_F1 = <strong>0.402</strong> on the Phase-7 cluster benchmark (n=24 spectra) versus a literature norm of ≥0.7 and a protocol-required floor of 0.6 (Si/Fe/Mg/Ca/Al/Ti/Mn/K/Na). The gap is large enough that there must be systemic physics/algorithm defects, not just parameter tuning.</p>
+<p><strong>Verdict:</strong> <strong>Four cross-corroborated systemic defect families are present.</strong> All are confirmed by published literature. A staged remediation should plausibly recover macro_F1 into the 0.6–0.8 range. The single highest-leverage fix is wiring self-absorption correction into the inversion loop (literature shows ×10 accuracy improvement); the highest-leverage-per-line-of-code is fixing the manifold’s Nyquist-violating wavelength grid.</p>
+<p>Audit artifacts: <code class="docutils literal notranslate"><span class="pre">.asta/documents/literature/find/lit-*.json</span></code> (8 Asta search snapshots).</p>
+<hr class="docutils" />
+<section id="the-four-defect-families-cross-corroborated-by-2-agents">
+<h2>1. The four defect families (cross-corroborated by ≥2 agents)<a class="headerlink" href="#the-four-defect-families-cross-corroborated-by-2-agents" title="Link to this heading"></a></h2>
+<section id="a-stark-broadening-is-broken-in-four-places">
+<h3>A. Stark broadening is broken in four places<a class="headerlink" href="#a-stark-broadening-is-broken-in-four-places" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Location</p></th>
+<th class="head"><p>Bug</p></th>
+<th class="head"><p>Severity</p></th>
+<th class="head"><p>Literature</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>A1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/element_id.py:170</span></code></p></td>
+<td><p>reads <code class="docutils literal notranslate"><span class="pre">transition.stark_width_nm</span></code>; <code class="docutils literal notranslate"><span class="pre">Transition</span></code> exposes <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>. ω_stark silently 0 → wavelength tolerance collapses to <code class="docutils literal notranslate"><span class="pre">λ/R</span></code>.</p></td>
+<td><p>HIGH</p></td>
+<td><p>Aragón, Pellé &amp; Aguilera 2011 (<em>Anal. Bioanal. Chem.</em> 400, 3331): Al II 281.6 nm red-shifts by <strong>130 pm</strong> under Stark; without that budget in tolerance the line silently overlaps other elements. Gajarska et al. 2024 (<em>JAAS</em> DOI 10.1039/D4JA00247D): documented three Cr lines missed in steel from this exact mechanism.</p></td>
+</tr>
+<tr class="row-odd"><td><p>A2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py:313</span></code></p></td>
+<td><p>hardcodes <code class="docutils literal notranslate"><span class="pre">apply_stark=False</span></code>; manifold and Bayesian paths default to True. SpectrumModel-based templates have no Stark.</p></td>
+<td><p>HIGH</p></td>
+<td><p>Aragón &amp; Aguilera 2008 (<em>Spectrochim. Acta B</em> 63, 893): at n_e ~ 10¹⁷ cm⁻³ Lorentzian (Stark) ≥ Gaussian (Doppler+inst). Gaussian-only templates miss 30–50% of central FWHM.</p></td>
+</tr>
+<tr class="row-even"><td><p>A3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/basis_library.py:179</span></code></p></td>
+<td><p>NNLS basis is pure Gaussian (<code class="docutils literal notranslate"><span class="pre">exp(-0.5·((wl-λ_0)/σ)²)</span></code>). No Lorentzian wings. NNLS holds w=0.46 of consensus voting.</p></td>
+<td><p>HIGH</p></td>
+<td><p>Same. With NNLS as the dominant voter, Gaussian-only basis bleeds residuals into adjacent species.</p></td>
+</tr>
+<tr class="row-odd"><td><p>A4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scripts/populate_stark_widths.py</span></code></p></td>
+<td><p>80% of stored Stark widths are one reference value per (element, ion) scaled by <code class="docutils literal notranslate"><span class="pre">(λ/λ_ref)²</span></code>. <strong>Phase-1 framing “intra-multiplet 2-5×” was wrong</strong> (Wiese &amp; Konjević 1982: intra-multiplet variation is normally &lt; 10% in angular-frequency units); the correct concern is <strong>inter-multiplet 2-10×</strong> variation per Konjević et al. 2002.</p></td>
+<td><p>MEDIUM-HIGH (correctness); MEDIUM (F1 lift)</p></td>
+<td><p>Konjević, Lesage, Fuhr &amp; Wiese 2002 (<em>J. Phys. Chem. Ref. Data</em> 31, 819); Lesage 2009 update.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Quantitative magnitudes</strong> at n_e = 10¹⁷ cm⁻³, T = 10,000 K (Stark FWHM, pm):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Line</p></th>
+<th class="head"><p>Konjević measured</p></th>
+<th class="head"><p>Repo populate value</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Si I 250.69 / 251.92 / 252.41</p></td>
+<td><p>~6</p></td>
+<td><p>~9</p></td>
+<td><p>Repo over-estimates by ×1.5</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si I 288.16</p></td>
+<td><p>~5</p></td>
+<td><p>12</p></td>
+<td><p>Over-estimate ×2.4</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe II 259.94</p></td>
+<td><p>~7</p></td>
+<td><p>18</p></td>
+<td><p>Over-estimate ×2.5</p></td>
+</tr>
+<tr class="row-odd"><td><p>Al I 396.15</p></td>
+<td><p>~40</p></td>
+<td><p>4</p></td>
+<td><p><strong>Catastrophic under-estimate ×10</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Ca II 393.37 (K-line)</p></td>
+<td><p>~34</p></td>
+<td><p>8</p></td>
+<td><p>Under-estimate ×4</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca II 396.85 (H-line)</p></td>
+<td><p>~9</p></td>
+<td><p>8</p></td>
+<td><p>OK</p></td>
+</tr>
+<tr class="row-even"><td><p>Mn II 257.61</p></td>
+<td><p>several pm to tens</p></td>
+<td><p>32</p></td>
+<td><p>Order-of-magnitude variable</p></td>
+</tr>
+<tr class="row-odd"><td><p>Instrument FWHM &#64; R=10⁴, 300 nm</p></td>
+<td><p>—</p></td>
+<td><p>30</p></td>
+<td><p>Stark is comparable to or exceeds it for Al I, Ca II K.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Confidence Phase-2 lift estimates:</strong> A1 +1–5, A3 +2–6, A2 +2–8, A4 +1–3 macro_F1 pts. Total Stark cluster: <strong>+6 to +20 pts</strong>.</p>
+<p><strong>Remediation order:</strong> A1 (one-line attribute fix) → A3 (Voigt basis using existing <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>) → A2 (default <code class="docutils literal notranslate"><span class="pre">apply_stark=True</span></code>) → A4 (line-resolved Stark data ingest from Konjević 2002 + STARK-B + Aragón 2014 LIBS-measured Fe II/Ni II).</p>
+</section>
+<hr class="docutils" />
+<section id="b-self-absorption-correction-is-dead-code">
+<h3>B. Self-absorption correction is dead code<a class="headerlink" href="#b-self-absorption-correction-is-dead-code" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Location</p></th>
+<th class="head"><p>Bug</p></th>
+<th class="head"><p>Severity</p></th>
+<th class="head"><p>Literature</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>B1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/self_absorption.py</span></code> (2196 LOC), <code class="docutils literal notranslate"><span class="pre">cdsb.py</span></code> (806 LOC)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SelfAbsorptionCorrector</span></code> and <code class="docutils literal notranslate"><span class="pre">CDSBPlotter</span></code> have <strong>zero call sites</strong> in the production inversion path. Verified by Serena <code class="docutils literal notranslate"><span class="pre">find_referencing_symbols</span></code>. The only “correction” in alias is <code class="docutils literal notranslate"><span class="pre">eps_th</span> <span class="pre">*=</span> <span class="pre">0.3</span></code> constant damping for E_i&lt;0.1 eV (<code class="docutils literal notranslate"><span class="pre">alias.py:3364</span></code>).</p></td>
+<td><p>CRITICAL</p></td>
+<td><p>Bulajic et al. 2002 (<em>Spectrochim. Acta B</em> 57, 339, 314 citations): recursive SA correction in the CF-LIBS loop is <strong>“approximately one order of magnitude” accuracy improvement</strong>. Poggialini, Palleschi et al. 2023 (<em>JAAS</em> DOI 10.1039/D3JA00130J): “self-absorption effects in most cases cannot be neglected” — post-Bulajic CF-LIBS replaces the optically-thin Boltzmann shortcut with the full radiation-transfer equation. John &amp; Anoop 2023 (<em>RSC Adv.</em> 13, 29613): Mg-Ca 50:50 simulated test, uncorrected → 36.42% / 63.58% (<strong>27% absolute error</strong>); corrected → 49.33% / 50.67% (<strong>2% error</strong>).</p></td>
+</tr>
+<tr class="row-odd"><td><p>B2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2602-2684</span></code> <code class="docutils literal notranslate"><span class="pre">_apply_resonance_filter</span></code></p></td>
+<td><p>drops lines with E_i &lt; 0.1 eV; Si I 250.69/251.92/252.41 (E_i=0.0096), Si I 251.43 (resonance E_i=0); cutoff also drops most of the Si analytical triplet. Boltzmann lever-arm collapses from ~5 eV to ~1.5 eV. <strong>NOTE:</strong> Phase-1 brief had Si I 251.611 E_i = 0.0096; <strong>corrected NIST value is 0.0277 eV</strong> — so 251.611 actually survives the 0.1 eV cutoff. But 250.69/251.92/252.41/251.43 (the rest of the triplet) are dropped, and the lever-arm point stands.</p></td>
+<td><p>HIGH</p></td>
+<td><p>Aragón &amp; Aguilera 2008 §7: lines with E_i &lt; ~1 eV should be <strong>corrected</strong>, not dropped. Direct conflict with the repo’s policy.</p></td>
+</tr>
+<tr class="row-even"><td><p>B3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/cdsb.py:429-504</span></code> <code class="docutils literal notranslate"><span class="pre">_estimate_initial_tau</span></code></p></td>
+<td><p>uses <code class="docutils literal notranslate"><span class="pre">density_factor</span> <span class="pre">=</span> <span class="pre">n_e/n_e_ref</span></code> instead of <code class="docutils literal notranslate"><span class="pre">n_lower/n_ref</span></code>. For major-matrix Si (25 wt%): n_total ≈ 7×10¹⁸ cm⁻³ vs n_e ≈ 10¹⁷ → initial τ underestimated by ~40-70×. CDSB iteration converges to “everything thin” before correcting anything.</p></td>
+<td><p>HIGH</p></td>
+<td><p>Aragón &amp; Aguilera 2008 Eq. 7; El Sherbini 2005.</p></td>
+</tr>
+<tr class="row-odd"><td><p>B4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">self_absorption.py:1070-1112</span></code> <code class="docutils literal notranslate"><span class="pre">_apply_recursive_correction</span></code></p></td>
+<td><p>updates τ via <code class="docutils literal notranslate"><span class="pre">tau</span> <span class="pre">*=</span> <span class="pre">I_new/I_obs</span></code> — dimensionally wrong. τ is set by plasma state + atomic data, not by observed intensity. Mitigated only by <code class="docutils literal notranslate"><span class="pre">max_iterations=5</span></code>.</p></td>
+<td><p>HIGH (correctness); MEDIUM (impact)</p></td>
+<td><p>Bulajic 2002 algorithm updates τ from updated T, n_e, n_lower per iteration. The Phase-1 finding stands.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Quantitative τ_0 at typical soil (Si ~25 wt%, T = 10⁴ K, n_e = 10¹⁷ cm⁻³, L = 1 mm):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Line</p></th>
+<th class="head"><p>E_i (eV)</p></th>
+<th class="head"><p>τ₀</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Si I 250.690</p></td>
+<td><p>0.0096</p></td>
+<td><p><strong>1.9</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Si I 251.432</p></td>
+<td><p>0.000</p></td>
+<td><p><strong>1.6</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Si I 251.611</p></td>
+<td><p>0.0277</p></td>
+<td><p><strong>5.8</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Si I 251.920</p></td>
+<td><p>0.0096</p></td>
+<td><p>1.2</p></td>
+</tr>
+<tr class="row-even"><td><p>Si I 252.411</p></td>
+<td><p>0.0096</p></td>
+<td><p>1.6</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si I 252.851</p></td>
+<td><p>0.0277</p></td>
+<td><p>1.9</p></td>
+</tr>
+<tr class="row-even"><td><p>Si I 288.158</p></td>
+<td><p>0.781</p></td>
+<td><p><strong>4.7</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>τ_0 ≥ 2 means strongly self-absorbed but not blackbody-saturated — exactly El Sherbini 2005’s regime of validity for <code class="docutils literal notranslate"><span class="pre">SA</span> <span class="pre">=</span> <span class="pre">(Δλ_obs/Δλ_0)^(-1/0.46)</span></code>. Si I 288 substitution does <strong>not</strong> rescue the situation at 25 wt% Si (τ ≈ 5).</p>
+<p><strong>Phase-2 lift estimate:</strong> B1 +0.15 to +0.30 macro_F1 (largest single fix). B2 +0.05 to +0.15 (Si recall). B3 +0.05 (CDSB convergence speed). B4 +0.05.</p>
+<p><strong>Remediation order:</strong> B4 (τ-update bug) → B3 (CDSB initial τ) → B1 (wire SelfAbsorptionCorrector into IterativeCFLIBSSolver) → eliminate constant <code class="docutils literal notranslate"><span class="pre">eps_th</span> <span class="pre">*=</span> <span class="pre">0.3</span></code> damping → adjust E_i cutoff after B1 lands (because correctly-modeled lines should not be dropped).</p>
+<p><strong>Validation gate:</strong> replicate John &amp; Anoop 2023’s Mg-Ca 50:50 case as a regression test; uncorrected ~27% error, fixed pipeline must converge to &lt;5%.</p>
+</section>
+<hr class="docutils" />
+<section id="c-partition-functions-disagree-with-direct-sum-by-23-at-libs-t">
+<h3>C. Partition functions disagree with direct-sum by 2–3× at LIBS T<a class="headerlink" href="#c-partition-functions-disagree-with-direct-sum-by-23-at-libs-t" title="Link to this heading"></a></h3>
+<p>At T = 10,000 K, from <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/partition.py</span></code>:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>species</p></th>
+<th class="head"><p>U_direct</p></th>
+<th class="head"><p>U_poly</p></th>
+<th class="head"><p>poly/direct</p></th>
+<th class="head"><p>literature U(10⁴ K)</p></th>
+<th class="head"><p>closer</p></th>
+<th class="head"><p>source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Fe I</p></td>
+<td><p>58.6</p></td>
+<td><p>33.8</p></td>
+<td><p>0.58</p></td>
+<td><p><strong>~41-43</strong> (Halenka 2002; Barklem-Collet 2016)</p></td>
+<td><p>poly less wrong; <strong>direct-sum overshoots by ~40%</strong> — likely incomplete level catalogue + Rydberg-cutoff issue</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>Fe II</p></td>
+<td><p>66.9</p></td>
+<td><p>47.5</p></td>
+<td><p>0.71</p></td>
+<td><p><strong>~62-67</strong></p></td>
+<td><p>direct-sum (within ~5%)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>Ca I</p></td>
+<td><p>3.93</p></td>
+<td><p>1.50</p></td>
+<td><p>0.38</p></td>
+<td><p><strong>~3.7-4.0</strong></p></td>
+<td><p>direct-sum (within ~5%)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti I</p></td>
+<td><p>75.6</p></td>
+<td><p>32.0</p></td>
+<td><p>0.42</p></td>
+<td><p><strong>~63-70</strong></p></td>
+<td><p>direct-sum (within ~10-15%)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>Si II</p></td>
+<td><p>5.87</p></td>
+<td><p>2.00</p></td>
+<td><p>0.34</p></td>
+<td><p><strong>~5.7-5.9</strong></p></td>
+<td><p>direct-sum</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>Na I</p></td>
+<td><p>3.76</p></td>
+<td><p>2.20</p></td>
+<td><p>0.59</p></td>
+<td><p><strong>~2.4-2.7</strong></p></td>
+<td><p>poly closer; direct-sum <strong>overshoots</strong> (Rydberg cutoff)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>K I</p></td>
+<td><p>5.50</p></td>
+<td><p>2.80</p></td>
+<td><p>0.51</p></td>
+<td><p><strong>~3.0-3.5</strong></p></td>
+<td><p>poly closer; same</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Verdict:</strong> Direct-sum is correct for Fe II, Ca I, Ti I, Si II. Both repo paths are wrong for Fe I and the alkalis (Na I, K I) — but in opposite directions, because direct-sum is missing the Debye-Hückel cutoff (<code class="docutils literal notranslate"><span class="pre">calculate_partition_function</span></code> doesn’t pass <code class="docutils literal notranslate"><span class="pre">n_e</span></code>).</p>
+<p><strong>Two IPD formulas disagree by 30%:</strong> the disagreement is a <strong>misapplied charge factor</strong> (<code class="docutils literal notranslate"><span class="pre">2.09e-8·√(n_e/T)</span></code> is the Z=1 form valid for Saha I↔II; <code class="docutils literal notranslate"><span class="pre">3.0e-8·Z·√(n_e/T)</span></code> is the generalized Z-dependent form needed for Saha II↔III). Both are Debye-Hückel; both are correct in their proper domain. Stewart &amp; Pyatt 1966 interpolates Debye-Hückel ↔ ion-sphere; at LIBS Γ ≪ 1 both reduce to Debye-Hückel. The Phase-1 framing “Saha uses smaller IPD formula” is technically correct but the literature explanation is more nuanced.</p>
+<p><strong>Phase-2 lift estimate:</strong> C +0.03 to +0.10 macro_F1 on identification; <strong>larger lift on quantitation</strong> (concentrations, abundances). The reason ID is less affected: peak-position dominates ID scoring; partition functions enter only through expected line intensities.</p>
+<p><strong>Recommended remediation:</strong></p>
+<ol class="arabic simple">
+<li><p>Ingest <strong>Barklem &amp; Collet 2016</strong> (<em>A&amp;A</em> 588, A96; CDS J/A+A/588/A96; <code class="docutils literal notranslate"><span class="pre">github.com/barklem/Equilibrium</span></code>) as the primary U(T) source — covers all needed species, 1–2% accuracy.</p></li>
+<li><p>Thread <code class="docutils literal notranslate"><span class="pre">n_e</span></code> into <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.calculate_partition_function</span></code> so Debye-Hückel cutoff actually applies.</p></li>
+<li><p>Standardize on <code class="docutils literal notranslate"><span class="pre">(Z+1)·2.09e-8·√(n_e/T)</span></code> for IPD; document as Debye-Hückel limit of Stewart-Pyatt.</p></li>
+<li><p>Add a regression test asserting <code class="docutils literal notranslate"><span class="pre">|U_poly</span> <span class="pre">−</span> <span class="pre">U_direct|</span> <span class="pre">/</span> <span class="pre">U_direct</span> <span class="pre">&lt;</span> <span class="pre">5%</span></code> at T ∈ {5000, 10000, 15000} K for the benchmark species.</p></li>
+</ol>
+<p>Sources actually consulted: Irwin 1981 <em>ApJS</em> 45, 621; Halenka &amp; Madej 2002 (preprint astro-ph/0204384); Barklem &amp; Collet 2016 <em>A&amp;A</em> 588, A96 (arXiv:1602.03304); Tognoni, Cristoforetti, Legnaioli &amp; Palleschi 2010 <em>Spectrochim. Acta B</em> 65, 1; Cristoforetti et al. 2007 <em>Spectrochim. Acta B</em> 62, 1287 (numerical study of theoretical-parameter error in CF-LIBS).</p>
+</section>
+<hr class="docutils" />
+<section id="d-forward-model-manifold-has-critical-sampling-coverage-defects">
+<h3>D. Forward model + manifold has critical sampling + coverage defects<a class="headerlink" href="#d-forward-model-manifold-has-critical-sampling-coverage-defects" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Location</p></th>
+<th class="head"><p>Bug</p></th>
+<th class="head"><p>Severity</p></th>
+<th class="head"><p>Literature</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>D1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py</span></code> defaults</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pixels=4096</span></code> over 250–550 nm → Δλ ≈ 0.073 nm with instrument FWHM 0.05 nm = <strong>0.68 px/FWHM</strong>. Need ≥ 3 px/FWHM (HARPS standard 3.2; LIBS Demidov 2022 standard 4.2).</p></td>
+<td><p>CRITICAL</p></td>
+<td><p>Robertson 2017 (<em>PASA</em> 34, e035; arXiv:1707.06455): below 2 px/FWHM, position bias grows as ~(px/FWHM)⁻² and width measurement degrades <strong>~4× worse than the fine-sampled limit at 1.5 px/FWHM</strong>. Magnier et al. 2025 (arXiv:2501.17163): at 13% undersampling (still well above 0.68 px/FWHM), point-sampled Gaussian <strong>flux is overestimated by 50%</strong>. At 0.68 px/FWHM the bias is uncalibrated, pixel-phase-dependent, and likely <strong>30–200% on line area</strong> — destroying the Boltzmann-plot ordinate.</p></td>
+</tr>
+<tr class="row-odd"><td><p>D2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py:540-542</span></code></p></td>
+<td><p>no continuum emission. No bremsstrahlung (<code class="docutils literal notranslate"><span class="pre">ε</span> <span class="pre">∝</span> <span class="pre">n_e</span> <span class="pre">n_i</span> <span class="pre">T^{-1/2}</span> <span class="pre">exp(-hν/kT)</span></code>), no free-bound recombination.</p></td>
+<td><p>HIGH</p></td>
+<td><p>Cristoforetti, Lorenzetti, Legnaioli &amp; Palleschi 2010 (<em>Spectrochim. Acta B</em> 65, 787): continuum is <strong>dominant at early delays</strong>; even after gating, line-to-continuum ratios show <strong>10–50% continuum in UV (250–350 nm), 5–25% in visible</strong>. Gornushkin et al. 1999 (<em>Spectrochim. Acta B</em> 54, 491): canonical bremsstrahlung + free-bound formulas. Demidov 2022 mitigates via local baseline subtraction on narrow line windows (cheaper interim than full continuum forward model).</p></td>
+</tr>
+<tr class="row-even"><td><p>D3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">generator.py:643,</span> <span class="pre">809</span></code></p></td>
+<td><p>hardcodes <code class="docutils literal notranslate"><span class="pre">sigma_inst</span> <span class="pre">=</span> <span class="pre">0.05/2.355</span></code> instead of <code class="docutils literal notranslate"><span class="pre">self.config.instrument_fwhm_nm</span></code>. User config is <strong>silently ignored</strong>.</p></td>
+<td><p>CERTAIN BUG</p></td>
+<td><p>n/a — pure software defect. Magnitude = whatever the user thought they were setting.</p></td>
+</tr>
+<tr class="row-odd"><td><p>D4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">generator.py:947-972</span></code></p></td>
+<td><p>if <code class="docutils literal notranslate"><span class="pre">len(elements)==4</span></code>, <strong>hardcodes Ti–Al–V–Fe composition simplex</strong> with <code class="docutils literal notranslate"><span class="pre">Al,V</span> <span class="pre">∈</span> <span class="pre">[0,0.12]</span></code>, <code class="docutils literal notranslate"><span class="pre">Fe</span> <span class="pre">≡</span> <span class="pre">0.002</span></code>, Ti = remainder. Any other 4-element system has its simplex wrong by construction (Cu–Fe–Ni–Cr steel, geological 4-element panel, etc.). For <code class="docutils literal notranslate"><span class="pre">len</span> <span class="pre">≠</span> <span class="pre">4</span></code>, falls through to a degenerate path.</p></td>
+<td><p>CERTAIN BUG</p></td>
+<td><p>Aitchison 1986 “Statistical Analysis of Compositional Data”; Petras 2009 arXiv:0909.0329 (constrained LHS on simplex); Graham et al. 2024 arXiv:2403.11374 (QMC on simplex for inverse problems). The correct recipe is Sobol or Dirichlet-LHS on the simplex.</p></td>
+</tr>
+<tr class="row-even"><td><p>D5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/validation/round_trip.py</span></code> <code class="docutils literal notranslate"><span class="pre">GoldenSpectrumGenerator</span></code></p></td>
+<td><p>manually computes <code class="docutils literal notranslate"><span class="pre">I</span> <span class="pre">∝</span> <span class="pre">C</span> <span class="pre">·</span> <span class="pre">f_stage</span> <span class="pre">·</span> <span class="pre">g_k</span> <span class="pre">·</span> <span class="pre">A_ki</span> <span class="pre">·</span> <span class="pre">exp(-E_k/kT)</span> <span class="pre">/</span> <span class="pre">U</span></code> with <strong>no Stark, no continuum, no instrument response, no self-absorption</strong>. Inversion runs the same formula. 19/19 round-trip pass at 10–40% tolerance is <strong>a unit test on <code class="docutils literal notranslate"><span class="pre">exp(-E/kT)</span></code> arithmetic</strong>, not validation.</p></td>
+<td><p>CERTAIN</p></td>
+<td><p>von Toussaint 2018 (arXiv:1805.08301): extracting information from measurements simply by agreement with simulations leads to <strong>significant underestimation of uncertainties</strong>. ChemCam team expanded validation set from 69 → 408 standards specifically because round-trip-only gave false confidence (Clegg et al. 2017 <em>Spectrochim. Acta B</em> 129, 64).</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Phase-2 lift estimate:</strong> D1 alone is the highest-impact-per-line-of-code fix in the cluster — <strong>likely +0.10 to +0.20 macro_F1</strong> just from going to ≥18,000 pixels.</p>
+<p><strong>Remediation order:</strong> D3 (one-line plumbing) → D1 (config change <code class="docutils literal notranslate"><span class="pre">pixels:</span> <span class="pre">18432</span></code>; regenerate manifold once; ~4.5 px/FWHM at 0.05 nm) → D5 (real-sample validation harness using LIBSqsa or ChemCam standards) → D4 (Sobol/Dirichlet simplex sampler) → D2 (continuum — deferred until D1+D3+D5 reveal how big the continuum bias actually is in real-sample residuals).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="tier-2-supporting-defects-well-grounded-but-lower-individual-leverage">
+<h2>2. Tier-2 supporting defects (well-grounded but lower individual leverage)<a class="headerlink" href="#tier-2-supporting-defects-well-grounded-but-lower-individual-leverage" title="Link to this heading"></a></h2>
+<p>These would not on their own explain the F1 gap, but they each compound:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Defect</p></th>
+<th class="head"><p>File</p></th>
+<th class="head"><p>Citation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">np.polyfit(w=1/σ²)</span></code> quartic-weighting bug; JAX path made bug-compatible</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann.py:890-895</span></code></p></td>
+<td><p>numpy.polyfit doc; Tognoni 2010 Eq. 5 (WLS form).</p></td>
+</tr>
+<tr class="row-odd"><td><p>Charge balance unenforced in forward path; <code class="docutils literal notranslate"><span class="pre">n_e</span></code> consumed as user input</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py:340-372</span></code></p></td>
+<td><p>Tognoni 2010 §2.2 + §3.4: CF-LIBS requires simultaneous Saha + charge neutrality. Anderson solver exists in repo but isn’t wired in.</p></td>
+</tr>
+<tr class="row-even"><td><p>Tier-2 K/Na/Mn score floor + <code class="docutils literal notranslate"><span class="pre">N_matched</span> <span class="pre">≥</span> <span class="pre">3</span></code> hard gate over-rejects 2-line doublet elements (K I 766.5/769.9, Na D 588.99/589.59) at percent-level USGS-basalt abundances</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/element_id.py:182</span></code>; <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py:4026-4037</span></code></p></td>
+<td><p>Pace et al. 2017 ChemCam: doublet pair-matching, not generic n≥3 gates. USGS GeoRem BCR-2/BHVO-2/AGV-2: Na 2.3-3.2 wt%, K 0.5-1.4 wt%, Mn 0.13-0.17 wt%.</p></td>
+</tr>
+<tr class="row-odd"><td><p>LTE validator uses ΔE between adjacent observed levels instead of largest transition gap; understates required n_e by <strong>(ΔE_repo/ΔE_lit)³ ≈ 100-1000×</strong>, “passes” non-LTE plasmas</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/plasma/lte_validator.py:244-260</span></code></p></td>
+<td><p>Cristoforetti et al. 2010 (<em>Spectrochim. Acta B</em> 65, 86).</p></td>
+</tr>
+<tr class="row-even"><td><p>A_ki accuracy grades D/E dominate alkalis (Na 94%, K 85%, Mg 83%, Al 61%, Si 58%); Boltzmann plots intrinsically noisy on these elements</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code></p></td>
+<td><p>Wiese &amp; Fuhr 2009 (<em>JPCRD</em> 38, 565) NIST critical compilations.</p></td>
+</tr>
+<tr class="row-odd"><td><p>NNLS w=0.46 + threshold 0.40: <strong>NNLS unilaterally triggers consensus detection</strong> because 0.46 ≥ 0.40</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py</span></code> (post-#205) <code class="docutils literal notranslate"><span class="pre">ID_WORKFLOW_PRESETS[&quot;hybrid_consensus_weighted&quot;]</span></code></p></td>
+<td><p>Dietterich 2000 ensemble methods: voters with correlated errors do not decorrelate. NNLS, ALIAS, comb, correlation all share the same NIST DB + Gaussian-profile forward model → errors are correlated.</p></td>
+</tr>
+<tr class="row-even"><td><p>Comb identifier has macro_F1 = <strong>0.014</strong> (Phase 7); per-tooth Pearson against triangular template doesn’t shape-discriminate; threshold 0.12 has no literature basis</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/comb.py:286</span></code></p></td>
+<td><p>(no positive citation — empirical failure documented in repo bead <code class="docutils literal notranslate"><span class="pre">s1qr.2</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="prioritized-remediation-plan">
+<h2>3. Prioritized remediation plan<a class="headerlink" href="#prioritized-remediation-plan" title="Link to this heading"></a></h2>
+<p>Ranked by <strong>expected macro_F1 lift per engineering hour</strong> and <strong>prerequisite chain</strong>:</p>
+<section id="wave-1-single-day-fixes-high-confidence">
+<h3>Wave 1 — single-day fixes, high confidence<a class="headerlink" href="#wave-1-single-day-fixes-high-confidence" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>A1 (Stark attribute typo)</strong> — <code class="docutils literal notranslate"><span class="pre">element_id.py:170</span></code> <code class="docutils literal notranslate"><span class="pre">stark_width_nm</span></code> → <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>, unit normalize. 1-line change. (Aragón 2011 / Gajarska 2024.)</p></li>
+<li><p><strong>D3 (instrument FWHM plumbing)</strong> — <code class="docutils literal notranslate"><span class="pre">generator.py:643,</span> <span class="pre">809</span></code> → read <code class="docutils literal notranslate"><span class="pre">self.config.instrument_fwhm_nm</span></code>. 2-line change. Unlocks empirical D1 testing.</p></li>
+<li><p><strong>D1 (manifold sampling)</strong> — config default <code class="docutils literal notranslate"><span class="pre">pixels:</span> <span class="pre">18432</span></code> (≈4.5 px / 0.05 nm FWHM). Regenerate manifold once. (Robertson 2017 / Magnier 2025.)</p></li>
+<li><p><strong>A2 (<code class="docutils literal notranslate"><span class="pre">apply_stark</span></code> default)</strong> — <code class="docutils literal notranslate"><span class="pre">spectrum_model.py:313</span></code> flip to True (or expose as config with default True). 1-line.</p></li>
+<li><p><strong>B4 (τ-update bug)</strong> — <code class="docutils literal notranslate"><span class="pre">self_absorption.py:1070-1112</span></code> — remove <code class="docutils literal notranslate"><span class="pre">tau</span> <span class="pre">*=</span> <span class="pre">I_new/I_obs</span></code>, recompute τ from updated plasma state per Bulajic 2002.</p></li>
+</ol>
+</section>
+<section id="wave-2-25-day-fixes">
+<h3>Wave 2 — 2–5 day fixes<a class="headerlink" href="#wave-2-25-day-fixes" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="6">
+<li><p><strong>A3 (Voigt basis library)</strong> — replace pure-Gaussian profile in <code class="docutils literal notranslate"><span class="pre">basis_library.py:179</span></code> with Voigt using existing <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>. Regenerate basis library.</p></li>
+<li><p><strong>B3 (CDSB initial τ)</strong> — replace <code class="docutils literal notranslate"><span class="pre">n_e/n_e_ref</span></code> with <code class="docutils literal notranslate"><span class="pre">n_lower/n_ref</span></code> (Saha-Boltzmann population) in <code class="docutils literal notranslate"><span class="pre">cdsb.py:429-504</span></code>.</p></li>
+<li><p><strong>B1 (wire SelfAbsorptionCorrector into IterativeCFLIBSSolver)</strong> — Bulajic 2002 recursive algorithm. Then <strong>remove</strong> the constant <code class="docutils literal notranslate"><span class="pre">eps_th</span> <span class="pre">*=</span> <span class="pre">0.3</span></code> damping in <code class="docutils literal notranslate"><span class="pre">alias.py:3364</span></code>.</p></li>
+<li><p><strong>B2 (resonance-filter cutoff)</strong> — once B1 is in place, raise/remove the E_i &lt; 0.1 eV cutoff.</p></li>
+</ol>
+</section>
+<section id="wave-3-12-weeks">
+<h3>Wave 3 — 1–2 weeks<a class="headerlink" href="#wave-3-12-weeks" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="10">
+<li><p><strong>C (Barklem-Collet 2016 partition functions)</strong> — CDS-table ingest; thread <code class="docutils literal notranslate"><span class="pre">n_e</span></code> into partition calls; standardize IPD formula.</p></li>
+<li><p><strong>A4 (line-resolved Stark data)</strong> — ingest Konjević 2002 + STARK-B + Aragón 2014 (LIBS-measured Fe II/Ni II in fused glass) into <code class="docutils literal notranslate"><span class="pre">stark_w</span></code> table with <code class="docutils literal notranslate"><span class="pre">accuracy_class</span></code> field.</p></li>
+<li><p><strong>D5 (real-sample validation harness)</strong> — LIBSqsa public corpus or ChemCam standards. Gate any future merge on independent F1 &gt; 0.5 (initially) then ratchet upward.</p></li>
+</ol>
+</section>
+<section id="wave-4-larger-deferred">
+<h3>Wave 4 — larger / deferred<a class="headerlink" href="#wave-4-larger-deferred" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="13">
+<li><p><strong>D4 (Sobol/Dirichlet simplex sampler)</strong> — generalize manifold composition coverage.</p></li>
+<li><p><strong>D2 (continuum forward model)</strong> — Gornushkin 1999 bremsstrahlung + free-bound. Defer until D1+D3+D5 reveal continuum residuals in real-sample fits.</p></li>
+<li><p><strong>Tier-2 fixes</strong> (polyfit weights, charge balance enforcement, doublet-pair matching for K/Na, LTE validator ΔE, etc.).</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="validation-methodology-recommendations">
+<h2>4. Validation methodology recommendations<a class="headerlink" href="#validation-methodology-recommendations" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Synthetic regression for self-absorption:</strong> replicate John &amp; Anoop 2023 Mg-Ca 50:50 case (T=1 eV, n_e=10¹⁷, L=1 cm). Uncorrected gives 36.42% / 63.58%; B1 fixed pipeline must converge to within 5% of 50/50.</p></li>
+<li><p><strong>Synthetic regression for partition functions:</strong> require <code class="docutils literal notranslate"><span class="pre">|U_pipeline</span> <span class="pre">−</span> <span class="pre">U_BarklemCollet|</span> <span class="pre">/</span> <span class="pre">U_BarklemCollet</span> <span class="pre">&lt;</span> <span class="pre">5%</span></code> at T ∈ {5000, 10000, 15000} K for Fe I, Fe II, Ca I, Ti I, Si II, Na I, K I.</p></li>
+<li><p><strong>Synthetic regression for sampling:</strong> generate identical inputs at 4096 vs 18432 vs 36864 pixels; require line-area agreement within 1%.</p></li>
+<li><p><strong>Independent real-sample validation:</strong> <em>Required before any release</em> once D1 lands. Sources: LIBSqsa public corpus; ChemCam mission standards; Castorena et al. 2022 cross-instrument transfer corpus.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="citation-index-most-consulted">
+<h2>5. Citation index (most consulted)<a class="headerlink" href="#citation-index-most-consulted" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Citation</p></th>
+<th class="head"><p>Used for</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Tognoni, Cristoforetti, Legnaioli, Palleschi 2010 <em>Spectrochim. Acta B</em> 65, 1. DOI: 10.1016/j.sab.2009.11.006</p></td>
+<td><p>CF-LIBS state of the art; Saha-Boltzmann Eq. 1, Boltzmann Eq. 2, emissivity Eq. 3, partition-function role.</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Aragón &amp; Aguilera 2008 <em>Spectrochim. Acta B</em> 63, 893. DOI: 10.1016/j.sab.2008.05.010</p></td>
+<td><p>Plasma characterization review; Voigt requirement at LIBS densities; LOS integration; SA correction §7.</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Cristoforetti et al. 2010 <em>Spectrochim. Acta B</em> 65, 86. DOI: 10.1016/j.sab.2009.11.005</p></td>
+<td><p>LTE beyond McWhirter; relaxation-time + spatial-gradient criteria.</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Cristoforetti, Lorenzetti, Legnaioli, Palleschi 2010 <em>Spectrochim. Acta B</em> 65, 787.</p></td>
+<td><p>Continuum radiation magnitude in LIBS.</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Bulajic, Corsi, Cristoforetti, Legnaioli, Palleschi, Salvetti, Tognoni 2002 <em>Spectrochim. Acta B</em> 57, 339. DOI: 10.1016/S0584-8547(01)00398-6</p></td>
+<td><p>Foundational SA-correction algorithm; ×10 accuracy gain on certified NIST steels.</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>El Sherbini et al. 2005 <em>Spectrochim. Acta B</em> 60, 1573. DOI: 10.1016/J.SAB.2005.10.011</p></td>
+<td><p>SA coefficient formula <code class="docutils literal notranslate"><span class="pre">SA</span> <span class="pre">=</span> <span class="pre">(Δλ_obs/Δλ_0)^(-1/0.46)</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Ciucci, Corsi, Palleschi, Rastelli, Salvetti, Tognoni 1999 <em>Appl. Spectrosc.</em> 53, 960. DOI: 10.1366/0003702991947612</p></td>
+<td><p>Saha-correction mapping (ion → neutral plane).</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Konjević, Lesage, Fuhr, Wiese 2002 <em>JPCRD</em> 31, 819. DOI: 10.1063/1.1486456</p></td>
+<td><p>Experimental Stark widths critical compilation.</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Lesage 2009 <em>JPCRD</em> 38, 761. DOI: 10.1063/1.3132702</p></td>
+<td><p>2001–2007 Stark width update.</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Aragón, Pellé &amp; Aguilera 2011 <em>Anal. Bioanal. Chem.</em> 400, 3331</p></td>
+<td><p>Quantified element misidentification from Stark shifts (130 pm).</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>Gajarska et al. 2024 <em>J. Anal. At. Spectrom.</em> DOI: 10.1039/D4JA00247D</p></td>
+<td><p>Modern reproduction in automated LIBS pipelines.</p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>Aragón &amp; Aguilera 2014 <em>Spectrochim. Acta B</em> 100, 104</p></td>
+<td><p>36 Fe II + 27 Ni II Stark widths measured by LIBS in fused glass.</p></td>
+</tr>
+<tr class="row-even"><td><p>13</p></td>
+<td><p>Aguilera &amp; Aragón 2004 <em>Spectrochim. Acta B</em> 59, 1861</p></td>
+<td><p>Multi-element Saha-Boltzmann common-slope plot.</p></td>
+</tr>
+<tr class="row-odd"><td><p>14</p></td>
+<td><p>Irwin 1981 <em>ApJS</em> 45, 621</p></td>
+<td><p>Polynomial partition functions (now deprecated).</p></td>
+</tr>
+<tr class="row-even"><td><p>15</p></td>
+<td><p>Halenka &amp; Madej 2002 astro-ph/0204384</p></td>
+<td><p>Fe I-X partition functions including auto-ionizing levels.</p></td>
+</tr>
+<tr class="row-odd"><td><p>16</p></td>
+<td><p>Barklem &amp; Collet 2016 <em>A&amp;A</em> 588, A96. arXiv:1602.03304</p></td>
+<td><p>Modern partition-function compilation (recommended replacement).</p></td>
+</tr>
+<tr class="row-even"><td><p>17</p></td>
+<td><p>Stewart &amp; Pyatt 1966 <em>ApJ</em> 144, 1203</p></td>
+<td><p>Ionization-potential depression formula.</p></td>
+</tr>
+<tr class="row-odd"><td><p>18</p></td>
+<td><p>Mihalas 1978 <em>Stellar Atmospheres</em> 2nd ed., §9.4</p></td>
+<td><p>IPD textbook reference.</p></td>
+</tr>
+<tr class="row-even"><td><p>19</p></td>
+<td><p>Hermann et al. 2014 <em>Spectrochim. Acta B</em> 100, 189</p></td>
+<td><p>Two-region plasma model.</p></td>
+</tr>
+<tr class="row-odd"><td><p>20</p></td>
+<td><p>Rezaei, Cristoforetti, Tognoni, Legnaioli, Palleschi, Safi 2020 <em>Spectrochim. Acta B</em> 169, 105878</p></td>
+<td><p>Current SA review.</p></td>
+</tr>
+<tr class="row-even"><td><p>21</p></td>
+<td><p>Poggialini, Campanella, Cocciaro, Lorenzetti, Palleschi, Legnaioli 2023 <em>JAAS</em> DOI: 10.1039/d3ja00130j</p></td>
+<td><p>“Catching up on CF-LIBS.”</p></td>
+</tr>
+<tr class="row-odd"><td><p>22</p></td>
+<td><p>John &amp; Anoop 2023 <em>RSC Adv.</em> 13, 29613</p></td>
+<td><p>Mg-Ca 50:50 simulated test of SA correction.</p></td>
+</tr>
+<tr class="row-even"><td><p>23</p></td>
+<td><p>Robertson 2017 <em>PASA</em> 34, e035. arXiv:1707.06455</p></td>
+<td><p>Pixel-per-FWHM sampling requirement.</p></td>
+</tr>
+<tr class="row-odd"><td><p>24</p></td>
+<td><p>Magnier et al. 2025 arXiv:2501.17163</p></td>
+<td><p>Undersampling-induced flux bias quantitation.</p></td>
+</tr>
+<tr class="row-even"><td><p>25</p></td>
+<td><p>Gornushkin et al. 1999 <em>Spectrochim. Acta B</em> 54, 491</p></td>
+<td><p>LIBS continuum (bremsstrahlung + free-bound).</p></td>
+</tr>
+<tr class="row-odd"><td><p>26</p></td>
+<td><p>Demidov et al. 2022 PMC9573556</p></td>
+<td><p>Monte Carlo CF-LIBS at 84 pix/nm (~4.2 px/FWHM).</p></td>
+</tr>
+<tr class="row-even"><td><p>27</p></td>
+<td><p>von Toussaint 2018 arXiv:1805.08301</p></td>
+<td><p>Round-trip-only validation as known anti-pattern.</p></td>
+</tr>
+<tr class="row-odd"><td><p>28</p></td>
+<td><p>Anderson, Forni, Cousin, Wiens, Clegg et al. 2021 <em>Spectrochim. Acta B</em> 188, 106347</p></td>
+<td><p>SuperCam LIBS post-landing element quantification.</p></td>
+</tr>
+<tr class="row-even"><td><p>29</p></td>
+<td><p>Clegg, Wiens, Anderson, Forni, Frydenvang, Lasue et al. 2017 <em>Spectrochim. Acta B</em> 129, 64</p></td>
+<td><p>MSL ChemCam recalibration with 408-sample expansion.</p></td>
+</tr>
+<tr class="row-odd"><td><p>30</p></td>
+<td><p>Petras 2009 arXiv:0909.0329; Graham et al. 2024 arXiv:2403.11374</p></td>
+<td><p>Constrained LHS / QMC on simplex.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="open-empirical-questions">
+<h2>6. Open empirical questions<a class="headerlink" href="#open-empirical-questions" title="Link to this heading"></a></h2>
+<p>These cannot be resolved by literature alone; they require running the pipeline with specific fixes in place and measuring:</p>
+<ol class="arabic simple">
+<li><p>After Wave-1 fixes (A1, A2, B4, D1, D3), what is the actual macro_F1 lift? Each component has a literature-justified estimate; the <strong>interaction</strong> is unknown.</p></li>
+<li><p>After A3 + B1, does the consensus-voter weighting still need adjustment? With NNLS errors reduced, the w=0.46 dominance may flip to a useful contribution.</p></li>
+<li><p>Is the continuum (D2) actually a major contributor once D1 is fixed, or is it small enough to defer indefinitely? Measure residuals after D1.</p></li>
+<li><p>Does the LTE-validator ΔE issue actually fire on the n=24 cohort? Some/all of the benchmark spectra may be deep-LTE and unaffected. Empirical check needed.</p></li>
+</ol>
+<hr class="docutils" />
+<p><strong>Audit completed by:</strong> Phase 1 — 6 parallel area-specialist subagents (general-purpose). Phase 2 — 4 parallel literature-validation subagents using Asta literature search + targeted web/PDF retrieval. All quantitative claims are citation-grounded.</p>
+<p><strong>Recommendation for next session:</strong> start with Wave-1 fixes A1/D3/D1, run synthetic regression, compare against Phase-7 baseline (alias_v2 macro_F1 = 0.402). Then plan Wave 2.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

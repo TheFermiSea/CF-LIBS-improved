@@ -1,0 +1,273 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/evolution Census Findings &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/evolution</span></code> Census Findings</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/evolution.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-evolution-census-findings">
+<h1>Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/evolution</span></code> Census Findings<a class="headerlink" href="#adversarial-verification-cflibs-evolution-census-findings" title="Link to this heading"></a></h1>
+<p>Verified against <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5</span></code> using rg + Read + live Python execution.</p>
+<hr class="docutils" />
+<section id="finding-1-1-high-exec-eval-compile-bypass-blocklist">
+<h2>Finding 1.1 — HIGH: <code class="docutils literal notranslate"><span class="pre">exec</span></code>/<code class="docutils literal notranslate"><span class="pre">eval</span></code>/<code class="docutils literal notranslate"><span class="pre">compile</span></code> bypass blocklist<a class="headerlink" href="#finding-1-1-high-exec-eval-compile-bypass-blocklist" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: HIGH</strong> (unchanged)</p>
+<p>Live execution confirms: <code class="docutils literal notranslate"><span class="pre">scan_source('exec(&quot;import</span> <span class="pre">torch&quot;)')</span></code> returns <code class="docutils literal notranslate"><span class="pre">[]</span></code>, <code class="docutils literal notranslate"><span class="pre">scan_source('eval(&quot;import</span> <span class="pre">torch&quot;)')</span></code> returns <code class="docutils literal notranslate"><span class="pre">[]</span></code>, <code class="docutils literal notranslate"><span class="pre">scan_source('compile(&quot;import</span> <span class="pre">torch&quot;,</span> <span class="pre">&quot;&quot;,</span> <span class="pre">&quot;exec&quot;)')</span></code> returns <code class="docutils literal notranslate"><span class="pre">[]</span></code>. The <code class="docutils literal notranslate"><span class="pre">_scan_call</span></code> function at <code class="docutils literal notranslate"><span class="pre">evaluator.py:148-168</span></code> dispatches to <code class="docutils literal notranslate"><span class="pre">DYNAMIC_IMPORT_CALLS</span></code> membership check, which only contains <code class="docutils literal notranslate"><span class="pre">(&quot;__import__&quot;,</span> <span class="pre">&quot;importlib.import_module&quot;,</span> <span class="pre">&quot;importlib.__import__&quot;)</span></code>. <code class="docutils literal notranslate"><span class="pre">exec</span></code> and <code class="docutils literal notranslate"><span class="pre">eval</span></code> resolve to <code class="docutils literal notranslate"><span class="pre">ast.Call</span></code> with <code class="docutils literal notranslate"><span class="pre">ast.Name(id=&quot;exec&quot;)</span></code> / <code class="docutils literal notranslate"><span class="pre">ast.Name(id=&quot;eval&quot;)</span></code> — the same node type that catches <code class="docutils literal notranslate"><span class="pre">__import__</span></code> — but they simply are not in the registry. The bypass is real and exploitable by any LLM-generated candidate that wraps forbidden imports in <code class="docutils literal notranslate"><span class="pre">exec()</span></code>/<code class="docutils literal notranslate"><span class="pre">eval()</span></code>. The <code class="docutils literal notranslate"><span class="pre">__import__</span></code> case is correctly caught (verified: returns one <code class="docutils literal notranslate"><span class="pre">dynamic_import</span></code> violation). No other scanner mechanism would catch this. HIGH severity confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-1-high-enforcement-mode-warn-is-a-config-fiction">
+<h2>Finding 2.1 — HIGH: <code class="docutils literal notranslate"><span class="pre">enforcement_mode=&quot;warn&quot;</span></code> is a config fiction<a class="headerlink" href="#finding-2-1-high-enforcement-mode-warn-is-a-config-fiction" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: HIGH</strong> (unchanged)</p>
+<p><code class="docutils literal notranslate"><span class="pre">EvolutionDriverConfig</span></code> is only referenced in <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/config.py</span></code> and <code class="docutils literal notranslate"><span class="pre">tests/evolution/test_config.py</span></code> — confirmed by <code class="docutils literal notranslate"><span class="pre">find</span> <span class="pre">...</span> <span class="pre">|</span> <span class="pre">xargs</span> <span class="pre">grep</span> <span class="pre">-l</span> <span class="pre">&quot;EvolutionDriverConfig&quot;</span></code>. No driver, no caller, no consumer of the <code class="docutils literal notranslate"><span class="pre">enforcement_mode</span></code> field anywhere in the codebase outside of tests. The config.py docstring (lines 44-48) explicitly says the field is “consumed by the evolution driver, not by <code class="docutils literal notranslate"><span class="pre">evaluator.scan_source</span></code> / <code class="docutils literal notranslate"><span class="pre">evaluator.assert_physics_only</span></code>” — but no such driver exists. The field is validated (line 87-89) and immutable (frozen dataclass), so a future external driver that naively reads <code class="docutils literal notranslate"><span class="pre">enforcement_mode</span> <span class="pre">==</span> <span class="pre">&quot;warn&quot;</span></code> and skips <code class="docutils literal notranslate"><span class="pre">assert_physics_only</span></code> would silently allow ML-violating candidates through the physics evaluator. HIGH confirmed: this is a security footgun with no implementation.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-1-high-no-tests-for-exec-eval-compile-evasion">
+<h2>Finding 5.1 — HIGH: No tests for <code class="docutils literal notranslate"><span class="pre">exec</span></code>/<code class="docutils literal notranslate"><span class="pre">eval</span></code>/<code class="docutils literal notranslate"><span class="pre">compile</span></code> evasion<a class="headerlink" href="#finding-5-1-high-no-tests-for-exec-eval-compile-evasion" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: HIGH</strong> (unchanged)</p>
+<p><code class="docutils literal notranslate"><span class="pre">tests/evolution/test_blocklist.py</span></code> contains tests for <code class="docutils literal notranslate"><span class="pre">__import__</span></code> (<code class="docutils literal notranslate"><span class="pre">test_dunder_import_rejected_for_forbidden_module</span></code>) and <code class="docutils literal notranslate"><span class="pre">importlib.import_module</span></code> (<code class="docutils literal notranslate"><span class="pre">test_importlib_import_module_rejected</span></code>), and a registry membership smoke test (<code class="docutils literal notranslate"><span class="pre">test_dynamic_import_calls_registry_covers_common_forms</span></code>). There is no test for <code class="docutils literal notranslate"><span class="pre">exec(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">eval(...)</span></code>, or <code class="docutils literal notranslate"><span class="pre">compile(...)</span></code> evasion. The test file was read in full; grep confirms no <code class="docutils literal notranslate"><span class="pre">exec</span></code> or <code class="docutils literal notranslate"><span class="pre">eval</span></code> test. Ties directly to Finding 1.1: the gap is both real in the scanner and unprotected by regression tests.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-1-2-medium-init-py-vs-claude-md-ml-allowance-contradiction">
+<h2>Finding 1.2 — MEDIUM: <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code> vs. CLAUDE.md ML-allowance contradiction<a class="headerlink" href="#finding-1-2-medium-init-py-vs-claude-md-ml-allowance-contradiction" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: MEDIUM</strong> (unchanged; documentation-only, no runtime impact)</p>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/evolution/__init__.py</span></code> line 8: “modules here must not import any ML / neural-network library.” CLAUDE.md “Physics-Only Constraint” section says “Machine learning is allowed <strong>only</strong> in <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code>.” The Ruff <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> (lines 206-218) enforces TID251 across all of <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> with no per-file-ignores for <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> (the only TID251 exemption is <code class="docutils literal notranslate"><span class="pre">scripts/archive/hpc-campaign/train_ml_classifier.py</span></code>). So the <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code> is accurate: ML is banned inside <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> by both the docstring and the static linter. CLAUDE.md’s claim is misleading: ML is permitted in the <em>external</em> LLM-driven optimization driver that calls into <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code>, not in <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> itself. The census characterization is correct; documentation discrepancy confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-2-medium-fitness-weights-lacks-normalisation-contract">
+<h2>Finding 2.2 — MEDIUM: <code class="docutils literal notranslate"><span class="pre">fitness_weights</span></code> lacks normalisation contract<a class="headerlink" href="#finding-2-2-medium-fitness-weights-lacks-normalisation-contract" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: MEDIUM</strong> (unchanged; speculative/design debt, no runtime impact without a driver)</p>
+<p><code class="docutils literal notranslate"><span class="pre">config.py:55-63</span></code> defines <code class="docutils literal notranslate"><span class="pre">fitness_weights</span></code> as a plain mapping of per-dataset floats with no aggregation formula. The comment says “per-dataset fitness weights” but documents no <code class="docutils literal notranslate"><span class="pre">aggregate_fitness</span></code> function or formula. No such function exists in <code class="docutils literal notranslate"><span class="pre">evaluator.py</span></code> or <code class="docutils literal notranslate"><span class="pre">config.py</span></code>. The <code class="docutils literal notranslate"><span class="pre">overfitting_penalty</span></code> field (line 67) references a variance penalty but without a formula. Since no driver exists, this is currently harmless, but the absence of a specified aggregation contract means any future driver will need to invent one. Severity MEDIUM correct (design debt, not a runtime bug in existing code).</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-3-medium-assert-benchmark-relevance-misses-binary-mode-change-hunks">
+<h2>Finding 2.3 — MEDIUM: <code class="docutils literal notranslate"><span class="pre">assert_benchmark_relevance</span></code> misses binary/mode-change hunks<a class="headerlink" href="#finding-2-3-medium-assert-benchmark-relevance-misses-binary-mode-change-hunks" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: MEDIUM</strong> (unchanged)</p>
+<p>Live test confirms: binary diff <code class="docutils literal notranslate"><span class="pre">&quot;Binary</span> <span class="pre">files</span> <span class="pre">a/cflibs/data.bin</span> <span class="pre">and</span> <span class="pre">b/cflibs/data.bin</span> <span class="pre">differ&quot;</span></code> with <code class="docutils literal notranslate"><span class="pre">exercised={&quot;cflibs/data.bin&quot;}</span></code> raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> (false rejection) because the <code class="docutils literal notranslate"><span class="pre">touched</span></code> set is empty — the parser only matches lines starting with <code class="docutils literal notranslate"><span class="pre">&quot;---</span> <span class="pre">a/&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;+++</span> <span class="pre">b/&quot;</span></code> (evaluator.py:253-257). The new-file case (<code class="docutils literal notranslate"><span class="pre">---</span> <span class="pre">/dev/null</span></code> / <code class="docutils literal notranslate"><span class="pre">+++</span> <span class="pre">b/new.py</span></code>) is NOT broken: the <code class="docutils literal notranslate"><span class="pre">+++</span> <span class="pre">b/</span></code> branch fires for the new-file hunk and the exercised path is found. The mode-change-only case (no <code class="docutils literal notranslate"><span class="pre">---/+++</span></code> lines at all) would also produce a false rejection. Binary-diff false rejection is confirmed real. Census finding is accurate. Note: the census also states “no bug” for renames — this is correct, since either the old or new path matching exercised_files is sufficient.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-4-1-medium-evaluation-timeout-s-5-0-unrealistically-short">
+<h2>Finding 4.1 — MEDIUM: <code class="docutils literal notranslate"><span class="pre">evaluation_timeout_s=5.0</span></code> unrealistically short<a class="headerlink" href="#finding-4-1-medium-evaluation-timeout-s-5-0-unrealistically-short" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: MEDIUM</strong> (unchanged; config default issue)</p>
+<p><code class="docutils literal notranslate"><span class="pre">config.py:38</span></code>: <code class="docutils literal notranslate"><span class="pre">evaluation_timeout_s:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">5.0</span></code>. Per project memory <code class="docutils literal notranslate"><span class="pre">reference_inversion_hotspot_profile</span></code>, RANSAC wavelength calibration alone accounts for ~73% of wall-clock on a reference inversion. A full benchmark run on real spectra (aalto, chemcam, supercam matrices) would substantially exceed 5 seconds per candidate. This default, if taken literally by a driver, would cause every non-trivial evaluation to time out with <code class="docutils literal notranslate"><span class="pre">fitness=-inf</span></code> from timeout rather than actual physics failure. MEDIUM severity is appropriate (misconfigured default, not a security issue; no driver currently reads it).</p>
+</section>
+<hr class="docutils" />
+<section id="finding-4-2-low-structural-mutation-cadence-10-magic-number-undocumented">
+<h2>Finding 4.2 — LOW: <code class="docutils literal notranslate"><span class="pre">structural_mutation_cadence=10</span></code> magic number undocumented<a class="headerlink" href="#finding-4-2-low-structural-mutation-cadence-10-magic-number-undocumented" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: LOW</strong> (unchanged; documentation gap)</p>
+<p><code class="docutils literal notranslate"><span class="pre">config.py:41-43</span></code> sets <code class="docutils literal notranslate"><span class="pre">structural_mutation_cadence:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">10</span></code> with a comment saying “Set to a large number to effectively disable” but no citation or rationale for K=10. In NES/CMA-ES literature, structural mutations are typically infrequent (1:50 to 1:100 relative to parameter mutations). K=10 means 10% of batches trigger structural mutation, which is aggressive. Finding is technically real but low impact; no driver exists to trigger it.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-2-medium-assert-benchmark-relevance-tests-incomplete-straggler-file">
+<h2>Finding 5.2 — MEDIUM: <code class="docutils literal notranslate"><span class="pre">assert_benchmark_relevance</span></code> tests incomplete; straggler file<a class="headerlink" href="#finding-5-2-medium-assert-benchmark-relevance-tests-incomplete-straggler-file" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: MEDIUM</strong> (unchanged)</p>
+<p><code class="docutils literal notranslate"><span class="pre">tests/test_evolution_evaluator.py</span></code> contains only 3 tests covering the normal unified-diff path. Confirmed: no binary-diff test, no mode-change test, no <code class="docutils literal notranslate"><span class="pre">pytestmark</span> <span class="pre">=</span> <span class="pre">pytest.mark.unit</span></code>. The file is at repo-root <code class="docutils literal notranslate"><span class="pre">tests/</span></code> rather than <code class="docutils literal notranslate"><span class="pre">tests/evolution/</span></code>. The missing binary-diff test would catch the bug in Finding 2.3. Finding accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-3-low-enforcement-mode-warn-has-no-behaviour-test">
+<h2>Finding 5.3 — LOW: <code class="docutils literal notranslate"><span class="pre">enforcement_mode=&quot;warn&quot;</span></code> has no behaviour test<a class="headerlink" href="#finding-5-3-low-enforcement-mode-warn-has-no-behaviour-test" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> | <strong>Corrected severity: LOW</strong> (unchanged; low impact since no driver exists)</p>
+<p><code class="docutils literal notranslate"><span class="pre">tests/evolution/test_config.py</span></code> tests that <code class="docutils literal notranslate"><span class="pre">enforcement_mode=&quot;off&quot;</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> but does not test what <code class="docutils literal notranslate"><span class="pre">&quot;warn&quot;</span></code> <em>does</em>. Since no driver implements warn-mode behaviour, this is a consequence of Finding 2.1 rather than an independent test gap. Severity LOW is correct.</p>
+</section>
+<hr class="docutils" />
+<section id="additional-findings-not-in-census">
+<h2>Additional Findings Not in Census<a class="headerlink" href="#additional-findings-not-in-census" title="Link to this heading"></a></h2>
+<section id="new-a-low-scan-call-does-not-flag-exec-eval-called-as-attribute-methods">
+<h3>NEW-A — LOW: <code class="docutils literal notranslate"><span class="pre">_scan_call</span></code> does not flag <code class="docutils literal notranslate"><span class="pre">exec</span></code>/<code class="docutils literal notranslate"><span class="pre">eval</span></code> called as attribute methods<a class="headerlink" href="#new-a-low-scan-call-does-not-flag-exec-eval-called-as-attribute-methods" title="Link to this heading"></a></h3>
+<p>While <code class="docutils literal notranslate"><span class="pre">exec(&quot;import</span> <span class="pre">torch&quot;)</span></code> at module level is an <code class="docutils literal notranslate"><span class="pre">ast.Call</span></code> with <code class="docutils literal notranslate"><span class="pre">ast.Name(id=&quot;exec&quot;)</span></code>, if a hypothetical candidate calls <code class="docutils literal notranslate"><span class="pre">builtins.exec(...)</span></code>, it would appear as an <code class="docutils literal notranslate"><span class="pre">ast.Attribute</span></code> chain <code class="docutils literal notranslate"><span class="pre">builtins.exec</span></code> — not in <code class="docutils literal notranslate"><span class="pre">DYNAMIC_IMPORT_CALLS</span></code>. Since <code class="docutils literal notranslate"><span class="pre">builtins</span></code> is not a forbidden prefix, <code class="docutils literal notranslate"><span class="pre">_scan_attribute</span></code> would not catch it either. This is a narrower variant of Finding 1.1 (the main finding already covers the common case). Severity LOW (requires deliberate obfuscation beyond the simple <code class="docutils literal notranslate"><span class="pre">exec(...)</span></code> case).</p>
+</section>
+<section id="new-b-low-no-test-for-syntaxerror-propagation-in-assert-physics-only">
+<h3>NEW-B — LOW: No test for <code class="docutils literal notranslate"><span class="pre">SyntaxError</span></code> propagation in <code class="docutils literal notranslate"><span class="pre">assert_physics_only</span></code><a class="headerlink" href="#new-b-low-no-test-for-syntaxerror-propagation-in-assert-physics-only" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">assert_physics_only</span></code> docstring (evaluator.py:228-232) says “malformed candidate code surfaces as <code class="docutils literal notranslate"><span class="pre">SyntaxError</span></code>, not <code class="docutils literal notranslate"><span class="pre">BlocklistViolationError</span></code>” and instructs callers to catch both. The <code class="docutils literal notranslate"><span class="pre">__main__.py</span></code> correctly catches <code class="docutils literal notranslate"><span class="pre">SyntaxError</span></code> (line 71). However, <code class="docutils literal notranslate"><span class="pre">tests/evolution/test_blocklist.py</span></code> has no test that passes a syntactically invalid source and confirms <code class="docutils literal notranslate"><span class="pre">SyntaxError</span></code> is raised rather than being swallowed. Minor test gap; severity LOW.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>Real?</p></th>
+<th class="head"><p>Confirmed Severity</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1.1 exec/eval bypass</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p>Live-executed; returns [] for exec/eval/compile</p></td>
+</tr>
+<tr class="row-odd"><td><p>1.2 CLAUDE.md contradiction</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>Ruff config confirms cflibs/evolution/ has no TID251 exemption</p></td>
+</tr>
+<tr class="row-even"><td><p>2.1 enforcement_mode fiction</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p>No callers of EvolutionDriverConfig outside tests</p></td>
+</tr>
+<tr class="row-odd"><td><p>2.2 fitness_weights no formula</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>No aggregate_fitness function anywhere</p></td>
+</tr>
+<tr class="row-even"><td><p>2.3 binary diff false rejection</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>Live-executed; binary diff raises false RuntimeError</p></td>
+</tr>
+<tr class="row-odd"><td><p>4.1 evaluation_timeout_s=5.0</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>Contradicts known inversion wall-clock</p></td>
+</tr>
+<tr class="row-even"><td><p>4.2 structural_mutation_cadence</p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+<td><p>Documentation gap only</p></td>
+</tr>
+<tr class="row-odd"><td><p>5.1 no exec/eval tests</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p>test_blocklist.py confirmed; zero exec/eval test cases</p></td>
+</tr>
+<tr class="row-even"><td><p>5.2 straggler test file</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>No pytestmark, no binary test</p></td>
+</tr>
+<tr class="row-odd"><td><p>5.3 warn mode no behaviour test</p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+<td><p>Consequence of 2.1</p></td>
+</tr>
+<tr class="row-even"><td><p>NEW-A builtins.exec attribute</p></td>
+<td><p>NEW</p></td>
+<td><p>LOW</p></td>
+<td><p>Narrow obfuscation variant</p></td>
+</tr>
+<tr class="row-odd"><td><p>NEW-B SyntaxError not tested</p></td>
+<td><p>NEW</p></td>
+<td><p>LOW</p></td>
+<td><p>Missing test for documented behaviour</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: HIGH</strong> (Findings 1.1, 2.1, 5.1)</p>
+<p>All census findings for severity HIGH and MEDIUM were verified as TRUE. No finding was found to be FALSE. The two prior false-positive findings (dead class, Saha ionization-potential guard) do not apply here — this package has no physics equations and no complex call graphs to misread.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

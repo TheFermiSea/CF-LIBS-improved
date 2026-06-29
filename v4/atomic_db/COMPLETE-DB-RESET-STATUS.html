@@ -1,0 +1,229 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Complete-DB Reset — Status &amp; Next-Phase Plan (2026-06-26) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Complete-DB Reset — Status &amp; Next-Phase Plan (2026-06-26)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/v4/atomic_db/COMPLETE-DB-RESET-STATUS.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="complete-db-reset-status-next-phase-plan-2026-06-26">
+<h1>Complete-DB Reset — Status &amp; Next-Phase Plan (2026-06-26)<a class="headerlink" href="#complete-db-reset-status-next-phase-plan-2026-06-26" title="Link to this heading"></a></h1>
+<p>After the atomic DB was rebuilt from the gold-standard <code class="docutils literal notranslate"><span class="pre">ASD59_dump.sql</span></code>, <strong>every
+prior benchmark/metric was invalidated</strong> (they were computed on a DB that held
+~30% of lines, missing IPs, and no stage III). This is the state of the reset.</p>
+<section id="foundation-done-validated-committed-pushed-branch-v4-m5-kurucz-atomic">
+<h2>1. Foundation — DONE, validated, committed + pushed (branch <code class="docutils literal notranslate"><span class="pre">v4/m5-kurucz-atomic</span></code>)<a class="headerlink" href="#foundation-done-validated-committed-pushed-branch-v4-m5-kurucz-atomic" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Item</p></th>
+<th class="head"><p>Status</p></th>
+<th class="head"><p>Evidence</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Atomic DB rebuilt from gold standard</p></td>
+<td><p>✅</p></td>
+<td><p>203,695 lines / 62,752 levels (I-III) / 324 IPs; validated vs live NIST (18/18 levels, 17/17 IPs) — <code class="docutils literal notranslate"><span class="pre">docs/v4/atomic_db/COMPLETENESS-VERIFICATION.md</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Partition-function overhaul</p></td>
+<td><p>✅</p></td>
+<td><p>direct-sum over complete DB authoritative; g0 fixed (Fe I 1→9); U(T) within ~10% of Barklem/Irwin; IPD handles high-T; 31/31 tests (<code class="docutils literal notranslate"><span class="pre">scripts/validate_partition_vs_literature.py</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_transitions</span></code> NULL-<code class="docutils literal notranslate"><span class="pre">aki</span></code> crash</p></td>
+<td><p>✅ fixed (<code class="docutils literal notranslate"><span class="pre">2f15cfa</span></code>)</p></td>
+<td><p>complete DB’s 74k observation-only lines crashed every forward-model path</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_level_cache</span></code> stale-after-reingest</p></td>
+<td><p>✅ fixed (<code class="docutils literal notranslate"><span class="pre">c22fe3b</span></code>)</p></td>
+<td><p>token-versioned like <code class="docutils literal notranslate"><span class="pre">_spec_cache</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Forward model (Saha-Boltzmann)</p></td>
+<td><p>✅ NIST parity PASS</p></td>
+<td><p>Fe ionization fractions within 5% (<code class="docutils literal notranslate"><span class="pre">scripts/validate_nist_parity.py</span> <span class="pre">--db</span> <span class="pre">ASD_da/...</span></code>)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="re-benchmark-on-the-complete-db-first-valid-numbers">
+<h2>2. Re-benchmark on the complete DB (first VALID numbers)<a class="headerlink" href="#re-benchmark-on-the-complete-db-first-valid-numbers" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Pipeline</p></th>
+<th class="head"><p>Result</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>DED constrained (Ti-6Al-4V, the real goal)</strong></p></td>
+<td><p>Al 0.82 / Ti 1.43 / V 0.87 wt% rmsep, V nominal bias +0.73, 27/27 converged</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Solver head-to-head (SuperCam labcal, n=15)</strong></p></td>
+<td><p><strong>iterative 2.31</strong> / ilr 11.0 / csigma 16.8 (median mass RMSE) — iterative wins</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>NIST forward-model parity (Fe)</strong></p></td>
+<td><p>PASS (I −4.5%, II +1.7%, III exact)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Open-element ID (small_v1, 12 spectra)</strong></p></td>
+<td><p>ALIAS F1 0.063 (recall collapse), Comb 0.329 (over-detects), Corr 0.327 — <strong>mis-tuned for the dense catalog</strong></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="the-hard-finding-open-element-id-needs-re-architecting-not-re-tuning">
+<h2>3. The hard finding — open-element ID needs RE-ARCHITECTING (not re-tuning)<a class="headerlink" href="#the-hard-finding-open-element-id-needs-re-architecting-not-re-tuning" title="Link to this heading"></a></h2>
+<p>The 7× denser catalog makes open ID fundamentally harder (more lines → more
+chance matches). Root causes + why simple knobs fail:</p>
+<ul class="simple">
+<li><p><strong>ALIAS:</strong> <code class="docutils literal notranslate"><span class="pre">k_det</span> <span class="pre">∝</span> <span class="pre">k_rate</span> <span class="pre">=</span> <span class="pre">matched_emissivity</span> <span class="pre">/</span> <span class="pre">total_emissivity_above</span></code>. The
+larger catalog inflates the expected-line denominator → line-rich <em>true</em>
+elements (Fe/Ni) get penalized while line-poor absent ones pass by chance. The
+k_det values are systematically low AND poorly separated. Threshold C_th 0.5→0.3
+only recovered recall 0.04→0.21 (band-aid, precision dropped); <code class="docutils literal notranslate"><span class="pre">max_lines</span></code> had
+no effect. <strong>Fix = a chance-corrected detection metric:</strong> normalize k_det by the
+<em>expected random-match rate given the catalog density in-window</em> (so a match is
+only credited above what the dense catalog would produce by coincidence), and/or
+a high-recall-Comb → precision-filter (NNLS/BIC) hybrid.</p></li>
+<li><p><strong>Comb:</strong> recall 0.96 already; over-predicts (precision 0.20). Tightening gates
+was marginal (F1 0.329→0.341). Better used as the high-recall front of a hybrid.</p></li>
+</ul>
+<p><strong>This is deep and SECONDARY to the DED goal</strong> (DED uses a known element set, so
+identification is bypassed).</p>
+</section>
+<section id="band-aid-inventory-from-workflow-w80qmlwsk-107-total-72-db-compensation">
+<h2>4. Band-aid inventory (from workflow <code class="docutils literal notranslate"><span class="pre">w80qmlwsk</span></code>): 107 total, 72 DB-compensation<a class="headerlink" href="#band-aid-inventory-from-workflow-w80qmlwsk-107-total-72-db-compensation" title="Link to this heading"></a></h2>
+<p>High-severity, now mostly NON-FIRING on the complete DB (cosmetic to remove, low
+accuracy value): missing-IP <code class="docutils literal notranslate"><span class="pre">15.0</span> <span class="pre">eV</span></code> fallback (iterative.py ×8 + quality.py:347),
+generic <code class="docutils literal notranslate"><span class="pre">{1:25,2:15}</span></code> partition tier-c, bayesian <code class="docutils literal notranslate"><span class="pre">log(25/15/10)</span></code> placeholder,
+<code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code> SQL floor. Behavior-changing (real value): <strong>stage-III
+enablement</strong> (iterative.py:489 <code class="docutils literal notranslate"><span class="pre">(1,2)</span></code>, alias.py ×3 — solver run confirmed “stage 3
+not supported; skipping”), Stark-width n_e diagnostic (vs the 1-atm pressure-balance
+band-aid). Cleanups done: partition <code class="docutils literal notranslate"><span class="pre">_level_cache</span></code>/docstrings.</p>
+</section>
+<section id="suggested-next-phase-benefits-from-user-direction-on-approach-priority">
+<h2>5. Suggested next phase (benefits from user direction on approach + priority)<a class="headerlink" href="#suggested-next-phase-benefits-from-user-direction-on-approach-priority" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>DED accuracy (real goal):</strong> Stark-width n_e diagnostic (replace pressure-balance);
+stage-III Saha for hotter regimes; instrument calibration as a first-class input.
+Cr under-estimate (Saha unobserved-stage) — <code class="docutils literal notranslate"><span class="pre">reference_ded_synthetic_benchmark</span></code>.</p></li>
+<li><p><strong>Open-ID re-architecting:</strong> chance-corrected k_det + hybrid (above). Larger effort.</p></li>
+<li><p><strong>Honest band-aid removal:</strong> the non-firing solver fallbacks → loud/error (the
+complete DB guarantees coverage), unit-test-gated.</p></li>
+<li><p><strong>Latency (deferred):</strong> ALIAS RANSAC wl-calibration is ~84 min on the full 288
+corpus (7× reference lines) — index/cap the calibration reference set.</p></li>
+</ol>
+<p><strong>Bottom line:</strong> the atomic data, partitions, forward model, and the DED-constrained
+pipeline (the real goal) are CORRECT on the gold-standard catalog. The remaining work
+is deep (ID re-architecting, DED-accuracy physics) + cosmetic (non-firing cleanups).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,479 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RASCAL Reference — Wavelength Calibration via Hough Transform + RANSAC &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">RASCAL Reference — Wavelength Calibration via Hough Transform + RANSAC</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/reference/rascal.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="rascal-reference-wavelength-calibration-via-hough-transform-ransac">
+<h1>RASCAL Reference — Wavelength Calibration via Hough Transform + RANSAC<a class="headerlink" href="#rascal-reference-wavelength-calibration-via-hough-transform-ransac" title="Link to this heading"></a></h1>
+<p><strong>Repo:</strong> https://github.com/jveitchmichaelis/rascal<br />
+<strong>Docs:</strong> https://rascal.readthedocs.io/en/latest/<br />
+<strong>Paper:</strong> arXiv:1912.05883 (Veitch-Michaelis &amp; Lam, ADASS 2019)<br />
+<strong>Source studied:</strong> <code class="docutils literal notranslate"><span class="pre">src/rascal/</span></code> — <code class="docutils literal notranslate"><span class="pre">calibrator.py</span></code>, <code class="docutils literal notranslate"><span class="pre">houghtransform.py</span></code>, <code class="docutils literal notranslate"><span class="pre">models.py</span></code>, <code class="docutils literal notranslate"><span class="pre">util.py</span></code>, <code class="docutils literal notranslate"><span class="pre">atlas.py</span></code></p>
+<hr class="docutils" />
+<section id="how-rascal-structures-the-computation">
+<h2>1. How RASCAL Structures the Computation<a class="headerlink" href="#how-rascal-structures-the-computation" title="Link to this heading"></a></h2>
+<section id="pipeline-overview">
+<h3>1.1 Pipeline Overview<a class="headerlink" href="#pipeline-overview" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>peaks (pixel positions)
+    │
+    ├─ refine_peaks()       ← Gaussian subpixel refinement per peak
+    │
+    ├─ Atlas (line list)    ← NIST arc lines, filtered by intensity + min_distance
+    │
+    ├─ _generate_pairs()    ← Cartesian product of every peak × every atlas line
+    │     (optionally masked by a Delaunay convex polygon for linearity constraint)
+    │
+    ├─ HoughTransform       ← maps each (pixel, wavelength) pair → (slope, intercept)
+    │     generate_hough_points()  → dense (gradient, intercept) point cloud
+    │     bin_hough_points()       → 2D histogram (xbins × ybins)
+    │     sorted by count → hough_lines (ordered list of most-likely (m, c) lines)
+    │
+    ├─ _get_candidate_points_linear()
+    │     for each hough_line: predict wavelength = m*pixel + c
+    │     keep pairs within candidate_tolerance (Å)
+    │     weight by Gaussian probability ∝ exp(−Δλ² / (2·σ²))
+    │
+    ├─ _get_most_common_candidates()
+    │     aggregate weighted vote per peak × wavelength pair
+    │     keep top_n_candidate wavelengths per peak
+    │
+    └─ _solve_candidate_ransac()
+          random draw of sample_size (peak, wavelength) pairs  (inversely weighted
+          by local peak density to spread samples across the spectrum)
+          → polyfit on the sample (exact fit)
+          → monotonicity check (derivative &gt; 0 everywhere)
+          → intercept bounds check
+          → _match_bijective(): one-to-one peak↔line assignment by nearest match
+          → M-SAC cost: errors clamped at ransac_tolerance; then sum / (n − dof)
+             optionally weighted by Hough-space density via 2D spline interpolation
+          → if cost improves: robust_polyfit (Huber loss) on inliers → store best
+          → early exit if all peaks matched
+</pre></div>
+</div>
+</section>
+<section id="module-responsibilities">
+<h3>1.2 Module Responsibilities<a class="headerlink" href="#module-responsibilities" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Module</p></th>
+<th class="head"><p>Responsibility</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calibrator.py</span></code></p></td>
+<td><p>Top-level orchestrator; holds all state; calls Hough → RANSAC → fit</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">houghtransform.py</span></code></p></td>
+<td><p>Generates and bins the 2D (slope, intercept) accumulator</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">models.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">robust_polyfit</span></code> — Huber-loss LSQ via <code class="docutils literal notranslate"><span class="pre">scipy.optimize.least_squares</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atlas.py</span></code></p></td>
+<td><p>Line list management; NIST data; vacuum↔air conversion (Modified Edlén)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">util.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">refine_peaks</span></code> (Gaussian fit); <code class="docutils literal notranslate"><span class="pre">gauss</span></code>; <code class="docutils literal notranslate"><span class="pre">vacuum_to_air_wavelength</span></code>; <code class="docutils literal notranslate"><span class="pre">_derivative</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="two-stage-polynomial-fitting">
+<h3>1.3 Two-Stage Polynomial Fitting<a class="headerlink" href="#two-stage-polynomial-fitting" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Exact fit</strong> on the RANSAC mini-sample (<code class="docutils literal notranslate"><span class="pre">np.polynomial.*.polyfit</span></code>): used only to test the hypothesis — no robustness required.</p></li>
+<li><p><strong>Robust refit</strong> on inliers (<code class="docutils literal notranslate"><span class="pre">robust_polyfit</span></code> with Huber loss): the accepted best fit. Inputs are z-score normalised before fitting (divided by std) and rescaled back after. This avoids numerical conditioning problems with high-degree polynomials over large pixel ranges.</p></li>
+</ol>
+</section>
+<section id="bijective-matching">
+<h3>1.4 Bijective Matching<a class="headerlink" href="#bijective-matching" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">_match_bijective</span></code> ensures a one-to-one mapping between detected peaks and atlas lines: first pick the closest atlas wavelength for each peak, then resolve any remaining wavelength duplicates by keeping the peak with the smallest error. The result is strictly injective in both directions before the robust refit is run.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="specific-apis-patterns-numerical-techniques-worth-adopting">
+<h2>2. Specific APIs / Patterns / Numerical Techniques Worth Adopting<a class="headerlink" href="#specific-apis-patterns-numerical-techniques-worth-adopting" title="Link to this heading"></a></h2>
+<section id="hough-space-prefilter-before-ransac">
+<h3>2.1 Hough-Space Prefilter Before RANSAC<a class="headerlink" href="#hough-space-prefilter-before-ransac" title="Link to this heading"></a></h3>
+<p>RASCAL does <strong>not</strong> run blind RANSAC over all (peak, line) pairs. Instead it uses the Hough accumulator to identify the most densely populated (slope, intercept) regions first, then restricts RANSAC sampling to candidate pairs that are consistent with those regions. This collapses the combinatorial space from O(P·L) pairs to a small set of likely correspondences before any polynomial is attempted.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># From houghtransform.py: vectorised intercept computation</span>
+<span class="n">slopes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">min_slope</span><span class="p">,</span> <span class="n">max_slope</span><span class="p">,</span> <span class="n">num_slopes</span><span class="p">)</span>
+<span class="n">intercepts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">slopes</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>  <span class="c1"># broadcast outer product</span>
+<span class="n">gradients</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">([</span><span class="n">slopes</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+<span class="c1"># Apply bounds, bin into 2D histogram, sort by count</span>
+</pre></div>
+</div>
+<p><strong>cflibs relevance:</strong> The existing RANSAC calibration does not have a Hough prefilter. Adding one would collapse the search from O(N_peaks × N_lines × max_tries) to a focused set of candidate line pairs.</p>
+</section>
+<section id="candidate-weighted-voting">
+<h3>2.2 Candidate Weighted Voting<a class="headerlink" href="#candidate-weighted-voting" title="Link to this heading"></a></h3>
+<p>Each candidate (peak, wavelength) pair is weighted by a Gaussian centred on the Hough-predicted wavelength:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">weight</span> <span class="o">=</span> <span class="n">gauss</span><span class="p">(</span><span class="n">actual</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">predicted</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span>
+               <span class="p">(</span><span class="n">range_tolerance</span> <span class="o">+</span> <span class="n">linearity_tolerance</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1.1775</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The factor 1.1775 maps FWHM → 1σ (σ = FWHM / 2.355). When multiple Hough lines vote for the same pair, votes are summed. The top-N candidates per peak by aggregated weight are forwarded to RANSAC.</p>
+</section>
+<section id="m-sac-cost-function-torr-zisserman-1996">
+<h3>2.3 M-SAC Cost Function (Torr &amp; Zisserman 1996)<a class="headerlink" href="#m-sac-cost-function-torr-zisserman-1996" title="Link to this heading"></a></h3>
+<p>Standard RANSAC counts inliers (binary). M-SAC weights inliers by their residual:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># From _solve_candidate_ransac:</span>
+<span class="n">err</span><span class="p">[</span><span class="n">err</span> <span class="o">&gt;</span> <span class="n">ransac_tolerance</span><span class="p">]</span> <span class="o">=</span> <span class="n">ransac_tolerance</span>   <span class="c1"># clamp outliers</span>
+<span class="n">cost</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">err</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">err</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">fit_coeffs</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The denominator <code class="docutils literal notranslate"><span class="pre">(n_matched</span> <span class="pre">−</span> <span class="pre">n_coeffs</span> <span class="pre">+</span> <span class="pre">1)</span></code> normalises for degrees of freedom — a fit with more inliers is preferred over an equally-tight fit with fewer. This distinguishes fits that have identical inlier counts but different residual distributions.</p>
+</section>
+<section id="hough-density-weighting-of-the-cost">
+<h3>2.4 Hough-Density Weighting of the Cost<a class="headerlink" href="#hough-density-weighting-of-the-cost" title="Link to this heading"></a></h3>
+<p>When <code class="docutils literal notranslate"><span class="pre">hough_weight</span></code> is set, the M-SAC cost is further divided by the Hough-space density evaluated along the current polynomial solution:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">wave</span>     <span class="o">=</span> <span class="n">polyval</span><span class="p">(</span><span class="n">pixel_list</span><span class="p">,</span> <span class="n">fit_coeffs</span><span class="p">)</span>
+<span class="n">gradient</span> <span class="o">=</span> <span class="n">polyval</span><span class="p">(</span><span class="n">pixel_list</span><span class="p">,</span> <span class="n">_derivative</span><span class="p">(</span><span class="n">fit_coeffs</span><span class="p">))</span>
+<span class="n">intercept</span> <span class="o">=</span> <span class="n">wave</span> <span class="o">-</span> <span class="n">gradient</span> <span class="o">*</span> <span class="n">pixel_list</span>
+<span class="c1"># Interpolate from the 2D Hough histogram at each (gradient, intercept):</span>
+<span class="n">weight</span> <span class="o">=</span> <span class="n">hough_weight</span> <span class="o">*</span> <span class="nb">sum</span><span class="p">(</span><span class="n">twoditp</span><span class="p">(</span><span class="n">intercept</span><span class="p">,</span> <span class="n">gradient</span><span class="p">,</span> <span class="n">grid</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+<span class="n">cost</span> <span class="o">/=</span> <span class="p">(</span><span class="n">weight</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This biases the search toward solutions that pass through dense Hough regions — a principled way to incorporate the global consistency evidence into the per-sample hypothesis evaluation.</p>
+</section>
+<section id="monotonicity-enforcement">
+<h3>2.5 Monotonicity Enforcement<a class="headerlink" href="#monotonicity-enforcement" title="Link to this heading"></a></h3>
+<p>After every RANSAC hypothesis, the polynomial is evaluated on the full pixel range ± 20% and rejected if it is not strictly monotonically increasing:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">polyval</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">pix_min</span><span class="p">,</span> <span class="n">pix_max</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">fit_coeffs</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+    <span class="k">continue</span>
+</pre></div>
+</div>
+<p>This eliminates physically impossible solutions (wavelength going backwards) before the expensive bijective matching step.</p>
+</section>
+<section id="intercept-bounds-check">
+<h3>2.6 Intercept Bounds Check<a class="headerlink" href="#intercept-bounds-check" title="Link to this heading"></a></h3>
+<p>Before any further computation, the fitted intercept (polynomial value at pixel 0) is compared against <code class="docutils literal notranslate"><span class="pre">[min_intercept,</span> <span class="pre">max_intercept]</span></code> derived from the user-supplied wavelength range ± range_tolerance. Fast reject before the O(N) matching step.</p>
+</section>
+<section id="subpixel-peak-refinement-via-gaussian-fit">
+<h3>2.7 Subpixel Peak Refinement via Gaussian Fit<a class="headerlink" href="#subpixel-peak-refinement-via-gaussian-fit" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># util.py refine_peaks:</span>
+<span class="n">popt</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">curve_fit</span><span class="p">(</span><span class="n">gauss</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="n">p0</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">mean</span><span class="p">,</span> <span class="n">sigma</span><span class="p">])</span>
+<span class="c1"># returns centre offset from window left edge → sub-pixel position</span>
+</pre></div>
+</div>
+<p>Window of ±10 pixels around each <code class="docutils literal notranslate"><span class="pre">find_peaks</span></code> hit; each peak is fitted independently. Peaks with negative heights or out-of-range centres are silently dropped. Peaks that collapse to the same location (to floating-point resolution) are deduplicated.</p>
+</section>
+<section id="inverse-density-sampling">
+<h3>2.8 Inverse-Density Sampling<a class="headerlink" href="#inverse-density-sampling" title="Link to this heading"></a></h3>
+<p>To avoid over-sampling peaks in crowded spectral regions, RANSAC draws peaks with probability inversely proportional to local density:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">histogram</span><span class="p">(</span><span class="n">peaks</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">prob</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">h</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">np</span><span class="o">.</span><span class="n">digitize</span><span class="p">(</span><span class="n">peaks</span><span class="p">,</span> <span class="n">h</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">right</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+<span class="n">prob</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">prob</span><span class="p">)</span>
+<span class="n">x_hat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">peaks</span><span class="p">,</span> <span class="n">sample_size</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">prob</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This ensures well-spread samples spanning the full spectral range, which improves polynomial conditioning.</p>
+</section>
+<section id="polynomial-basis-choice">
+<h3>2.9 Polynomial Basis Choice<a class="headerlink" href="#polynomial-basis-choice" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">fit_type</span></code> selects among <code class="docutils literal notranslate"><span class="pre">'poly'</span></code> (standard monomial), <code class="docutils literal notranslate"><span class="pre">'legendre'</span></code>, and <code class="docutils literal notranslate"><span class="pre">'chebyshev'</span></code>, all via <code class="docutils literal notranslate"><span class="pre">numpy.polynomial.*</span></code>. Legendre/Chebyshev have better conditioning for high-degree fits over large domains. The robust refit uses the same basis as the Hough/RANSAC stage.</p>
+</section>
+<section id="atlas-filtering-pipeline">
+<h3>2.10 Atlas Filtering Pipeline<a class="headerlink" href="#atlas-filtering-pipeline" title="Link to this heading"></a></h3>
+<p>Atlas lines are filtered in order:</p>
+<ol class="arabic simple">
+<li><p>Wavelength range (with added <code class="docutils literal notranslate"><span class="pre">range_tolerance</span></code> padding)</p></li>
+<li><p>Minimum NIST relative intensity (per-element, can be a list)</p></li>
+<li><p>Minimum separation between neighbouring lines (<code class="docutils literal notranslate"><span class="pre">filter_separation</span></code>)</p></li>
+</ol>
+<p>Intensity is filtered before separation so that a bright line near a faint line is never removed in favour of the faint one.</p>
+</section>
+<section id="robust-polyfit-huber-loss-with-input-normalisation">
+<h3>2.11 Robust Polyfit (Huber Loss with Input Normalisation)<a class="headerlink" href="#robust-polyfit-huber-loss-with-input-normalisation" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># models.py robust_polyfit:</span>
+<span class="n">x_n</span><span class="p">,</span> <span class="n">y_n</span> <span class="o">=</span> <span class="n">x</span> <span class="o">/</span> <span class="n">x</span><span class="o">.</span><span class="n">std</span><span class="p">(),</span> <span class="n">y</span> <span class="o">/</span> <span class="n">y</span><span class="o">.</span><span class="n">std</span><span class="p">()</span>   <span class="c1"># unit-variance normalisation</span>
+<span class="n">res</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">least_squares</span><span class="p">(</span><span class="n">poly_cost_function</span><span class="p">,</span> <span class="n">p_init</span><span class="p">,</span>
+                                   <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">x_n</span><span class="p">,</span> <span class="n">y_n</span><span class="p">,</span> <span class="n">degree</span><span class="p">),</span>
+                                   <span class="n">loss</span><span class="o">=</span><span class="s1">&#39;huber&#39;</span><span class="p">,</span> <span class="n">diff_step</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">)</span>
+<span class="c1"># rescale back: p *= y.std(); p[i] /= x.std()**(degree - i)</span>
+</pre></div>
+</div>
+<p>This is the correct way to do a robust fit on a high-dynamic-range polynomial problem. Standard <code class="docutils literal notranslate"><span class="pre">np.polyfit</span></code> uses QR decomposition with no outlier protection; the Huber loss makes the final inlier fit resistant to the few remaining bad matches.</p>
+</section>
+<section id="vacuumair-wavelength-conversion">
+<h3>2.12 Vacuum↔Air Wavelength Conversion<a class="headerlink" href="#vacuumair-wavelength-conversion" title="Link to this heading"></a></h3>
+<p>Full Modified Edlén equation (NIST documentation) is implemented in <code class="docutils literal notranslate"><span class="pre">util.py</span></code>, accounting for temperature, pressure, and relative humidity. The Atlas defaults to air wavelengths (vacuum=False) because observatory line lists are usually already in air.</p>
+</section>
+<section id="known-pair-pinning">
+<h3>2.13 Known-Pair Pinning<a class="headerlink" href="#known-pair-pinning" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">set_known_pairs(pix,</span> <span class="pre">wave)</span></code> injects user-supplied (pixel, wavelength) ground-truth points into every RANSAC sample unconditionally. Useful for anchoring edge-of-spectrum lines that are too faint to be detected but whose identity is known. The docs warn this can bias the fit — use at most a couple of pairs.</p>
+</section>
+<section id="overfit-guard">
+<h3>2.14 Overfit Guard<a class="headerlink" href="#overfit-guard" title="Link to this heading"></a></h3>
+<p>After RANSAC completes, validity is checked: <code class="docutils literal notranslate"><span class="pre">n_inliers</span> <span class="pre">&gt;</span> <span class="pre">fit_deg</span> <span class="pre">+</span> <span class="pre">1</span></code>. A “perfect” fit with zero residual is also rejected (<code class="docutils literal notranslate"><span class="pre">minimum_fit_error</span> <span class="pre">=</span> <span class="pre">1e-4</span></code> by default) because it typically indicates an overfitted degenerate solution.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="pitfalls-documented-by-rascal">
+<h2>3. Pitfalls Documented by RASCAL<a class="headerlink" href="#pitfalls-documented-by-rascal" title="Link to this heading"></a></h2>
+<section id="num-pix-pixel-list-must-be-set-correctly">
+<h3>3.1 num_pix / pixel_list Must Be Set Correctly<a class="headerlink" href="#num-pix-pixel-list-must-be-set-correctly" title="Link to this heading"></a></h3>
+<p>For multi-chip detectors with gaps, <code class="docutils literal notranslate"><span class="pre">pixel_list</span></code> must explicitly encode the physical pixel coordinates. The default assumes <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">...,</span> <span class="pre">num_pix-1]</span></code>. Getting this wrong silently produces an incorrect wavelength solution with no error because the polynomial simply fits the wrong domain.</p>
+</section>
+<section id="tolerance-cascade-three-different-tolerances">
+<h3>3.2 Tolerance Cascade: Three Different Tolerances<a class="headerlink" href="#tolerance-cascade-three-different-tolerances" title="Link to this heading"></a></h3>
+<p>RASCAL uses three distinct tolerances that are easy to confuse:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Role</p></th>
+<th class="head"><p>Typical value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">range_tolerance</span></code></p></td>
+<td><p>error on the provided spectral range</p></td>
+<td><p>500 Å</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">linearity_tolerance</span></code></p></td>
+<td><p>maximum non-linearity excursion from a linear dispersion</p></td>
+<td><p>50–100 Å</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">candidate_tolerance</span></code></p></td>
+<td><p>Hough-stage inlier threshold (linear step)</p></td>
+<td><p>10 Å</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ransac_tolerance</span></code></p></td>
+<td><p>RANSAC inlier threshold (polynomial step)</p></td>
+<td><p>1–5 Å</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fit_tolerance</span></code></p></td>
+<td><p>post-fit RMS warning threshold</p></td>
+<td><p>5–10 Å</p></td>
+</tr>
+</tbody>
+</table>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">candidate_tolerance</span></code> too tight starves RANSAC of candidates. Setting <code class="docutils literal notranslate"><span class="pre">ransac_tolerance</span></code> too loose accepts spurious inliers. The Hough stage tolerances should be wider (they handle non-linearity) while RANSAC tolerance should be close to the expected final residual.</p>
+</section>
+<section id="min-intensity-filtering-is-instrument-dependent">
+<h3>3.3 min_intensity Filtering Is Instrument-Dependent<a class="headerlink" href="#min-intensity-filtering-is-instrument-dependent" title="Link to this heading"></a></h3>
+<p>NIST relative intensities do not account for detector quantum efficiency or filter transmission. The <code class="docutils literal notranslate"><span class="pre">min_intensity</span></code> parameter needs tuning per instrument; the default of 10 is conservative and may exclude usable lines, or retain unusable ones for a different instrument configuration.</p>
+</section>
+<section id="minimum-fit-error-anti-degenerate-guard-has-a-false-positive-risk">
+<h3>3.4 <code class="docutils literal notranslate"><span class="pre">minimum_fit_error</span></code> Anti-Degenerate Guard Has a False Positive Risk<a class="headerlink" href="#minimum-fit-error-anti-degenerate-guard-has-a-false-positive-risk" title="Link to this heading"></a></h3>
+<p>If the spectrograph is extremely well characterised (sub-0.01 Å residuals), the default <code class="docutils literal notranslate"><span class="pre">minimum_fit_error=1e-4</span></code> will reject valid perfect fits. The parameter must be reduced in high-precision regimes.</p>
+</section>
+<section id="filter-close-true-can-exclude-nearby-doublets">
+<h3>3.5 <code class="docutils literal notranslate"><span class="pre">filter_close=True</span></code> Can Exclude Nearby Doublets<a class="headerlink" href="#filter-close-true-can-exclude-nearby-doublets" title="Link to this heading"></a></h3>
+<p>The close-line filter (<code class="docutils literal notranslate"><span class="pre">3</span> <span class="pre">*</span> <span class="pre">ransac_tolerance</span></code> separation threshold) removes pairs with wavelengths closer than that distance. For plasma spectroscopy (LIBS), many physically important lines form close doublets (e.g. Fe lines separated by 0.3–1 Å). This filter should default to <code class="docutils literal notranslate"><span class="pre">False</span></code> for LIBS.</p>
+</section>
+<section id="hough-accumulator-resolution-matters">
+<h3>3.6 Hough Accumulator Resolution Matters<a class="headerlink" href="#hough-accumulator-resolution-matters" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">num_slopes</span></code> (the number of trial gradients) drives both the Hough space density and the computational cost. Too few slopes → coarse accumulator → wrong hough_lines are forwarded to RANSAC. The quickstart uses <code class="docutils literal notranslate"><span class="pre">num_slopes=10000</span></code> with <code class="docutils literal notranslate"><span class="pre">xbins=ybins=1000</span></code> for a wide-range instrument. Under-resolution causes RANSAC to spend iterations on wrong candidate sets.</p>
+</section>
+<section id="sample-size-floor">
+<h3>3.7 <code class="docutils literal notranslate"><span class="pre">sample_size</span></code> Floor<a class="headerlink" href="#sample-size-floor" title="Link to this heading"></a></h3>
+<p>If <code class="docutils literal notranslate"><span class="pre">sample_size</span> <span class="pre">&lt;=</span> <span class="pre">fit_deg</span></code>, RASCAL silently raises it to <code class="docutils literal notranslate"><span class="pre">fit_deg</span> <span class="pre">+</span> <span class="pre">1</span></code>. Users who set <code class="docutils literal notranslate"><span class="pre">sample_size=5</span></code> but then change <code class="docutils literal notranslate"><span class="pre">fit_deg=7</span></code> will get a silent size adjustment. The polynomial is underdetermined with fewer samples than <code class="docutils literal notranslate"><span class="pre">fit_deg</span> <span class="pre">+</span> <span class="pre">1</span></code>, so this guard is correct — but it means <code class="docutils literal notranslate"><span class="pre">max_tries</span></code> iterations may still be needed even with an “exact” sample.</p>
+</section>
+<section id="add-atlas-is-deprecated">
+<h3>3.8 <code class="docutils literal notranslate"><span class="pre">add_atlas</span></code> Is Deprecated<a class="headerlink" href="#add-atlas-is-deprecated" title="Link to this heading"></a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">add_atlas()</span></code> convenience method on <code class="docutils literal notranslate"><span class="pre">Calibrator</span></code> is deprecated; the correct approach is to construct an <code class="docutils literal notranslate"><span class="pre">Atlas</span></code> object separately and call <code class="docutils literal notranslate"><span class="pre">calibrator.set_atlas(atlas)</span></code>. Code using the old API still works but logs warnings.</p>
+</section>
+<section id="monotonicity-check-range-is-20-extrapolated">
+<h3>3.9 Monotonicity Check Range Is 20% Extrapolated<a class="headerlink" href="#monotonicity-check-range-is-20-extrapolated" title="Link to this heading"></a></h3>
+<p>The monotonicity test evaluates the polynomial at <code class="docutils literal notranslate"><span class="pre">[pix_min</span> <span class="pre">-</span> <span class="pre">0.2·ptp,</span> <span class="pre">pix_max</span> <span class="pre">+</span> <span class="pre">0.2·ptp]</span></code>. This can reject valid fits for spectrographs with strong non-linearity near the chip edges. The 20% factor is hard-coded and not user-configurable.</p>
+</section>
+<section id="brute-force-mode-is-implicitly-triggered">
+<h3>3.10 Brute Force Mode Is Implicitly Triggered<a class="headerlink" href="#brute-force-mode-is-implicitly-triggered" title="Link to this heading"></a></h3>
+<p>If <code class="docutils literal notranslate"><span class="pre">sample_size</span> <span class="pre">&gt;=</span> <span class="pre">len(unique</span> <span class="pre">candidate</span> <span class="pre">peaks)</span></code>, RASCAL silently switches to brute-force combination enumeration (<code class="docutils literal notranslate"><span class="pre">itertools.combinations</span></code>). For narrow spectra with few detected peaks this can cause unexpectedly long runtimes.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="concrete-cflibs-should-consider-x-recommendations">
+<h2>4. Concrete “cflibs Should Consider X” Recommendations<a class="headerlink" href="#concrete-cflibs-should-consider-x-recommendations" title="Link to this heading"></a></h2>
+<section id="r1-add-a-hough-transform-pre-stage-to-the-ransac-calibrator">
+<h3>R1. Add a Hough-Transform Pre-Stage to the RANSAC Calibrator<a class="headerlink" href="#r1-add-a-hough-transform-pre-stage-to-the-ransac-calibrator" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> Before drawing RANSAC samples, run a vectorised Hough transform on (peak_pixel, atlas_wavelength) pairs to build a 2D (slope, intercept) accumulator. Extract the top-K densest bins as candidate linear models; restrict RANSAC sampling to pairs consistent with those models.</p>
+<p><strong>Why:</strong> cflibs’s RANSAC calibration runs blind over all peak×line pairs, which scales as O(N_peaks × N_lines × max_iterations). The Hough prefilter collapses this to O(K × candidate_pool_per_bin) where K ≈ 20–50 bins. For LIBS spectra with many Fe/Ca/Mg/Si lines this difference is substantial.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">houghtransform.py::generate_hough_points</span></code> + <code class="docutils literal notranslate"><span class="pre">bin_hough_points</span></code> — the entire prefilter is ~20 lines of vectorised NumPy.</p>
+</section>
+<section id="r2-use-m-sac-instead-of-binary-ransac-inlier-count">
+<h3>R2. Use M-SAC Instead of Binary RANSAC Inlier Count<a class="headerlink" href="#r2-use-m-sac-instead-of-binary-ransac-inlier-count" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> Replace the binary inlier/outlier split with M-SAC: clamp errors at <code class="docutils literal notranslate"><span class="pre">ransac_tolerance</span></code>, sum the clamped errors, normalise by degrees of freedom. Use this as the cost rather than counting inliers.</p>
+<p><strong>Why:</strong> With LIBS spectra, multiple plausible polynomial fits may have the same number of inliers but very different residual distributions. M-SAC with DOF normalisation selects the fit that best explains the data globally.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">calibrator.py::_solve_candidate_ransac</span></code> lines ~530–560.</p>
+</section>
+<section id="r3-enforce-monotonicity-early-in-the-ransac-loop">
+<h3>R3. Enforce Monotonicity Early in the RANSAC Loop<a class="headerlink" href="#r3-enforce-monotonicity-early-in-the-ransac-loop" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> After fitting a polynomial hypothesis, immediately check that <code class="docutils literal notranslate"><span class="pre">np.diff(polyval(pixel_grid,</span> <span class="pre">p))</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> before running the expensive bijective matching step.</p>
+<p><strong>Why:</strong> The current cflibs RANSAC does not have an explicit monotonicity guard. Physically impossible solutions (wavelength reversals) waste iterations on bijective matching.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">calibrator.py::_solve_candidate_ransac</span></code> monotonicity check block.</p>
+</section>
+<section id="r4-replace-numpy-polyfit-with-huber-loss-robust-polyfit-for-the-final-fit">
+<h3>R4. Replace numpy.polyfit with Huber-Loss robust_polyfit for the Final Fit<a class="headerlink" href="#r4-replace-numpy-polyfit-with-huber-loss-robust-polyfit-for-the-final-fit" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> On the RANSAC inlier set, use <code class="docutils literal notranslate"><span class="pre">scipy.optimize.least_squares(loss='huber')</span></code> instead of plain <code class="docutils literal notranslate"><span class="pre">np.polyfit</span></code>. Normalise inputs to unit variance before fitting, rescale after.</p>
+<p><strong>Why:</strong> Even after RANSAC inlier selection, the inlier set for a LIBS spectrum may contain a few misidentified lines (the plasma has many overlapping weak lines). Huber loss suppresses their influence on the final polynomial coefficients. Unit-variance normalisation avoids the ill-conditioning of standard monomial basis over wide pixel ranges.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">models.py::robust_polyfit</span></code> — 30 lines, self-contained.</p>
+</section>
+<section id="r5-use-gaussian-weighted-candidate-voting-before-ransac">
+<h3>R5. Use Gaussian-Weighted Candidate Voting Before RANSAC<a class="headerlink" href="#r5-use-gaussian-weighted-candidate-voting-before-ransac" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> For each candidate (peak, line) pair accepted by the Hough-stage tolerance, weight it by <code class="docutils literal notranslate"><span class="pre">gauss(actual_wavelength,</span> <span class="pre">1.0,</span> <span class="pre">predicted_wavelength,</span> <span class="pre">sigma)</span></code> where sigma encodes the range + linearity tolerance. Aggregate weights across all Hough lines voting for the same pair; forward only the top-N weighted candidates per peak to RANSAC.</p>
+<p><strong>Why:</strong> This converts the Hough accumulator’s global information into a per-pair prior probability, biasing RANSAC toward the most globally consistent assignments and reducing the effective sample space.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">calibrator.py::_get_candidate_points_linear</span></code> and <code class="docutils literal notranslate"><span class="pre">_get_most_common_candidates</span></code>.</p>
+</section>
+<section id="r6-add-inverse-density-sampling-in-ransac-to-improve-polynomial-conditioning">
+<h3>R6. Add Inverse-Density Sampling in RANSAC to Improve Polynomial Conditioning<a class="headerlink" href="#r6-add-inverse-density-sampling-in-ransac-to-improve-polynomial-conditioning" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> Weight the RANSAC sampling distribution inversely to local peak density (10-bin histogram over peak positions). Draw peaks with <code class="docutils literal notranslate"><span class="pre">np.random.choice(...,</span> <span class="pre">p=prob)</span></code> rather than uniformly.</p>
+<p><strong>Why:</strong> For LIBS spectra with element-specific line clusters (e.g. dense Fe forest at 370–380 nm, sparse at 220–250 nm), uniform sampling over-represents the dense region, producing poorly conditioned polynomial fits. Spread sampling improves condition number of the Vandermonde matrix.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">calibrator.py::_solve_candidate_ransac</span></code> lines ~480–490.</p>
+</section>
+<section id="r7-separate-atlas-filtering-intensity-first-then-separation">
+<h3>R7. Separate Atlas Filtering: Intensity First, Then Separation<a class="headerlink" href="#r7-separate-atlas-filtering-intensity-first-then-separation" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> When constructing the atlas of reference lines, apply intensity threshold before minimum-distance filtering (not simultaneously or in reverse order).</p>
+<p><strong>Why:</strong> If a bright line is adjacent to a faint line, filtering by separation first may remove the bright line. RASCAL’s <code class="docutils literal notranslate"><span class="pre">Atlas.add()</span></code> applies intensity then separation — this is the correct order. The current cflibs line-selection logic in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code> may not respect this ordering.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">atlas.py::Atlas.add</span></code> docstring (“Lines are filtered first by relative intensity, then by separation”).</p>
+</section>
+<section id="r8-subpixel-peak-refinement-via-gaussian-window-fit">
+<h3>R8. Subpixel Peak Refinement via Gaussian Window Fit<a class="headerlink" href="#r8-subpixel-peak-refinement-via-gaussian-window-fit" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> After initial peak detection (<code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code>), fit a 1D Gaussian in a ±10-pixel window around each detected peak to get a sub-pixel centroid. Drop peaks with negative heights or centroids outside the spectrum.</p>
+<p><strong>Why:</strong> cflibs peak detection is used for wavelength calibration. Sub-pixel accuracy in the calibration peaks directly reduces residuals. RASCAL achieves this with a single <code class="docutils literal notranslate"><span class="pre">curve_fit</span></code> call per peak — cheap and effective.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">util.py::refine_peaks</span></code> — 60 lines, zero dependencies beyond scipy.</p>
+</section>
+<section id="r9-add-minimum-matches-and-minimum-peak-utilisation-quality-gates">
+<h3>R9. Add <code class="docutils literal notranslate"><span class="pre">minimum_matches</span></code> and <code class="docutils literal notranslate"><span class="pre">minimum_peak_utilisation</span></code> Quality Gates<a class="headerlink" href="#r9-add-minimum-matches-and-minimum-peak-utilisation-quality-gates" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> After RANSAC, reject solutions that match fewer than <code class="docutils literal notranslate"><span class="pre">minimum_matches</span></code> lines absolute, or fewer than <code class="docutils literal notranslate"><span class="pre">minimum_peak_utilisation</span></code> fraction of detected peaks. Also reject solutions with RMS below <code class="docutils literal notranslate"><span class="pre">minimum_fit_error</span></code> (degenerate/overfitted solutions).</p>
+<p><strong>Why:</strong> cflibs wavelength calibration currently has no post-RANSAC quality gates on the <em>number</em> of matched lines — a 3-line polynomial fit over 40 peaks is not physically meaningful. These gates are separate from the RMS tolerance and catch different failure modes.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">calibrator.py::_solve_candidate_ransac</span></code> acceptance block and <code class="docutils literal notranslate"><span class="pre">set_ransac_properties</span></code> docstring.</p>
+</section>
+<section id="r10-expose-hough-transform-state-for-debugging-caching">
+<h3>R10. Expose Hough Transform State for Debugging / Caching<a class="headerlink" href="#r10-expose-hough-transform-state-for-debugging-caching" title="Link to this heading"></a></h3>
+<p><strong>What:</strong> Save/load the 2D Hough histogram to disk (<code class="docutils literal notranslate"><span class="pre">.npy</span></code> or <code class="docutils literal notranslate"><span class="pre">.json</span></code>). When re-running calibration with the same atlas and peaks but different RANSAC settings, reload the Hough state to skip the transform.</p>
+<p><strong>Why:</strong> For batch LIBS calibration (many spectra from the same instrument session), the Hough histogram for the instrument model is constant. Caching it avoids recomputation. RASCAL’s <code class="docutils literal notranslate"><span class="pre">save_hough_transform</span></code> / <code class="docutils literal notranslate"><span class="pre">load_hough_transform</span></code> implements this pattern.</p>
+<p><strong>Link:</strong> <code class="docutils literal notranslate"><span class="pre">houghtransform.py::save</span></code> and <code class="docutils literal notranslate"><span class="pre">load</span></code>; <code class="docutils literal notranslate"><span class="pre">calibrator.py::save_hough_transform</span></code>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="sources">
+<h2>Sources<a class="headerlink" href="#sources" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><a class="reference external" href="https://github.com/jveitchmichaelis/rascal">GitHub — jveitchmichaelis/rascal</a></p></li>
+<li><p><a class="reference external" href="https://rascal.readthedocs.io/en/latest/">RASCAL readthedocs</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/1912.05883">arXiv:1912.05883 — RASCAL: Towards automated spectral wavelength calibration</a></p></li>
+<li><p><a class="reference external" href="https://rascal.readthedocs.io/en/latest/modules/calibrator.html">Calibrator API reference</a></p></li>
+<li><p><a class="reference external" href="https://rascal.readthedocs.io/en/latest/tutorial/quickstart.html">Quickstart tutorial</a></p></li>
+<li><p><a class="reference external" href="https://github.com/jveitchmichaelis/rascal/blob/main/docs/source/background/houghtransform.rst">Hough transform background doc</a></p></li>
+<li><p><a class="reference external" href="https://github.com/jveitchmichaelis/rascal/blob/main/docs/source/background/ransac.rst">RANSAC background doc</a></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

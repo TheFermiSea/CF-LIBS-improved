@@ -1,0 +1,574 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Overhaul — Target Architecture &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Overhaul — Target Architecture</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/v4/overhaul/ARCHITECTURE.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-overhaul-target-architecture">
+<h1>CF-LIBS Overhaul — Target Architecture<a class="headerlink" href="#cf-libs-overhaul-target-architecture" title="Link to this heading"></a></h1>
+<p><strong>Author:</strong> Lead Architect (synthesis pass)
+<strong>Date:</strong> 2026-06-25
+<strong>Inputs:</strong> verified/<em>.md (adversarially-verified findings), literature/</em>.md checklists,
+reference/*.md (ExoJAX/RADIS/RASCAL/specutils patterns)
+<strong>Status:</strong> TARGET STATE — this document supersedes all inline per-milestone architecture notes in
+BLUEPRINT.md and provides the stable anchor for Gaps 7–10 (see BLUEPRINT-ADDENDUM.md).</p>
+<hr class="docutils" />
+<section id="guiding-principles">
+<h2>0. Guiding Principles<a class="headerlink" href="#guiding-principles" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Physics-only constraint is inviolable.</strong> No ML library (<code class="docutils literal notranslate"><span class="pre">sklearn</span></code>, <code class="docutils literal notranslate"><span class="pre">torch</span></code>, <code class="docutils literal notranslate"><span class="pre">tensorflow</span></code>,
+<code class="docutils literal notranslate"><span class="pre">keras</span></code>, <code class="docutils literal notranslate"><span class="pre">flax</span></code>, <code class="docutils literal notranslate"><span class="pre">equinox</span></code>, <code class="docutils literal notranslate"><span class="pre">transformers</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.experimental.stax</span></code>) in shipped
+<code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>. Evolution tooling in <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> is the sole exception for LLM-driven
+optimization — but <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> itself may not import ML either (ruff TID251 + AST scan).</p></li>
+<li><p><strong>Mission priority governs ordering:</strong> ACCURACY &gt; PRECISION &gt; RELIABILITY &gt; latency. Every
+performance-only item is deferred behind correctness items in the same area.</p></li>
+<li><p><strong>Single source of truth for every physics quantity.</strong> One canonical function/constant for
+emissivity, IPD, Voigt FWHM, Saha constant, molar-mass conversion, air↔vacuum wavelength. All
+other call sites import from that canonical location; no local copies.</p></li>
+<li><p><strong>JAX optional, graceful degradation.</strong> JAX is an accelerator, not a requirement. Every physics
+computation must have a working NumPy path. JAX paths must be parity-tested against NumPy
+(radiation F3, manifold F5, inv-solve F6/F10).</p></li>
+<li><p><strong>Configuration over environment variables.</strong> Typed, logged, gated config replaces the 15+
+<code class="docutils literal notranslate"><span class="pre">CFLIBS_*</span></code> env-var sprawl. Effective values surface in result metadata so benchmarks are
+reproducible. (See §5.)</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="target-module-map">
+<h2>1. Target Module Map<a class="headerlink" href="#target-module-map" title="Link to this heading"></a></h2>
+<section id="canonical-package-boundaries">
+<h3>1.1 Canonical package boundaries<a class="headerlink" href="#canonical-package-boundaries" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>cflibs/
+├── domain/                ← NEW: pure-physics data structures with no import side-effects
+│   ├── result.py          ← CFLIBSResult (moved from inversion/solve/iterative.py:94)
+│   ├── observation.py     ← LineObservation, BoltzmannFitResult (canonical; shim in
+│   │                          inversion/common/data_structures.py kept for back-compat)
+│   └── identification.py  ← ElementIdentification, IdentifiedLine + intensity_uncertainty slot
+│
+├── atomic/                ← atomic data: DB, structures, snapshot, partition functions
+│   ├── database.py        ← AtomicDatabase + AtomicDataSource ABC (already here)
+│   ├── structures.py      ← Transition, EnergyLevel, StarkData (already here)
+│   ├── snapshot.py        ← AtomicSnapshot pytree (MOVED from core/jax_runtime.py:429–551)
+│   └── partition.py       ← polynomial PF + direct summation + truncation invariant
+│
+├── plasma/                ← plasma state, Saha-Boltzmann solver, LTE validity
+│   ├── state.py           ← SingleZoneLTEPlasma, TwoRegionPlasma
+│   ├── saha_boltzmann.py  ← SahaBoltzmannSolver (canonical Saha + IPD)
+│   ├── lte_validator.py   ← McWhirter + Cristoforetti; resonance-ΔE path default
+│   └── constants.py       ← plasma physical constants (fold into core/constants.py)
+│
+├── radiation/             ← forward model: emissivity, broadening, spectrum assembly
+│   ├── emissivity.py      ← THE canonical emissivity function (§2)
+│   ├── profiles.py        ← Voigt/Gaussian/Lorentz; single OLIVERO_A/B constant pair
+│   ├── stark.py           ← Stark broadening (radiation path)
+│   ├── kernels.py         ← JAX-jittable kernels; delegates to emissivity.py
+│   └── spectrum_model.py  ← SpectrumModel orchestrator; default BroadeningMode = PHYSICAL_DOPPLER
+│
+├── instrument/            ← instrument models; single response-curve implementation
+│   ├── model.py           ← InstrumentModel + InstrumentModelJax (fixed from_file, F2)
+│   ├── convolution.py     ← apply_instrument_function; sigma=0 guard (F10); exact 2√(2 ln2)
+│   └── kernels.py         ← JIT-compiled instrument broadening (already here)
+│
+├── core/                  ← constants, config, JAX runtime, logging, cache
+│   ├── constants.py       ← SAHA_CONST_CM3, KB_EV, CM_TO_EV, MCWHIRTER_CONST,
+│   │                          OLIVERO_A=0.5343, OLIVERO_B=0.2169, FWHM_TO_SIGMA=1/2√(2ln2)
+│   ├── config.py          ← typed Config (replaces env-var sprawl; §5)
+│   ├── jax_runtime.py     ← JAX backend detection ONLY (AtomicSnapshot moved out)
+│   ├── abc.py             ← SolverStrategy, InstrumentModelProtocol (TYPE_CHECKING import only)
+│   └── cache.py           ← LRUCache with MISS sentinel (not None); key by id()+db_sha
+│
+├── inversion/
+│   ├── common/            ← shared data structures, re-exports for back-compat
+│   │   ├── data_structures.py  ← re-exports from domain/ + local PCA, IdentifiedLine
+│   │   └── element_id.py
+│   ├── preprocess/        ← signal preprocessing: SPLIT into sub-modules (§6)
+│   │   ├── baseline.py
+│   │   ├── noise.py       ← NoiseModel: shot noise on clean signal; variance from params (F3-rev)
+│   │   ├── peaks.py       ← detect_peaks with sub-pixel centroiding (inv-preprocess F2)
+│   │   ├── calibration/   ← wavelength calibration split from 2119-line monolith (F5)
+│   │   │   ├── ransac.py  ← normalized RANSAC (inv-preprocess F1/F2)
+│   │   │   ├── segmented.py
+│   │   │   └── hough.py
+│   │   └── outliers.py    ← moved to common/ (inv-preprocess F6) or kept here with re-export
+│   ├── physics/           ← Saha-Boltzmann plane, closure, self-absorption, line selection
+│   ├── identify/          ← ALIAS, comb, correlation, NNLS identifiers
+│   ├── solve/             ← iterative, closed_form, bayesian, joint, manifold solvers
+│   └── runtime/           ← DAQ streaming, temporal gate optimization
+│
+├── manifold/              ← JAX-accelerated manifold generation; single canonical forward
+├── benchmark/             ← composition metrics, harness, ID benchmark
+├── validation/            ← round-trip, NIST parity; solver-injection seam (F5)
+├── hpc/                   ← distributed MCMC, SLURM integration
+├── pds/                   ← PDS corpus; dead-end schema decision (§8)
+├── io/                    ← exporters with unit labels + basis annotation
+├── cli/                   ← CLI; unified --elements parsing
+└── evolution/             ← blocklist scanner + driver config (no ML imports anywhere)
+</pre></div>
+</div>
+</section>
+<section id="domain-type-seam-where-cflibsresult-lineobservation-atomicsnapshot-live">
+<h3>1.2 Domain-type seam: where CFLIBSResult, LineObservation, AtomicSnapshot live<a class="headerlink" href="#domain-type-seam-where-cflibsresult-lineobservation-atomicsnapshot-live" title="Link to this heading"></a></h3>
+<p><strong>Motivation:</strong> inv-solve F5 (CFLIBSResult in iterative.py imported by io/jitpipe/closed_form),
+inv-common F5/F11 (LineObservation via physics/boltzmann shim, 11+ importers), core F1
+(AtomicSnapshot domain carrier in jax_runtime.py).</p>
+<p><strong>Decision:</strong> Create <code class="docutils literal notranslate"><span class="pre">cflibs/domain/</span></code> as a leaf package (no cflibs imports except
+<code class="docutils literal notranslate"><span class="pre">cflibs.core.constants</span></code>). Move:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> → <code class="docutils literal notranslate"><span class="pre">cflibs/domain/result.py</span></code> (M1-1)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LineObservation</span></code>, <code class="docutils literal notranslate"><span class="pre">BoltzmannFitResult</span></code> → <code class="docutils literal notranslate"><span class="pre">cflibs/domain/observation.py</span></code> (M1-2);
+<code class="docutils literal notranslate"><span class="pre">inversion/common/data_structures.py</span></code> re-exports for back-compat</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> → <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/snapshot.py</span></code> (M1-4); pytree registration moves with it;
+<code class="docutils literal notranslate"><span class="pre">core/jax_runtime.py</span></code> retains only backend/capability detection code</p></li>
+</ul>
+<p><strong>Rationale:</strong> following RADIS’s loose-coupling principle (database objects separate from
+computation objects; reference RADIS §1.1 factory hierarchy). A domain leaf package ensures
+the result contract can be imported by io/, jitpipe/, benchmark/, validation/ without pulling
+in solver internals.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="the-single-canonical-forward-model">
+<h2>2. The Single Canonical Forward Model<a class="headerlink" href="#the-single-canonical-forward-model" title="Link to this heading"></a></h2>
+<section id="design-decision-radiation-manifold-forward-consolidation-m6-4">
+<h3>2.1 Design decision — radiation/manifold forward consolidation (M6-4)<a class="headerlink" href="#design-decision-radiation-manifold-forward-consolidation-m6-4" title="Link to this heading"></a></h3>
+<p><strong>Context:</strong> Three parallel forward-physics implementations exist (manifold F5; radiation F3):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">generator.py</span></code> — static <code class="docutils literal notranslate"><span class="pre">&#64;jit</span></code> kernels with T^(-α) Stark scaling</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">batch_forward.py</span></code> — <code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code> without T^(-α)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">basis_library.py</span></code> — CPU sequential, area-normalized, NNLS context</p></li>
+</ul>
+<p>These diverge in confirmed ways (manifold F3: 50% Stark width error in batch_forward; manifold
+F4: missing hc/4π in basis_library, benign only because area normalization cancels it).</p>
+<p><strong>Decision:</strong> Do NOT fully unify into one JAX kernel (the three serve different API shapes:
+batch generation vs. single-spectrum vs. basis decomposition). Instead:</p>
+<ol class="arabic">
+<li><p><strong>Define <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/emissivity.py</span></code></strong> as the single source of truth for the
+population-weighted emissivity formula:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ε_ki = (hc / 4π λ_ki) · A_ki · N_s · (g_k / U(T)) · exp(-E_k / T_eV)
+</pre></div>
+</div>
+<p>(saha-boltzmann-lte literature §1.2; broadening-rt literature §1.1).
+Both the NumPy and JAX paths call into this module for the physics formula; only the
+vectorization strategy differs.</p>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">batch_forward.py</span></code></strong> must import and use the same T^(-α) Stark formula as <code class="docutils literal notranslate"><span class="pre">generator.py</span></code>
+(M6-3). Add parity test (M0-3) and flip xfail→assert when fix lands (GAP-15).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">basis_library.py</span></code></strong> is intentionally area-normalized and NNLS-context-specific; document
+this explicitly (manifold F4). It does NOT need hc/4π since normalization cancels it.</p></li>
+<li><p><strong>Parity-test binding</strong> (M0-3) is mandatory: any change to one path triggers the parity suite
+for all three paths.</p></li>
+</ol>
+<p><strong>ExoJAX pattern adopted (reference/exojax.md §2.2):</strong> separate the one-time reference
+computation (S0 at Tref) from the per-T scaling. In cflibs terms: pre-compute population weights
+at <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> build time; scale by Boltzmann/Saha at each T during generation/solve.</p>
+</section>
+<section id="instrument-response-curve-consolidation-instrument-f5">
+<h3>2.2 Instrument response-curve consolidation (instrument F5)<a class="headerlink" href="#instrument-response-curve-consolidation-instrument-f5" title="Link to this heading"></a></h3>
+<p><strong>Context:</strong> Three response-curve interpolation implementations with divergent edge handling:
+<code class="docutils literal notranslate"><span class="pre">model.py:177</span></code> (scipy interp1d, fill=0), <code class="docutils literal notranslate"><span class="pre">kernels.py:52</span></code> (jnp.interp + jnp.where), and
+<code class="docutils literal notranslate"><span class="pre">inversion/preprocess/response_correction.py</span></code> (independent).</p>
+<p><strong>Decision (DESIGN-DECISION — see ADDENDUM DA-1):</strong> Designate <code class="docutils literal notranslate"><span class="pre">instrument/kernels.py</span></code> as the
+canonical interpolation path (JAX-compatible, jit-cached). <code class="docutils literal notranslate"><span class="pre">model.py</span></code> delegates to it via a
+numpy-compatibility shim. <code class="docutils literal notranslate"><span class="pre">response_correction.py</span></code> is audited for divergence and either
+redirected or documented as a separate use case. A single fill_value=0.0 policy is enforced at
+all edges. Single parity test added before any change lands.</p>
+</section>
+<section id="broadeningmode-default-radiation-f2-gap-8">
+<h3>2.3 BroadeningMode default (radiation F2 + GAP-8)<a class="headerlink" href="#broadeningmode-default-radiation-f2-gap-8" title="Link to this heading"></a></h3>
+<p><strong>Context:</strong> <code class="docutils literal notranslate"><span class="pre">BroadeningMode.LEGACY</span></code> (formula <code class="docutils literal notranslate"><span class="pre">0.01</span> <span class="pre">*</span> <span class="pre">sqrt(T/0.86)</span></code>) is the default with no
+DeprecationWarning. It is physically unmotivated for LIBS.</p>
+<p><strong>Decision (DESIGN-DECISION — see ADDENDUM DA-2):</strong> Promote <code class="docutils literal notranslate"><span class="pre">PHYSICAL_DOPPLER</span></code> as the new
+default in a BENCHMARK-GATED pass. Add <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> when LEGACY is selected (SAFE-NOW).
+The exact default mode is decided by benchmark comparison on the held-out node set (M0-2).</p>
+<p><strong>Instrument broadening per-wavelength:</strong> for resolving-power instruments, use per-wavelength
+sigma at each spectral bin (σ = λ/R/2√(2 ln2)), not the midpoint scalar. This is SAFE-NOW for
+non-production non-default instrument paths (radiation F4, instrument F5).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="configuration-model">
+<h2>3. Configuration Model<a class="headerlink" href="#configuration-model" title="Link to this heading"></a></h2>
+<section id="replacing-the-env-var-sprawl">
+<h3>3.1 Replacing the env-var sprawl<a class="headerlink" href="#replacing-the-env-var-sprawl" title="Link to this heading"></a></h3>
+<p><strong>Context:</strong> 15+ <code class="docutils literal notranslate"><span class="pre">CFLIBS_*</span></code> env vars (M7-7 in blueprint), 8 inline <code class="docutils literal notranslate"><span class="pre">CFLIBS_FF_*</span></code> flags in
+benchmark (benchmark F6), <code class="docutils literal notranslate"><span class="pre">enforcement_mode</span></code> config fiction in evolution (evolution F2.1),
+<code class="docutils literal notranslate"><span class="pre">evaluation_timeout_s=5.0</span></code> default in evolution (evolution F4.1). Truthy parsing is inconsistent
+(<code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_LAX_WHILE_LOOP</span></code> only accepts “1”, <code class="docutils literal notranslate"><span class="pre">CFLIBS_RELIABILITY_FROM_UNCERTAINTY</span></code> accepts
+“1/true/yes/on” — inv-solve F9/FA1).</p>
+<p><strong>Target:</strong> a single <code class="docutils literal notranslate"><span class="pre">cflibs.core.config.CFLIBSConfig</span></code> dataclass (frozen, validated on
+construction) that replaces all env-var reads. Effective configuration is:</p>
+<ul class="simple">
+<li><p>Loaded once at solver/pipeline construction</p></li>
+<li><p>Logged at INFO level with all effective values</p></li>
+<li><p>Embedded in <code class="docutils literal notranslate"><span class="pre">CFLIBSResult.metadata</span></code> so benchmark runs are reproducible</p></li>
+<li><p>Feature-flag promotions are mechanical config changes, not env-var toggles</p></li>
+</ul>
+<p><strong>Migration path:</strong></p>
+<ol class="arabic simple">
+<li><p>Create <code class="docutils literal notranslate"><span class="pre">CFLIBSConfig</span></code> with typed fields mirroring all current env vars (SAFE-NOW).</p></li>
+<li><p>Constructor defaults match current env-var defaults (no behavior change on construct).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_feature_flag()</span></code> helper reads from <code class="docutils literal notranslate"><span class="pre">CFLIBSConfig</span></code> not <code class="docutils literal notranslate"><span class="pre">os.environ</span></code> (one source of truth).</p></li>
+<li><p>CLI and <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">generate-*</span></code> pass <code class="docutils literal notranslate"><span class="pre">CFLIBSConfig</span></code> through to all sub-components.</p></li>
+<li><p>Env vars deprecated but still honored via adapter for backward compat (one release cycle).</p></li>
+</ol>
+<p><strong>Note:</strong> <code class="docutils literal notranslate"><span class="pre">CFLIBS_REFUSE_TO_REPORT</span></code>, <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_LAX_WHILE_LOOP</span></code> are the three highest-value flags to migrate first; they gate the
+M2/M3/M4 accuracy items.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="noise-and-uncertainty-model">
+<h2>4. Noise and Uncertainty Model<a class="headerlink" href="#noise-and-uncertainty-model" title="Link to this heading"></a></h2>
+<section id="physical-noise-model-poisson-readout-signal-dependent-variance">
+<h3>4.1 Physical noise model (Poisson + readout; signal-dependent variance)<a class="headerlink" href="#physical-noise-model-poisson-readout-signal-dependent-variance" title="Link to this heading"></a></h3>
+<p><strong>Context:</strong> <code class="docutils literal notranslate"><span class="pre">round_trip.py:588–615</span></code> adds background before shot noise, applies Poisson to
+signal+background (inflating variance), then uses the noise-realized intensity as its own
+variance estimate (validation F3-revised, REAL/HIGH). The Bayesian forward model uses a
+Gaussian likelihood with fixed σ (Pearson bias, inv-solve F4). Both violate the Poisson+readout
+model mandated by bayesian-oe literature §1.4.2.</p>
+<p><strong>Target <code class="docutils literal notranslate"><span class="pre">NoiseModel</span></code> (canonical):</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Clean signal (before background addition):</span>
+<span class="n">var_shot</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">clean_signal</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>          <span class="c1"># Poisson: Var[photons] = E[photons]</span>
+<span class="n">var_total</span> <span class="o">=</span> <span class="n">var_shot</span> <span class="o">+</span> <span class="n">sigma_readout</span><span class="o">**</span><span class="mi">2</span>  <span class="c1"># Gaussian readout added in quadrature</span>
+<span class="c1"># Then add background to intensity (AFTER variance is computed):</span>
+<span class="n">noisy</span> <span class="o">=</span> <span class="n">clean_signal</span> <span class="o">+</span> <span class="n">background</span> <span class="o">+</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">scale</span><span class="o">=</span><span class="n">sqrt</span><span class="p">(</span><span class="n">var_total</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><strong>Bayesian likelihood:</strong> pixel-dependent variance <code class="docutils literal notranslate"><span class="pre">σ_k²(x)</span> <span class="pre">=</span> <span class="pre">λ_k(x)</span> <span class="pre">+</span> <span class="pre">σ_RON²</span></code> evaluated at each
+MCMC proposal (bayesian-oe §2.4). Include <code class="docutils literal notranslate"><span class="pre">log(σ_k²)</span></code> normalization term for BIC/WAIC model
+comparison (bayesian-oe §2.5, GAP-13).</p>
+<p><strong>Signal-dependent variance</strong> is the gate condition: if max(SNR_per_line) &lt; 100 for any line
+used in a Bayesian fit, fixed-σ approximation is inaccurate. The threshold is configurable via
+<code class="docutils literal notranslate"><span class="pre">CFLIBSConfig</span></code>.</p>
+</section>
+<section id="uncertainty-propagation-chain">
+<h3>4.2 Uncertainty propagation chain<a class="headerlink" href="#uncertainty-propagation-chain" title="Link to this heading"></a></h3>
+<p>The complete propagation is: atomic-data uncertainty (aki_uncertainty on Transition) → preserved
+through <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> (inv-common F2) → carried in <code class="docutils literal notranslate"><span class="pre">LineObservation.aki_uncertainty</span></code> →
+used by <code class="docutils literal notranslate"><span class="pre">_build_sigma_y</span></code> in boltzmann fitter → propagated to <code class="docutils literal notranslate"><span class="pre">BoltzmannFitResult.cov</span></code> → through
+<code class="docutils literal notranslate"><span class="pre">CFLIBSResult.uncertainties</span></code>. The gap is at the <code class="docutils literal notranslate"><span class="pre">IdentifiedLine.intensity_uncertainty</span></code> slot
+(inv-common F12, NEW finding): adding this field unblocks the propagation from line-detection
+through the result hierarchy (inv-common F1/F2/F3, GAP-E).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="partition-function-saha-ipd-truncation-consistency-invariant">
+<h2>5. Partition-Function ↔ Saha IPD Truncation-Consistency Invariant<a class="headerlink" href="#partition-function-saha-ipd-truncation-consistency-invariant" title="Link to this heading"></a></h2>
+<p><strong>This is identified as CRITICAL in saha-boltzmann-lte literature §P2 and GAP-12.</strong></p>
+<p><strong>The invariant:</strong> The partition-function sum cutoff (E_max = χ - Δχ) MUST use the same Δχ
+as the Saha equation exponent (χ_eff = χ - Δχ). Breaking this makes the Saha equation
+internally inconsistent: the forward model produces n_II/n_I ratios that do not correspond
+to the population calculation in the Boltzmann plot.</p>
+<p><strong>Current risk:</strong> radiation F3 documents two divergent population code paths in <code class="docutils literal notranslate"><span class="pre">kernels.py</span></code>
+(precomputed vs. kernel-internal). If these two paths use different IPD cutoffs, they will
+produce different Saha ratios for the same (T, n_e, composition). The audit in verified/radiation
+F3 notes the <code class="docutils literal notranslate"><span class="pre">_directsum_partition_functions</span></code> was added to close the gap — but there is no
+invariant test.</p>
+<p><strong>Architectural enforcement:</strong></p>
+<ol class="arabic simple">
+<li><p>A single <code class="docutils literal notranslate"><span class="pre">compute_ipd(n_e,</span> <span class="pre">T,</span> <span class="pre">model)</span></code> function in <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code> is the only site that
+computes Δχ. All callers (Saha solver, partition function truncation, level population filter)
+must import and call this function.</p></li>
+<li><p>The Saha solver (<code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py</span></code>) passes the computed Δχ to the partition function
+evaluator as an explicit argument; the evaluator does NOT independently recompute IPD.</p></li>
+<li><p>An invariant test (M0-1 extended; GAP-12) asserts:</p>
+<ul class="simple">
+<li><p>PF sum cutoff == χ - Δχ for both polynomial and direct-sum paths</p></li>
+<li><p>Saha ratio computed via <code class="docutils literal notranslate"><span class="pre">cflibs.plasma.saha_boltzmann</span></code> agrees within 0.1% with
+independently-derived value at (n_e=1e17, T=1e4 K) for Fe I/II</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="air-vacuum-wavelength-convention-cross-cutting-invariant">
+<h2>6. Air ↔ Vacuum Wavelength Convention (Cross-Cutting Invariant)<a class="headerlink" href="#air-vacuum-wavelength-convention-cross-cutting-invariant" title="Link to this heading"></a></h2>
+<p><strong>Context:</strong> NIST ASD reports air wavelengths above 200 nm. Atomic constants (Doppler broadening,
+Stark formula) and the physics-plane equations (Boltzmann y-value = ln(I·λ/(gA))) require
+consistent λ. A 0.05–0.1 nm systematic air/vacuum offset would dominate the sub-pixel centroid
+gains of M7-8 and create false identification peaks at tolerances below ~0.1 nm.</p>
+<p><strong>Status:</strong> No verified finding examined this (GAP-11 in CRITIC). Audit required before any
+wavelength-calibration or sub-pixel centroiding change goes in.</p>
+<p><strong>Convention target (to be confirmed by audit):</strong></p>
+<ul class="simple">
+<li><p>DB stores wavelengths in <strong>air</strong> (matching NIST/ASD provenance; see datagen_v2.py and
+ingest_kurucz_atomic.py for confirmation of provenance)</p></li>
+<li><p>Line matching tolerance is in <strong>air nm</strong></p></li>
+<li><p>Forward model emissivity uses the stored (air) λ for the hc/λ factor</p></li>
+<li><p>Conversion to vacuum is applied ONLY if an explicitly-vacuum detector calibration is used</p></li>
+<li><p>A single <code class="docutils literal notranslate"><span class="pre">air_to_vacuum(wl_nm)</span></code> / <code class="docutils literal notranslate"><span class="pre">vacuum_to_air(wl_nm)</span></code> utility lives in <code class="docutils literal notranslate"><span class="pre">cflibs/core/</span></code>
+using the Edlén (1953) formula (same as NIST)</p></li>
+<li><p>Every module that stores or compares wavelengths annotates the convention in its docstring</p></li>
+</ul>
+<p><strong>Audit command (from CRITIC GAP-11):</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>rg<span class="w"> </span>-ni<span class="w"> </span><span class="s2">&quot;vacuum|air.?wavelength|n_air|edlen|ciddor&quot;</span><span class="w"> </span>cflibs/
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="preprocessing-module-split-gap-7">
+<h2>7. Preprocessing Module Split (GAP-7)<a class="headerlink" href="#preprocessing-module-split-gap-7" title="Link to this heading"></a></h2>
+<p><strong>Context:</strong> <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py</span></code> is a 2119-line monolith (inv-preprocess F5, confirmed
+HIGH) containing six distinct subsystems: quality-gate, Hough transform (273–369), RANSAC
+(431–643), line-pool construction (646–815), candidate pairs (818–853), segmented orchestration
+(1503–1748). M7-2 and M7-8 touch RANSAC math inside the monolith; splitting is a prerequisite
+for safely isolating and flag-gating those paths.</p>
+<p><strong>Target split (SAFE-NOW, behavior-preserving):</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>inversion/preprocess/calibration/
+    __init__.py        ← re-exports public API
+    ransac.py          ← _ransac_search, _ransac_fit, _refine_robust_inliers
+    hough.py           ← detect_ccd_seams, Hough logic
+    pool.py            ← line pool construction, candidate pairs
+    quality.py         ← _quality_gate_check, coverage gates
+    segmented.py       ← calibrate_wavelength_axis_segmented (orchestrator)
+</pre></div>
+</div>
+<p><strong>Acceptance:</strong> import-parity test (all public functions accessible from original path);
+existing calibration test suite green on the split module. No behavior change.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">outliers.py</span></code> relocation (inv-preprocess F6):</strong> Move to <code class="docutils literal notranslate"><span class="pre">inversion/common/outliers.py</span></code> and
+re-export from <code class="docutils literal notranslate"><span class="pre">inversion/preprocess/outliers.py</span></code>. The module is broadly re-exported at
+<code class="docutils literal notranslate"><span class="pre">cflibs.inversion</span></code> level; the move must update <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code> re-exports.</p>
+</section>
+<hr class="docutils" />
+<section id="pds-schema-dead-end-bridge-decision-gap-9">
+<h2>8. PDS Schema: Dead-End Bridge Decision (GAP-9)<a class="headerlink" href="#pds-schema-dead-end-bridge-decision-gap-9" title="Link to this heading"></a></h2>
+<p><strong>Context:</strong> <code class="docutils literal notranslate"><span class="pre">PDSValidationDataset</span></code> in <code class="docutils literal notranslate"><span class="pre">pds/validation.py</span></code> is confirmed unwired from benchmark
+and validation pipelines despite its docstring claiming it is. The docstring claim is currently
+false (pds F2-2, REAL/MEDIUM).</p>
+<p><strong>Decision:</strong> Wire or delete within M3/M5 window.</p>
+<ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">PDSValidationDataset</span></code> is wired into the benchmark adapter during M3 work (it participates
+in the mole/mass fraction correction), keep it and update the docstring.</p></li>
+<li><p>If it is not wired by the time M3 lands, mark it <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">DEPRECATED:</span> <span class="pre">will</span> <span class="pre">be</span> <span class="pre">removed</span> <span class="pre">in</span> <span class="pre">next</span> <span class="pre">major</span> <span class="pre">version</span></code> and file a removal issue.</p></li>
+</ul>
+<p><strong>Data-correctness fix (GAP-9 pds F1-2):</strong> SCCT5/SCCT7 compositions are copy-pasted from
+CCCT3/CCCT2 with K silently dropped. Fix: verify against ChemCam published compositions
+(Fabre et al. 2011 and companion papers) and restore K with a citation comment. This is
+SAFE-NOW data-truth correction, not a code logic change.</p>
+</section>
+<hr class="docutils" />
+<section id="rust-python-comb-interface-gap-10-native-rust-f2">
+<h2>9. Rust ↔ Python Comb Interface (GAP-10 + native-rust F2)<a class="headerlink" href="#rust-python-comb-interface-gap-10-native-rust-f2" title="Link to this heading"></a></h2>
+<p><strong>Context:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">kdet_filter_elements</span></code> Rust branch is dead under default <code class="docutils literal notranslate"><span class="pre">shift_coherence_veto=True</span></code> pipeline
+(native-rust F2, REAL/HIGH). The comment in <code class="docutils literal notranslate"><span class="pre">jitpipe/host.py:1148</span></code> confirms this is an
+intentional architectural gap.</p></li>
+<li><p>Greedy matching orientation is transposed between Rust (<code class="docutils literal notranslate"><span class="pre">outer=peaks</span></code>) and Python
+(<code class="docutils literal notranslate"><span class="pre">outer=transitions</span></code>) (native-rust Missed-A, REAL/MEDIUM). Diverges on ambiguous inputs.</p></li>
+<li><p>F1 tie-break epsilon differs: Rust 1e-12 vs Python np.isclose rtol=1e-5 (native-rust Missed-B).</p></li>
+</ul>
+<p><strong>Decision (DESIGN-DECISION — see ADDENDUM DA-3):</strong></p>
+<ul class="simple">
+<li><p>The dead kdet branch is intentional. Options: (a) port the density-score path to Python and
+remove the dead Rust branch, (b) document as “future Rust acceleration” with a <code class="docutils literal notranslate"><span class="pre">TODO(kdet)</span></code>.
+Decision requires a measured comparison of ID F1 with and without the kdet filter enabled
+(impossible to measure currently since the branch is dead — fixing the gate condition to
+enable it is the first step).</p></li>
+<li><p>Greedy orientation MUST be aligned before the parity fixture (M0-3) can be flipped from
+xfail to assert. The Python semantics (outer=transitions) are the original design and should
+be treated as ground truth.</p></li>
+<li><p>F1 tie-break: adopt the Python <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> semantics in Rust (change <code class="docutils literal notranslate"><span class="pre">1e-12</span></code> threshold to
+match Python’s default relative tolerance).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="plasma-architecture-plasma-module-roles-plasma-f6-gap-e">
+<h2>10. Plasma Architecture: <code class="docutils literal notranslate"><span class="pre">plasma/</span></code> Module Roles (plasma F6 + GAP-E)<a class="headerlink" href="#plasma-architecture-plasma-module-roles-plasma-f6-gap-e" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">plasma/</span></code> is the home for the closed-form forward Saha-Boltzmann physics that is shared by both
+the forward model and the inversion. It should NOT import from <code class="docutils literal notranslate"><span class="pre">inversion/</span></code> (currently clean).
+The architecture target keeps:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">plasma/state.py</span></code> — plasma state dataclass; <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code> + <code class="docutils literal notranslate"><span class="pre">TwoRegionPlasma</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">plasma/saha_boltzmann.py</span></code> — Saha equation + multi-stage charge balance + IPD</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">plasma/lte_validator.py</span></code> — McWhirter + Cristoforetti; resonance-ΔE is default (post-M2)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">plasma/partition.py</span></code> — polynomial PF; direct-sum PF; truncation-consistency invariant</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">TwoRegionPlasma</span></code> (plasma F6):</strong> documented as UNVALIDATED / EXPERIMENTAL with explicit
+<code class="docutils literal notranslate"><span class="pre">UserWarning</span></code> on construction when <code class="docutils literal notranslate"><span class="pre">two_region=True</span></code>. The magic-number 0.8/0.3-0.7 constants
+and element-scope list (<code class="docutils literal notranslate"><span class="pre">{&quot;Si&quot;,&quot;Fe&quot;,&quot;Ca&quot;,&quot;Al&quot;,&quot;Mg&quot;}</span></code>) must be documented with their absence of
+literature basis (DESIGN-DECISION M5-8 in blueprint).</p>
+</section>
+<hr class="docutils" />
+<section id="key-verified-design-decisions-summary">
+<h2>11. Key Verified Design Decisions Summary<a class="headerlink" href="#key-verified-design-decisions-summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>decision</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>where decided</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>DA-1</p></td>
+<td><p>Response-curve single canonical path: instrument/kernels.py</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>§2.2</p></td>
+</tr>
+<tr class="row-odd"><td><p>DA-2</p></td>
+<td><p>BroadeningMode default: PHYSICAL_DOPPLER (benchmark-gated flip)</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>§2.3</p></td>
+</tr>
+<tr class="row-even"><td><p>DA-3</p></td>
+<td><p>Rust kdet branch: port vs. document-as-future</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>§9</p></td>
+</tr>
+<tr class="row-odd"><td><p>DA-4</p></td>
+<td><p>Air/vacuum convention: DB stores air; single conversion utility</p></td>
+<td><p>AUDIT-FIRST</p></td>
+<td><p>§6</p></td>
+</tr>
+<tr class="row-even"><td><p>DA-5</p></td>
+<td><p>CFLIBSConfig typed config replaces env-var sprawl</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>§3</p></td>
+</tr>
+<tr class="row-odd"><td><p>DA-6</p></td>
+<td><p>IPD/PF truncation consistency enforced by single compute_ipd() call</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>§5</p></td>
+</tr>
+<tr class="row-even"><td><p>DA-7</p></td>
+<td><p>NoiseModel: shot noise on clean signal; variance from params</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>§4</p></td>
+</tr>
+<tr class="row-odd"><td><p>DA-8</p></td>
+<td><p>domain/ leaf package for CFLIBSResult/LineObservation/AtomicSnapshot</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>§1.2</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="what-this-architecture-does-not-change">
+<h2>12. What This Architecture Does NOT Change<a class="headerlink" href="#what-this-architecture-does-not-change" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>The CF-LIBS algorithmic flow (SahaBoltzmann + Boltzmann-plot + closure equation + n_e iteration)
+is preserved and validated. Any physics change is benchmark-gated.</p></li>
+<li><p>JAX is still optional. The architecture adds no new JAX dependencies.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> remains a separate optimization tooling package. The physics-only constraint
+is not relaxed.</p></li>
+<li><p>The CLI interface and YAML config schema are backward-compatible through the CFLIBSConfig
+migration (env vars honored for one release cycle).</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

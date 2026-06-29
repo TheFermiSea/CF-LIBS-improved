@@ -1,0 +1,234 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/inversion/common &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/inv-common.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-inversion-common">
+<h1>Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common</span></code><a class="headerlink" href="#adversarial-verification-cflibs-inversion-common" title="Link to this heading"></a></h1>
+<p>Verifier: adversarial sub-agent (claude-sonnet-4-6) | Date: 2026-06-25
+Worktree: <code class="docutils literal notranslate"><span class="pre">v4-m5</span></code>
+Method: ripgrep + Read on actual source; cross-referenced against literature in scratchpad.</p>
+<hr class="docutils" />
+<section id="f1-get-wavelength-tolerance-fallback-discards-computed-instrument-fwhm">
+<h2>F1 — <code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance</span></code>: fallback discards computed instrument FWHM<a class="headerlink" href="#f1-get-wavelength-tolerance-fallback-discards-computed-instrument-fwhm" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> (bug confirmed, but impact is LOWER than census claims)
+<strong>Corrected severity: MEDIUM</strong> (was HIGH)</p>
+<p>The code at <code class="docutils literal notranslate"><span class="pre">element_id.py:245–250</span></code> does exactly what the census describes: when <code class="docutils literal notranslate"><span class="pre">omega_stark</span> <span class="pre">==</span> <span class="pre">0</span></code> (no Stark data), the function returns <code class="docutils literal notranslate"><span class="pre">fallback=0.05</span></code> and silently discards <code class="docutils literal notranslate"><span class="pre">fwhm_inst</span> <span class="pre">=</span> <span class="pre">wavelength_nm</span> <span class="pre">/</span> <span class="pre">resolving_power</span></code>. The physics argument is correct — the instrument FWHM is always a real contribution. However, the census overstates the impact: verified that <code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance()</span></code> is <strong>not called from any production code path</strong>. Ripgrep of <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> (excluding tests) shows zero callers. The production pipeline goes through <code class="docutils literal notranslate"><span class="pre">detect_line_observations()</span></code> in <code class="docutils literal notranslate"><span class="pre">identify/line_detection.py</span></code>, which uses its own independent adaptive tolerance (<code class="docutils literal notranslate"><span class="pre">max(2</span> <span class="pre">*</span> <span class="pre">wl_step,</span> <span class="pre">lambda_mid</span> <span class="pre">/</span> <span class="pre">resolving_power)</span></code> at line 609-610). The function is invoked exclusively from tests. The correctness argument stands and the fix (<code class="docutils literal notranslate"><span class="pre">return</span> <span class="pre">max(fwhm_inst,</span> <span class="pre">fallback)</span></code>) is sound, but this is a test-utility correctness issue rather than a live accuracy regression. Severity is MEDIUM, not HIGH.</p>
+</section>
+<hr class="docutils" />
+<section id="f2-to-line-observations-drops-aki-uncertainty-from-transition">
+<h2>F2 — <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> drops <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> from <code class="docutils literal notranslate"><span class="pre">Transition</span></code><a class="headerlink" href="#f2-to-line-observations-drops-aki-uncertainty-from-transition" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> (bug confirmed, but impact is LOWER than census claims)
+<strong>Corrected severity: MEDIUM</strong> (was HIGH)</p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">element_id.py:334–343</span></code>: the <code class="docutils literal notranslate"><span class="pre">LineObservation(...)</span></code> constructor call does not include <code class="docutils literal notranslate"><span class="pre">aki_uncertainty=line.transition.aki_uncertainty</span></code> while <code class="docutils literal notranslate"><span class="pre">Transition.aki_uncertainty</span></code> exists (confirmed in <code class="docutils literal notranslate"><span class="pre">atomic/structures.py:87</span></code>). However, the census overstates impact by not noting that <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> is <strong>not on the main production pipeline path</strong>. The production pipeline calls <code class="docutils literal notranslate"><span class="pre">detect_line_observations()</span></code> → <code class="docutils literal notranslate"><span class="pre">_build_observation_from_fit()</span></code> → creates <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> with <code class="docutils literal notranslate"><span class="pre">aki_uncertainty=transition.aki_uncertainty</span></code> at <code class="docutils literal notranslate"><span class="pre">line_detection.py:451</span></code>. The <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> bridge function is used in integration tests and potentially by external integrators that go through the three-tier identifier result hierarchy instead of the line-detection path. The bug is real and should be fixed, but it does not affect the <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> solver’s aki-weighted Boltzmann fitting in normal production use.</p>
+</section>
+<hr class="docutils" />
+<section id="f3-y-uncertainty-ignores-aki-uncertainty">
+<h2>F3 — <code class="docutils literal notranslate"><span class="pre">y_uncertainty</span></code> ignores <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code><a class="headerlink" href="#f3-y-uncertainty-ignores-aki-uncertainty" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: MEDIUM</strong> (confirmed as-stated)</p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">data_structures.py:80–90</span></code>: <code class="docutils literal notranslate"><span class="pre">y_uncertainty</span></code> returns <code class="docutils literal notranslate"><span class="pre">intensity_uncertainty</span> <span class="pre">/</span> <span class="pre">intensity</span></code> only, with the docstring explicitly noting “assuming errors in lambda, g, A are negligible.” The <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> field is on the same dataclass but unused here. The census finding is accurate: the property name implies total y-axis uncertainty but delivers only the intensity component. The dual code path with the Boltzmann fitter is real (<code class="docutils literal notranslate"><span class="pre">boltzmann.py:1178–1207</span></code> shows <code class="docutils literal notranslate"><span class="pre">_build_sigma_y</span></code> adding <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> in quadrature separately). Any external consumer of <code class="docutils literal notranslate"><span class="pre">obs.y_uncertainty</span></code> gets an underestimate. Medium severity is correct since the fitter itself handles the full error budget correctly.</p>
+</section>
+<hr class="docutils" />
+<section id="f4-get-wavelength-tolerance-comment-misidentifies-stark-w-convention">
+<h2>F4 — <code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance</span></code> comment misidentifies <code class="docutils literal notranslate"><span class="pre">stark_w</span></code> convention<a class="headerlink" href="#f4-get-wavelength-tolerance-comment-misidentifies-stark-w-convention" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> (but partially corrected inline)
+<strong>Corrected severity: MEDIUM</strong> (confirmed as-stated, with nuance)</p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">element_id.py:226</span></code>: the inline comment “The Transition dataclass exposes Stark HWHM-at-reference as <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>” is wrong — <code class="docutils literal notranslate"><span class="pre">stark.py:37–40</span></code> clearly states <code class="docutils literal notranslate"><span class="pre">_STARK_W_IS_FWHM</span> <span class="pre">=</span> <span class="pre">True</span></code> and <code class="docutils literal notranslate"><span class="pre">stark_w</span></code> is a FWHM. However, the <strong>same function</strong> has a correcting comment at line 235: “<code class="docutils literal notranslate"><span class="pre">stark_w</span></code> is the stored FWHM at REF_NE=1e17; <code class="docutils literal notranslate"><span class="pre">stark_hwhm</span></code> returns the corresponding HWHM (half), so <code class="docutils literal notranslate"><span class="pre">2.0</span> <span class="pre">*</span></code> recovers the FWHM”. The code logic is therefore correct and self-documenting in the lower comment; the misleading comment at line 226 is a residual error from the bug-history note (which describes fixing the wrong attribute name, not the FWHM/HWHM distinction). The census is right that this creates a documentation trap; medium severity confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="f5-element-id-py-imports-lineobservation-through-physics-boltzmann">
+<h2>F5 — <code class="docutils literal notranslate"><span class="pre">element_id.py</span></code> imports <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> through <code class="docutils literal notranslate"><span class="pre">physics/boltzmann</span></code><a class="headerlink" href="#f5-element-id-py-imports-lineobservation-through-physics-boltzmann" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: HIGH</strong> (confirmed as-stated)</p>
+<p>Verified: <code class="docutils literal notranslate"><span class="pre">element_id.py:12</span></code> imports <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.physics.boltzmann</span> <span class="pre">import</span> <span class="pre">LineObservation</span></code>. <code class="docutils literal notranslate"><span class="pre">physics/boltzmann.py:23–27</span></code> re-exports it from <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.common.data_structures</span></code>. The import chain is: <code class="docutils literal notranslate"><span class="pre">common/element_id</span> <span class="pre">→</span> <span class="pre">physics/boltzmann</span> <span class="pre">→</span> <span class="pre">common/data_structures</span></code>. This is a real <code class="docutils literal notranslate"><span class="pre">common</span> <span class="pre">→</span> <span class="pre">physics</span></code> dependency inversion. Notably, several other modules also import <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> from <code class="docutils literal notranslate"><span class="pre">physics.boltzmann</span></code> (validation, runtime, identify packages) — all bypassing the canonical source. The <code class="docutils literal notranslate"><span class="pre">boltzmann.py</span></code> re-export shim explicitly says “All new code should import these from <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.common.data_structures</span></code>.” Python’s module cache prevents a runtime circular import error, but the architectural violation is real and creates fragile dependency ordering. The one-line fix is correct. HIGH severity confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="f6-pcapipeline-with-use-jax-true-pays-xla-compile-cost-but-pcaresult-transform-uses-numpy">
+<h2>F6 — <code class="docutils literal notranslate"><span class="pre">PCAPipeline</span></code> with <code class="docutils literal notranslate"><span class="pre">use_jax=True</span></code> pays XLA compile cost but <code class="docutils literal notranslate"><span class="pre">PCAResult.transform()</span></code> uses NumPy<a class="headerlink" href="#f6-pcapipeline-with-use-jax-true-pays-xla-compile-cost-but-pcaresult-transform-uses-numpy" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong> (confirmed, but census context is partially wrong)
+<strong>Corrected severity: MEDIUM</strong> (was MEDIUM — stays, but with correction)</p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">pca.py:133–161</span></code>: <code class="docutils literal notranslate"><span class="pre">PCAResult.transform()</span></code> unconditionally uses <code class="docutils literal notranslate"><span class="pre">np.asarray</span></code> and NumPy matmul. The <code class="docutils literal notranslate"><span class="pre">_components_jax</span></code>/<code class="docutils literal notranslate"><span class="pre">_mean_jax</span></code> fields stored by <code class="docutils literal notranslate"><span class="pre">_fit_jax</span></code> are never read by any consumer outside <code class="docutils literal notranslate"><span class="pre">pca.py</span></code> itself. Ripgrep confirms <code class="docutils literal notranslate"><span class="pre">_components_jax</span></code>/<code class="docutils literal notranslate"><span class="pre">_mean_jax</span></code> appear only in <code class="docutils literal notranslate"><span class="pre">pca.py</span></code> (field definition, <code class="docutils literal notranslate"><span class="pre">_fit_jax</span></code> assignment, <code class="docutils literal notranslate"><span class="pre">fit()</span></code> passthrough) and tests that call <code class="docutils literal notranslate"><span class="pre">pca_transform_jax</span></code> directly. The census claim that “The manifold pipeline (<code class="docutils literal notranslate"><span class="pre">basis_index</span></code>, <code class="docutils literal notranslate"><span class="pre">vector_index</span></code>) uses these functions externally” is FALSE — <code class="docutils literal notranslate"><span class="pre">PCAPipeline</span></code>/<code class="docutils literal notranslate"><span class="pre">PCAResult</span></code> are not imported from any <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> production module; they appear only in tests. The waste is confirmed (XLA SVD compile for nothing when transform is NumPy anyway), but the practical impact is limited to callers who explicitly use <code class="docutils literal notranslate"><span class="pre">PCAPipeline(use_jax=True)</span></code>, which in production code is nobody currently. MEDIUM severity confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="f10-no-test-for-aki-uncertainty-forwarding-in-to-line-observations">
+<h2>F10 — No test for <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> forwarding in <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code><a class="headerlink" href="#f10-no-test-for-aki-uncertainty-forwarding-in-to-line-observations" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: HIGH</strong> (confirmed as-stated)</p>
+<p>Verified: <code class="docutils literal notranslate"><span class="pre">grep</span> <span class="pre">-n</span> <span class="pre">&quot;aki_uncertainty&quot;</span></code> on <code class="docutils literal notranslate"><span class="pre">tests/test_element_id.py</span></code> returns zero results. <code class="docutils literal notranslate"><span class="pre">grep</span> <span class="pre">-n</span> <span class="pre">&quot;aki_uncertainty&quot;</span></code> on <code class="docutils literal notranslate"><span class="pre">tests/test_integration_element_id.py</span></code> also returns zero results. Given that F2 (the bug this gap masked) is confirmed real, this is a genuine test-gap finding. High severity confirmed — the bug exists and no test caught it.</p>
+</section>
+<hr class="docutils" />
+<section id="summary-of-confirmed-findings-critical-high">
+<h2>Summary of Confirmed Findings (Critical/High)<a class="headerlink" href="#summary-of-confirmed-findings-critical-high" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Title</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Original Sev</p></th>
+<th class="head"><p>Corrected Sev</p></th>
+<th class="head"><p>Key adjustment</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance</span></code> discards <code class="docutils literal notranslate"><span class="pre">fwhm_inst</span></code> in no-Stark fallback</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p>Function is not called from production code; only from tests</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> drops <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code></p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> not on production pipeline; <code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> does forward it</p></td>
+</tr>
+<tr class="row-even"><td><p>F5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">element_id.py</span></code> imports through <code class="docutils literal notranslate"><span class="pre">physics/boltzmann</span></code> (architectural cycle)</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p>Confirmed — real <code class="docutils literal notranslate"><span class="pre">common</span> <span class="pre">→</span> <span class="pre">physics</span></code> cycle</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10</p></td>
+<td><p>No test for <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> forwarding</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p>Confirmed — zero matches in test files</p></td>
+</tr>
+</tbody>
+</table>
+<p>All medium-severity findings (F3, F4, F6, F7, F8, F9) also confirmed true by code inspection.</p>
+<p><strong>Highest confirmed severity: HIGH</strong> (F5, F10)</p>
+</section>
+<hr class="docutils" />
+<section id="new-finding-f11-multiple-non-common-modules-import-lineobservation-from-the-shim-path-unlisted-callers-of-f5">
+<h2>NEW Finding: F11 — Multiple non-<code class="docutils literal notranslate"><span class="pre">common</span></code> modules import <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> from the shim path (unlisted callers of F5)<a class="headerlink" href="#new-finding-f11-multiple-non-common-modules-import-lineobservation-from-the-shim-path-unlisted-callers-of-f5" title="Link to this heading"></a></h2>
+<p><strong>Severity: MEDIUM</strong></p>
+<p>While verifying F5, ripgrep revealed that <code class="docutils literal notranslate"><span class="pre">element_id.py</span></code> is not the only module using the shim path. <code class="docutils literal notranslate"><span class="pre">cflibs/validation/round_trip.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/streaming.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/temporal.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/quality.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/closed_form.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/self_absorption.py</span></code> and <code class="docutils literal notranslate"><span class="pre">self_absorption_inputs.py</span></code> all import <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> from <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.boltzmann</span></code> rather than the canonical <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.common.data_structures</span></code>. The census only flagged <code class="docutils literal notranslate"><span class="pre">element_id.py</span></code> because it is inside <code class="docutils literal notranslate"><span class="pre">common/</span></code> (creating the worst-case cycle), but the pattern of importing through the shim is systemic. A single sweep to redirect all callers to <code class="docutils literal notranslate"><span class="pre">common.data_structures</span></code> would eliminate the technical debt.</p>
+</section>
+<hr class="docutils" />
+<section id="new-finding-f12-identifiedline-intensity-exp-carries-no-uncertainty-slot-structural-gap-enabling-f2-f9">
+<h2>NEW Finding: F12 — <code class="docutils literal notranslate"><span class="pre">IdentifiedLine.intensity_exp</span></code> carries no uncertainty slot (structural gap enabling F2/F9)<a class="headerlink" href="#new-finding-f12-identifiedline-intensity-exp-carries-no-uncertainty-slot-structural-gap-enabling-f2-f9" title="Link to this heading"></a></h2>
+<p><strong>Severity: MEDIUM</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">element_id.py:24–62</span></code>: <code class="docutils literal notranslate"><span class="pre">IdentifiedLine</span></code> has <code class="docutils literal notranslate"><span class="pre">intensity_exp:</span> <span class="pre">float</span></code> but no <code class="docutils literal notranslate"><span class="pre">intensity_uncertainty:</span> <span class="pre">float</span></code> field. This is the structural root cause behind both F2 (forcing <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> to invent a 2% floor) and F9 (the 2% magic number). The census flags F9 as a consequence but does not identify the absence of the upstream slot as a first-class finding. Any fix to F9 (propagating real σ_I from preprocessing) requires adding this field to <code class="docutils literal notranslate"><span class="pre">IdentifiedLine</span></code>, updating all identifier code that constructs <code class="docutils literal notranslate"><span class="pre">IdentifiedLine</span></code> objects (ALIAS, comb, correlation identifiers), and threading noise estimates from preprocessing through the result hierarchy — a non-trivial chain. The finding is already implicit in F9’s “two-step fix” but deserves explicit tracking.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

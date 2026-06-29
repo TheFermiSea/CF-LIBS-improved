@@ -1,0 +1,581 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Self-Absorption, Optical Depth, and Curve-of-Growth Corrections in LIBS &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Self-Absorption, Optical Depth, and Curve-of-Growth Corrections in LIBS</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/literature/self-absorption-cog.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="self-absorption-optical-depth-and-curve-of-growth-corrections-in-libs">
+<h1>Self-Absorption, Optical Depth, and Curve-of-Growth Corrections in LIBS<a class="headerlink" href="#self-absorption-optical-depth-and-curve-of-growth-corrections-in-libs" title="Link to this heading"></a></h1>
+<section id="governing-equations-canonical-form">
+<h2>1. Governing Equations — Canonical Form<a class="headerlink" href="#governing-equations-canonical-form" title="Link to this heading"></a></h2>
+<section id="radiative-transfer-through-a-homogeneous-lte-plasma-slab">
+<h3>1.1 Radiative Transfer Through a Homogeneous LTE Plasma Slab<a class="headerlink" href="#radiative-transfer-through-a-homogeneous-lte-plasma-slab" title="Link to this heading"></a></h3>
+<p>For a homogeneous, isothermal slab of thickness <em>l</em> in local thermodynamic equilibrium (LTE),
+the emerging spectral radiance satisfies the equation of transfer</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>dI_λ/dl = ε_λ − κ_λ I_λ
+</pre></div>
+</div>
+<p>with the source function S_λ = ε_λ / κ_λ = B_λ(T) (Kirchhoff’s law), giving the
+closed-form solution</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_λ = B_λ(T) [1 − exp(−τ_λ)]          ... (1)
+</pre></div>
+</div>
+<p>where</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">τ_λ</span> <span class="o">=</span> <span class="n">κ_λ</span> <span class="n">l</span>                             <span class="o">...</span> <span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>is the <strong>optical depth</strong> at wavelength λ.</p>
+<p><strong>Symbols and units:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>Meaning</p></th>
+<th class="head"><p>SI unit</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>I_λ</p></td>
+<td><p>Spectral radiance (observed)</p></td>
+<td><p>W m⁻² sr⁻¹ m⁻¹</p></td>
+</tr>
+<tr class="row-odd"><td><p>B_λ(T)</p></td>
+<td><p>Planck function at plasma temperature T</p></td>
+<td><p>W m⁻² sr⁻¹ m⁻¹</p></td>
+</tr>
+<tr class="row-even"><td><p>κ_λ</p></td>
+<td><p>Absorption coefficient (spectrally resolved)</p></td>
+<td><p>m⁻¹</p></td>
+</tr>
+<tr class="row-odd"><td><p>l</p></td>
+<td><p>Effective plasma column length (line-of-sight)</p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-even"><td><p>τ_λ</p></td>
+<td><p>Optical depth (dimensionless)</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Optically thin limit</strong> (τ ≪ 1): 1 − exp(−τ) ≈ τ, so I_λ → B_λ κ_λ l ∝ N_s.
+<strong>Optically thick limit</strong> (τ ≫ 1): I_λ → B_λ(T) (approaches blackbody at T).</p>
+</section>
+<section id="absorption-coefficient">
+<h3>1.2 Absorption Coefficient<a class="headerlink" href="#absorption-coefficient" title="Link to this heading"></a></h3>
+<p>For a spectral line u→l (upper level u, lower level l), under LTE, including stimulated
+emission (usually small at LIBS temperatures but formally required):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>κ(ν) = (hν/4π) · (N_l B_lu − N_u B_ul) · φ(ν)
+
+     = (A_ul g_u λ² / 8π) · (N_l/g_l) · [1 − exp(−hν/k_B T)] · g_l/U_s(T) · exp(−E_l/k_B T) · N_s · φ(ν)
+</pre></div>
+</div>
+<p>In the common LIBS approximation (hν ≫ k_B T for UV/visible, stimulated emission ≈ 0)
+this simplifies to</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>κ(ν) ≈ (A_ul g_u λ²)/(8π) · (N_s/U_s(T)) · exp(−E_l/k_B T) · φ(ν)    ... (3)
+</pre></div>
+</div>
+<p><strong>Symbols:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>A_ul</p></td>
+<td><p>Einstein A-coefficient (s⁻¹); note “ki” and “ul” subscript conventions differ by author</p></td>
+</tr>
+<tr class="row-odd"><td><p>g_u</p></td>
+<td><p>Upper-level statistical weight = 2J_u + 1</p></td>
+</tr>
+<tr class="row-even"><td><p>g_l</p></td>
+<td><p>Lower-level statistical weight = 2J_l + 1</p></td>
+</tr>
+<tr class="row-odd"><td><p>E_l</p></td>
+<td><p>Lower-level energy (J or eV)</p></td>
+</tr>
+<tr class="row-even"><td><p>E_u</p></td>
+<td><p>Upper-level energy (J or eV)</p></td>
+</tr>
+<tr class="row-odd"><td><p>N_s</p></td>
+<td><p>Total number density of the emitting species (m⁻³)</p></td>
+</tr>
+<tr class="row-even"><td><p>U_s(T)</p></td>
+<td><p>Partition function of the species at temperature T</p></td>
+</tr>
+<tr class="row-odd"><td><p>φ(ν)</p></td>
+<td><p>Normalised line profile (Hz⁻¹); ∫φ dν = 1</p></td>
+</tr>
+<tr class="row-even"><td><p>λ</p></td>
+<td><p>Transition wavelength (m)</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><strong>Sign/degeneracy trap:</strong> Some papers absorb the (g_u/g_l) ratio into the oscillator
+strength f via f_lu = (m_e c)/(π e²) · (g_u/g_l) · A_ul · λ²/(8π). If you use
+the absorption oscillator strength f_lu, the formula becomes κ(ν) = (π e²/m_e c) · (N_l/g_l) · g_l · f_lu · φ(ν).
+Using the wrong g ratio here is a common off-by-(g_u/g_l) error.</p>
+</div></blockquote>
+</section>
+<section id="self-absorption-coefficient-sa">
+<h3>1.3 Self-Absorption Coefficient SA<a class="headerlink" href="#self-absorption-coefficient-sa" title="Link to this heading"></a></h3>
+<p>The <strong>SA coefficient</strong> is the ratio of the observed peak intensity to the intensity
+the line would have in an optically thin plasma of the same temperature and density:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>SA = I(λ₀) / I₀(λ₀)                    ... (4)
+</pre></div>
+</div>
+<p>For the homogeneous slab, using Eq. (1) and the thin-limit formula:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>SA = [1 − exp(−τ₀)] / τ₀               ... (5)
+</pre></div>
+</div>
+<p>where τ₀ = κ(λ₀)·l is the peak optical depth.</p>
+<p><strong>Range:</strong> SA ∈ (0, 1].</p>
+<ul class="simple">
+<li><p>SA = 1 : optically thin (no self-absorption).</p></li>
+<li><p>SA → 0 : severely self-absorbed (saturated).</p></li>
+</ul>
+<p><strong>Equivalent width / integrated intensity:</strong> For a Voigt line profile the integrated
+intensity scales as SA^0.5 (to first approximation), while the FWHM scales as SA^(−0.54):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ_obs = Δλ₀ · (SA)^(−0.54)           ... (6)
+</pre></div>
+</div>
+<p>This is the Konjevic–Wiese empirical exponent; some texts use −0.5.</p>
+</section>
+<section id="the-optical-depth-parameter-q-ladenburgreiche">
+<h3>1.4 The Optical Depth Parameter q (Ladenburg–Reiche)<a class="headerlink" href="#the-optical-depth-parameter-q-ladenburgreiche" title="Link to this heading"></a></h3>
+<p>After inserting the Boltzmann population and Eq. (3), the <strong>peak optical depth</strong> at
+line centre λ₀ for a Voigt profile becomes</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>τ₀ = κ(λ₀) · l ≡ q                     ... (7)
+</pre></div>
+</div>
+<p>with</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>q = (2 e²)/(m_e c²) · n_i · f_lu · λ₀² · l    (Gaussian cgs form)
+
+  ≈ (λ₀² l g_u A_ul N_s)/(8π · Δλ_D · U_s(T)) · exp(−E_l / k_B T)    ... (8)
+</pre></div>
+</div>
+<p>where Δλ_D is the Doppler (inhomogeneous) width. Note q ≡ τ₀ in this context; authors
+sometimes call q the “Ladenburg factor.”</p>
+<p><strong>Pitfall:</strong> Equation (8) is written for Doppler-dominated profiles. For Voigt profiles
+one must use the peak of φ(ν), which requires the Voigt damping ratio η = Γ_L / Γ_D.
+The (1-exp(-q)) / q formula still holds; only the q formula changes.</p>
+</section>
+<section id="curve-of-growth-cog">
+<h3>1.5 Curve of Growth (COG)<a class="headerlink" href="#curve-of-growth-cog" title="Link to this heading"></a></h3>
+<p>The <strong>curve of growth</strong> relates the integrated emission intensity W (or equivalent width
+in absorption) to the column density N_s · l:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>W ≡ ∫ I(λ) dλ = I_peak^(thin) · ∫ [1 − exp(−τ(λ))] dλ    ... (9)
+</pre></div>
+</div>
+<p>Three regimes:</p>
+<ol class="arabic simple">
+<li><p><strong>Linear regime</strong> (τ₀ ≪ 1): W ∝ N_s · l.  Boltzmann plot is valid.</p></li>
+<li><p><strong>Flat-of-the-curve</strong> (τ₀ ~ 1–10): W grows as (N_s · l)^0.5 for Doppler profiles
+(Voigt: slower than linear). Self-absorption causes slope change in Boltzmann plot.</p></li>
+<li><p><strong>Square-root regime</strong> (τ₀ ≫ 1, Doppler-dominated): W ∝ (N_s · l)^0.5.</p></li>
+</ol>
+<p>In LIBS the COG iteration (Bulajic et al. 2002) fits T, n_e, Gaussian width, Lorentzian
+width, and l simultaneously by comparing modelled and measured COGs for multiple lines,
+then corrects all line intensities to their optically thin equivalents.</p>
+</section>
+<section id="planck-function-correction-brr-sac-poggialini-method">
+<h3>1.6 Planck-Function Correction (BRR-SAC / Poggialini method)<a class="headerlink" href="#planck-function-correction-brr-sac-poggialini-method" title="Link to this heading"></a></h3>
+<p>If plasma temperature T is known, Eq. (1) can be inverted directly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_Thin_λ = B_λ(T) · κ_λ · l = −B_λ(T) · ln[1 − I_λ / B_λ(T)]    ... (10)
+</pre></div>
+</div>
+<p>This requires only T (not n_e, not l separately), making it the simplest single-parameter
+correction. It fails when I_λ / B_λ(T) approaches 1 (τ &gt; ~3) due to numerical
+instability.</p>
+</section>
+<section id="csigma-c-method-aragon-aguilera-2014">
+<h3>1.7 CSigma (Cσ) Method — Aragón &amp; Aguilera 2014<a class="headerlink" href="#csigma-c-method-aragon-aguilera-2014" title="Link to this heading"></a></h3>
+<p>The Cσ method generalises the COG to multiple species and ionisation states.
+Define for each observed line the <strong>line cross section</strong>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>σ_l = (λ² A_ul g_u)/(8π U_s(T)) · exp(−E_u / k_B T)
+      × [1 + (N_{s+1}/N_s)]^(−1)    ... (11)
+</pre></div>
+</div>
+<p>where the last factor accounts for ionisation balance via Saha.</p>
+<p>The <strong>Cσ graph</strong> plots C = I_measured / (β_A · σ_l)  vs  σ_l · N_l,
+where N_l = N_s · l (columnar density, m⁻²) and β_A is an instrumental constant.</p>
+<ul class="simple">
+<li><p>For optically thin lines: C ≈ 1 (flat region).</p></li>
+<li><p>For self-absorbed lines: C &lt; 1, following the universal COG curve.</p></li>
+</ul>
+<p>Four parameters are fitted globally: {β_A, N_l, T, N_e}.
+The method can <strong>exploit</strong> self-absorption rather than avoid it.</p>
+<p><strong>Limitation:</strong> Strongly reversed lines (SA &lt; ~0.3) lie outside the model’s validity and
+must be excluded from the fit.</p>
+</section>
+<section id="duplicating-mirror-method">
+<h3>1.8 Duplicating Mirror Method<a class="headerlink" href="#duplicating-mirror-method" title="Link to this heading"></a></h3>
+<p>A spherical mirror placed behind the plasma doubles the effective path length. For
+emission I₁ (direct) and I₂ (direct + reflected), if G = solid-angle collection factor:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Continuum ratio:  R_c = I₂^cont / I₁^cont = 1 + G         ... (12)
+Line ratio:       R_λ = I₂(λ) / I₁(λ)  = 1 + G · exp(−τ_λ)  ... (13)
+</pre></div>
+</div>
+<p>Solving for τ:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>τ_λ = ln[(R_c − 1) / (R_λ − 1)]                           ... (14)
+</pre></div>
+</div>
+<p>And the correction factor:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>K_corr = τ_λ / (1 − exp(−τ_λ))  = 1/SA                   ... (15)
+</pre></div>
+</div>
+<p>This gives τ without needing T, n_e, or l independently — useful as a diagnostic.
+Requires simultaneous measurement with and without mirror; requires smooth continuum.</p>
+</section>
+<section id="internal-reference-self-absorption-correction-irsac">
+<h3>1.9 Internal Reference Self-Absorption Correction (IRSAC)<a class="headerlink" href="#internal-reference-self-absorption-correction-irsac" title="Link to this heading"></a></h3>
+<p>Select a reference line (ref) of the same species and ionisation state with negligible
+self-absorption (SA_ref ≈ 1). The SA-corrected intensity of any other line k is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_k^(IRSAC) = I_ref^(meas) · (A_k g_k / A_ref g_ref) · exp[−(E_k − E_ref) / k_B T]  ... (16)
+</pre></div>
+</div>
+<p>This is simply the Boltzmann ratio relative to the reference line: it reconstructs what
+the intensity <em>would be</em> if the line were optically thin, using T from an initial
+(possibly biased) Boltzmann plot. An iterative loop updates T until the Boltzmann plot
+correlation coefficient converges.</p>
+<p><strong>Reference-line selection criteria:</strong></p>
+<ul class="simple">
+<li><p>High upper-level energy E_k (low self-absorption probability).</p></li>
+<li><p>Not a resonance line (E_l ≠ 0).</p></li>
+<li><p>Isolated, symmetric, unblended profile.</p></li>
+<li><p>Verify optical thinness: doublet ratio test (observed / theoretical ≤ ±4%).</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="common-implementation-pitfalls-and-correct-treatment">
+<h2>2. Common Implementation Pitfalls and Correct Treatment<a class="headerlink" href="#common-implementation-pitfalls-and-correct-treatment" title="Link to this heading"></a></h2>
+<section id="including-resonance-lines-in-boltzmann-plots-without-sa-check">
+<h3>2.1 Including Resonance Lines in Boltzmann Plots Without SA Check<a class="headerlink" href="#including-resonance-lines-in-boltzmann-plots-without-sa-check" title="Link to this heading"></a></h3>
+<p><strong>Pitfall:</strong> Resonance lines (lower level = ground state, E_l = 0) have the highest
+lower-level population and therefore the largest optical depth for a given N_s · l.
+Including them uncorrected in a Boltzmann plot artificially <strong>raises the apparent
+temperature</strong> (the self-absorbed low-E points fall below the line, increasing the slope).</p>
+<p><strong>Correct treatment:</strong> Screen all lines with a doublet-ratio test or COG/Cσ check before
+inclusion. Exclude or correct lines with SA &lt; ~0.9 before fitting T.</p>
+</section>
+<section id="using-fwhm-alone-as-sa-diagnostic">
+<h3>2.2 Using FWHM Alone as SA Diagnostic<a class="headerlink" href="#using-fwhm-alone-as-sa-diagnostic" title="Link to this heading"></a></h3>
+<p><strong>Pitfall:</strong> Equation (6) assumes a homogeneous plasma. In inhomogeneous plasmas FWHM
+can be broadened by self-reversal without the same SA vs. FWHM relationship.</p>
+<p><strong>Correct treatment:</strong> Distinguish self-absorption (smooth profile flattening) from
+self-reversal (dip at line centre). Self-reversal requires a two-layer inhomogeneous
+model; its presence invalidates the homogeneous SA formula entirely.</p>
+</section>
+<section id="applying-sa-correction-to-reversed-lines">
+<h3>2.3 Applying SA Correction to Reversed Lines<a class="headerlink" href="#applying-sa-correction-to-reversed-lines" title="Link to this heading"></a></h3>
+<p><strong>Pitfall:</strong> If a line shows a central dip (self-reversal), formula (5) does not apply.
+Attempting correction with Eq. (5) or (16) gives wrong results.</p>
+<p><strong>Correct treatment:</strong> Amamou et al. (2003) derived a correction for reversed lines using
+the two-layer model. Alternatively, exclude reversed lines from CF-LIBS analysis.</p>
+</section>
+<section id="neglecting-stimulated-emission-term">
+<h3>2.4 Neglecting Stimulated Emission Term<a class="headerlink" href="#neglecting-stimulated-emission-term" title="Link to this heading"></a></h3>
+<p><strong>Pitfall:</strong> Dropping the [1 − exp(−hν/k_B T)] term in κ(ν) is valid for UV/visible at
+T ~ 5000–20000 K, but introduces a systematic overestimate of κ for far-infrared or very
+high-T plasmas.</p>
+<p><strong>Correct treatment:</strong> Include the correction factor. For T = 10000 K and λ = 500 nm,
+hν/k_B T ≈ 2.9, so exp(−hν/k_B T) ≈ 0.055 — a ~5% error if omitted.</p>
+</section>
+<section id="confusing-per-unit-length-with-integrated">
+<h3>2.5 Confusing κ (per-unit-length) with τ (integrated)<a class="headerlink" href="#confusing-per-unit-length-with-integrated" title="Link to this heading"></a></h3>
+<p><strong>Pitfall:</strong> Some LIBS papers define τ = κ(λ₀) · l only at line centre, while others
+integrate over the profile. The SA = (1-exp(-τ))/τ formula applies strictly to the
+<strong>peak</strong> optical depth; the integrated correction requires the full COG integral.</p>
+<p><strong>Correct treatment:</strong> Be explicit about whether τ refers to peak or integrated optical
+depth. For peak-corrected intensities use Eq. (5); for integrated intensities use Eq. (9).</p>
+</section>
+<section id="circular-dependence-of-t-on-sa">
+<h3>2.6 Circular Dependence of T on SA<a class="headerlink" href="#circular-dependence-of-t-on-sa" title="Link to this heading"></a></h3>
+<p><strong>Pitfall:</strong> SA depends on T (via partition function and Boltzmann factor); T is measured
+from the Boltzmann plot, which depends on SA. Failure to iterate produces a biased T.</p>
+<p><strong>Correct treatment:</strong> Use an iterative loop: initial T from uncorrected Boltzmann plot →
+compute SA for all lines → correct intensities → re-fit T → repeat until convergence
+(typically 3–5 iterations). IRSAC and BRR-SAC both require this loop.</p>
+</section>
+<section id="wrong-g-u-vs-g-l-in-the-absorption-coefficient">
+<h3>2.7 Wrong g_u vs g_l in the Absorption Coefficient<a class="headerlink" href="#wrong-g-u-vs-g-l-in-the-absorption-coefficient" title="Link to this heading"></a></h3>
+<p><strong>Pitfall:</strong> The absorption coefficient κ uses the <em>lower</em>-level population (N_l = N_s
+g_l / U_s · exp(-E_l/k_B T)), not the upper level. Some implementations accidentally
+substitute g_k (upper) where g_l (lower) is required.</p>
+<p><strong>Correct treatment:</strong> Eq. (3) uses E_l (lower level energy) and N_s normalised by U_s.
+The A_ul already carries the (g_u) factor through Einstein’s relation; do not
+double-count it.</p>
+</section>
+<section id="identifiability-limits">
+<h3>2.8 Identifiability Limits<a class="headerlink" href="#identifiability-limits" title="Link to this heading"></a></h3>
+<p>When self-absorption is severe (SA &lt; 0.3, τ₀ &gt; ~3):</p>
+<ul class="simple">
+<li><p>The Boltzmann plot temperature is unreliable.</p></li>
+<li><p>Equation (10) becomes ill-conditioned (I_λ / B_λ → 1).</p></li>
+<li><p>The COG flat portion degenerates: multiple (T, N_l) pairs may fit the data equally
+well.</p></li>
+<li><p>In the limiting case τ → ∞, the line intensity → B_λ(T) regardless of N_s, making
+concentration unidentifiable from that line alone.</p></li>
+</ul>
+<p>Practical consequence: <strong>do not attempt single-line SA correction when τ₀ &gt; 3</strong>; rely on
+lines from the weak-line multiplet members or non-resonance transitions, or apply the
+full COG/Cσ with sufficient lines to constrain T and N_l simultaneously.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-references">
+<h2>3. Key References<a class="headerlink" href="#key-references" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Bulajic, D., Corsi, M., Cristoforetti, G., Legnaioli, S., Salvetti, A., Sezgin, F., &amp;
+Tognoni, E. (2002).</strong> “A procedure for correcting self-absorption in calibration
+free-laser induced breakdown spectroscopy.” <em>Spectrochim. Acta Part B</em>, 57(2), 339–353.
+DOI: 10.1016/S0584-8547(01)00398-6.
+— <em>The foundational COG iterative algorithm for CF-LIBS; introduces the iterative
+fitting of T, n_e, Gaussian/Lorentzian widths, and optical path length.</em></p></li>
+<li><p><strong>Amamou, H., Bois, A., Ferhat, B., Redon, R., Rossetto, B., &amp; Matheron, P. (2002).</strong>
+“Correction of self-absorption spectral line and ratios of transition probabilities for
+homogeneous and LTE plasma.” <em>J. Quant. Spectrosc. Radiat. Transf.</em>, 75(6), 747–763.
+DOI: 10.1016/S0022-4073(02)00040-7.
+— <em>Derives correction factors for homogeneous LTE plasma; discusses SA for resonance
+and non-resonance lines; gives the κ formula with stimulated-emission correction.</em></p></li>
+<li><p><strong>Amamou, H., Bois, A., Ferhat, B., Redon, R., Rossetto, B., &amp; Matheron, P. (2003).</strong>
+“Correction of the self-absorption for reversed spectral lines: application to two
+resonance lines of neutral aluminium.” <em>J. Quant. Spectrosc. Radiat. Transf.</em>, 77(4),
+365–372.  DOI: 10.1016/S0022-4073(02)00163-2.
+— <em>Two-layer model correction for self-reversed lines; Al I resonance doublet case study.</em></p></li>
+<li><p><strong>Cristoforetti, G., De Giacomo, A., Dell’Aglio, M., Legnaioli, S., Tognoni, E.,
+Palleschi, V., &amp; Omenetto, N. (2010).</strong> “Local Thermodynamic Equilibrium in
+Laser-Induced Breakdown Spectroscopy: Beyond the McWhirter Criterion.”
+<em>Spectrochim. Acta Part B</em>, 65(1), 86–95.  DOI: 10.1016/j.sab.2009.11.005.
+— <em>Quantifies when LTE holds and when self-absorption invalidates plasma diagnostics.</em></p></li>
+<li><p><strong>Aragón, C. &amp; Aguilera, J. A. (2014).</strong> “CSigma graphs: A new approach for plasma
+characterization in laser-induced breakdown spectroscopy.” <em>J. Quant. Spectrosc. Radiat.
+Transf.</em>, 149, 90–102.  DOI: 10.1016/j.jqsrt.2014.07.026.
+— <em>Introduces Cσ graphs; defines line cross-section σ_l; provides the four-parameter
+fit {β_A, N_l, T, N_e}; shows how to exploit self-absorbed lines.</em></p></li>
+<li><p><strong>El Sherbini, A. M., El Sherbini, Th. M., Hegazy, H., Cristoforetti, G., Legnaioli,
+S., Palleschi, V., Pardini, L., Salvetti, A., &amp; Tognoni, E. (2005).</strong> “Evaluation of
+self-absorption coefficients of aluminum emission lines in laser-induced breakdown
+spectroscopy measurements.” <em>Spectrochim. Acta Part B</em>, 60(12), 1573–1579.
+DOI: 10.1016/j.sab.2005.10.011.
+— <em>Systematic measurement of SA coefficients for Al I lines; doublet-ratio test;
+correction methodology including Stark broadening.</em></p></li>
+<li><p><strong>Sun, L. &amp; Yu, H. (2009).</strong> “Correction of self-absorption effect in calibration-free
+laser-induced breakdown spectroscopy by an internal reference method.” <em>Talanta</em>, 79(2),
+388–395.  DOI: 10.1016/j.talanta.2009.04.003.
+— <em>Introduces IRSAC; describes the reference-line selection criteria and iterative
+convergence algorithm.</em></p></li>
+<li><p><strong>Poggialini, F., Campanella, B., Legnaioli, S., Raneri, S., &amp; Palleschi, V. (2023).</strong>
+“Investigation of a method for the correction of self-absorption by Planck function in
+laser induced breakdown spectroscopy.” <em>J. Anal. At. Spectrom.</em>, 38, 571–578.
+DOI: 10.1039/D2JA00352J.
+— <em>Planck-function (BRR-SAC) method; requires only T; shows correction accuracy
+limit at τ ~ 2–3 and temperature-error sensitivity.</em></p></li>
+<li><p><strong>Rezaei, F., Cristoforetti, G., Tognoni, E., Legnaioli, S., Palleschi, V., &amp;
+Safi, A. (2020).</strong> “A review of the current analytical approaches for evaluating,
+compensating and exploiting self-absorption in Laser Induced Breakdown Spectroscopy.”
+<em>Spectrochim. Acta Part B</em>, 169, 105878.  DOI: 10.1016/j.sab.2020.105878.
+— <em>Comprehensive review of all SA correction methods; detailed comparison; identifiability
+discussion.</em></p></li>
+<li><p><strong>Safi, A., Messaoud Aberkane, S., Botto, A., Campanella, B., Legnaioli, S.,
+Poggialini, F., Raneri, S., Rezaei, F., &amp; Palleschi, V. (2021).</strong> “Determination of
+Spectroscopic Parameters of Ag(I) and Ag(II) Emission Lines Using Time-Independent
+Extended C-Sigma Method.” <em>Appl. Spectrosc.</em>, 75(8), 1039–1051.
+DOI: 10.1177/0003702821999425.
+— <em>Extended Cσ method; application to multi-species plasma; shows iterative convergence
+criteria.</em></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="what-correct-code-must-do-checklist">
+<h2>4. What Correct Code MUST Do — Checklist<a class="headerlink" href="#what-correct-code-must-do-checklist" title="Link to this heading"></a></h2>
+<section id="pre-analysis-before-fitting-t-concentrations">
+<h3>Pre-Analysis (before fitting T / concentrations)<a class="headerlink" href="#pre-analysis-before-fitting-t-concentrations" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Doublet-ratio screen:</strong> For each species with known doublet/multiplet, compute
+R_obs / R_theory. Flag any line with R_obs / R_theory &lt; 0.95 as potentially
+self-absorbed (SA &lt; 1).</p></li>
+<li><p>[ ] <strong>Resonance-line flag:</strong> Any line with E_l = 0 (or E_l &lt; k_B T ~ 0.1 eV at 10 kK)
+is a resonance/near-resonance line and should be treated with extra suspicion.</p></li>
+<li><p>[ ] <strong>Estimate q (Eq. 8):</strong> Using initial T, n_e, and an estimated N_s · l, compute
+q for all candidate lines. Lines with q &gt; 0.5 should be corrected or excluded.</p></li>
+</ul>
+</section>
+<section id="self-absorption-coefficient-computation-eqs-35">
+<h3>Self-Absorption Coefficient Computation (Eqs. 3–5)<a class="headerlink" href="#self-absorption-coefficient-computation-eqs-35" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Use <strong>lower-level energy E_l</strong> (NOT E_u) in the Boltzmann factor for κ.</p></li>
+<li><p>[ ] Include <strong>g_u</strong> (statistical weight of upper level = 2J_u + 1) — do not
+substitute g_l or the total degeneracy 2L+1.</p></li>
+<li><p>[ ] Apply the <strong>stimulated-emission correction</strong> [1 − exp(−hν / k_B T)] if T &lt; 20 000 K
+and λ &lt; 600 nm (correction is ~5% at T = 10 000 K, λ = 500 nm; larger for higher λ or
+lower T).</p></li>
+<li><p>[ ] For peak intensities, SA = (1 − exp(−τ₀)) / τ₀ where τ₀ = κ(λ₀) · l.
+For integrated intensities, evaluate the full integral Eq. (9) — <strong>do not</strong> simply
+apply the peak SA to the integrated intensity.</p></li>
+</ul>
+</section>
+<section id="sa-correction-algorithm">
+<h3>SA Correction Algorithm<a class="headerlink" href="#sa-correction-algorithm" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] <strong>Iterate:</strong> compute SA → correct intensities → re-fit T from corrected Boltzmann
+plot → recompute SA → repeat until |ΔT/T| &lt; 0.5% (typically 3–5 iterations).</p></li>
+<li><p>[ ] <strong>Exclude reversed lines:</strong> If a line shows a central dip, the homogeneous formula
+does not apply. Flag and exclude or apply the Amamou (2003) two-layer correction.</p></li>
+</ul>
+</section>
+<section id="identifiability-guards">
+<h3>Identifiability Guards<a class="headerlink" href="#identifiability-guards" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] If τ₀ &gt; 3 for a line, log a warning: “Line {line_id} severely self-absorbed
+(τ₀ = {value}); correction unreliable, excluding from quantitative analysis.”</p></li>
+<li><p>[ ] If all lines of a species are self-absorbed, concentration is <strong>not identifiable</strong>
+from that species alone; set concentration uncertainty to +∞ or mark as unbounded.</p></li>
+<li><p>[ ] When the Planck-function method (Eq. 10) is used, guard against I_λ / B_λ &gt; 0.95
+(numerical divergence); clamp and report.</p></li>
+</ul>
+</section>
+<section id="csigma-cog-path">
+<h3>CSigma / COG Path<a class="headerlink" href="#csigma-cog-path" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] The four-parameter Cσ fit requires sufficient spectral lines spanning the COG
+(both optically thin and optically thick lines) to constrain {β_A, N_l, T, N_e}.
+With &lt; 4 usable lines per species the fit is underdetermined.</p></li>
+<li><p>[ ] Lines with SA &lt; 0.3 should be excluded from Cσ fitting (they lie outside the
+model’s validity per Aragón &amp; Aguilera 2014).</p></li>
+</ul>
+</section>
+<section id="doublet-ratio-diagnostic-recommended-continuous-check">
+<h3>Doublet-Ratio Diagnostic (recommended continuous check)<a class="headerlink" href="#doublet-ratio-diagnostic-recommended-continuous-check" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] For Mg II 279.6 / 280.3 nm: R_theory = 2.03; for Ca II 393.4 / 396.8 nm:
+R_theory = 2.0; for Al I 394.4 / 396.2 nm: R_theory ≈ 2.0.
+Report SA_empirical = R_obs / R_theory for monitoring purposes.</p></li>
+</ul>
+</section>
+<section id="documentation">
+<h3>Documentation<a class="headerlink" href="#documentation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>[ ] Record which lines were corrected, which were excluded, and the final τ₀ and SA
+values alongside any T / n_e / concentration outputs.</p></li>
+<li><p>[ ] If optical path length <em>l</em> is used in the correction, note that <em>l</em> is a fitted
+or assumed parameter — uncertainty in <em>l</em> propagates directly to uncertainty in SA.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,395 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Pipeline Audit — 2026-06-25 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Pipeline Audit — 2026-06-25</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/v4/pipeline-audit-2026-06-25.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-pipeline-audit-2026-06-25">
+<h1>CF-LIBS Pipeline Audit — 2026-06-25<a class="headerlink" href="#cf-libs-pipeline-audit-2026-06-25" title="Link to this heading"></a></h1>
+<p>Multi-agent audit of the entire inversion pipeline + all solvers, on three lenses:
+<strong>scientific correctness</strong>, <strong>genuine vectorization</strong>, <strong>complexity/flag-debt</strong>.
+9 units, ripgrep+Read, concurrency-3, file-checkpointed. Mission order: ACCURACY &gt; PRECISION &gt; RELIABILITY &gt; latency.</p>
+<section id="executive-verdict">
+<h2>Executive verdict<a class="headerlink" href="#executive-verdict" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>The core physics is largely correct.</strong> Saha constant (incl. the factor-of-2 spin degeneracy), Boltzmann
+level populations, emissivity <code class="docutils literal notranslate"><span class="pre">ε</span> <span class="pre">=</span> <span class="pre">(hc/4πλ)·A_ki·n_k</span></code>, Voigt/Faddeeva profiles, the Boltzmann-plot WLS fit,
+the Saha ionic→neutral correction, closure algebra, the NUTS Dirichlet-simplex prior, and the scalar
+RANSAC consensus are all implemented correctly. The audit did <strong>not</strong> find the pipeline to be broadly wrong.</p></li>
+<li><p><strong>But there are real, specific correctness bugs</strong> — one CRITICAL (a 10⁶× unit error in the manifold
+forward), and several HIGH (a non-physical T clamp, a documented-but-broken solver method, an
+under-spanned SVD basis, an invalid NNLS covariance, two Bayesian noise/sampler bugs). Notably, the
+worst bug is in a <strong>non-flagged</strong> path — the flags weren’t hiding it; insufficient cross-path verification was.</p></li>
+<li><p><strong>Your thesis is confirmed on complexity:</strong> 15+ <code class="docutils literal notranslate"><span class="pre">CFLIBS_*</span></code> env vars, several gating <em>physics</em> decisions,
+with inconsistent override semantics, two correct-physics paths defaulting OFF, a dead parallel
+quality-scoring module, and an 8-flag benchmark cluster that makes scoring non-reproducible from logs.
+This obscures <em>which</em> algorithm runs and makes correctness hard to verify — even if it didn’t directly
+cause the bugs.</p></li>
+<li><p><strong>Optimization:</strong> the only genuine, accuracy-safe perf win is replacing two <code class="docutils literal notranslate"><span class="pre">O(n·w)</span></code> Python rolling-median /
+per-line loops with C-level calls (~100×). The “vectorized RANSAC” is both slower <em>and</em> semantically wrong
+— delete it.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="scientific-correctness-issues-ranked">
+<h2>§1 Scientific-correctness issues (ranked)<a class="headerlink" href="#scientific-correctness-issues-ranked" title="Link to this heading"></a></h2>
+<section id="critical">
+<h3>🔴 CRITICAL<a class="headerlink" href="#critical" title="Link to this heading"></a></h3>
+<p><strong>C1. Manifold emissivity missing cm³→m³ conversion — 10⁶× scale error.</strong>
+<code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py:567-804</span></code> (and <code class="docutils literal notranslate"><span class="pre">_compute_spectrum_snapshot_ldm</span></code> ~926).
+<code class="docutils literal notranslate"><span class="pre">ε</span> <span class="pre">=</span> <span class="pre">(hc/4πλ)·A·n_upper</span></code> needs <code class="docutils literal notranslate"><span class="pre">n_upper</span></code> in m⁻³ with SI constants, but <code class="docutils literal notranslate"><span class="pre">n_e</span></code> is cm⁻³ (project convention) and
+the <code class="docutils literal notranslate"><span class="pre">*</span> <span class="pre">1e6</span></code> is missing. The <strong>identical bug was already fixed</strong> in the two-zone Bayesian forward
+(<code class="docutils literal notranslate"><span class="pre">forward.py:517</span></code>) — the manifold path was missed in that pass. <strong>Every pre-built manifold is 10⁶×
+underscaled.</strong> Fix: <code class="docutils literal notranslate"><span class="pre">n_upper_m3</span> <span class="pre">=</span> <span class="pre">n_upper</span> <span class="pre">*</span> <span class="pre">1.0e6</span></code> in both snapshot paths; regenerate manifolds.
+<em>(Corroborates the known “manifold generator is stale” finding.)</em></p>
+</section>
+<section id="high">
+<h3>🟠 HIGH<a class="headerlink" href="#high" title="Link to this heading"></a></h3>
+<p><strong>C2. Closed-form ILR clamps T=50000 K on non-physical slope instead of holding the prior.</strong>
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/closed_form.py:344-347</span></code>. A non-negative Boltzmann slope is unphysical; the iterative
+path correctly holds <code class="docutils literal notranslate"><span class="pre">T=T_prev</span></code> and flags non-converged, but the ILR path sets <code class="docutils literal notranslate"><span class="pre">T=50000</span></code> → “keystone
+collapse” (closure degenerates to raw-intensity softmax) and a meaningless composition still propagates
+into the n_e refinement. Fix: <code class="docutils literal notranslate"><span class="pre">T_K</span> <span class="pre">=</span> <span class="pre">initial_T_K</span></code>; gate n_e refinement on <code class="docutils literal notranslate"><span class="pre">physical=True</span></code>.</p>
+<p><strong>C3. SVD library never generates composition-perturbation rows at default <code class="docutils literal notranslate"><span class="pre">sweep_points=9</span></code>.</strong>
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/full_spectrum.py:476-488</span></code>. The T/ne grid (3×3=9) exhausts the budget, so
+<code class="docutils literal notranslate"><span class="pre">extra</span> <span class="pre">=</span> <span class="pre">max(0,</span> <span class="pre">9-9)</span> <span class="pre">=</span> <span class="pre">0</span></code> → the loop that adds single-element composition spectra never runs. The SVD basis
+spans T/ne but <strong>not composition directions</strong> (Hébert 2020 §3 uses single-element spectra precisely for this),
+so the optimizer moves in an under-covered subspace. <strong>Directly affects the newly-integrated full-spectrum
+solver.</strong> Fix: default <code class="docutils literal notranslate"><span class="pre">sweep_points</span> <span class="pre">=</span> <span class="pre">9</span> <span class="pre">+</span> <span class="pre">len(elements)</span></code>, or always generate composition rows.</p>
+<p><strong>C4. <code class="docutils literal notranslate"><span class="pre">JointOptimizer.optimize(method=&quot;L-BFGS-B&quot;)</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> at runtime</strong> despite being the
+documented default-named method. <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/joint_optimizer.py:526,682</span></code>. <code class="docutils literal notranslate"><span class="pre">jax.scipy...minimize</span></code>
+only accepts <code class="docutils literal notranslate"><span class="pre">&quot;bfgs&quot;</span></code>; <code class="docutils literal notranslate"><span class="pre">&quot;lbfgsb&quot;</span></code> → <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. Fix: use real <code class="docutils literal notranslate"><span class="pre">scipy.optimize.minimize(method=&quot;L-BFGS-B&quot;)</span></code>
+(supports bounds — physically valuable for T/ne/composition limits) or restrict to BFGS and fix docs.</p>
+<p><strong>C5. Poisson readout residual uses the Poisson mean <code class="docutils literal notranslate"><span class="pre">mu</span></code> instead of <code class="docutils literal notranslate"><span class="pre">predicted</span></code>.</strong>
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/likelihood.py:107</span></code>. Gaussian read-noise acts on raw counts; the residual
+should be <code class="docutils literal notranslate"><span class="pre">observed</span> <span class="pre">-</span> <span class="pre">predicted</span></code>, not <code class="docutils literal notranslate"><span class="pre">observed</span> <span class="pre">-</span> <span class="pre">(predicted/gain</span> <span class="pre">+</span> <span class="pre">dark)</span></code>. Conflates shot-noise expectation
+with the readout reference and makes the penalty depend incorrectly on <code class="docutils literal notranslate"><span class="pre">gain</span></code>/<code class="docutils literal notranslate"><span class="pre">dark</span></code>. Opt-in branch, but it’s
+the docstring-recommended “best” choice.</p>
+<p><strong>C6. NUTS two-zone T-ordering uses a finite <code class="docutils literal notranslate"><span class="pre">-1e6</span></code> hard barrier — pathological for HMC gradients.</strong>
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/models.py:152</span></code>. A finite cliff yields a constant gradient pointing toward the
+boundary regardless of position → divergences, poor mixing. Fix: reparameterize
+(<code class="docutils literal notranslate"><span class="pre">T_shell</span> <span class="pre">~</span> <span class="pre">U(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">delta_T</span> <span class="pre">~</span> <span class="pre">HalfNormal</span></code>, <code class="docutils literal notranslate"><span class="pre">T_core</span> <span class="pre">=</span> <span class="pre">T_shell</span> <span class="pre">+</span> <span class="pre">delta_T</span></code>).</p>
+<p><strong>C7. NNLS coefficient uncertainty uses the OLS covariance <code class="docutils literal notranslate"><span class="pre">(AᵀA)⁻¹</span></code> — invalid at active-set boundaries.</strong>
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/spectral_nnls.py:609-618</span></code>. NNLS with active (zero-clamped) constraints has a
+truncated distribution; OLS σ underestimates uncertainty for near-zero coefficients → over-estimated SNR →
+false-positive trace elements. Fix: bootstrap residual σ, or <code class="docutils literal notranslate"><span class="pre">snr</span> <span class="pre">=</span> <span class="pre">coeff</span> <span class="pre">/</span> <span class="pre">(noise_σ</span> <span class="pre">·</span> <span class="pre">‖basis_row‖₂)</span></code>.</p>
+<p><strong>C8. Vectorized RANSAC scores on per-peak minimum, not one-to-one assignment</strong> → ranks a many-to-one
+hypothesis above the correct one-to-one winner. <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:612-620</span></code>. (Also slow — see O1.)
+The scalar path is correct. Fix: delete the vectorized path (see X1).</p>
+</section>
+<section id="medium-notable-correctness">
+<h3>🟡 MEDIUM (notable correctness)<a class="headerlink" href="#medium-notable-correctness" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>M1. JAX <code class="docutils literal notranslate"><span class="pre">lax</span></code>-while path silently drops corona two-region T-weighting</strong> for <code class="docutils literal notranslate"><span class="pre">{Si,Fe,Ca,Al,Mg}</span></code> (the most
+common rock-formers). <code class="docutils literal notranslate"><span class="pre">iterative.py:831-841</span></code>. Python path applies <code class="docutils literal notranslate"><span class="pre">0.3·T</span> <span class="pre">+</span> <span class="pre">0.7·T_corona</span></code>; lax path uses <code class="docutils literal notranslate"><span class="pre">T</span></code>
+uniformly → different composition for two-region datasets. Fix: carry <code class="docutils literal notranslate"><span class="pre">corona_sensitive_mask</span></code> into the lax
+body, or force the Python path when <code class="docutils literal notranslate"><span class="pre">two_region=True</span></code>.</p></li>
+<li><p><strong>M2. Saha S2 guard <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">ip_II</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">None</span></code> should be <code class="docutils literal notranslate"><span class="pre">ip_III</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">None</span></code></strong> → computes a spurious U_III for
+species with no third ionization stage, depressing n_I/n_II. <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py:236-247</span></code>. CPU/JAX <strong>parity
+gap</strong> (the JAX kernel guards correctly). Fix: guard on <code class="docutils literal notranslate"><span class="pre">ip_III</span></code>.</p></li>
+<li><p><strong>M3. Default broadening is <code class="docutils literal notranslate"><span class="pre">LEGACY</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">0.01·√(T_eV/0.86)</span></code>, no λ/mass dependence) for <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code> /
+<code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">forward</span></code>. <code class="docutils literal notranslate"><span class="pre">kernels.py:710</span></code>. Physical Doppler exists but isn’t the default. Fix: default to
+<code class="docutils literal notranslate"><span class="pre">PHYSICAL_DOPPLER</span></code> (benchmark-gate; it’s already the Bayesian/manifold default).</p></li>
+<li><p><strong>M4. Sigma-clip outlier rejection uses unweighted residual std</strong>, biasing rejection against low-σ lines.
+<code class="docutils literal notranslate"><span class="pre">boltzmann.py:427-432</span></code>, <code class="docutils literal notranslate"><span class="pre">_jax_reject_outliers:651</span></code>. Fix: clip on normalized residuals <code class="docutils literal notranslate"><span class="pre">r_i/σ_i</span></code>.</p></li>
+<li><p><strong>M5. <code class="docutils literal notranslate"><span class="pre">apply_oxide_mode</span></code> docstring quotes the wrong constant</strong> (molar-mass ratio 2.139 vs O/cation 2.0 for
+Si). <code class="docutils literal notranslate"><span class="pre">closure.py:819,833</span></code>. A caller following the docstring corrupts composition by up to ~70% (Al). Fix
+docstring/example to O/cation.</p></li>
+<li><p><strong>M6. Self-absorption <code class="docutils literal notranslate"><span class="pre">g_i</span> <span class="pre">=</span> <span class="pre">g_k</span></code> substitution</strong> biases τ for excited lower levels (up to 3× for large
+g-ratio lines). <code class="docutils literal notranslate"><span class="pre">self_absorption.py:857</span></code>. Fix: plumb true <code class="docutils literal notranslate"><span class="pre">g_i</span></code> through <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code>.</p></li>
+<li><p><strong>M7. <code class="docutils literal notranslate"><span class="pre">_tau_ratio</span></code> drops the lower-level Boltzmann factor</strong>; safe for true same-upper-level doublets but
+<code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> doesn’t constrain lower levels (up to ~25% τ-ratio error). <code class="docutils literal notranslate"><span class="pre">self_absorption.py:299-317</span></code>.</p></li>
+<li><p><strong>M8. MC-UQ <code class="docutils literal notranslate"><span class="pre">A_ki</span></code> floor of 1.0 s⁻¹</strong> is an absolute hard floor → asymmetric bias on weak lines (biases T
+upward). <code class="docutils literal notranslate"><span class="pre">uncertainty.py:1055</span></code>. Fix: relative floor <code class="docutils literal notranslate"><span class="pre">max(A_ki,</span> <span class="pre">0.01·A_ki_nominal)</span></code>.</p></li>
+<li><p><strong>M9. Joint Hessian covariance scaling</strong> double-applies the χ²-inflation and misses a <code class="docutils literal notranslate"><span class="pre">2/n</span></code> factor.
+<code class="docutils literal notranslate"><span class="pre">joint_optimizer.py:573,743</span></code>. Fix: document as noise-inflation or use plain <code class="docutils literal notranslate"><span class="pre">inv(H)</span></code> with the correct factor.</p></li>
+<li><p><strong>M10. BIC/AIC fit term assumes homoscedastic noise</strong> (LIBS is Poisson/heteroscedastic).
+<code class="docutils literal notranslate"><span class="pre">model_selection.py:117</span></code>. Fix: weighted RSS <code class="docutils literal notranslate"><span class="pre">Σ(r_i/σ_i)²</span></code> using the already-estimated per-pixel σ.</p></li>
+<li><p><strong>M11. RANSAC+BIC uses <code class="docutils literal notranslate"><span class="pre">n</span> <span class="pre">=</span> <span class="pre">n_inliers</span></code></strong>, which can favor a simpler model merely because it recruited fewer
+inliers (Torr &amp; Zisserman 2000). <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:679</span></code>. Fix: pass <code class="docutils literal notranslate"><span class="pre">n</span> <span class="pre">=</span> <span class="pre">total</span> <span class="pre">candidate</span> <span class="pre">pairs</span></code>.</p></li>
+<li><p><strong>M12. Python n_e convergence check divides by bare <code class="docutils literal notranslate"><span class="pre">ne_prev</span></code></strong> (lax path guards with 1e-30).
+<code class="docutils literal notranslate"><span class="pre">iterative.py:1964</span></code>. Fix: <code class="docutils literal notranslate"><span class="pre">max(ne_prev,</span> <span class="pre">1e-30)</span></code>.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="genuine-optimization-issues-latency-is-last-priority-but-these-are-accuracy-safe">
+<h2>§2 Genuine-optimization issues (latency is LAST priority — but these are accuracy-safe)<a class="headerlink" href="#genuine-optimization-issues-latency-is-last-priority-but-these-are-accuracy-safe" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>O1. The “vectorized RANSAC” is 1.8× SLOWER (measured) and semantically wrong.</strong> <code class="docutils literal notranslate"><span class="pre">np.minimum.at</span></code> is an
+unbuffered 2-D scatter (300k non-contiguous writes), and the batch can’t early-exit. <strong>Delete it</strong> (the
+scalar path with early-exit is correct and faster). If a batch path is ever wanted, use
+<code class="docutils literal notranslate"><span class="pre">np.minimum.reduceat</span></code> on a peak-id-sorted axis (SIMD-friendly), never <code class="docutils literal notranslate"><span class="pre">ufunc.at</span></code>.</p></li>
+<li><p><strong>O2. <code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code> rolling median is an <code class="docutils literal notranslate"><span class="pre">O(n·w)</span></code> Python loop</strong> calling <code class="docutils literal notranslate"><span class="pre">np.median</span></code> per pixel.
+<code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:1428</span></code>. Fix: <code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter(dl,</span> <span class="pre">size=2w+1,</span> <span class="pre">mode='nearest')</span></code> —
+<strong>parity-exact, ~100× faster</strong>, single C call. <strong>This is the cleanest safe perf win.</strong></p></li>
+<li><p><strong>O3. NumPy per-line broadening loops</strong> (<code class="docutils literal notranslate"><span class="pre">O(N_lines)</span></code> kernel launches) on the legacy CPU path.
+<code class="docutils literal notranslate"><span class="pre">profiles.py:154,337</span></code>. The correct vectorized outer-product already exists in <code class="docutils literal notranslate"><span class="pre">kernels.py:643</span></code>. Fix: rewrite
+with <code class="docutils literal notranslate"><span class="pre">wl_grid[:,None]</span> <span class="pre">-</span> <span class="pre">line_wl[None,:]</span></code> broadcasting.</p></li>
+<li><p><strong>O4. <code class="docutils literal notranslate"><span class="pre">grad_fn</span></code> recomputed after optimization</strong> (extra XLA compile + forward/backward) just for the gradient
+norm. <code class="docutils literal notranslate"><span class="pre">full_spectrum.py:604</span></code>, <code class="docutils literal notranslate"><span class="pre">joint_optimizer.py:693</span></code>. Fix: reuse <code class="docutils literal notranslate"><span class="pre">res.jac</span></code> or a cached jitted grad.</p></li>
+</ul>
+<blockquote>
+<div><p>Note: per the profiled hotspot data, RANSAC-with-early-exit is <em>not</em> the bottleneck it appeared to be; the
+real, safe wins are O2/O3. Do not chase within-RANSAC micro-optimization — it’s accuracy-coupled and
+RNG-seeded.</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="complexity-flag-debt-map-simplification-plan">
+<h2>§3 Complexity &amp; flag-debt map + simplification plan<a class="headerlink" href="#complexity-flag-debt-map-simplification-plan" title="Link to this heading"></a></h2>
+<p><strong>Census: 15+ <code class="docutils literal notranslate"><span class="pre">CFLIBS_*</span></code> env vars</strong>, several gating physics, with inconsistent semantics. The map:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Flag / artifact</p></th>
+<th class="head"><p>Verdict</p></th>
+<th class="head"><p>Action</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_VECTORIZED_RANSAC</span></code></p></td>
+<td><p>Selects a slower, parity-breaking variant; “opt-in to <em>worse</em>”</p></td>
+<td><p><strong>DELETE</strong> flag + <code class="docutils literal notranslate"><span class="pre">_ransac_search_vectorized</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code></p></td>
+<td><p>Gates the <strong>correct</strong> (DB-validated) physics but defaults to the <strong>wrong</strong> δE</p></td>
+<td><p><strong>FLIP default ON</strong> (benchmark-gate), then remove flag</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_HOUGH_CALIB</span></code></p></td>
+<td><p>Deterministic, benchmark-confirmed held-out win, but default OFF</p></td>
+<td><p><strong>PROMOTE to default ON</strong>, opt-out only</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_CALIB_POOL_CACHE</span></code></p></td>
+<td><p>Parity-exact, faster, default OFF</p></td>
+<td><p><strong>PROMOTE to default ON</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_RANSAC_EARLY_EXIT</span></code></p></td>
+<td><p>Held-out win but +0.15 dev regress; small held-out N</p></td>
+<td><p>Keep gated <strong>until</strong> confirmed on larger held-out, then promote</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_RELIABILITY_FROM_UNCERTAINTY</span></code></p></td>
+<td><p>Correctness lever, never benchmarked, default OFF indefinitely</p></td>
+<td><p>Benchmark &amp; land winner as default, or remove</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_LAX_WHILE_LOOP</span></code>, <code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION</span></code></p></td>
+<td><p>Dual numerical paths that must stay byte-identical (M1 shows they don’t)</p></td>
+<td><p>Promote to constructor kwargs; expose effective value in <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_REFUSE_TO_REPORT</span></code></p></td>
+<td><p>Physics-layer gate, bare env read</p></td>
+<td><p>Promote to constructor kwarg</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_FF_*</span></code> (8 entries)</p></td>
+<td><p>Benchmark fitness-fn shape; non-reproducible from logs</p></td>
+<td><p>Collapse into a <code class="docutils literal notranslate"><span class="pre">FitnessFunctionConfig</span></code> dataclass, log to JSON</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">QualityAssessor</span></code> (<code class="docutils literal notranslate"><span class="pre">physics/quality.py</span></code>)</p></td>
+<td><p><strong>Dead</strong> parallel quality path w/ its own threshold table; no shipped consumer</p></td>
+<td><p><strong>DELETE</strong>; migrate 2 tests to the solver’s canonical path</p></td>
+</tr>
+<tr class="row-even"><td><p>3 calib flags’ dual config+env resolution</p></td>
+<td><p>Inconsistent: <code class="docutils literal notranslate"><span class="pre">ransac_early_exit=False</span></code> can’t override env (<code class="docutils literal notranslate"><span class="pre">or</span> <span class="pre">None</span></code> coercion)</p></td>
+<td><p>Unify to tri-state <code class="docutils literal notranslate"><span class="pre">True/False/None</span></code>; document resolution order once</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">method</span></code> (two meanings in adjacent solver code)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">regularization</span></code> vs optimizer algorithm — same name</p></td>
+<td><p>Rename <code class="docutils literal notranslate"><span class="pre">full_spectrum</span></code> param to <code class="docutils literal notranslate"><span class="pre">regularization</span></code>/<code class="docutils literal notranslate"><span class="pre">prior_mode</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Principle for the cleanup:</strong> the flag debt exists because past gated changes were never <em>promoted or removed</em>.
+The fix is to <strong>follow through the discipline to its end state</strong>: benchmark each lever, promote winners to the
+default and <strong>delete the flag</strong>, remove losers. End state = one correct code path per decision, flags only for
+genuinely-undecided experiments.</p>
+</section>
+<hr class="docutils" />
+<section id="recommended-action-sequence-mission-ordered">
+<h2>§4 Recommended action sequence (mission-ordered)<a class="headerlink" href="#recommended-action-sequence-mission-ordered" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Fix C1 (10⁶× manifold scale).</strong> One-line-class fix matching the already-fixed sibling; regenerate a small
+manifold and confirm the manifold solver now matches forward/iterative. Unblocks the manifold path.</p></li>
+<li><p><strong>Fix C3 + C4 (SVD composition basis; L-BFGS-B ValueError).</strong> Both directly affect the full-spectrum/joint
+solvers we just integrated (the joint solver is the one that <em>beats</em> iterative).</p></li>
+<li><p><strong>Fix C2 (ILR T-clamp → hold prior).</strong> Clear correctness fix.</p></li>
+<li><p><strong>Fix C5 + C6 (Bayesian Poisson residual; NUTS reparam).</strong> Needed before trusting the Bayesian path.</p></li>
+<li><p><strong>Fix C7 (NNLS covariance).</strong> Improves identification precision / SNR gate.</p></li>
+<li><p><strong>Flip wrong-physics defaults behind benchmark gates:</strong> McWhirter resonance δE on; LEGACY→PHYSICAL_DOPPLER.
+(Standing rule: measure flag-off vs -on on held-out, promote only on a win + zero regression, then drop flag.)</p></li>
+<li><p><strong>Delete <code class="docutils literal notranslate"><span class="pre">CFLIBS_VECTORIZED_RANSAC</span></code> + <code class="docutils literal notranslate"><span class="pre">_ransac_search_vectorized</span></code> (X1/O1)</strong> and <code class="docutils literal notranslate"><span class="pre">QualityAssessor</span></code> — pure
+simplification, zero behavior change on the default path.</p></li>
+<li><p><strong>Land the MEDIUM correctness batch</strong> (M1–M12), each verified against the governing equation.</p></li>
+<li><p><strong>Apply the two safe perf wins (O2/O3)</strong> — parity-exact, ~100× and ~10–100× on their paths.</p></li>
+<li><p><strong>Execute the flag-simplification table (§3)</strong> — promote winners, unify semantics, FitnessFunctionConfig.</p></li>
+</ol>
+<p>Each accuracy-changing fix follows the standing discipline: default-OFF flag → benchmark flag-off vs -on on
+dev + held-out → promote to default only on a measured win with zero regression → <strong>then remove the flag</strong> so
+the simplification actually lands.</p>
+</section>
+<hr class="docutils" />
+<section id="execution-status-2026-06-25">
+<h2>Execution status (2026-06-25)<a class="headerlink" href="#execution-status-2026-06-25" title="Link to this heading"></a></h2>
+<section id="landed-verified-pushed-v4-m5-kurucz-atomic">
+<h3>Landed + verified + pushed (<code class="docutils literal notranslate"><span class="pre">v4/m5-kurucz-atomic</span></code>)<a class="headerlink" href="#landed-verified-pushed-v4-m5-kurucz-atomic" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>C1</strong> manifold 10⁶× emissivity scale — fixed both snapshot paths; real-DB parity verified; regression test added.</p></li>
+<li><p><strong>C2</strong> ILR non-physical-slope holds prior T (no 50000 K clamp); unit test.</p></li>
+<li><p><strong>C3</strong> full-spectrum SVD basis always spans composition; real-DB recovery verified; test. (NOTE: composition is now <em>movable</em> but the solver still under-recovers in float64 — see “needs benchmark” below.)</p></li>
+<li><p><strong>C4</strong> <code class="docutils literal notranslate"><span class="pre">JointOptimizer</span></code> L-BFGS-B/CG route through scipy (were silent no-ops); parametrized test.</p></li>
+<li><p><strong>C5</strong> Bayesian Poisson readout residual <code class="docutils literal notranslate"><span class="pre">observed−predicted</span></code>; unit test.</p></li>
+<li><p><strong>C6</strong> NUTS T-ordering smooth quadratic hinge (was zero-gradient cliff); <code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> test.</p></li>
+<li><p><strong>X1</strong> deleted vectorized RANSAC (<code class="docutils literal notranslate"><span class="pre">_ransac_search_vectorized</span></code> + <code class="docutils literal notranslate"><span class="pre">CFLIBS_VECTORIZED_RANSAC</span></code>) — proven 1.8× slower + parity-breaking.</p></li>
+<li><p><strong>M5</strong> oxide-closure docstring (O/cation, not molar-mass ratio).</p></li>
+<li><p><strong>SOLVER_BACKENDS</strong> + <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code> solver validation (fixed 2 pre-existing dispatch tests).</p></li>
+</ul>
+<p>Fast gate (<code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">slow</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">requires_db</span></code>): <strong>3488 passed</strong>; the only reds are pre-existing (below).</p>
+</section>
+<section id="audit-findings-corrected-false-positives-do-not-apply">
+<h3>Audit findings CORRECTED (false positives — do NOT apply)<a class="headerlink" href="#audit-findings-corrected-false-positives-do-not-apply" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>QualityAssessor “dead code”</strong> is FALSE — it is live in <code class="docutils literal notranslate"><span class="pre">iterative.py:2099</span></code> (M7 Lever 6). Not deleted.</p></li>
+<li><p><strong>M2 Saha S2 guard</strong> is FALSE — S2 = n_III/n_II uses the <em>second</em> ionization potential <code class="docutils literal notranslate"><span class="pre">ip_II</span></code> (correctly used); the existing <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">ip_II</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">None</span></code> guard is correct. The proposed <code class="docutils literal notranslate"><span class="pre">ip_III</span></code> guard would wrongly zero stage-III populations.</p></li>
+<li><p><em>Lesson:</em> the workflow only adversarially-verified CRITICAL/HIGH findings; the unverified MEDIUM/complexity tier produced these false positives. Treat remaining MEDIUM/complexity items as leads requiring per-item verification.</p></li>
+</ul>
+</section>
+<section id="deferred-needs-a-node-benchmark-scoring-accuracy-affecting-gate-per-standing-rules">
+<h3>Deferred — needs a node benchmark (scoring/accuracy-affecting; gate per standing rules)<a class="headerlink" href="#deferred-needs-a-node-benchmark-scoring-accuracy-affecting-gate-per-standing-rules" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>C7</strong> NNLS SNR covariance — synthetic <strong>ID-F1</strong> benchmark (identifier-scoring change).</p></li>
+<li><p><strong>Default flips</strong>: McWhirter resonance-δE ON; LEGACY→PHYSICAL_DOPPLER broadening; <strong>M3/M4/M10</strong>.</p></li>
+<li><p><strong>Full-spectrum convergence quality</strong> (C3 follow-on: under-recovers in float64) — the sigma_d/Hessian items + Step-4 validation.</p></li>
+</ul>
+</section>
+<section id="deferred-design-decision-benchmark">
+<h3>Deferred — design decision + benchmark<a class="headerlink" href="#deferred-design-decision-benchmark" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">test_dispatch_routes_full_spectrum</span></code></strong> (the one remaining red, pre-existing since integration c7a43f8): the oracle spec forbids a peak-solver call in the full-spectrum dispatch, but the integration computes an iterative warm-start there and <code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code> requires a warm-start. Options: (a) move warm-start into <code class="docutils literal notranslate"><span class="pre">_run_full_spectrum_solver</span></code> (re-detect internally); (b) default warm-start; (c) update the spec to pass observations. Decide via a benchmark: does the iterative warm-start improve full-spectrum accuracy? (Ties into Step-4.)</p></li>
+</ul>
+</section>
+<section id="deferred-per-item-verification-unverified-medium-tier">
+<h3>Deferred — per-item verification (unverified MEDIUM tier)<a class="headerlink" href="#deferred-per-item-verification-unverified-medium-tier" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>M1 (corona two-region T in lax path), M6/M7 (self-absorption g_i / τ-ratio), M8 (MC A_ki floor), M9 (joint Hessian covariance), M11 (RANSAC+BIC n), M12 (n_e floor guard).</p></li>
+</ul>
+</section>
+<section id="deferred-safe-perf-latency-lowest-priority">
+<h3>Deferred — safe perf (latency = lowest priority)<a class="headerlink" href="#deferred-safe-perf-latency-lowest-priority" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>O2 <code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code>→<code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code> (parity-exact ~100×), O3 per-line broadening vectorization, O4 grad caching.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

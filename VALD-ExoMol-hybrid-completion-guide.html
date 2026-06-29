@@ -1,0 +1,729 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HYBRID Execution Guide — Complete Atomic + Molecular Line DB (VALD atomic/7-molecules + ExoMol TiO) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">HYBRID Execution Guide — Complete Atomic + Molecular Line DB (VALD atomic/7-molecules + ExoMol TiO)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/VALD-ExoMol-hybrid-completion-guide.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <p>The paths check out: <code class="docutils literal notranslate"><span class="pre">ingest_vald_atomic.py</span></code> and <code class="docutils literal notranslate"><span class="pre">complete_atomic_db.py</span></code> exist, <code class="docutils literal notranslate"><span class="pre">data/vald/</span></code> exists, and <code class="docutils literal notranslate"><span class="pre">ingest_exomol_tio.py</span></code> is the new script to be created (Part B). Here is the assembled guide.</p>
+<hr class="docutils" />
+<section id="hybrid-execution-guide-complete-atomic-molecular-line-db-vald-atomic-7-molecules-exomol-tio">
+<h1>HYBRID Execution Guide — Complete Atomic + Molecular Line DB (VALD atomic/7-molecules + ExoMol TiO)<a class="headerlink" href="#hybrid-execution-guide-complete-atomic-molecular-line-db-vald-atomic-7-molecules-exomol-tio" title="Link to this heading"></a></h1>
+<p><strong>Goal:</strong> Close the line-list gap so the DB has contiguous <strong>atomic</strong> coverage 100–1000 nm plus a complete <strong>molecular</strong> set (TiO from ExoMol + the 7 minor molecules CN/C₂/OH/CH/CO/NH/MgH from VALD). Two data sources, two ingesters, one final DB.</p>
+<p><strong>Why hybrid:</strong> TiO is 95–98% of every VALD red slice and slams into VALD’s ~101k-record/request cap, so TiO is pulled <strong>separately</strong> from ExoMol’s complete ‘Toto’ list (<code class="docutils literal notranslate"><span class="pre">ingest_exomol_tio.py</span></code>), while <strong>everything else</strong> (all atoms + the 7 minor molecules) comes from VALD’s <em>Extract Element</em> mode with TiO explicitly excluded so the per-request count collapses to the non-TiO total.</p>
+<hr class="docutils" />
+<section id="part-a-vald3-extract-element-atomic-7-minor-molecules-over-323-871000-nm-tio-excluded">
+<h2>PART A — VALD3 “Extract Element”: atomic + 7 minor molecules over 323.87–1000 nm (TiO EXCLUDED)<a class="headerlink" href="#part-a-vald3-extract-element-atomic-7-minor-molecules-over-323-871000-nm-tio-excluded" title="Link to this heading"></a></h2>
+<p>Contiguous atomic+molecular coverage <strong>100.002–323.875 nm</strong> is already on disk (<code class="docutils literal notranslate"><span class="pre">data/vald/</span></code>). Only the <strong>323.87–1000 nm</strong> red gap needs new requests.</p>
+<section id="a-1-why-extract-element-and-not-extract-all-extract-stellar">
+<h3>A.1 Why “Extract Element” (and NOT Extract All / Extract Stellar)<a class="headerlink" href="#a-1-why-extract-element-and-not-extract-all-extract-stellar" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mode</p></th>
+<th class="head"><p>What it returns</p></th>
+<th class="head"><p>Verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Extract All</strong></p></td>
+<td><p>every species in the range — but TiO saturates it at ~101k records/req, so red chunks must be ~2–3 nm wide</p></td>
+<td><p>❌ TiO dominates; un-usable for the red gap</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Extract Stellar</strong></p></td>
+<td><p>every species, <strong>but applies a depth/line-strength threshold vs a model atmosphere → silently drops weak lines</strong></p></td>
+<td><p>❌ breaks completeness — <strong>do not use</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Extract Element</strong></p></td>
+<td><p><strong>every line of the species you explicitly name, with NO line-strength cut</strong></p></td>
+<td><p>✅ species-selectable <em>and</em> strength-complete</p></td>
+</tr>
+</tbody>
+</table>
+<p><em>Extract Element</em> is the only mode that is both species-selectable and strength-complete. Because we <strong>name every species except TiO</strong>, the per-request record count drops to just the non-TiO total (atomic + 7 molecules), letting each request span <strong>20–30 nm</strong> instead of ~2–3 nm.</p>
+</section>
+<section id="a-2-species-list-strategy-and-the-100-species-cap-split">
+<h3>A.2 Species-list strategy (and the 100-species cap split)<a class="headerlink" href="#a-2-species-list-strategy-and-the-100-species-cap-split" title="Link to this heading"></a></h3>
+<p>VALD has a <strong>~100-species hard cap per Extract-Element request</strong>, and there is <strong>no wildcard / “all atoms except TiO” toggle</strong> — you must enumerate. The full LIBS set (H–U neutral + 1st + 2nd ion ≈ 276 species) + 7 molecules ≈ <strong>283 species</strong>, exceeding 100. So split the <strong>species list</strong> into 3 groups of ≤100, each run over the <strong>same</strong> wide wavelength range:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Group</p></th>
+<th class="head"><p>Contents</p></th>
+<th class="head"><p>Syntax (one species per line)</p></th>
+<th class="head text-right"><p>~count</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>G1</strong></p></td>
+<td><p>H–U <strong>neutral</strong> + the <strong>7 molecules</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Fe</span> <span class="pre">1</span></code>, <code class="docutils literal notranslate"><span class="pre">Ca</span> <span class="pre">1</span></code>, … <code class="docutils literal notranslate"><span class="pre">U</span> <span class="pre">1</span></code>, then <code class="docutils literal notranslate"><span class="pre">CN</span> <span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">C2</span> <span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">OH</span> <span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">CH</span> <span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">CO</span> <span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">NH</span> <span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">MgH</span> <span class="pre">1</span></code></p></td>
+<td class="text-right"><p>~99</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>G2</strong></p></td>
+<td><p>H–U <strong>singly ionized</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Fe</span> <span class="pre">2</span></code>, <code class="docutils literal notranslate"><span class="pre">Ca</span> <span class="pre">2</span></code>, … <code class="docutils literal notranslate"><span class="pre">U</span> <span class="pre">2</span></code></p></td>
+<td class="text-right"><p>~92</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>G3</strong></p></td>
+<td><p>H–U <strong>doubly ionized</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Fe</span> <span class="pre">3</span></code>, <code class="docutils literal notranslate"><span class="pre">Ca</span> <span class="pre">3</span></code>, … <code class="docutils literal notranslate"><span class="pre">U</span> <span class="pre">3</span></code></p></td>
+<td class="text-right"><p>~92</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p>VALD convention: <code class="docutils literal notranslate"><span class="pre">1</span></code> = neutral, <code class="docutils literal notranslate"><span class="pre">2</span></code> = singly ionized, <code class="docutils literal notranslate"><span class="pre">3</span></code> = doubly ionized. Molecules are charge <code class="docutils literal notranslate"><span class="pre">1</span></code> (neutral); token must match VALD naming exactly (<code class="docutils literal notranslate"><span class="pre">C2</span></code>, <code class="docutils literal notranslate"><span class="pre">MgH</span></code> — not <code class="docutils literal notranslate"><span class="pre">C_2</span></code>/<code class="docutils literal notranslate"><span class="pre">Mg</span> <span class="pre">H</span></code>).</p></li>
+<li><p><strong>OMIT <code class="docutils literal notranslate"><span class="pre">TiO</span> <span class="pre">1</span></code> from every group</strong> (it comes from ExoMol in Part B). You may drop any element/ion known to be irrelevant to trim further, but 99/92/92 already fits under 100.</p></li>
+<li><p>If the live form rejects a 100-species list, drop to <strong>3 groups of ~90</strong>.</p></li>
+</ul>
+<p><strong>Net file dumps = (wavelength ranges) × 3 species-groups.</strong> With the conservative 18-range plan that’s <strong>18 × 3 = 54 dumps</strong>, but only <strong>18 distinct wavelength ranges</strong> — well under 20. The ingest dedups by <code class="docutils literal notranslate"><span class="pre">(species,</span> <span class="pre">ion,</span> <span class="pre">wl,</span> <span class="pre">E_low,</span> <span class="pre">E_up)</span></code>, so the 3 groups never collide, and overlap with the existing 100–324 nm slices is harmless.</p>
+</section>
+<section id="a-3-exact-form-settings-must-match-the-existing-data-vald-slices">
+<h3>A.3 Exact form settings (must match the existing <code class="docutils literal notranslate"><span class="pre">data/vald/</span></code> slices)<a class="headerlink" href="#a-3-exact-form-settings-must-match-the-existing-data-vald-slices" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Extraction mode</p></td>
+<td><p><strong>Extract Element</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Format</p></td>
+<td><p><strong>Long format</strong> (4-line-per-transition block — ingest depends on it)</p></td>
+</tr>
+<tr class="row-even"><td><p>Wavelength unit</p></td>
+<td><p><strong>Angstrom</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Energy unit</p></td>
+<td><p><strong>eV</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Wavelength medium</p></td>
+<td><p><strong>air</strong> (VALD gives air ≥2000 Å; ingest air-converts &lt;200 nm)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Isotopic / HFS structure</p></td>
+<td><p><strong>HFS on</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Retrieval</p></td>
+<td><p><strong>FTP</strong> (large dumps; emailed FTP link, like <code class="docutils literal notranslate"><span class="pre">BrianSquires.0197xx.gz</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>All “require lines have a known … (rad/Stark/vdW damping, Landé, term designation)” toggles</p></td>
+<td><p><strong>ALL OFF</strong> — any “require known X” filter drops otherwise-complete lines</p></td>
+</tr>
+<tr class="row-even"><td><p>Microturbulence / line-strength threshold</p></td>
+<td><p><strong>N/A for Extract Element</strong> (no depth cut — this is the whole point)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="a-4-record-cap-truncation-and-the-wide-request-table">
+<h3>A.4 Record cap, truncation, and the wide-request table<a class="headerlink" href="#a-4-record-cap-truncation-and-the-wide-request-table" title="Link to this heading"></a></h3>
+<p>The ~101k-record cap is on <strong>records returned per dump</strong>, not wavelength width. With TiO excluded, the count collapses to the <strong>non-TiO</strong> total. Measured non-TiO density (atomic + 7 mol, parsed from saturated slices on disk): ~2,900 rec/nm near 324 nm, ~3,300 rec/nm at 500 nm, falling to ~960–1,700 rec/nm beyond 600 nm (e.g. 500–502 nm: total 101,519 → TiO 96,665 → <strong>non-TiO only 4,854</strong>).</p>
+<p><strong>Truncation behavior:</strong> if a single dump <em>would</em> exceed the cap, VALD does <strong>not</strong> reject — it <strong>silently truncates</strong> at the first ~101k lines (ordered by wavelength). <strong>Detection:</strong> after every dump, check whether the returned <code class="docutils literal notranslate"><span class="pre">WL_air(Å)</span></code> max reaches the requested upper edge; if it stops short, <strong>split that wavelength range and re-request</strong>. G1 (neutrals + molecules) is the binding group; G2/G3 (ionized, far fewer lines) never approach the cap. The table below is sized to <strong>G1</strong>.</p>
+<p><strong>Recommended (conservative) wide-request table — closes 323.87–1000 nm.</strong> Each row = one wavelength range, run for <strong>all 3 species-groups</strong>. <code class="docutils literal notranslate"><span class="pre">est</span> <span class="pre">non-TiO</span></code> is the G1-bounding count (max 85.6k, ~15k cap margin):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-right"><p>req#</p></th>
+<th class="head"><p>nm range</p></th>
+<th class="head"><p>Ångström range</p></th>
+<th class="head text-right"><p>est non-TiO lines</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-right"><p>1</p></td>
+<td><p>323.87–348</p></td>
+<td><p>3238.7–3480</p></td>
+<td class="text-right"><p>73,700</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>2</p></td>
+<td><p>348–372</p></td>
+<td><p>3480–3720</p></td>
+<td class="text-right"><p>85,600</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>3</p></td>
+<td><p>372–396</p></td>
+<td><p>3720–3960</p></td>
+<td class="text-right"><p>76,300</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>4</p></td>
+<td><p>396–420</p></td>
+<td><p>3960–4200</p></td>
+<td class="text-right"><p>68,200</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>5</p></td>
+<td><p>420–445</p></td>
+<td><p>4200–4450</p></td>
+<td class="text-right"><p>71,400</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>6</p></td>
+<td><p>445–470</p></td>
+<td><p>4450–4700</p></td>
+<td class="text-right"><p>72,000</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>7</p></td>
+<td><p>470–495</p></td>
+<td><p>4700–4950</p></td>
+<td class="text-right"><p>75,500</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>8</p></td>
+<td><p>495–520</p></td>
+<td><p>4950–5200</p></td>
+<td class="text-right"><p>79,100</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>9</p></td>
+<td><p>520–548</p></td>
+<td><p>5200–5480</p></td>
+<td class="text-right"><p>72,600</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>10</p></td>
+<td><p>548–580</p></td>
+<td><p>5480–5800</p></td>
+<td class="text-right"><p>66,000</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>11</p></td>
+<td><p>580–615</p></td>
+<td><p>5800–6150</p></td>
+<td class="text-right"><p>63,400</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>12</p></td>
+<td><p>615–655</p></td>
+<td><p>6150–6550</p></td>
+<td class="text-right"><p>65,200</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>13</p></td>
+<td><p>655–700</p></td>
+<td><p>6550–7000</p></td>
+<td class="text-right"><p>69,400</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>14</p></td>
+<td><p>700–755</p></td>
+<td><p>7000–7550</p></td>
+<td class="text-right"><p>72,400</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>15</p></td>
+<td><p>755–820</p></td>
+<td><p>7550–8200</p></td>
+<td class="text-right"><p>69,800</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>16</p></td>
+<td><p>820–895</p></td>
+<td><p>8200–8950</p></td>
+<td class="text-right"><p>77,300</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>17</p></td>
+<td><p>895–955</p></td>
+<td><p>8950–9550</p></td>
+<td class="text-right"><p>58,200</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>18</p></td>
+<td><p>955–1000</p></td>
+<td><p>9550–10000</p></td>
+<td class="text-right"><p>43,300</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>18 wavelength ranges</strong>, ~1.26M non-TiO lines total, max chunk 85.6k (15.4k under cap) × 3 species-groups = <strong>54 dumps</strong>.</p>
+<p><strong>Aggressive alternative (14 ranges, max 93.5k, ~7.5k margin)</strong> if you want fewer ranges: edges at 323.87 / 354 / 380 / 408 / 438 / 470 / 500 / 530 / 570 / 620 / 675 / 740 / 820 / 905 / 1000 nm. Use only if confident in the density estimate; otherwise prefer the 18-range plan.</p>
+<blockquote>
+<div><p><strong>Estimate caveat:</strong> counts interpolate measured density at ~22 probe points; real per-chunk counts can deviate ±10–15%. That margin is exactly why the conservative 18-chunk plan (max 85.6k) is recommended over the 14-chunk plan (max 93.5k). The truncation-detection check makes the plan robust regardless of whether VALD applies the cap per species-group or per range.</p>
+</div></blockquote>
+</section>
+<section id="a-5-copy-pasteable-claude-for-chrome-prompt">
+<h3>A.5 Copy-pasteable Claude-for-Chrome prompt<a class="headerlink" href="#a-5-copy-pasteable-claude-for-chrome-prompt" title="Link to this heading"></a></h3>
+<p>Paste the following into Claude-for-Chrome with the VALD3 <em>Extract Element</em> page open (log in first):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>You are driving the VALD3 web interface (vald.astro.uu.se) to download line lists via
+&quot;Extract Element&quot; mode. We are filling the 323.87–1000 nm gap for a LIBS atomic+molecular
+database. Follow EXACTLY — do not improvise modes or settings.
+
+CRITICAL MODE: Use &quot;EXTRACT ELEMENT&quot; (the species-selectable mode). DO NOT use &quot;Extract All&quot;
+(TiO saturates it) and DO NOT use &quot;Extract Stellar&quot; (it applies a line-strength/depth
+threshold that silently drops weak lines and breaks completeness).
+
+FIXED FORM SETTINGS (set these once and keep for every request):
+  - Extraction mode:        Extract Element
+  - Format:                 Long format
+  - Wavelength unit:        Angstrom
+  - Energy unit:            eV
+  - Wavelength medium:      air
+  - Isotopic/HFS structure: HFS ON
+  - Retrieval method:       FTP (results emailed as an FTP .gz link)
+  - Every &quot;require lines have a known ... (radiative/Stark/vdW damping, Landé factor,
+    term designation, etc.)&quot; checkbox: ALL OFF / UNCHECKED. Any &quot;require known X&quot; filter
+    drops otherwise-complete lines — we want completeness.
+  - There is NO microturbulence / line-strength threshold in Extract Element — leave any
+    such field at default; it does not apply.
+
+WAVELENGTH FIELDS: For EVERY request you MUST enter BOTH the lower and upper wavelength
+bounds (in Angstroms) into the two wavelength fields. Never leave one blank.
+
+SPECIES LIST: Extract Element has a ~100-species cap and NO wildcard. Paste the explicit
+species list (one species per line) into the species box. We run THREE species groups over
+each wavelength range. NEVER include &quot;TiO 1&quot; in any group (TiO is sourced separately).
+
+  GROUP G1 (neutral atoms + the 7 minor molecules):
+    H 1, He 1, Li 1, Be 1, B 1, C 1, N 1, O 1, F 1, Ne 1, Na 1, Mg 1, Al 1, Si 1, P 1,
+    S 1, Cl 1, Ar 1, K 1, Ca 1, Sc 1, Ti 1, V 1, Cr 1, Mn 1, Fe 1, Co 1, Ni 1, Cu 1,
+    Zn 1, Ga 1, Ge 1, As 1, Se 1, Br 1, Kr 1, Rb 1, Sr 1, Y 1, Zr 1, Nb 1, Mo 1, Tc 1,
+    Ru 1, Rh 1, Pd 1, Ag 1, Cd 1, In 1, Sn 1, Sb 1, Te 1, I 1, Xe 1, Cs 1, Ba 1, La 1,
+    Ce 1, Pr 1, Nd 1, Pm 1, Sm 1, Eu 1, Gd 1, Tb 1, Dy 1, Ho 1, Er 1, Tm 1, Yb 1, Lu 1,
+    Hf 1, Ta 1, W 1, Re 1, Os 1, Ir 1, Pt 1, Au 1, Hg 1, Tl 1, Pb 1, Bi 1, Po 1, At 1,
+    Rn 1, Fr 1, Ra 1, Ac 1, Th 1, Pa 1, U 1,
+    CN 1, C2 1, OH 1, CH 1, CO 1, NH 1, MgH 1
+    (≈99 species — DO NOT add TiO)
+
+  GROUP G2 (singly ionized atoms): same element list as G1 atoms but with ion &quot;2&quot;:
+    H 2, He 2, Li 2, ... U 2   (≈92 species)
+
+  GROUP G3 (doubly ionized atoms): same element list with ion &quot;3&quot;:
+    H 3, He 3, Li 3, ... U 3   (≈92 species)
+
+  If the form rejects a ~100-species list as too long, split each group into two halves of
+  ~50 and run both halves over the same wavelength range.
+
+WAVELENGTH RANGES (run ALL THREE species groups for each — enter BOTH Angstrom bounds):
+   1) 3238.7 – 3480     2) 3480 – 3720      3) 3720 – 3960      4) 3960 – 4200
+   5) 4200 – 4450       6) 4450 – 4700      7) 4700 – 4950      8) 4950 – 5200
+   9) 5200 – 5480      10) 5480 – 5800     11) 5800 – 6150     12) 6150 – 6550
+  13) 6550 – 7000      14) 7000 – 7550     15) 7550 – 8200     16) 8200 – 8950
+  17) 8950 – 9550      18) 9550 – 10000
+
+PROCEDURE per (range × group):
+  1. Confirm mode = Extract Element and all FIXED SETTINGS above.
+  2. Enter the LOWER and UPPER Angstrom bounds in the two wavelength fields.
+  3. Paste the species list for the current group.
+  4. Submit. Record the request number, the FTP link / filename, and the species group.
+  5. After all 54 submissions (18 ranges × 3 groups), report the full list of FTP filenames.
+
+TRUNCATION CHECK (do this when results arrive): VALD silently truncates a dump at ~101k
+records. For each returned file, compare the MAX air wavelength in the file against the
+requested upper bound. If the file&#39;s max wavelength stops short of the requested upper edge,
+the dump was truncated — flag that (range × group) so it can be split into two narrower
+wavelength sub-ranges and re-requested.
+
+Proceed one request at a time, confirm each form state before submitting, and keep a running
+table of {request#, range, group, ftp_filename}.
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="part-b-exomol-tio-toto-bulk-download-ingest-into-molecular-lines">
+<h2>PART B — ExoMol TiO ‘Toto’ bulk download + ingest into <code class="docutils literal notranslate"><span class="pre">molecular_lines</span></code><a class="headerlink" href="#part-b-exomol-tio-toto-bulk-download-ingest-into-molecular-lines" title="Link to this heading"></a></h2>
+<section id="b-1-exact-download-mechanism">
+<h3>B.1 Exact download mechanism<a class="headerlink" href="#b-1-exact-download-mechanism" title="Link to this heading"></a></h3>
+<p><strong>Tooling decision: use <code class="docutils literal notranslate"><span class="pre">radis.api.exomolapi.MdbExomol</span></code> directly — NOT top-level <code class="docutils literal notranslate"><span class="pre">radis</span></code>, NOT exojax.</strong></p>
+<ul class="simple">
+<li><p>Top-level <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">radis</span></code> (and anything reaching <code class="docutils literal notranslate"><span class="pre">radis.misc.arrays</span></code> / <code class="docutils literal notranslate"><span class="pre">radis.config</span></code>) <strong>crashes</strong> in this venv: <code class="docutils literal notranslate"><span class="pre">AttributeError:</span> <span class="pre">module</span> <span class="pre">'coverage'</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">attribute</span> <span class="pre">'types'</span></code> (numba/coverage version conflict). The ingest must import <strong>only</strong> <code class="docutils literal notranslate"><span class="pre">radis.api.exomolapi</span></code> and pass <code class="docutils literal notranslate"><span class="pre">local_databases</span></code> explicitly (avoids the broken <code class="docutils literal notranslate"><span class="pre">radis.config</span></code> default lookup).</p></li>
+<li><p>exojax’s MdbExomol path is gone (<code class="docutils literal notranslate"><span class="pre">exojax.spec.api</span></code> deprecated; <code class="docutils literal notranslate"><span class="pre">exojax.database.exomol</span></code> empty in 2.5.0). RADIS is the only path.</p></li>
+<li><p>⚠️ <strong>Pre-flight blocker:</strong> before the real load, fix the numba breakage (pin <code class="docutils literal notranslate"><span class="pre">coverage&lt;7.6</span></code> or upgrade numba) and run a bounded smoke test — <code class="docutils literal notranslate"><span class="pre">MdbExomol</span></code>’s read path may also touch <code class="docutils literal notranslate"><span class="pre">radis.lbl.base</span></code> (<code class="docutils literal notranslate"><span class="pre">linestrength_from_Einstein</span></code>); whether that import dodges numba is unverified.</p></li>
+</ul>
+<p><strong>Authoritative dataset facts (from the <code class="docutils literal notranslate"><span class="pre">.def</span></code>, not the trans):</strong> <code class="docutils literal notranslate"><span class="pre">48Ti-16O__Toto</span></code>, version 20240509.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>field</p></th>
+<th class="head"><p>value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>dataset</p></td>
+<td><p><strong>Toto</strong> (48Ti-16O recommended isotopologue; ⁴⁸Ti ≈ 73.7% abundance)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>transitions</strong></p></td>
+<td><p><strong>58,983,952 (~59M — NOT ~30M)</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>states</p></td>
+<td><p>301,245</p></td>
+</tr>
+<tr class="row-odd"><td><p>trans files</p></td>
+<td><p><strong>1</strong> (<code class="docutils literal notranslate"><span class="pre">numinf=None</span></code>) → single <code class="docutils literal notranslate"><span class="pre">.trans.bz2</span></code>, no wavenumber splitting</p></td>
+</tr>
+<tr class="row-even"><td><p>max wavenumber</p></td>
+<td><p>30,000 cm⁻¹ → <strong>bluest line ≈ 333.3 nm vacuum</strong> (no TiO lines below ~333 nm)</p></td>
+</tr>
+<tr class="row-odd"><td><p>broadeners</p></td>
+<td><p><strong>0</strong> — no <code class="docutils literal notranslate"><span class="pre">.broad</span></code> files (H2/He/air.broad all 404)</p></td>
+</tr>
+<tr class="row-even"><td><p>molmass</p></td>
+<td><p>63.943 Da</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Download sizes (HEAD-verified, no body fetched):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>file</p></th>
+<th class="head"><p>size</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">48Ti-16O__Toto.trans.bz2</span></code></p></td>
+<td><p><strong>304.75 MB</strong> (the only large file)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">48Ti-16O__Toto.states.bz2</span></code></p></td>
+<td><p>5.90 MB</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">48Ti-16O__Toto.pf</span></code></p></td>
+<td><p>0.20 MB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">48Ti-16O__Toto.def</span></code></p></td>
+<td><p>7.5 KB</p></td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>one bulk download ≈ 311 MB compressed.</strong> On first load RADIS decompresses + reconverts to an <code class="docutils literal notranslate"><span class="pre">.h5</span></code> vaex/feather cache (expect a few GB of derived cache); the <code class="docutils literal notranslate"><span class="pre">.trans.bz2</span></code> can be deleted afterward. Load + <code class="docutils literal notranslate"><span class="pre">.h5</span></code> build time is <strong>minutes to tens of minutes</strong> (estimated, not measured).</p>
+<p><strong>Ingest ONLY 48Ti-16O.</strong> The other four isotopologues (46/47/49/50Ti-16O) are full ~59M Toto lists (~301–308 MB each) near-identical apart from an isotope mass shift. The <code class="docutils literal notranslate"><span class="pre">molecular_lines</span></code> schema has <strong>no isotopologue field</strong> (<code class="docutils literal notranslate"><span class="pre">species='TiO'</span></code>), so mixing them silently overlays near-duplicate lines for marginal LIBS benefit at typical resolving power. Leave them out unless isotopic structure is explicitly required.</p>
+<p><strong>Exact python call</strong> (window-limited; <code class="docutils literal notranslate"><span class="pre">nurange</span></code> in cm⁻¹ wavenumber, ascending):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">radis.api.exomolapi</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ea</span>          <span class="c1"># ONLY this submodule (top-level radis is numba-broken)</span>
+<span class="c1"># air 333–1000 nm -&gt; vacuum 1e7/lambda_vac -&gt; nu in cm-1</span>
+<span class="c1">#   1000 nm -&gt; 10000 cm-1 ; 333.3 nm -&gt; 30000 cm-1 (TiO maxnu)</span>
+<span class="n">mdb</span> <span class="o">=</span> <span class="n">ea</span><span class="o">.</span><span class="n">MdbExomol</span><span class="p">(</span>
+    <span class="n">path</span><span class="o">=</span><span class="s2">&quot;TiO/48Ti-16O/Toto&quot;</span><span class="p">,</span>            <span class="c1"># -&gt; &lt;local_databases&gt;/TiO/48Ti-16O/Toto/</span>
+    <span class="n">molecule</span><span class="o">=</span><span class="s2">&quot;TiO&quot;</span><span class="p">,</span>
+    <span class="n">database</span><span class="o">=</span><span class="s2">&quot;Toto&quot;</span><span class="p">,</span>
+    <span class="n">local_databases</span><span class="o">=</span><span class="s2">&quot;data/exomol&quot;</span><span class="p">,</span>       <span class="c1"># cache root; pass EXPLICITLY (dodges radis.config)</span>
+    <span class="n">nurange</span><span class="o">=</span><span class="p">[</span><span class="mf">10000.0</span><span class="p">,</span> <span class="mf">30000.0</span><span class="p">],</span>          <span class="c1"># cm-1; covers 333.3–1000 nm air</span>
+    <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;vaex&quot;</span><span class="p">,</span>                       <span class="c1"># memory-mapped; REQUIRED for 59M rows</span>
+    <span class="n">broadf</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">broadf_download</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="c1"># MANDATORY: Toto has 0 broad files -&gt; avoids 404s</span>
+    <span class="n">skip_optional_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>            <span class="c1"># keep J/quantum labels (set True for speed if unneeded)</span>
+    <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># resulting columns: mdb.nu_lines (cm-1, VACUUM), mdb.A (s-1), mdb.elower (cm-1),</span>
+<span class="c1">#   mdb.gpp (g_upper), mdb.jlower, mdb.jupper ; partition: mdb.QT_interp(T)</span>
+</pre></div>
+</div>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">nurange</span></code> does <strong>NOT</strong> shrink the <em>download</em> (single trans file → the whole 305 MB <code class="docutils literal notranslate"><span class="pre">.trans.bz2</span></code> is fetched regardless); it only limits what gets loaded/cached. Window-filtering to a wavelength range is a post-load filter on <code class="docutils literal notranslate"><span class="pre">nu_lines</span></code>.</p>
+</div></blockquote>
+</section>
+<section id="b-2-field-mapping-exomol-radis-molecular-lines">
+<h3>B.2 Field mapping: ExoMol/RADIS → <code class="docutils literal notranslate"><span class="pre">molecular_lines</span></code><a class="headerlink" href="#b-2-field-mapping-exomol-radis-molecular-lines" title="Link to this heading"></a></h3>
+<p>Constants (same as <code class="docutils literal notranslate"><span class="pre">ingest_vald_atomic.py</span></code>): <code class="docutils literal notranslate"><span class="pre">HC</span> <span class="pre">=</span> <span class="pre">1.239841984e-4</span> <span class="pre">eV·cm</span></code>, <code class="docutils literal notranslate"><span class="pre">_AKI_CONST</span> <span class="pre">=</span> <span class="pre">6.6702e15</span></code>. ExoMol <code class="docutils literal notranslate"><span class="pre">nu_lines</span></code> is <strong>vacuum</strong>; VALD slices are <strong>air</strong> → convert every line with <code class="docutils literal notranslate"><span class="pre">vacuum_to_air_nm</span></code> (cflibs air convention; verified shift +0.096 nm &#64;333 nm → +0.274 nm &#64;1000 nm) so the merged table stays single-medium (air).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">molecular_lines</span></code> column</p></th>
+<th class="head"><p>source / formula</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">species</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">'TiO'</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">charge</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code> (neutral; matches VALD ion convention)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">vacuum_to_air_nm(1e7</span> <span class="pre">/</span> <span class="pre">nu_lines)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">aki</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">A</span></code> (Einstein A, s⁻¹, directly)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">loggf</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">log10(gk</span> <span class="pre">*</span> <span class="pre">A</span> <span class="pre">*</span> <span class="pre">lam_air_A**2</span> <span class="pre">/</span> <span class="pre">6.6702e15)</span></code> — same constant as VALD ingest (provenance parity); or NULL</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ei_ev</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">elower</span> <span class="pre">*</span> <span class="pre">1.239841984e-4</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ek_ev</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(elower</span> <span class="pre">+</span> <span class="pre">nu_lines)</span> <span class="pre">*</span> <span class="pre">1.239841984e-4</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gi</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">2*jlower</span> <span class="pre">+</span> <span class="pre">1</span></code> (approx; <code class="docutils literal notranslate"><span class="pre">pickup_gE</span></code> returns only <code class="docutils literal notranslate"><span class="pre">gup</span></code>. Ignores Λ-doubling/spin — same shape as VALD’s 2J+1)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">gk</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">gpp</span></code> (exact, from states table)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gamma_rad_log</span></code>, <code class="docutils literal notranslate"><span class="pre">gamma_stark_log</span></code>, <code class="docutils literal notranslate"><span class="pre">gamma_vdw_log</span></code></p></td>
+<td><p><strong>NULL</strong> — Toto ships 0 broad files; do not fabricate</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">accuracy_grade</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">'C'</span></code> blanket for v1 (ExoMol theory/MARVEL-mixed). Optional refinement: <code class="docutils literal notranslate"><span class="pre">'B'</span></code> when both levels are MARVEL (<code class="docutils literal notranslate"><span class="pre">SourceType=Ma</span></code>), else <code class="docutils literal notranslate"><span class="pre">'C'</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">provenance</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">'exomol_toto'</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="b-3-ingest-script-plan-scripts-ingest-exomol-tio-py-new">
+<h3>B.3 Ingest-script plan: <code class="docutils literal notranslate"><span class="pre">scripts/ingest_exomol_tio.py</span></code> (new)<a class="headerlink" href="#b-3-ingest-script-plan-scripts-ingest-exomol-tio-py-new" title="Link to this heading"></a></h3>
+<p>Mirror <code class="docutils literal notranslate"><span class="pre">ingest_vald_atomic.py</span></code>: same <code class="docutils literal notranslate"><span class="pre">molecular_lines</span></code> schema (<code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TABLE</span> <span class="pre">IF</span> <span class="pre">NOT</span> <span class="pre">EXISTS</span></code>), same dedup discipline, write to the <strong>same DB</strong> so VALD’s 7 minor molecules + ExoMol TiO coexist.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;Ingest ExoMol TiO &#39;Toto&#39; (48Ti-16O) into the cflibs molecular_lines table.</span>
+<span class="sd">Streams ~59M lines via radis.api.exomolapi.MdbExomol (vaex, memory-mapped),</span>
+<span class="sd">filters to an AIR wavelength window, converts vacuum-&gt;air, batches sqlite inserts.</span>
+<span class="sd">Run: PYTHONPATH=$PWD .venv/bin/python scripts/ingest_exomol_tio.py \</span>
+<span class="sd">       --db output/vald_atomic.db --wl-min 200 --wl-max 1000 --local-db data/exomol</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span><span class="o">,</span><span class="w"> </span><span class="nn">math</span><span class="o">,</span><span class="w"> </span><span class="nn">sqlite3</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">radis.api.exomolapi</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ea</span>          <span class="c1"># ONLY this submodule (top-level radis is numba-broken)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.atomic.wavelength_conversion</span><span class="w"> </span><span class="kn">import</span> <span class="n">vacuum_to_air_nm</span>
+
+<span class="n">HC_EV_CM</span>  <span class="o">=</span> <span class="mf">1.239841984e-4</span>
+<span class="n">AKI_CONST</span> <span class="o">=</span> <span class="mf">6.6702e15</span>
+<span class="n">SCHEMA</span> <span class="o">=</span> <span class="s2">&quot;&lt;copy molecular_lines CREATE TABLE IF NOT EXISTS from ingest_vald_atomic.py&gt;&quot;</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">nm_window_to_nurange</span><span class="p">(</span><span class="n">wl_min_air</span><span class="p">,</span> <span class="n">wl_max_air</span><span class="p">):</span>
+    <span class="c1"># air-&gt;vacuum (approx, widened by margin), vacuum nm -&gt; cm-1</span>
+    <span class="k">return</span> <span class="p">[</span><span class="mf">1e7</span> <span class="o">/</span> <span class="n">wl_max_air</span> <span class="o">*</span> <span class="mf">0.999</span><span class="p">,</span> <span class="mf">1e7</span> <span class="o">/</span> <span class="n">wl_min_air</span> <span class="o">*</span> <span class="mf">1.001</span><span class="p">]</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="c1"># argparse: --db --wl-min --wl-max --local-db --batch(=50_000) --grade(=C)</span>
+    <span class="n">nurange</span> <span class="o">=</span> <span class="n">nm_window_to_nurange</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">wl_min</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">wl_max</span><span class="p">)</span>
+    <span class="n">mdb</span> <span class="o">=</span> <span class="n">ea</span><span class="o">.</span><span class="n">MdbExomol</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;TiO/48Ti-16O/Toto&quot;</span><span class="p">,</span> <span class="n">molecule</span><span class="o">=</span><span class="s2">&quot;TiO&quot;</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s2">&quot;Toto&quot;</span><span class="p">,</span>
+                       <span class="n">local_databases</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">local_db</span><span class="p">,</span> <span class="n">nurange</span><span class="o">=</span><span class="n">nurange</span><span class="p">,</span>
+                       <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;vaex&quot;</span><span class="p">,</span> <span class="n">broadf</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">broadf_download</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                       <span class="n">skip_optional_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">conn</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">db</span><span class="p">);</span> <span class="n">conn</span><span class="o">.</span><span class="n">executescript</span><span class="p">(</span><span class="n">SCHEMA</span><span class="p">)</span>
+    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;PRAGMA journal_mode=WAL&quot;</span><span class="p">);</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;PRAGMA synchronous=OFF&quot;</span><span class="p">)</span>
+
+    <span class="n">nu</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">El</span><span class="p">,</span> <span class="n">gu</span> <span class="o">=</span> <span class="n">mdb</span><span class="o">.</span><span class="n">nu_lines</span><span class="p">,</span> <span class="n">mdb</span><span class="o">.</span><span class="n">A</span><span class="p">,</span> <span class="n">mdb</span><span class="o">.</span><span class="n">elower</span><span class="p">,</span> <span class="n">mdb</span><span class="o">.</span><span class="n">gpp</span>
+    <span class="n">jl</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">mdb</span><span class="p">,</span> <span class="s2">&quot;jlower&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">INSERT</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;INSERT INTO molecular_lines (species,charge,wavelength_nm,aki,loggf,&quot;</span>
+              <span class="s2">&quot;ei_ev,ek_ev,gi,gk,gamma_rad_log,gamma_stark_log,gamma_vdw_log,&quot;</span>
+              <span class="s2">&quot;accuracy_grade,provenance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)&quot;</span><span class="p">)</span>
+    <span class="n">seen</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">B</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(),</span> <span class="p">[],</span> <span class="n">args</span><span class="o">.</span><span class="n">batch</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">nu</span><span class="p">),</span> <span class="n">B</span><span class="p">):</span>                    <span class="c1"># STREAM — never materialize 59M python rows</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="n">B</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nu</span><span class="p">[</span><span class="n">s</span><span class="p">])):</span>
+            <span class="n">nu_i</span><span class="p">,</span> <span class="n">A_i</span><span class="p">,</span> <span class="n">El_i</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">nu</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="n">i</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="n">i</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">El</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">gk</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">gu</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">lam_air</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">vacuum_to_air_nm</span><span class="p">(</span><span class="mf">1e7</span> <span class="o">/</span> <span class="n">nu_i</span><span class="p">))</span>   <span class="c1"># vacuum-&gt;air BEFORE window + loggf</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">wl_min</span> <span class="o">&lt;=</span> <span class="n">lam_air</span> <span class="o">&lt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">wl_max</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">jl_i</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">jl</span><span class="p">[</span><span class="n">s</span><span class="p">][</span><span class="n">i</span><span class="p">])</span> <span class="k">if</span> <span class="n">jl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">gi</span>  <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">jl_i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span> <span class="k">if</span> <span class="n">jl_i</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">ei</span><span class="p">,</span> <span class="n">ek</span> <span class="o">=</span> <span class="n">El_i</span> <span class="o">*</span> <span class="n">HC_EV_CM</span><span class="p">,</span> <span class="p">(</span><span class="n">El_i</span> <span class="o">+</span> <span class="n">nu_i</span><span class="p">)</span> <span class="o">*</span> <span class="n">HC_EV_CM</span>
+            <span class="n">lam_air_A</span> <span class="o">=</span> <span class="n">lam_air</span> <span class="o">*</span> <span class="mf">10.0</span>
+            <span class="n">loggf</span> <span class="o">=</span> <span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">gk</span> <span class="o">*</span> <span class="n">A_i</span> <span class="o">*</span> <span class="n">lam_air_A</span> <span class="o">*</span> <span class="n">lam_air_A</span> <span class="o">/</span> <span class="n">AKI_CONST</span><span class="p">)</span>
+                     <span class="k">if</span> <span class="n">gk</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">A_i</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;TiO&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">round</span><span class="p">(</span><span class="n">lam_air</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">ei</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">ek</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="n">batch</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s2">&quot;TiO&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">lam_air</span><span class="p">,</span> <span class="n">A_i</span><span class="p">,</span> <span class="n">loggf</span><span class="p">,</span> <span class="n">ei</span><span class="p">,</span> <span class="n">ek</span><span class="p">,</span> <span class="n">gi</span><span class="p">,</span> <span class="n">gk</span><span class="p">,</span>
+                          <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">grade</span><span class="p">,</span> <span class="s2">&quot;exomol_toto&quot;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">B</span><span class="p">:</span>
+                <span class="n">conn</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">INSERT</span><span class="p">,</span> <span class="n">batch</span><span class="p">);</span> <span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">();</span> <span class="n">batch</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">batch</span><span class="p">:</span>
+        <span class="n">conn</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">INSERT</span><span class="p">,</span> <span class="n">batch</span><span class="p">);</span> <span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+    <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;PRAGMA synchronous=NORMAL&quot;</span><span class="p">);</span> <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><strong>Memory/time discipline at 59M rows:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">engine=&quot;vaex&quot;</span></code> memory-maps the <code class="docutils literal notranslate"><span class="pre">.h5</span></code> cache instead of loading 59M×N floats into RAM. First load builds the cache (one-time, minutes–tens of minutes); later loads are fast.</p></li>
+<li><p>Stream slices of <code class="docutils literal notranslate"><span class="pre">B≈50k</span></code>; <code class="docutils literal notranslate"><span class="pre">executemany</span></code> + <code class="docutils literal notranslate"><span class="pre">commit()</span></code> per batch — never accumulate all rows or one giant transaction. <code class="docutils literal notranslate"><span class="pre">PRAGMA</span> <span class="pre">journal_mode=WAL;</span> <span class="pre">synchronous=OFF</span></code> during bulk load.</p></li>
+<li><p>The window cut (333–1000 nm air; below ~333 nm is empty) keeps the in-RAM <code class="docutils literal notranslate"><span class="pre">seen</span></code> dedup set bounded. <strong>If you ever ingest the full unfiltered 59M</strong>, prefer a UNIQUE index <code class="docutils literal notranslate"><span class="pre">(species,</span> <span class="pre">charge,</span> <span class="pre">round(wl),</span> <span class="pre">round(ei),</span> <span class="pre">round(ek))</span></code> + <code class="docutils literal notranslate"><span class="pre">INSERT</span> <span class="pre">OR</span> <span class="pre">IGNORE</span></code> and let SQLite dedup, rather than a 59M-tuple Python set.</p></li>
+</ul>
+<p><strong>Gotchas:</strong> top-level <code class="docutils literal notranslate"><span class="pre">radis</span></code> import crashes (numba/coverage) — import only <code class="docutils literal notranslate"><span class="pre">radis.api.exomolapi</span></code>, pass <code class="docutils literal notranslate"><span class="pre">local_databases</span></code> explicitly; <code class="docutils literal notranslate"><span class="pre">broadf=False,</span> <span class="pre">broadf_download=False</span></code> mandatory (0 broad files → 404 otherwise); <code class="docutils literal notranslate"><span class="pre">nurange</span></code> does NOT shrink the 305 MB download; <code class="docutils literal notranslate"><span class="pre">gi=2J_lower+1</span></code> is an approximation; vacuum→air on every line (all TiO ≥333 nm &gt; 200 nm boundary), before the window test and before <code class="docutils literal notranslate"><span class="pre">loggf</span></code>. The <code class="docutils literal notranslate"><span class="pre">.pf</span></code> partition function (fetched by <code class="docutils literal notranslate"><span class="pre">MdbExomol</span></code>, via <code class="docutils literal notranslate"><span class="pre">mdb.QT_interp(T)</span></code>) is <strong>not</strong> needed for the line table but <strong>will</strong> be needed by any future TiO band-emissivity forward model — keep it.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="part-c-final-assembly-build-the-complete-db-sanity-check">
+<h2>PART C — Final assembly: build the COMPLETE DB + sanity check<a class="headerlink" href="#part-c-final-assembly-build-the-complete-db-sanity-check" title="Link to this heading"></a></h2>
+<p>Once <strong>all VALD slices</strong> (existing 100–324 nm + the 54 new Extract-Element dumps) and the <strong>ExoMol TiO</strong> dump are downloaded, build the DB in three steps. Run everything from the worktree root with <code class="docutils literal notranslate"><span class="pre">PYTHONPATH=$PWD</span></code> and check the printed <code class="docutils literal notranslate"><span class="pre">cflibs=</span></code> provenance line (worktree-import trap).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 0) work from the worktree root; verify the right cflibs is imported</span>
+<span class="nb">cd</span><span class="w"> </span>/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5
+<span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import cflibs, sys; print(&#39;cflibs=&#39;, cflibs.__file__)&quot;</span>
+
+<span class="c1"># 1) Ingest ALL VALD slices -&gt; atomic lines + the 7 minor molecules (TiO NOT in these).</span>
+<span class="c1">#    One shot over the whole data/vald dir; dedup makes group/slice overlap safe.</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>scripts/ingest_vald_atomic.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--vald<span class="w"> </span>data/vald/*.linelist.gz<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--db<span class="w"> </span>output/vald_atomic.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--wl-min<span class="w"> </span><span class="m">100</span><span class="w"> </span>--wl-max<span class="w"> </span><span class="m">1000</span>
+
+<span class="c1"># 2) Ingest ExoMol TiO &#39;Toto&#39; (48Ti-16O) -&gt; molecular_lines, SAME DB.</span>
+<span class="c1">#    (Ensure the numba/coverage breakage is fixed first; see Part B.1.)</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>scripts/ingest_exomol_tio.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--db<span class="w"> </span>output/vald_atomic.db<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--wl-min<span class="w"> </span><span class="m">200</span><span class="w"> </span>--wl-max<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--local-db<span class="w"> </span>data/exomol
+
+<span class="c1"># 3) Complete the atomic physics (partition functions, species_physics, etc.)</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>scripts/complete_atomic_db.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--db<span class="w"> </span>output/vald_atomic.db
+</pre></div>
+</div>
+<section id="coverage-sanity-check">
+<h3>Coverage / sanity check<a class="headerlink" href="#coverage-sanity-check" title="Link to this heading"></a></h3>
+<p>Confirm (a) atomic coverage is contiguous 100–1000 nm and (b) <code class="docutils literal notranslate"><span class="pre">molecular_lines</span></code> has TiO <strong>plus</strong> all 7 minor molecules.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>.venv/bin/python<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;&#39;PY&#39;</span>
+<span class="s">import sqlite3</span>
+<span class="s">db = sqlite3.connect(&quot;output/vald_atomic.db&quot;)</span>
+
+<span class="s"># (a) ATOMIC: contiguous 100-1000 nm — count lines per 50 nm bin; flag empty bins.</span>
+<span class="s">print(&quot;=== Atomic coverage (lines per 50 nm bin, 100-1000 nm) ===&quot;)</span>
+<span class="s">rows = db.execute(&quot;&quot;&quot;</span>
+<span class="s">    SELECT CAST(wavelength_nm/50 AS INT)*50 AS bin, COUNT(*)</span>
+<span class="s">    FROM lines WHERE wavelength_nm BETWEEN 100 AND 1000</span>
+<span class="s">    GROUP BY bin ORDER BY bin</span>
+<span class="s">&quot;&quot;&quot;).fetchall()</span>
+<span class="s">have = {b for b, _ in rows}</span>
+<span class="s">for b, n in rows:</span>
+<span class="s">    print(f&quot;  {b:4d}-{b+50:&lt;4d} nm : {n:&gt;8d}&quot;)</span>
+<span class="s">gaps = [b for b in range(100, 1000, 50) if b not in have]</span>
+<span class="s">print(&quot;  ATOMIC GAPS (empty 50 nm bins):&quot;, gaps if gaps else &quot;NONE -&gt; contiguous OK&quot;)</span>
+
+<span class="s"># (b) MOLECULAR: TiO + the 7 minor molecules all present, with counts + medium check.</span>
+<span class="s">print(&quot;\n=== molecular_lines species present ===&quot;)</span>
+<span class="s">want = {&quot;TiO&quot;, &quot;CN&quot;, &quot;C2&quot;, &quot;OH&quot;, &quot;CH&quot;, &quot;CO&quot;, &quot;NH&quot;, &quot;MgH&quot;}</span>
+<span class="s">present = {}</span>
+<span class="s">for sp, n, lo, hi in db.execute(&quot;&quot;&quot;</span>
+<span class="s">        SELECT species, COUNT(*), MIN(wavelength_nm), MAX(wavelength_nm)</span>
+<span class="s">        FROM molecular_lines GROUP BY species ORDER BY species&quot;&quot;&quot;):</span>
+<span class="s">    present[sp] = n</span>
+<span class="s">    print(f&quot;  {sp:5s}: {n:&gt;9d} lines   {lo:.2f}-{hi:.2f} nm&quot;)</span>
+<span class="s">missing = want - set(present)</span>
+<span class="s">print(&quot;  MOLECULAR MISSING:&quot;, missing if missing else &quot;NONE -&gt; TiO + 7 minor all present&quot;)</span>
+
+<span class="s"># TiO provenance + air-window sanity (should start ~333 nm, none below)</span>
+<span class="s">tio_lo = db.execute(&quot;SELECT MIN(wavelength_nm) FROM molecular_lines WHERE species=&#39;TiO&#39;&quot;).fetchone()[0]</span>
+<span class="s">print(f&quot;\n  TiO min wavelength = {tio_lo:.2f} nm (expect ~333 nm; none bluer)&quot;)</span>
+<span class="s">print(&quot;  TiO provenance:&quot;, db.execute(</span>
+<span class="s">    &quot;SELECT DISTINCT provenance FROM molecular_lines WHERE species=&#39;TiO&#39;&quot;).fetchall())</span>
+<span class="s">db.close()</span>
+<span class="s">PY</span>
+</pre></div>
+</div>
+<p><strong>PASS criteria:</strong></p>
+<ul class="simple">
+<li><p><strong>Atomic:</strong> every 50 nm bin from 100 to 1000 nm is non-empty → “ATOMIC GAPS: NONE”. (If a red bin is empty, a VALD Extract-Element range was truncated — re-check Part A.4 truncation detection and re-request that split range.)</p></li>
+<li><p><strong>Molecular:</strong> “MOLECULAR MISSING: NONE” — <code class="docutils literal notranslate"><span class="pre">TiO</span></code>, <code class="docutils literal notranslate"><span class="pre">CN</span></code>, <code class="docutils literal notranslate"><span class="pre">C2</span></code>, <code class="docutils literal notranslate"><span class="pre">OH</span></code>, <code class="docutils literal notranslate"><span class="pre">CH</span></code>, <code class="docutils literal notranslate"><span class="pre">CO</span></code>, <code class="docutils literal notranslate"><span class="pre">NH</span></code>, <code class="docutils literal notranslate"><span class="pre">MgH</span></code> all present. TiO min wavelength ≈ 333 nm with <code class="docutils literal notranslate"><span class="pre">provenance='exomol_toto'</span></code>; the 7 minor molecules carry the VALD provenance.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="key-file-paths-absolute">
+<h3>Key file paths (absolute)<a class="headerlink" href="#key-file-paths-absolute" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>VALD ingester: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/scripts/ingest_vald_atomic.py</span></code></p></li>
+<li><p>ExoMol TiO ingester (to create): <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/scripts/ingest_exomol_tio.py</span></code></p></li>
+<li><p>Atomic-physics completion: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/scripts/complete_atomic_db.py</span></code></p></li>
+<li><p>VALD slice directory: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/data/vald/</span></code></p></li>
+<li><p>ExoMol cache root (to create): <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/data/exomol/</span></code></p></li>
+</ul>
+</section>
+<section id="open-blockers-unverified-mechanics">
+<h3>Open blockers / unverified mechanics<a class="headerlink" href="#open-blockers-unverified-mechanics" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>numba/coverage breakage</strong> (<code class="docutils literal notranslate"><span class="pre">module</span> <span class="pre">'coverage'</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">attribute</span> <span class="pre">'types'</span></code>) must be fixed (pin <code class="docutils literal notranslate"><span class="pre">coverage&lt;7.6</span></code> or upgrade numba) before the real <code class="docutils literal notranslate"><span class="pre">MdbExomol</span></code> load; smoke-test that <code class="docutils literal notranslate"><span class="pre">radis.lbl.base</span></code> import also dodges numba.</p></li>
+<li><p><strong>VALD cap scope</strong> (per species-group vs per range) is the one unverified mechanic — the post-dump truncation check (returned <code class="docutils literal notranslate"><span class="pre">WL_air</span></code> max vs requested edge) makes the plan robust either way.</p></li>
+<li><p><strong>Line-count estimates</strong> (±10–15%) drive the choice of the conservative 18-range plan; truncation detection backstops any underestimate.</p></li>
+</ol>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

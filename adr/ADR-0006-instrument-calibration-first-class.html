@@ -1,0 +1,409 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADR-0006 — Instrument calibration is a first-class, provenance-tracked input &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ADR-0006 — Instrument calibration is a first-class, provenance-tracked input</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/adr/ADR-0006-instrument-calibration-first-class.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adr-0006-instrument-calibration-is-a-first-class-provenance-tracked-input">
+<h1>ADR-0006 — Instrument calibration is a first-class, provenance-tracked input<a class="headerlink" href="#adr-0006-instrument-calibration-is-a-first-class-provenance-tracked-input" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><strong>Status:</strong> PROPOSED (2026-06-20)</p></li>
+<li><p><strong>Authors:</strong> Brian Squires + Opus 4.8 design session (2026-06-20)</p></li>
+<li><p><strong>Scope:</strong> the decision to model the spectrometer as an explicit, provenance-tracked
+<code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> object consumed identically by every forward and inversion path —
+the legacy integrated-intensity CF-LIBS solver, the differentiable real-time hot path
+(ADR plan v3, <code class="docutils literal notranslate"><span class="pre">docs/research/realtime/2026-06-20-realtime-plan-v3-structured-jacobian.md</span></code>),
+the <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code> pipeline (ADR-0004/0005), the Bayesian model, and the manifold/ExoJAX reference
+generator.</p></li>
+<li><p><strong>Out of scope / non-goals:</strong> the numerical fitting algorithm for each instrument term (that is
+the design doc, <a class="reference internal" href="../design/instrument-calibration.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">docs/design/instrument-calibration.md</span></code></span></a>);
+absolute (radiometric) composition — we calibrate <em>relative</em> response only, see §4.1; any ML
+(the physics-only constraint of CLAUDE.md applies unchanged — <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> lives under
+<code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> so ruff TID251 covers it automatically).</p></li>
+<li><p><strong>Related:</strong> ADR-0004 (jittable pipeline; <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code>/<code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code>), ADR-0005
+(jit promotion), <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/</span></code> (existing <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_response</span></code>,
+<code class="docutils literal notranslate"><span class="pre">apply_instrument_function</span></code>), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian.py</span></code>
+(<code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code> resolving-power mode + Chebyshev baseline — the prior art for fittable
+instrument terms), the 2026-06-20 ExoJAX-reference validation run (workflow <code class="docutils literal notranslate"><span class="pre">wphrxvuyj</span></code>).</p></li>
+</ul>
+<hr class="docutils" />
+<section id="context">
+<h2>1. Context<a class="headerlink" href="#context" title="Link to this heading"></a></h2>
+<section id="the-classical-calibration-free-claim-made-precise">
+<h3>1.1 The classical “calibration-free” claim, made precise<a class="headerlink" href="#the-classical-calibration-free-claim-made-precise" title="Link to this heading"></a></h3>
+<p>CF-LIBS gets its name from the cancellation of one — and only one — instrumental term. The integrated
+intensity of a line <code class="docutils literal notranslate"><span class="pre">k→i</span></code> of species <code class="docutils literal notranslate"><span class="pre">s</span></code> is</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>I_ki = F · (h c / 4π λ_ki) · A_ki · g_k · (n_s / U_s(T)) · exp(−E_k / kT)
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">F</span></code> bundles the <em>wavelength-independent</em> experimental factors: plasma volume in the field of
+view, collection solid angle, the overall optical-train throughput, and detector gain. The Boltzmann
+plot linearises this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ln( I_ki λ_ki / (g_k A_ki) ) = −E_k/(kT) + ln( F · (h c/4π) · n_s/U_s(T) )
+</pre></div>
+</div>
+<p>The <strong>slope</strong> gives <code class="docutils literal notranslate"><span class="pre">T</span></code>; the <strong>intercept</strong> gives <code class="docutils literal notranslate"><span class="pre">n_s/U_s(T)</span></code> up to the common factor <code class="docutils literal notranslate"><span class="pre">F</span></code>. Because <code class="docutils literal notranslate"><span class="pre">F</span></code>
+is identical for every species, the closure constraint <code class="docutils literal notranslate"><span class="pre">Σ_s</span> <span class="pre">C_s</span> <span class="pre">=</span> <span class="pre">1</span></code> divides it out exactly. <strong>That
+is the entire content of “calibration-free”: the scalar <code class="docutils literal notranslate"><span class="pre">F</span></code> cancels.</strong> Nothing else does.</p>
+</section>
+<section id="the-two-instrumental-effects-that-calibration-free-does-not-remove">
+<h3>1.2 The two instrumental effects that “calibration-free” does <em>not</em> remove<a class="headerlink" href="#the-two-instrumental-effects-that-calibration-free-does-not-remove" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Wavelength-dependent spectral response <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>.</strong> Grating efficiency, optics transmission, and
+detector quantum efficiency all vary with wavelength, so the measured spectrum is
+<code class="docutils literal notranslate"><span class="pre">I_meas(λ)</span> <span class="pre">=</span> <span class="pre">E(λ)</span> <span class="pre">·</span> <span class="pre">I_true(λ)</span></code>. In the Boltzmann plot this contributes <code class="docutils literal notranslate"><span class="pre">ln</span> <span class="pre">E(λ_ki)</span></code>. Because lines
+with different upper energies <code class="docutils literal notranslate"><span class="pre">E_k</span></code> sit at different wavelengths <code class="docutils literal notranslate"><span class="pre">λ_ki</span></code>, <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> injects an
+<strong><code class="docutils literal notranslate"><span class="pre">E_k</span></code>-correlated perturbation that rotates and scatters the Boltzmann plot</strong> — biasing the slope
+(→ <code class="docutils literal notranslate"><span class="pre">T</span></code>) <em>and</em> the intercept (→ composition). It does <strong>not</strong> cancel under closure, because it is
+wavelength-dependent and different species populate different wavelength regions. <strong><code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> is the
+dominant un-removed instrumental systematic in quantitative CF-LIBS.</strong></p></li>
+<li><p><strong>The line-spread function (LSF).</strong> The instrument convolves every line with its LSF. Convolution
+conserves area, so in the <em>integrated-intensity</em> formulation the LSF leaves the intercept invariant
+<em>in principle</em> — which is the textbook reason the classical method “lumps broadening into the
+intercept and ignores it.” In practice the LSF still matters even classically (it sets which lines
+are resolved and drives blend contamination of integrated intensities), and it is <strong>confounded with
+the physical broadening</strong>: Stark width → <code class="docutils literal notranslate"><span class="pre">n_e</span></code> and Doppler width → <code class="docutils literal notranslate"><span class="pre">T</span></code>. An unknown LSF makes the
+Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code> diagnostic dishonest — width gets over-attributed to the plasma.</p></li>
+</ol>
+</section>
+<section id="why-this-becomes-structurally-mandatory-now-the-new-method">
+<h3>1.3 Why this becomes structurally mandatory now (the new method)<a class="headerlink" href="#why-this-becomes-structurally-mandatory-now-the-new-method" title="Link to this heading"></a></h3>
+<p>The legacy solver fits <strong>integrated intensities</strong> (areas under peaks), so it can mostly ignore the LSF
+for relative composition and only optionally apply a response curve. The real-time method this project
+is now building fits the <strong>full line profile</strong> — the residual is computed in spectrum space, not in
+integrated-intensity space (plan v3 §2; the structured-Jacobian forward
+<code class="docutils literal notranslate"><span class="pre">S(θ)</span> <span class="pre">=</span> <span class="pre">response</span> <span class="pre">⊙</span> <span class="pre">broaden(Σ_s</span> <span class="pre">C_s</span> <span class="pre">·</span> <span class="pre">emissivity_s(T,</span> <span class="pre">n_e))</span></code>). <strong>In profile space all three instrumental
+effects — LSF, <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>, and the wavelength axis <code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code> — directly shape the residual.</strong> The
+instrument operator is now <em>part of the forward model</em>; it can no longer be waved away by an area
+argument. The new method therefore <strong>cannot be calibration-free</strong> in the LSF/<code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>/axis sense, and the
+instrument must be a real, declared input rather than an implicit assumption.</p>
+<p>The 2026-06-20 ExoJAX-reference validation (workflow <code class="docutils literal notranslate"><span class="pre">wphrxvuyj</span></code>) made this concrete and gave the
+numerical mechanism: the instrument FWHM is folded <strong>exactly</strong> into the Voigt Gaussian core
+(<code class="docutils literal notranslate"><span class="pre">Gaussian</span> <span class="pre">⊗</span> <span class="pre">Voigt</span> <span class="pre">=</span> <span class="pre">Voigt</span></code>), both because it is the physically correct convolution and because the
+naive separate <code class="docutils literal notranslate"><span class="pre">jnp.convolve</span></code> lowers to a cuDNN <code class="docutils literal notranslate"><span class="pre">convForward</span></code> that fails to autotune on the V100S. The
+LSF is thus a <em>parameter of the forward operator</em>, not a post-hoc filter — exactly the seam this ADR
+formalises.</p>
+<p>That same validation campaign corroborates this ADR’s central thesis — <strong>input quality dominates the
+solver</strong> — from the <em>other</em> direction. Its controlled round-trip
+(<a class="reference internal" href="../research/realtime/2026-06-20-realtime-plan-v4-real-data-accuracy.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">docs/research/realtime/2026-06-20-realtime-plan-v4-real-data-accuracy.md</span></code></span></a>
+§3) found the inversion <em>algorithm</em> floor at RMSE ≈ 2.9e-6 (≈ 0) while the <em>atomic-data</em> line-list
+mismatch alone injected ≈ 0.17 RMSE — i.e. the data inputs, not the math, are the binding error. Those
+real-data tests were themselves run <strong>uncalibrated</strong> (fixed-FWHM proxy, no <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>, no measured LSF — a
+Mode-C configuration in this ADR’s terms), so the instrument is the <em>second</em> uncontrolled input alongside
+the atomic data. Atomic-data curation (plan v4 STEP A) and instrument calibration (this ADR) are sibling
+input-quality levers, both ahead of solver speed.</p>
+</section>
+<section id="what-already-exists-assets-to-build-on-not-replace">
+<h3>1.4 What already exists (assets to build on, not replace)<a class="headerlink" href="#what-already-exists-assets-to-build-on-not-replace" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Asset</p></th>
+<th class="head"><p>Location</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code> (FWHM / resolving-power, <code class="docutils literal notranslate"><span class="pre">response_curve</span></code>, <code class="docutils literal notranslate"><span class="pre">wavelength_calibration</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/instrument/model.py</span></code></p></td>
+<td><p>Today’s instrument carrier; <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> <em>produces</em> one of these for the legacy path</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code> + <code class="docutils literal notranslate"><span class="pre">apply_response</span></code> JAX kernels</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/instrument/{model,kernels}.py</span></code></p></td>
+<td><p>Hot-path response application; consumes calibration arrays</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">apply_instrument_function</span></code> (Gaussian convolution)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/instrument/convolution.py</span></code></p></td>
+<td><p>Legacy LSF application</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">InstrumentModelProtocol</span></code> (structural typing)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/core/abc.py:132</span></code></p></td>
+<td><p>The existing instrument seam — <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> complements, does not break it</p></td>
+</tr>
+<tr class="row-even"><td><p>Resolving-power mode + Chebyshev baseline as <em>fittable</em> terms</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian.py</span></code></p></td>
+<td><p>Prior art for Mode-C self-calibration</p></td>
+</tr>
+<tr class="row-odd"><td><p>Segmented wavelength calibration</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/</span></code> (<code class="docutils literal notranslate"><span class="pre">pipeline.py:488</span></code>)</p></td>
+<td><p>The measurement that produces <code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code> from lamp lines</p></td>
+</tr>
+</tbody>
+</table>
+<p>The seam is an <em>aggregation and elevation</em> of capabilities the repo already has, not new physics.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="decision">
+<h2>2. Decision<a class="headerlink" href="#decision" title="Link to this heading"></a></h2>
+<p><strong>Model the spectrometer as a single, immutable, provenance-tracked <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> object,
+required as an explicit input to every quantitative forward/inversion path, with three declared
+acquisition modes and a hard rule that quantitative results require Mode A or Mode B.</strong> Six binding
+sub-decisions:</p>
+<ul class="simple">
+<li><p><strong>D1 — One object, three terms, one provenance record.</strong> <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> carries exactly
+three physical terms — <code class="docutils literal notranslate"><span class="pre">wavelength_solution</span></code> (<code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code>), <code class="docutils literal notranslate"><span class="pre">lsf</span></code> (the LSF, <code class="docutils literal notranslate"><span class="pre">σ(λ)</span></code> + shape), and
+<code class="docutils literal notranslate"><span class="pre">response</span></code> (<code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>) — plus a mandatory <code class="docutils literal notranslate"><span class="pre">provenance</span></code> record (mode, per-term source, instrument id,
+acquisition date, quality flags). The object is the <em>single seam</em> for all instrument physics; no
+pipeline reaches around it to a bare FWHM or a loose response array. (API in the design doc.)</p></li>
+<li><p><strong>D2 — Three explicit acquisition modes, never implicit.</strong></p>
+<ul>
+<li><p><strong>Mode A — Calibrated.</strong> Built from the user’s own lamp spectra
+(<code class="docutils literal notranslate"><span class="pre">InstrumentCalibration.from_lamps(...)</span></code>): a wavelength/LSF lamp (HgAr, Ne, ThAr, Ar) fixes
+<code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code> and the LSF; a radiance lamp (deuterium–halogen, or NIST-traceable tungsten-halogen)
+fixes <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>. All three terms are <em>measured</em>; the fit removes them from the inversion.</p></li>
+<li><p><strong>Mode B — Vendor pre-corrected.</strong> Flight/commercial instruments (ChemCam, SuperCam) deliver
+radiance-corrected spectra with a published response/LSF. We <em>declare</em> that provenance and use the
+published <code class="docutils literal notranslate"><span class="pre">R(λ)</span></code>/LSF; we do not re-fit them.</p></li>
+<li><p><strong>Mode C — Self-calibrating fallback.</strong> No lamp data and no vendor correction: the instrument terms
+that cannot be supplied are <em>fit from the science spectrum itself</em> (smooth <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> as a low-order
+Chebyshev, LSF width as a nonlinear parameter, sub-pixel shift), and the result carries a <strong>loud
+quality flag</strong>.</p></li>
+</ul>
+</li>
+<li><p><strong>D3 — Mode A or B is required for any quantitative / accuracy-claimed result.</strong> The benchmark
+scoreboard, NIST-parity, and any reported composition RMSE run in Mode A or B. Mode C is permitted
+for best-effort/exploratory use and for the existing real-data test sets where no lamp exists, but
+its outputs are flagged non-quantitative and are never used to <em>flip a default</em> or claim a SOTA
+number. (This is the discipline that prevents an uncalibrated regression from masquerading as an
+algorithm result — the same failure class ADR-0004 §1 and the 2026-06-19 gate findings guard against.)</p></li>
+<li><p><strong>D4 — The calibration enters the forward model as a typed operator, decomposed by how it enters the
+fit.</strong> <code class="docutils literal notranslate"><span class="pre">S_meas(θ)</span> <span class="pre">=</span> <span class="pre">E(λ)</span> <span class="pre">⊙</span> <span class="pre">LSF_σ(λ){</span> <span class="pre">Σ_s</span> <span class="pre">C_s</span> <span class="pre">·</span> <span class="pre">ε_s(T,</span> <span class="pre">n_e;</span> <span class="pre">λ</span> <span class="pre">on</span> <span class="pre">the</span> <span class="pre">λ(pixel)</span> <span class="pre">grid)</span> <span class="pre">}</span></code>. The three
+terms map cleanly onto the structured-Jacobian / VarPro decomposition (plan v3 §3–4):</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">F</span></code> (the scalar) — <strong>cancels via closure</strong>; needs no calibration for relative composition.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> (smooth, multiplicative) — <strong>linear</strong> in the forward; when known it folds into the
+per-species basis columns (the linear block); when unknown (Mode C) it is fit as a smooth
+low-order function (added linear DOF + degeneracy).</p></li>
+<li><p>LSF width (the Voigt Gaussian core) — <strong>nonlinear</strong>; when known it is a fixed kernel folded exactly
+into the Voigt core; when unknown (Mode C) it becomes an extra nonlinear column alongside
+<code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">log</span> <span class="pre">n_e)</span></code> (~+0.4 ms / +1 column measured in <code class="docutils literal notranslate"><span class="pre">wphrxvuyj</span></code>) <strong>and confounds with Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code></strong>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code> — a resample/sub-pixel alignment; fixed when known, a small nonlinear shift when not.
+Mode A therefore yields the best-conditioned, fastest, most honest fit; Mode C pays in conditioning,
+latency, and Stark-<code class="docutils literal notranslate"><span class="pre">n_e</span></code> honesty — which is <em>why</em> it is flagged.</p></li>
+</ul>
+</li>
+<li><p><strong>D5 — Consumed identically by all pipelines via two bridges.</strong> <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> exposes
+(a) <code class="docutils literal notranslate"><span class="pre">to_instrument_model()</span></code> → an <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>/<code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code> for the legacy integrated-
+intensity path and the existing <code class="docutils literal notranslate"><span class="pre">apply_response</span></code>/<code class="docutils literal notranslate"><span class="pre">apply_instrument_function</span></code> consumers, and
+(b) <code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code> → fixed-shape static arrays (<code class="docutils literal notranslate"><span class="pre">σ(λ)</span></code> samples, <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> on the grid, dispersion
+coeffs) that drop into the <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> (ADR-0004 D2/D4) and the real-time hot kernel. One
+object, two adapters — mirroring the partition-function provider pattern (CONTEXT.md “the seam”).</p></li>
+<li><p><strong>D6 — Physics-only and immutable.</strong> <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> and its builders are pure physics + NumPy/
+JAX (no banned ML imports; Mode-C smoothing is explicit Chebyshev/<code class="docutils literal notranslate"><span class="pre">jnp</span></code>, reusing
+<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.softmax_closure</span></code>-style explicit forms, never <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>). The object is a
+frozen dataclass — calibration is a measurement, not mutable state — so it is hashable/snapshot-safe
+and jit-static.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="why-the-deletion-test-and-the-alternatives-rejected">
+<h2>3. Why (the deletion test and the alternatives rejected)<a class="headerlink" href="#why-the-deletion-test-and-the-alternatives-rejected" title="Link to this heading"></a></h2>
+<p><strong>Deletion test.</strong> Delete <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> and the three instrument terms scatter: the wavelength
+solution lives in <code class="docutils literal notranslate"><span class="pre">preprocess</span></code>, the LSF in <code class="docutils literal notranslate"><span class="pre">InstrumentModel.resolution_fwhm_nm</span></code> <em>and</em> the Bayesian
+resolving-power knob <em>and</em> the hot kernel’s folded σ, the response in a loose <code class="docutils literal notranslate"><span class="pre">response_curve</span></code> array <em>and</em>
+ChemCam’s vendor assumption <em>and</em> the Bayesian Chebyshev baseline — and <em>nothing</em> records which of these
+were measured vs assumed. Complexity (and the silent-miscalibration risk) reappears across ≥5 call sites.
+The object concentrates it: one place defines what the instrument is, one place records its provenance,
+one rule decides whether a result is quantitative. That is depth, not a pass-through.</p>
+<p><strong>Alternatives considered and rejected:</strong></p>
+<ul class="simple">
+<li><p><strong>Keep it implicit (status quo).</strong> Works for the legacy integrated-intensity path <em>only because</em> of the
+<code class="docutils literal notranslate"><span class="pre">F</span></code>-cancellation and area-conservation arguments (§1.1–1.2). It breaks structurally for the profile-space
+method (§1.3), and it has already let an uncalibrated assumption ride silently — the exact failure the
+gate discipline exists to stop. Rejected.</p></li>
+<li><p><strong>Three separate inputs (a wavelength solution, an <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>, a response array) with no
+aggregate.</strong> This is essentially today’s scatter. It cannot carry a single provenance record or enforce
+the Mode-A/B-required rule, and it forces every pipeline to re-assemble the instrument from parts.
+Rejected on the deletion test.</p></li>
+<li><p><strong>Fold everything into a fit knob (always Mode C).</strong> “Just fit the instrument with the science spectrum”
+is seductive but conflates instrumental and plasma physics — the LSF/Stark-<code class="docutils literal notranslate"><span class="pre">n_e</span></code> confound (§1.2) and the
+<code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>/slope-<code class="docutils literal notranslate"><span class="pre">T</span></code> confound (§1.2) make this systematically biased. Calibration data, when available, is
+<em>more information</em>; throwing it away to fit more parameters is strictly worse. Mode C is the documented
+fallback, not the design center. Rejected as the default.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="consequences">
+<h2>4. Consequences<a class="headerlink" href="#consequences" title="Link to this heading"></a></h2>
+<section id="scope-boundary-relative-not-absolute">
+<h3>4.1 Scope boundary: relative, not absolute<a class="headerlink" href="#scope-boundary-relative-not-absolute" title="Link to this heading"></a></h3>
+<p>We calibrate the <em>relative</em> response <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> (shape vs wavelength) and the LSF and axis. The absolute scalar
+<code class="docutils literal notranslate"><span class="pre">F</span></code> is deliberately left to closure — CF-LIBS stays calibration-free in the one sense it legitimately is.
+Absolute number densities (which <em>would</em> need <code class="docutils literal notranslate"><span class="pre">F</span></code> from a radiance standard with known geometry) are an
+explicit non-goal here; <code class="docutils literal notranslate"><span class="pre">provenance.response.is_absolute</span></code> records whether a traceable absolute response was
+supplied, for a future absolute-radiance mode.</p>
+</section>
+<section id="test-data-handling-honest-not-aspirational">
+<h3>4.2 Test-data handling (honest, not aspirational)<a class="headerlink" href="#test-data-handling-honest-not-aspirational" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>ChemCam / SuperCam</strong> datasets → <strong>Mode B</strong> (vendor radiance-corrected; published <code class="docutils literal notranslate"><span class="pre">R(λ)</span></code>/LSF declared in
+provenance). No re-fit.</p></li>
+<li><p><strong>Lab datasets with lamp spectra available</strong> → <strong>Mode A</strong>.</p></li>
+<li><p><strong>Lab datasets without lamps</strong> (most of the current real-data suite) → <strong>Mode C</strong>, results flagged
+non-quantitative. We do not pretend these are calibrated; the flag is the honesty.</p></li>
+<li><p>This means some current benchmark numbers are Mode-C-grade and must be re-labelled accordingly; the
+scoreboard gains a per-dataset calibration-mode column.</p></li>
+</ul>
+</section>
+<section id="engineering-consequences">
+<h3>4.3 Engineering consequences<a class="headerlink" href="#engineering-consequences" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>New module <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/calibration.py</span></code> (the object + builders); <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/__init__.py</span></code>
+exports <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code>. Existing <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>/<code class="docutils literal notranslate"><span class="pre">apply_response</span></code>/<code class="docutils literal notranslate"><span class="pre">apply_instrument_function</span></code>
+are unchanged and become consumers via <code class="docutils literal notranslate"><span class="pre">to_instrument_model()</span></code>.</p></li>
+<li><p>The forward (<code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>), the legacy solver path, <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code>, the Bayesian model, and the real-time
+kernel each take an <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> (or <code class="docutils literal notranslate"><span class="pre">None</span></code> → an explicit Mode-C construction with the flag).</p></li>
+<li><p>The hot path gains <code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code> → <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code>; Mode A bakes <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>/<code class="docutils literal notranslate"><span class="pre">σ(λ)</span></code> as fixed
+arrays (best conditioning, no extra fit columns), Mode C adds the nonlinear LSF column + linear Chebyshev
+<code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> block.</p></li>
+<li><p>The benchmark scoreboard records and reports the calibration mode per dataset; Mode C cannot set a
+default flip.</p></li>
+</ul>
+</section>
+<section id="what-this-does-not-change">
+<h3>4.4 What this does <em>not</em> change<a class="headerlink" href="#what-this-does-not-change" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The closure constraint and the <code class="docutils literal notranslate"><span class="pre">F</span></code>-cancellation are untouched — relative composition stays calibration-
+free in the legitimate sense.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">InstrumentModelProtocol</span></code> (<code class="docutils literal notranslate"><span class="pre">abc.py:132</span></code>) stays the structural seam for “an object that applies a response
+and a convolution”; <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> is the richer, provenance-carrying source those objects are
+derived from.</p></li>
+<li><p>No change to the physics-only constraint, the partition-function provider, or the jit parity contracts.</p></li>
+</ul>
+</section>
+<section id="follow-ups-tracked-not-blocking-this-adr">
+<h3>4.5 Follow-ups (tracked, not blocking this ADR)<a class="headerlink" href="#follow-ups-tracked-not-blocking-this-adr" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Implement <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/calibration.py</span></code> + <code class="docutils literal notranslate"><span class="pre">from_lamps</span></code> / <code class="docutils literal notranslate"><span class="pre">vendor_precorrected</span></code> / <code class="docutils literal notranslate"><span class="pre">self_calibrating</span></code>
+builders (design doc §3).</p></li>
+<li><p>Wire <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> through <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>, the solver path, <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code>, Bayesian, and the
+real-time kernel; add <code class="docutils literal notranslate"><span class="pre">to_instrument_model()</span></code> / <code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code> bridges.</p></li>
+<li><p>Add the scoreboard calibration-mode column + the Mode-A/B-required gate rule.</p></li>
+<li><p>Acquire/locate lamp spectra for the lab datasets to lift them from Mode C → Mode A where possible.</p></li>
+<li><p>Optional absolute-radiance mode (uses <code class="docutils literal notranslate"><span class="pre">F</span></code>) — deferred.</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="status-acceptance">
+<h2>5. Status / acceptance<a class="headerlink" href="#status-acceptance" title="Link to this heading"></a></h2>
+<p>PROPOSED. Accepted by starting follow-up (1). The design doc
+<a class="reference internal" href="../design/instrument-calibration.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">docs/design/instrument-calibration.md</span></code></span></a> specifies the API, the
+lamp-fitting math, and the per-pipeline wiring. <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> and its three modes are added to
+<code class="docutils literal notranslate"><span class="pre">CONTEXT.md</span></code> as canonical vocabulary on acceptance.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

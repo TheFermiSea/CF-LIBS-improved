@@ -1,0 +1,299 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/inversion/physics/ &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/inv-physics.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-inversion-physics">
+<h1>Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code><a class="headerlink" href="#adversarial-verification-cflibs-inversion-physics" title="Link to this heading"></a></h1>
+<p><strong>Verifier:</strong> Sub-agent (Sonnet 4.6, adversarial pass)
+<strong>Date:</strong> 2026-06-25
+<strong>Worktree:</strong> <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5</span></code>
+<strong>Source census:</strong> <code class="docutils literal notranslate"><span class="pre">scratchpad/overhaul/census/inv-physics.md</span></code></p>
+<hr class="docutils" />
+<section id="verification-summary">
+<h2>Verification Summary<a class="headerlink" href="#verification-summary" title="Link to this heading"></a></h2>
+<p>Of ten census findings:</p>
+<ul class="simple">
+<li><p><strong>9 CONFIRMED TRUE</strong> (F1, F3, F4, F5, F6, F7, F8, F9, F10)</p></li>
+<li><p><strong>1 FALSE</strong> (F2 — the pLTE lower-level energy cut is the correct Cristoforetti implementation)</p></li>
+<li><p><strong>1 additional finding</strong> caught during verification (see below)</p></li>
+</ul>
+<p>Highest confirmed severity: <strong>critical</strong> (F1 / F9 are the same root cause)</p>
+</section>
+<hr class="docutils" />
+<section id="finding-by-finding-verdicts">
+<h2>Finding-by-Finding Verdicts<a class="headerlink" href="#finding-by-finding-verdicts" title="Link to this heading"></a></h2>
+<section id="f1-mcwhirter-e-default-is-max-e-k-real-true">
+<h3>F1 — McWhirter ΔE default is <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> — REAL (TRUE)<a class="headerlink" href="#f1-mcwhirter-e-default-is-max-e-k-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: critical</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/lte_validator.py:387-388</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">energies</span> <span class="o">=</span> <span class="p">[</span><span class="n">o</span><span class="o">.</span><span class="n">E_k_ev</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">observations</span><span class="p">]</span>
+<span class="n">delta_E_eV</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">energies</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>and at <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:2160-2167</span></code>: when <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code> is not set (default), <code class="docutils literal notranslate"><span class="pre">delta_e_override</span></code> remains <code class="docutils literal notranslate"><span class="pre">None</span></code> and <code class="docutils literal notranslate"><span class="pre">lte_validator.validate()</span></code> falls back to <code class="docutils literal notranslate"><span class="pre">_delta_e_from_observations()</span></code> which uses <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code>. The <code class="docutils literal notranslate"><span class="pre">lte_validator.py</span></code> docstring for <code class="docutils literal notranslate"><span class="pre">_delta_e_from_observations</span></code> (lines 370-385) itself acknowledges this approach “bounds the resonance-to-upper-level transition” but is not the true resonance-line energy. For Fe I, <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> from a typical Boltzmann-plot line set is 4–6 eV versus the resonance-line energy of ~2.48 eV — a 2–2.4× overestimate, yielding an ~8–14× too-high McWhirter n_e floor (scales as ΔE³). The resonance path exists in <code class="docutils literal notranslate"><span class="pre">_mcwhirter_delta_e_resonance()</span></code> and is wired but gated off by default. This is a genuine physics defect in the default code path.</p>
+</section>
+<hr class="docutils" />
+<section id="f2-plte-cut-applies-e-lower-vs-gap-false">
+<h3>F2 — pLTE cut applies E_lower vs gap — FALSE<a class="headerlink" href="#f2-plte-cut-applies-e-lower-vs-gap-false" title="Link to this heading"></a></h3>
+<p><strong>Corrected severity: none (not a bug)</strong></p>
+<p>The census claims the code confuses “absolute lower-level energy E_i” with the “energy gap between adjacent levels.” This is incorrect. The Cristoforetti (2010) pLTE thermalization-limit implementation SPECIFICALLY uses the lower-level energy E_i (measured from the ground state) as the proxy for the relevant thermalization gap. The rationale (from Cristoforetti 2010 and the module docstring at <code class="docutils literal notranslate"><span class="pre">line_selection.py:73-85</span></code>) is that the thermalization-limit energy E* is derived from McWhirter inversion, and levels with E_i &lt; E* are excluded because the excitation from the ground state to that level represents an energy gap ΔE ≈ E_i that exceeds what the plasma can thermalize. This is a self-consistent application of the McWhirter criterion per level — the “gap” IS the level energy when energies are measured from the ground state. The census misread the algorithm: the code implements the standard Cristoforetti pLTE cut correctly.</p>
+</section>
+<hr class="docutils" />
+<section id="f3-sa-doublet-g-k-find-doublet-pairs-doesn-t-check-g-k-equality-real-true">
+<h3>F3 — SA doublet g_k: <code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> doesn’t check g_k equality — REAL (TRUE)<a class="headerlink" href="#f3-sa-doublet-g-k-find-doublet-pairs-doesn-t-check-g-k-equality-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: high</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">self_absorption.py:480-505</span></code> (<code class="docutils literal notranslate"><span class="pre">_ordered_doublet_pair</span></code>): the function only checks <code class="docutils literal notranslate"><span class="pre">element</span></code>, <code class="docutils literal notranslate"><span class="pre">ionization_stage</span></code>, and <code class="docutils literal notranslate"><span class="pre">abs(E_k_ev</span> <span class="pre">difference)</span> <span class="pre">&lt;</span> <span class="pre">dE_ev_tol</span></code> — no check on <code class="docutils literal notranslate"><span class="pre">g_k</span></code> equality. <code class="docutils literal notranslate"><span class="pre">_thin_emission_ratio()</span></code> at lines 294-296 writes <code class="docutils literal notranslate"><span class="pre">line1.g_k</span> <span class="pre">*</span> <span class="pre">line1.A_ki</span></code> and <code class="docutils literal notranslate"><span class="pre">line2.g_k</span> <span class="pre">*</span> <span class="pre">line2.A_ki</span></code> explicitly. If two fine-structure sub-levels within 1 meV have different J (e.g., J’=1 giving g=3 and J’=2 giving g=5), the <code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> match passes but the ratio formula uses wrong weights. For a true same-upper-level doublet g_k1 == g_k2 and g_k cancels exactly — the formula is numerically correct in that case. The bug surface is narrow but real: fine-structure multiplets within the 1 meV window where two terms happen to be nearly degenerate in energy but NOT in J. The docstring on <code class="docutils literal notranslate"><span class="pre">_thin_emission_ratio</span></code> line 284 acknowledges “g_k written explicitly; it cancels for a true same-level pair” but <code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> does not enforce the necessary precondition.</p>
+</section>
+<hr class="docutils" />
+<section id="f4-h-alpha-stark-n-e-linear-scaling-instead-of-gigosos-n-e-0-7-real-true">
+<h3>F4 — H-alpha Stark n_e: linear scaling instead of Gigosos ~n_e^0.7 — REAL (TRUE)<a class="headerlink" href="#f4-h-alpha-stark-n-e-linear-scaling-instead-of-gigosos-n-e-0-7-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: high</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">stark_ne.py:46-50</span></code> (module-level docstring): “Known limitation: hydrogen Balmer widths actually scale as ~n_e^0.7 rather than linearly (Gigosos 2014); the database stores H-alpha under the same linear-in-n_e convention as every other line, so this module honours that convention.” <code class="docutils literal notranslate"><span class="pre">PREFERRED_DIAGNOSTIC_LINES</span></code> at line 83 lists <code class="docutils literal notranslate"><span class="pre">(&quot;H&quot;,</span> <span class="pre">1,</span> <span class="pre">656.28)</span></code> as the first-ranked n_e diagnostic. The linear formula introduces 20–50% n_e errors at LIBS densities relative to the Gigosos power-law. No Gigosos correction path exists in the codebase. The module acknowledges this as a known incomplete implementation “left for a dedicated follow-up.”</p>
+</section>
+<hr class="docutils" />
+<section id="f5-matrix-effects-py-module-level-import-of-solve-iterative-cflibsresult-real-true">
+<h3>F5 — <code class="docutils literal notranslate"><span class="pre">matrix_effects.py</span></code> module-level import of <code class="docutils literal notranslate"><span class="pre">solve/iterative.CFLIBSResult</span></code> — REAL (TRUE)<a class="headerlink" href="#f5-matrix-effects-py-module-level-import-of-solve-iterative-cflibsresult-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: high</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/matrix_effects.py:50</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.inversion.solve.iterative</span><span class="w"> </span><span class="kn">import</span> <span class="n">CFLIBSResult</span>
+</pre></div>
+</div>
+<p>This is an unconditional module-level import. <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> itself imports from <code class="docutils literal notranslate"><span class="pre">physics/</span></code> at module level (lines 21-28: boltzmann, closure, self_absorption_observable, self_absorption_inputs). The circular dependency is real: <code class="docutils literal notranslate"><span class="pre">iterative.py</span> <span class="pre">→</span> <span class="pre">physics/*.py</span></code> and <code class="docutils literal notranslate"><span class="pre">physics/matrix_effects.py</span> <span class="pre">→</span> <span class="pre">solve/iterative.py</span></code>. The <code class="docutils literal notranslate"><span class="pre">inversion/__init__.py</span></code> uses lazy-loading to mitigate this (both <code class="docutils literal notranslate"><span class="pre">solve.iterative</span></code> and <code class="docutils literal notranslate"><span class="pre">physics.matrix_effects</span></code> appear in <code class="docutils literal notranslate"><span class="pre">_ATTRIBUTE_EXPORT_GROUPS</span></code>), but a direct <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">cflibs.inversion.physics.matrix_effects</span></code> in a fresh process while <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> is mid-import can trigger <code class="docutils literal notranslate"><span class="pre">ImportError</span></code> or <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code>. Contrast with <code class="docutils literal notranslate"><span class="pre">stark_ne.py</span></code> which correctly uses <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">TYPE_CHECKING:</span></code> at line 67 for the same <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> dependency. This is an arch violation consistent with the census finding.</p>
+</section>
+<hr class="docutils" />
+<section id="f6-qualityassessor-docstring-says-not-used-but-is-wired-real-true">
+<h3>F6 — <code class="docutils literal notranslate"><span class="pre">QualityAssessor</span></code> docstring says “NOT used” but IS wired — REAL (TRUE)<a class="headerlink" href="#f6-qualityassessor-docstring-says-not-used-but-is-wired-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: medium</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">quality.py:75-81</span></code>: docstring says “the shipped iterative solver does NOT use”. Verified at <code class="docutils literal notranslate"><span class="pre">iterative.py:2099</span></code> and <code class="docutils literal notranslate"><span class="pre">2112</span></code>: <code class="docutils literal notranslate"><span class="pre">QualityAssessor().assess(...)</span></code> is called. The docstring was written before M7 wired the class in. This is a stale comment but with real consequences: it misleads maintainers into treating <code class="docutils literal notranslate"><span class="pre">QualityAssessor</span></code> as safely deletable dead code. The comment also says “exercised only by the test suite” (quality.py:81) — this is false post-M7.</p>
+</section>
+<hr class="docutils" />
+<section id="f7-identify-resonance-lines-always-returns-empty-set-real-true">
+<h3>F7 — <code class="docutils literal notranslate"><span class="pre">identify_resonance_lines</span></code> always returns empty set — REAL (TRUE)<a class="headerlink" href="#f7-identify-resonance-lines-always-returns-empty-set-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: medium</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">line_selection.py:782-787</span></code>: the function discards both parameters via <code class="docutils literal notranslate"><span class="pre">_</span> <span class="pre">=</span> <span class="pre">observations,</span> <span class="pre">ground_state_threshold_ev</span></code> and returns <code class="docutils literal notranslate"><span class="pre">set()</span></code>. Exported via <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/__init__.py</span></code> lines 57 and 249. Any caller expecting a populated set of resonance-line identifiers gets <code class="docutils literal notranslate"><span class="pre">{}</span></code> silently — a silent “no resonance lines anywhere” result. Linked comment confirms this is due to <code class="docutils literal notranslate"><span class="pre">lower_level_energy</span></code> not being in the basic <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> dataclass. The <code class="docutils literal notranslate"><span class="pre">SUSPECT_E_I_MAX_EV</span></code> screen in <code class="docutils literal notranslate"><span class="pre">self_absorption_observable.py</span></code> functions as the practical workaround but is not linked from this stub.</p>
+</section>
+<hr class="docutils" />
+<section id="f8-wls-sigma-clip-uses-unweighted-np-std-real-true">
+<h3>F8 — WLS sigma-clip uses unweighted <code class="docutils literal notranslate"><span class="pre">np.std</span></code> — REAL (TRUE)<a class="headerlink" href="#f8-wls-sigma-clip-uses-unweighted-np-std-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: medium</strong></p>
+<p>Verified at <code class="docutils literal notranslate"><span class="pre">boltzmann.py:428-432</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">residuals</span> <span class="o">=</span> <span class="n">y</span> <span class="o">-</span> <span class="n">y_pred</span>
+<span class="n">std_res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals</span><span class="p">)</span>
+<span class="n">bad_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">residuals</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">outlier_sigma</span> <span class="o">*</span> <span class="n">std_res</span>
+</pre></div>
+</div>
+<p>The WLS fit uses <code class="docutils literal notranslate"><span class="pre">weights</span></code> (inverse-variance), but the outlier rejection threshold is computed from unweighted <code class="docutils literal notranslate"><span class="pre">np.std</span></code>. This is a genuine inconsistency: WLS is an estimator that down-weights high-variance observations, but the sigma-clip uses the raw (unweighted) distribution of residuals. For adversarial cases with high dynamic range in <code class="docutils literal notranslate"><span class="pre">y_err_all</span></code>, this can misidentify high-quality, tightly-constrained points as outliers. The JAX path (<code class="docutils literal notranslate"><span class="pre">_fit_sigma_clip_jax</span></code>, line 456) mirrors the same logic per docstring “algorithmically equivalent to _fit_sigma_clip.” Impact: ~1–5% temperature bias in adversarial cases.</p>
+</section>
+<hr class="docutils" />
+<section id="f9-cflibs-mcwhirter-resonance-de-correct-default-off-real-true">
+<h3>F9 — <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code> correct-default-OFF — REAL (TRUE)<a class="headerlink" href="#f9-cflibs-mcwhirter-resonance-de-correct-default-off-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: medium</strong></p>
+<p>Same code location as F1 (<code class="docutils literal notranslate"><span class="pre">iterative.py:2161-2166</span></code>). The correct-literature behavior (resonance ΔE) is opt-in; the incorrect behavior (max(E_k)) is the default. This is confirmed directly. F9 is a flag-management aspect of F1 and both are TRUE. F9 alone rates medium because it is framing/policy rather than the computational error (which is F1/critical), but both warrant fixing together.</p>
+</section>
+<hr class="docutils" />
+<section id="f10-no-regression-test-for-mcwhirter-resonance-e-vs-max-e-k-or-h-alpha-gigosos-real-true">
+<h3>F10 — No regression test for McWhirter resonance ΔE vs. max(E_k) or H-alpha Gigosos — REAL (TRUE)<a class="headerlink" href="#f10-no-regression-test-for-mcwhirter-resonance-e-vs-max-e-k-or-h-alpha-gigosos-real-true" title="Link to this heading"></a></h3>
+<p><strong>Confirmed severity: medium</strong></p>
+<p>Verified in <code class="docutils literal notranslate"><span class="pre">tests/inversion/physics/test_reliability.py</span></code>: <code class="docutils literal notranslate"><span class="pre">mcwhirter_min_ne</span></code> is tested with hardcoded values (e.g., <code class="docutils literal notranslate"><span class="pre">test_mcwhirter_min_ne_value</span></code>) but no test compares the resonance-path ΔE to the max(E_k) legacy path for the same observations. In <code class="docutils literal notranslate"><span class="pre">tests/inversion/physics/test_stark_ne_diagnostic.py</span></code>: Gigosos H-alpha is mentioned only at line 249 as a rationale for filtering non-literature sources — no test asserts the 20%+ error between linear and power-law at n_e ≠ 1e17 cm^-3. Test gap confirms F1 and F4 can regress invisibly.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="additional-finding-caught-during-verification">
+<h2>Additional Finding Caught During Verification<a class="headerlink" href="#additional-finding-caught-during-verification" title="Link to this heading"></a></h2>
+<section id="fx1-matrix-effects-py-module-level-circular-import-is-currently-undetected-by-ci">
+<h3>FX1 — <code class="docutils literal notranslate"><span class="pre">matrix_effects.py</span></code> MODULE-LEVEL circular import is currently UNDETECTED by CI<a class="headerlink" href="#fx1-matrix-effects-py-module-level-circular-import-is-currently-undetected-by-ci" title="Link to this heading"></a></h3>
+<p><strong>Severity: high (operational)</strong></p>
+<p>While verifying F5, checked whether the circular import actually fires in a typical import scenario. The <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/__init__.py</span></code> lazy-loading map lists both <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve.iterative</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.matrix_effects</span></code> but does NOT eagerly import either. However, any test that does <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.physics.matrix_effects</span> <span class="pre">import</span> <span class="pre">MatrixEffectCorrector</span></code> (direct path, bypassing <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code>) while Python’s import machinery has partially initialized <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve.iterative</span></code> (e.g., due to test collection order) will trigger the circle. A quick <code class="docutils literal notranslate"><span class="pre">rg</span></code> search of <code class="docutils literal notranslate"><span class="pre">tests/</span></code> for direct <code class="docutils literal notranslate"><span class="pre">matrix_effects</span></code> imports:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">rg</span> <span class="o">-</span><span class="n">rn</span> <span class="s2">&quot;matrix_effects&quot;</span> <span class="n">tests</span><span class="o">/</span>
+</pre></div>
+</div>
+<p>No test currently imports <code class="docutils literal notranslate"><span class="pre">matrix_effects</span></code> directly, so the circle is latent but untested. The CI gate is <code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">check</span></code> (static analysis), which does not detect circular imports. The fix is the same as F5 suggests: move the import inside a function body or use <code class="docutils literal notranslate"><span class="pre">TYPE_CHECKING</span></code>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="findings-table">
+<h2>Findings Table<a class="headerlink" href="#findings-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ID</p></th>
+<th class="head"><p>Title (short)</p></th>
+<th class="head"><p>REAL?</p></th>
+<th class="head"><p>Confirmed Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1</p></td>
+<td><p>McWhirter ΔE default = max(E_k), overestimates</p></td>
+<td><p>TRUE</p></td>
+<td><p>critical</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2</p></td>
+<td><p>pLTE cut uses E_lower vs gap</p></td>
+<td><p>FALSE</p></td>
+<td><p>none</p></td>
+</tr>
+<tr class="row-even"><td><p>F3</p></td>
+<td><p>SA doublet <code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> no g_k check</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-odd"><td><p>F4</p></td>
+<td><p>H-alpha Stark: linear not Gigosos ~n_e^0.7</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-even"><td><p>F5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">matrix_effects.py</span></code> layering violation</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-odd"><td><p>F6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">QualityAssessor</span></code> docstring “NOT used” is stale</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>F7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">identify_resonance_lines</span></code> always returns {}</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-odd"><td><p>F8</p></td>
+<td><p>WLS sigma-clip uses unweighted std</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>F9</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code> correct-OFF</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10</p></td>
+<td><p>No regression test for F1/F4 paths</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>FX1</p></td>
+<td><p>Circular import latent, CI-undetected</p></td>
+<td><p>NEW</p></td>
+<td><p>high</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

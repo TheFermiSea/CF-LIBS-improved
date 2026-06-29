@@ -1,0 +1,298 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pre-built basis libraries (T2.4) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Pre-built basis libraries (T2.4)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/basis-libraries.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pre-built-basis-libraries-t2-4">
+<h1>Pre-built basis libraries (T2.4)<a class="headerlink" href="#pre-built-basis-libraries-t2-4" title="Link to this heading"></a></h1>
+<p>Basis-driven identification workflows
+(<code class="docutils literal notranslate"><span class="pre">spectral_nnls</span></code>, <code class="docutils literal notranslate"><span class="pre">hybrid_intersect</span></code>, <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>,
+<code class="docutils literal notranslate"><span class="pre">nnls_concentration_threshold</span></code>) decompose a measured spectrum as a
+non-negative linear combination of per-element basis vectors evaluated
+at the closest (T, n_e) grid point in a pre-computed library. Each
+library is keyed by the instrumental FWHM that was baked in when the
+library was generated.</p>
+<p>Because each library is ~100-150 MB compressed and the canonical grid
+spans 8 FWHM values, we <strong>build the library once and share it over
+NFS</strong> rather than rebuilding on every compute node.</p>
+<section id="tl-dr-using-the-canonical-libraries">
+<h2>TL;DR — using the canonical libraries<a class="headerlink" href="#tl-dr-using-the-canonical-libraries" title="Link to this heading"></a></h2>
+<p>The runner picks up the NFS-shared libraries automatically when no
+<code class="docutils literal notranslate"><span class="pre">--basis-dir</span></code> is given. From any vasp node:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Confirm the NFS share is mounted (one-time):</span>
+ls<span class="w"> </span>/cluster/shared/cf-libs-bench/basis_libraries/
+
+<span class="c1"># Run a benchmark with basis-driven identifiers:</span>
+python<span class="w"> </span>scripts/run_unified_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--id-workflows<span class="w"> </span>spectral_nnls,hybrid_intersect
+<span class="c1"># --basis-dir is now optional; defaults to the NFS share.</span>
+</pre></div>
+</div>
+<p>If the NFS path is unavailable, override with the environment variable:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">CFLIBS_BASIS_DIR</span><span class="o">=</span>/some/local/dir<span class="w"> </span>python<span class="w"> </span>scripts/run_unified_benchmark.py<span class="w"> </span>...
+</pre></div>
+</div>
+</section>
+<section id="canonical-layout">
+<h2>Canonical layout<a class="headerlink" href="#canonical-layout" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>/cluster/shared/cf-libs-bench/basis_libraries/
+├── basis_fwhm_0.05nm.h5    # ~120 MB, FWHM = 0.05 nm  (RP ~11k @ 550 nm)
+├── basis_fwhm_0.1nm.h5     #
+├── basis_fwhm_0.17nm.h5
+├── basis_fwhm_0.25nm.h5
+├── basis_fwhm_0.5nm.h5
+├── basis_fwhm_0.71nm.h5
+├── basis_fwhm_1nm.h5
+├── basis_fwhm_1.67nm.h5    # ~120 MB, FWHM = 1.67 nm  (RP ~330)
+└── manifest.json           # provenance + sha256 of every file
+</pre></div>
+</div>
+<p>Filenames match the loader pattern in
+<a class="reference download internal" download="" href="_downloads/a0a0db0d737140cc1ea32a52f6e313a7/unified.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">cflibs.benchmark.unified.UnifiedBenchmarkContext._basis_files</span></code></span></a>
+(<code class="docutils literal notranslate"><span class="pre">basis_fwhm_*nm.h5</span></code>). Each file’s FWHM-tag is extracted via regex,
+so any FWHM-tag whose <code class="docutils literal notranslate"><span class="pre">%g</span></code> formatted form is a valid filename works
+(<code class="docutils literal notranslate"><span class="pre">0.05</span></code>, <code class="docutils literal notranslate"><span class="pre">0.1</span></code>, <code class="docutils literal notranslate"><span class="pre">0.17</span></code>, etc.).</p>
+</section>
+<section id="canonical-configuration">
+<h2>Canonical configuration<a class="headerlink" href="#canonical-configuration" title="Link to this heading"></a></h2>
+<p>The builder bakes the following parameters into every library
+(<code class="docutils literal notranslate"><span class="pre">scripts/build_basis_library.py:CanonicalConfig</span></code>):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Rationale</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wavelength_range</span></code></p></td>
+<td><p>(200.0, 900.0) nm</p></td>
+<td><p>Covers UV+visible+NIR; standard Aalto LIBS detector range.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pixels</span></code></p></td>
+<td><p>4096</p></td>
+<td><p>Matches all production benchmark spectra (avoids resample).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">temperature_range</span></code></p></td>
+<td><p>(4000.0, 15000.0) K</p></td>
+<td><p>Spans calibration cell + plasma-jet conditions.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">temperature_steps</span></code></p></td>
+<td><p>30</p></td>
+<td><p>Nearest-neighbour error &lt;= 1/29 of T-range ~= 380 K.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">density_range</span></code></p></td>
+<td><p>(1e15, 5e17) cm^-3</p></td>
+<td><p>Log-spaced; covers 2.5 decades.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">density_steps</span></code></p></td>
+<td><p>10</p></td>
+<td><p>Sufficient for log-bilinear interp in (T, log10(ne)).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ionization_stages</span></code></p></td>
+<td><p>(1, 2)</p></td>
+<td><p>Neutrals + singly-ionised; double-ionised is rare in LIBS.</p></td>
+</tr>
+<tr class="row-odd"><td><p>FWHM grid</p></td>
+<td><p>[0.05, 0.10, 0.17, 0.25, 0.50, 0.71, 1.00, 1.67] nm</p></td>
+<td><p>Mirrors <code class="docutils literal notranslate"><span class="pre">RP_TO_FWHM</span></code> in <code class="docutils literal notranslate"><span class="pre">scripts/archive/hpc-campaign/run_benchmark_sweep.py</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The 30 x 10 = 300-point (T, n_e) grid matches
+<code class="docutils literal notranslate"><span class="pre">scripts/benchmark_element_id.py</span></code>’s default and is the minimum required
+to keep nearest-neighbour mismatch error below ~5% on simulated steel
+spectra. Bump to (50, 20) for tighter interpolation at ~5x build cost.</p>
+</section>
+<section id="re-building-from-scratch">
+<h2>Re-building from scratch<a class="headerlink" href="#re-building-from-scratch" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Default (~100 min on a single CPU): rebuild every FWHM into the</span>
+<span class="c1"># canonical NFS path.</span>
+python<span class="w"> </span>scripts/build_basis_library.py
+
+<span class="c1"># Force overwrite of existing files:</span>
+python<span class="w"> </span>scripts/build_basis_library.py<span class="w"> </span>--force
+
+<span class="c1"># Single FWHM (useful for a focused experiment):</span>
+python<span class="w"> </span>scripts/build_basis_library.py<span class="w"> </span>--fwhm<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span>--force
+
+<span class="c1"># Custom output dir (e.g., a per-experiment slice):</span>
+python<span class="w"> </span>scripts/build_basis_library.py<span class="w"> </span>--output-dir<span class="w"> </span>/scratch/cf-libs-bench/basis_libraries_v2
+
+<span class="c1"># Just regenerate manifest.json from existing files (cheap, ~seconds):</span>
+python<span class="w"> </span>scripts/build_basis_library.py<span class="w"> </span>--manifest-only
+</pre></div>
+</div>
+<section id="reproducibility">
+<h3>Reproducibility<a class="headerlink" href="#reproducibility" title="Link to this heading"></a></h3>
+<p>The builder writes <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> alongside the HDF5 files containing:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">built_at_utc</span></code> – UTC timestamp.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">atomic_db.sha256</span></code> – hash of <code class="docutils literal notranslate"><span class="pre">libs_production.db</span></code> used as input.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">config</span></code> – the full <code class="docutils literal notranslate"><span class="pre">CanonicalConfig</span></code> dict.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">files[].sha256</span></code> – hash of every generated file.</p></li>
+</ul>
+<p>A second <code class="docutils literal notranslate"><span class="pre">--manifest-only</span></code> run with the same inputs produces an
+identical <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> modulo <code class="docutils literal notranslate"><span class="pre">built_at_utc</span></code>. Per-file sha256
+values are deterministic <em>because</em> the underlying Saha-Boltzmann
+solver is deterministic; if a re-build produces different hashes,
+either the atomic database changed or a solver code path was
+edited – both should trigger a CI alarm.</p>
+</section>
+</section>
+<section id="how-run-unified-benchmark-py-finds-the-libraries">
+<h2>How <code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code> finds the libraries<a class="headerlink" href="#how-run-unified-benchmark-py-finds-the-libraries" title="Link to this heading"></a></h2>
+<p>Resolution order (highest priority first):</p>
+<ol class="arabic simple">
+<li><p>Explicit <code class="docutils literal notranslate"><span class="pre">--basis-dir</span> <span class="pre">&lt;path&gt;</span></code> on the CLI.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">$CFLIBS_BASIS_DIR</span></code> environment variable.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/cluster/shared/cf-libs-bench/basis_libraries</span></code> – iff the NFS
+parent directory exists.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">output/basis_libraries</span></code> – in-repo legacy default.</p></li>
+</ol>
+<p>The resolver lives in <code class="docutils literal notranslate"><span class="pre">scripts/run_unified_benchmark._resolve_basis_dir</span></code>.
+The builder script (<code class="docutils literal notranslate"><span class="pre">scripts/build_basis_library.resolve_basis_dir</span></code>)
+uses the same priority order so a typical workflow is::</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># On the build host
+python scripts/build_basis_library.py        # writes to NFS share
+# On a compute host (e.g. vasp-01)
+python scripts/run_unified_benchmark.py ...  # reads from NFS share
+</pre></div>
+</div>
+</section>
+<section id="when-to-rebuild">
+<h2>When to rebuild<a class="headerlink" href="#when-to-rebuild" title="Link to this heading"></a></h2>
+<p>You need to regenerate basis libraries when <strong>any</strong> of these change:</p>
+<ul class="simple">
+<li><p>The atomic database (<code class="docutils literal notranslate"><span class="pre">libs_production.db</span></code>) – new transitions, new
+ionization levels, new partition functions.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CanonicalConfig</span></code> values in <code class="docutils literal notranslate"><span class="pre">scripts/build_basis_library.py</span></code> –
+wavelength range, T/n_e grid, pixels, etc.</p></li>
+<li><p>Code paths inside <code class="docutils literal notranslate"><span class="pre">cflibs.manifold.basis_library</span></code> or
+<code class="docutils literal notranslate"><span class="pre">cflibs.plasma.saha_boltzmann</span></code> – the per-element spectra are
+computed from first principles, so a solver bug-fix invalidates
+every previously cached library.</p></li>
+</ul>
+<p>In all three cases:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>scripts/build_basis_library.py<span class="w"> </span>--force
+</pre></div>
+</div>
+<p>Then commit the <strong>new</strong> <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> – it serves as the canonical
+record of which library version is on the NFS share.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

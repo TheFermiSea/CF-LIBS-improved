@@ -1,0 +1,483 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Root cause: Al over-attribution under wavelength calibration vs Mg deletion without it &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Root cause: Al over-attribution under wavelength calibration vs Mg deletion without it</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/al-calibration-rootcause.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="root-cause-al-over-attribution-under-wavelength-calibration-vs-mg-deletion-without-it">
+<h1>Root cause: Al over-attribution under wavelength calibration vs Mg deletion without it<a class="headerlink" href="#root-cause-al-over-attribution-under-wavelength-calibration-vs-mg-deletion-without-it" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-10. <strong>Branch:</strong> <code class="docutils literal notranslate"><span class="pre">overhaul/wave2-integration</span></code> (worktree <code class="docutils literal notranslate"><span class="pre">.worktrees/w2-integration</span></code>).
+<strong>Spectrum:</strong> <code class="docutils literal notranslate"><span class="pre">data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv</span></code>. <strong>DB:</strong> <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>.
+<strong>Config:</strong> geological preset (oxide closure + SB-graph + stark-n_e), confounders requested.
+All runs reproduced through <code class="docutils literal notranslate"><span class="pre">scripts/measure_bhvo2_presence.py</span></code> (provenance line confirmed:
+<code class="docutils literal notranslate"><span class="pre">cflibs=.../w2-integration/cflibs</span></code>) and <code class="docutils literal notranslate"><span class="pre">/tmp</span></code> instrumentation of
+<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.pipeline.detect_and_select_lines</span></code> (monkey-patched
+<code class="docutils literal notranslate"><span class="pre">_register_observation</span></code>, <code class="docutils literal notranslate"><span class="pre">_shift_coherence_veto</span></code>, <code class="docutils literal notranslate"><span class="pre">_select_accepted_elements</span></code>).</p>
+<section id="reproduction-this-worktree-stark-n-e-default-on">
+<h2>Reproduction (this worktree, stark-n_e default-on)<a class="headerlink" href="#reproduction-this-worktree-stark-n-e-default-on" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>run</p></th>
+<th class="head"><p>T (K)</p></th>
+<th class="head"><p>n_e</p></th>
+<th class="head"><p>Al wt% (n)</p></th>
+<th class="head"><p>Mg wt% (n)</p></th>
+<th class="head"><p>Mn (n)</p></th>
+<th class="head"><p>RMSE</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rc-al-calon</span></code> (defaults)</p></td>
+<td><p>11529</p></td>
+<td><p>1.18e18</p></td>
+<td><p><strong>19.44 (6)</strong></p></td>
+<td><p>1.70 (9)</p></td>
+<td><p>0.44 (5)</p></td>
+<td><p>4.499</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rc-al-caloff</span></code></p></td>
+<td><p>11074</p></td>
+<td><p>6.44e17</p></td>
+<td><p><strong>6.88 (5)</strong></p></td>
+<td><p><strong>0 (0)</strong></p></td>
+<td><p>0 (0)</p></td>
+<td><p>2.843</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">rc-al-calon-nostark</span></code></p></td>
+<td><p>9783</p></td>
+<td><p>2.0e17</p></td>
+<td><p>21.02 (6)</p></td>
+<td><p>1.85 (9)</p></td>
+<td><p>0.26 (5)</p></td>
+<td><p>4.990</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rc-al-caloff-nostark</span></code></p></td>
+<td><p>9871</p></td>
+<td><p>1.9e17</p></td>
+<td><p>7.17 (5)</p></td>
+<td><p>0 (0)</p></td>
+<td><p>0 (0)</p></td>
+<td><p>3.214</p></td>
+</tr>
+</tbody>
+</table>
+<p>(The nostark rows are bit-identical to harness-bridge rows A and C.)</p>
+<p><strong>Stark/Saha interaction (isolated):</strong> the Stark n_e (1.2e18 vs assumed 2e17) <em>shrinks</em> Al
+19.44 vs 21.02 — higher n_e suppresses the Al II fraction in the Saha (1+S) factor
+(χ_Al = 5.99 eV), so the +12 wt% inflation is <strong>entirely a line-set effect</strong>, not an
+n_e/Saha effect. (n_e also bears no responsibility for the Mg flip: Mg dies cal-off with
+stark on or off.)</p>
+</section>
+<section id="the-mechanism-falsifiable-statement">
+<h2>The mechanism (falsifiable statement)<a class="headerlink" href="#the-mechanism-falsifiable-statement" title="Link to this heading"></a></h2>
+<p>Three coupled defects, all in the axis-alignment chain, none in the solver:</p>
+<ol class="arabic simple">
+<li><p><strong>VNIR affine extrapolation (calibration defect).</strong> The segmented calibrator finds 3
+ChemCam channels (UV 240.8–340.8, VIO 382.1–469.1, VNIR 473.2–905.6). UV/VIO get
+<code class="docutils literal notranslate"><span class="pre">shift</span></code> fits (−0.060 / −0.115 nm; rmse 0.021/0.025, 60/35 inliers). VNIR gets an
+<strong>affine</strong> fit (a−1 ≈ −4.6e-4) whose 35–37 inlier pairs sit mostly at 475–650 nm
+(41/56 candidate-pair inliers &lt; 700 nm; the few red “inliers” at 854/877.6/892.6 are
+the disputed peaks themselves, matched circularly within the 2-nm pair window). The
+slope extrapolates the correction from −0.12 &#64;518 nm to <strong>−0.28…−0.34 &#64;877–905 nm</strong>.
+Measured truth at the red end (Ca II IR triplet 849.8/854.2/866.2, the only reliable
+anchors there; VNIR pixel = 0.21 nm): raw−true ≈ +0.06±0.10 — the affine overcorrects
+the red end by ~0.2 nm. Effects: Ca II 854.209 is lost cal-on (present cal-off); the
+Al I 877 doublet flips to the wrong member (below).</p></li>
+<li><p><strong>Post-calibration residual comb shift-scan runs to its cap (detection defect).</strong>
+After a quality-passed calibration the global comb scan is reduced to ±0.05 nm
+(“mop-up”). Its objective (<code class="docutils literal notranslate"><span class="pre">_best_summary_improves</span></code>: max total F1, then max match
+count; small-|shift| only on exact ties) rewards scooping extra dense-catalog
+coincidences, so it <strong>hits the window edge in every configuration tested</strong>
+(+0.05 default; +0.05 with quadratic-free models; −0.05 with shift-only segments).
+On loc1 the calibrated axis needs ~0 (veto consensus at shift 0 = +0.005 nm); the
+applied +0.05 displaces every element’s residual cluster to ≈ +0.044 and, with the
+unchanged ±0.1 tolerance, admits matches up to db−peak = +0.15 — exactly where the
+contaminated Al matches live.</p></li>
+<li><p><strong>Per-element (not per-line) shift-coherence veto + single global shift (cal-off
+defect).</strong> Without calibration, one global comb shift (−0.10) cannot represent the
+per-channel offsets (UV −0.06 / VIO −0.115 / VNIR −0.12…). Real elements whose lines
+straddle channels become internally bimodal in residual space and fail the ≥50 %
+coherence fraction: <strong>Mg residuals split 11/7 across two clusters → frac 0.44 → VETO;
+Mn frac 0.38 → VETO</strong> (measured veto dump, consensus −0.008, band ±0.033). Al survives
+(frac 0.56) with the <em>physically right</em> line set → 6.88 wt% ≈ cert. So cal-off “exact
+Al” and “deleted Mg” are the same coin: the veto judges per-element coherence against
+a single global shift that no piecewise axis can satisfy.</p></li>
+</ol>
+</section>
+<section id="per-line-evidence-the-6-cal-on-al-observations">
+<h2>Per-line evidence: the 6 cal-on Al observations<a class="headerlink" href="#per-line-evidence-the-6-cal-on-al-observations" title="Link to this heading"></a></h2>
+<p>y = ln(Iλ/gA); Boltzmann expectation from the two resonance anchors with slope −1/kT at
+T≈11.5 kK: y_exp(E) ≈ 16.5 − E.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Al line (cal-on)</p></th>
+<th class="head"><p>E_k (eV)</p></th>
+<th class="head"><p>g</p></th>
+<th class="head"><p>A_ki</p></th>
+<th class="head"><p>I</p></th>
+<th class="head"><p>y</p></th>
+<th class="head"><p>y−y_exp</p></th>
+<th class="head"><p>verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>394.401</p></td>
+<td><p>3.143</p></td>
+<td><p>2</p></td>
+<td><p>4.99e7</p></td>
+<td><p>1.76e11</p></td>
+<td><p>13.45</p></td>
+<td><p>ref</p></td>
+<td><p>real (resonance)</p></td>
+</tr>
+<tr class="row-odd"><td><p>396.152</p></td>
+<td><p>3.143</p></td>
+<td><p>2</p></td>
+<td><p>9.85e7</p></td>
+<td><p>2.75e11</p></td>
+<td><p>13.22</p></td>
+<td><p>ref</p></td>
+<td><p>real (resonance)</p></td>
+</tr>
+<tr class="row-even"><td><p>308.215</p></td>
+<td><p>4.021</p></td>
+<td><p>4</p></td>
+<td><p>5.87e7</p></td>
+<td><p>7.95e10</p></td>
+<td><p>11.56</p></td>
+<td><p>−0.9</p></td>
+<td><p>real (resonance)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>256.798</strong></p></td>
+<td><p>4.827</p></td>
+<td><p>4</p></td>
+<td><p>1.92e7</p></td>
+<td><p>5.69e10</p></td>
+<td><p>12.16</p></td>
+<td><p>+0.5</p></td>
+<td><p><strong>contaminated: peak true λ 256.696 = Fe II 256.691 (Δ=5 mÅ, Fe 8.6 wt%); Al line is 0.102 nm from the peak — match exists only via the +0.05 shift</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>877.287</strong></p></td>
+<td><p>5.434</p></td>
+<td><p>6</p></td>
+<td><p>6.47e6</p></td>
+<td><p>9.01e10</p></td>
+<td><p>14.53</p></td>
+<td><p>+3.4</p></td>
+<td><p><strong>wrong doublet member: unresolved Al I 877.287(g=6)+877.390(g=8) blend; −0.34 nm overcorrection puts corrected peak at 877.223, so 877.390 (the stronger member, matched cal-off) is unreachable (Δ=0.117 &gt; tol after shift)</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>892.356</strong></p></td>
+<td><p>5.476</p></td>
+<td><p>6</p></td>
+<td><p><strong>2.73e5</strong></p></td>
+<td><p>6.08e10</p></td>
+<td><p><strong>17.32</strong></p></td>
+<td><p><strong>+6.3</strong></p></td>
+<td><p><strong>not Al: gA implies I(892)/I(877) ≈ 1/57 if both Al; observed ratio 1/1.5 (38× too bright). db−peak = +0.105 — match exists only via the +0.05 shift. True emitter ambiguous (raw peak 892.600; nearest credible: K I 892.544 / Co I 892.624 / red-end ripple); no strong line of any sample element is closer than 0.2 nm</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>Cal-off Al set (5): 396.152, 394.401, 308.215, <strong>309.271</strong> (genuine Al I, E 4.02 — lost
+cal-on because the +0.05 shift re-routes its peak to Al I 309.284 which then collides with
+Mg I 309.298 at the isolation gate), 877.390 (right member). No 256.8/892.4 contaminants
+(both are &gt;tol at shift −0.10 on the raw axis).</p>
+</section>
+<section id="leverage-leave-one-out-through-the-real-solver-sb-graph-oxide-stark">
+<h2>Leverage (leave-one-out through the real solver: SB-graph + oxide + stark)<a class="headerlink" href="#leverage-leave-one-out-through-the-real-solver-sb-graph-oxide-stark" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>variant (cal-on obs set)</p></th>
+<th class="head"><p>Al wt%</p></th>
+<th class="head"><p>Mg</p></th>
+<th class="head"><p>RMSE</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>full (baseline)</p></td>
+<td><p>19.43</p></td>
+<td><p>1.70</p></td>
+<td><p>4.497</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>− 892.356</strong></p></td>
+<td><p><strong>9.04</strong></p></td>
+<td><p><strong>2.08</strong></p></td>
+<td><p><strong>2.640</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>− 256.798</p></td>
+<td><p>22.50 (worse: this line’s y sits <em>below</em> the fit and was pulling Al down)</p></td>
+<td><p>1.59</p></td>
+<td><p>5.421</p></td>
+</tr>
+<tr class="row-odd"><td><p>− 877.287</p></td>
+<td><p>14.54</p></td>
+<td><p>1.88</p></td>
+<td><p>3.252</p></td>
+</tr>
+<tr class="row-even"><td><p>− 892 − 256.8</p></td>
+<td><p>9.27</p></td>
+<td><p>2.07</p></td>
+<td><p>2.639</p></td>
+</tr>
+<tr class="row-odd"><td><p>− 892 − 256.8 − 877</p></td>
+<td><p>3.88</p></td>
+<td><p>2.26</p></td>
+<td><p>3.254</p></td>
+</tr>
+<tr class="row-even"><td><p>swap 877.287→877.390 (g=8, A=6.95e6)</p></td>
+<td><p>18.60</p></td>
+<td><p>1.73</p></td>
+<td><p>4.263</p></td>
+</tr>
+<tr class="row-odd"><td><p>− 892 − 256.8 + swap 877</p></td>
+<td><p>8.56</p></td>
+<td><p>2.09</p></td>
+<td><p>2.649</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Al I 892.356 alone carries −10.4 wt% of the over-attribution</strong> (19.43→9.04) and beats
+the cal-off RMSE while keeping Mg. The 877 blend carries most of the remaining ~2 wt%
+(its +3.x ln excess is intrinsic to attributing an unresolved doublet + possibly
+non-Al flux to one member; it affects cal-off too). 256.798 is contaminated but its
+leverage is <em>downward</em>; removing it alone hurts.</p>
+</section>
+<section id="fix-probes-measured-end-to-end-on-loc1">
+<h2>Fix probes (measured end-to-end on loc1)<a class="headerlink" href="#fix-probes-measured-end-to-end-on-loc1" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>probe</p></th>
+<th class="head"><p>shift</p></th>
+<th class="head"><p>Al (lines)</p></th>
+<th class="head"><p>Mg</p></th>
+<th class="head"><p>Mn</p></th>
+<th class="head"><p>RMSE</p></th>
+<th class="head"><p>notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>A status quo (cal + mop-up 0.05)</p></td>
+<td><p>+0.050</p></td>
+<td><p>19.43 (6)</p></td>
+<td><p>1.70</p></td>
+<td><p>0.44</p></td>
+<td><p>4.497</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>B cal + <strong>mop-up = 0</strong></p></td>
+<td><p>0.000</p></td>
+<td><p>10.80 (5)</p></td>
+<td><p>2.71</p></td>
+<td><p>0</p></td>
+<td><p><strong>2.353</strong></p></td>
+<td><p>drops 892/256.8; veto consensus +0.005; Mg frac 0.83 (15/18). Side effects: <strong>Sn FP 2.45 wt% (6 lines)</strong> — the +0.05 displacement had been <em>accidentally</em> decohering Sn; Al steals vetoed Mn’s 257.61 peak as Al I 257.539; Mn 5-obs survival in A was itself shift-scoop luck (comb-gate fail at shift 0; A over-attributes Mn 3×)</p></td>
+</tr>
+<tr class="row-even"><td><p>E <strong>shift-only segments</strong> + mop-up 0</p></td>
+<td><p>0.000</p></td>
+<td><p>10.20 (5)</p></td>
+<td><p>2.71</p></td>
+<td><p>0</p></td>
+<td><p><strong>2.253</strong></p></td>
+<td><p>best probe; picks the correct 877.390 member</p></td>
+</tr>
+<tr class="row-odd"><td><p>D shift-only segments, mop-up kept</p></td>
+<td><p>−0.050</p></td>
+<td><p>22.70 (5)</p></td>
+<td><p>2.64</p></td>
+<td><p>0</p></td>
+<td><p>5.360</p></td>
+<td><p>scan runs to the <em>other</em> edge — the mop-up, not the segment model, is the chaos agent</p></td>
+</tr>
+<tr class="row-even"><td><p>C/F tolerance 0.06 post-cal</p></td>
+<td><p>0.000</p></td>
+<td><p>0 (0)</p></td>
+<td><p>~3.0</p></td>
+<td><p>0</p></td>
+<td><p>5.29/3.71</p></td>
+<td><p><strong>falsified</strong>: VNIR pixel = 0.21 nm; a global sub-pixel tolerance deletes Al and Fe entirely. Tolerance must stay resolution-aware (per-λ), not be globally tightened to cal-rmse</p></td>
+</tr>
+<tr class="row-odd"><td><p>veto band 0.033→0.020 &#64;shift 0</p></td>
+<td><p>0.000</p></td>
+<td><p>14.80</p></td>
+<td><p>2.49</p></td>
+<td><p>0</p></td>
+<td><p>4.036</p></td>
+<td><p><strong>falsified</strong>: vetoes real Fe (pixel-quantization scatter) while Sn still passes — a single per-element band cannot separate lucky-coherent FPs from quantization-scattered real elements</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="ranked-fix-proposals">
+<h2>Ranked fix proposals<a class="headerlink" href="#ranked-fix-proposals" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Kill (or bound and re-objective) the post-calibration mop-up scan.</strong>
+After a quality-passed calibration (<code class="docutils literal notranslate"><span class="pre">rmse_nm</span></code> ≈ 0.029 here), set
+<code class="docutils literal notranslate"><span class="pre">residual_shift_scan_nm</span> <span class="pre">=</span> <span class="pre">0</span></code>, or at most <code class="docutils literal notranslate"><span class="pre">±2·rmse</span></code> with the scan objective penalizing
+|shift| (prefer the smallest shift within one F1 unit, not exact-tie only).
+Principle: a fitted axis must not be re-broken by a match-count-greedy global offset;
+measured edge-seeking in 3/3 configurations.
+Expected: Al 19.4→~10.8, Mg kept (1.7→2.7), RMSE 4.50→2.35 on loc1; Mn 0.44→0 (it was
+3× over-attributed shift-scoop); <strong>must be paired with an FP guard</strong> (see 3) because
+the well-centered axis lets Sn cohere by chance (2.45 wt%).
+Validate: harness on loc1–4 + the synthetic identifier benchmark (project memory:
+benchmark-gate identifier-scoring changes) + gate criterion (c) no confounder FPs.</p></li>
+<li><p><strong>Gate the affine segment model on inlier <em>coverage</em>, not just count/rmse.</strong>
+Accept <code class="docutils literal notranslate"><span class="pre">affine</span></code> for a segment only if the inlier span covers (say) ≥70 % of the
+segment and the implied edge extrapolation beyond the inlier hull is &lt; 1 pixel;
+otherwise degrade to <code class="docutils literal notranslate"><span class="pre">shift</span></code> (the existing sparse-segment mechanism, currently keyed
+on point count only, at <code class="docutils literal notranslate"><span class="pre">sparse_segment_points=400</span></code>). Principle: never extrapolate a
+dispersion slope past its anchors; the VNIR slope is anchored at 475–650 nm and is
+wrong by ~0.2 nm at 877–906 nm against the Ca II triplet.
+Expected: correct 877 doublet member (Al −0.6 wt% further), Ca II 854 recovered,
+892-region mismatch moves out of reach of Al I 892.356 even with a small residual
+scan; E-probe (shift-only VNIR + no mop-up) measured RMSE 2.253, Al 10.20, Mg 2.71.</p></li>
+<li><p><strong>Per-LINE residual gating at observation build (element-coherent match validation).</strong>
+The veto already demands per-element coherence; the surviving elements still <em>carry</em>
+their incoherent lines into the Boltzmann fit. After computing the consensus residual,
+drop individual matched lines with |residual − consensus| &gt; band (band = current
+tol/3, kept resolution-aware per-λ — NOT a global tightening, which probe C falsified).
+At shift 0 this drops 877 (res −0.064) and the 0.096-residual match while keeping
+394/396/308/309: Al →~3.9–8.6 wt% depending on whether 877 is rescued by fix 2 first.
+It is also the only probe-supported lever against the Sn-type lucky-coherent FP
+<em>line sets</em> (6 Sn lines spread across the Fe/Ti UV forest): per-line gating plus a
+per-peak ownership rule (a peak inside a kept element’s match set cannot double-count
+as evidence for a weaker claimant — extend <code class="docutils literal notranslate"><span class="pre">used_peaks</span></code> arbitration from f1-order to
+expected-emissivity order) removes the FP mass without touching real majors.
+Validate: loc1–4 harness with confounders on (criterion c), synthetic ID benchmark F1.</p></li>
+</ol>
+<p>Not recommended: global tolerance tightening (C/F), veto-band tightening (measured Fe
+deletion), or defaulting calibration off (row C of the harness bridge: fragile, deletes
+Mg/Mn, catastrophic without confounders — row F RMSE 11.0).</p>
+<section id="residual-physics-note-out-of-scope-here">
+<h3>Residual physics note (out of scope here)<a class="headerlink" href="#residual-physics-note-out-of-scope-here" title="Link to this heading"></a></h3>
+<p>Both axes leave the 877-doublet point ~+3 ln above the resonance-anchored Boltzmann
+line, and cal-off’s “exact” 6.88 wt% relies on it (without any 877 line Al falls to
+~3.9). Likely a blend/self-absorption imbalance (resonance anchors optically thick →
+intercept biased low; the unresolved IR doublet integrates both members’ flux). Any fix
+that removes the contaminated lines should re-baseline Al against this effect (SA mode
+<code class="docutils literal notranslate"><span class="pre">observable</span></code>, or fitting the doublet as combined gA) before judging the final Al number.</p>
+</section>
+</section>
+<section id="raw-artifacts">
+<h2>Raw artifacts<a class="headerlink" href="#raw-artifacts" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/rc-al-calon.log</span></code>, <code class="docutils literal notranslate"><span class="pre">/tmp/rc-al-caloff.log</span></code>, <code class="docutils literal notranslate"><span class="pre">/tmp/rc-al-{calon,caloff}-nostark.log</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">output/bhvo2_measure/rc-al-{calon,caloff,calon-nostark,caloff-nostark}.json</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/rc_lines_{calon,caloff}.json</span></code> (per-match dumps), <code class="docutils literal notranslate"><span class="pre">/tmp/instrument_lines.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">/tmp/instrument_veto.py</span></code>, <code class="docutils literal notranslate"><span class="pre">/tmp/leverage.py</span></code>, <code class="docutils literal notranslate"><span class="pre">/tmp/fixprobe.py</span></code></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

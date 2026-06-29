@@ -1,0 +1,284 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cflibs/pds — Adversarial Verification Report &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">cflibs/pds — Adversarial Verification Report</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/pds.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cflibs-pds-adversarial-verification-report">
+<h1>cflibs/pds — Adversarial Verification Report<a class="headerlink" href="#cflibs-pds-adversarial-verification-report" title="Link to this heading"></a></h1>
+<p>Verifier role: adversarial cross-check of census findings<br />
+Worktree: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5</span></code><br />
+Method: ripgrep + Read on actual source; compared against literature in <code class="docutils literal notranslate"><span class="pre">overhaul/literature/</span></code><br />
+Date: 2026-06-25</p>
+<hr class="docutils" />
+<section id="verification-of-high-severity-findings">
+<h2>Verification of HIGH-Severity Findings<a class="headerlink" href="#verification-of-high-severity-findings" title="Link to this heading"></a></h2>
+<section id="f1-1-ground-truth-weight-fraction-basis-vs-cf-libs-mole-fractions">
+<h3>F1-1 · Ground-truth weight-fraction basis vs CF-LIBS mole fractions<a class="headerlink" href="#f1-1-ground-truth-weight-fraction-basis-vs-cf-libs-mole-fractions" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: HIGH</strong> (confirmed, no downgrade warranted)</p>
+<p>Code verification:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">corpus.py:65-67</span></code> — <code class="docutils literal notranslate"><span class="pre">CorpusEntry.expected_elements</span></code> docstring explicitly says “known weight fraction (0-1)”.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">corpus.py:116</span></code> — inline comment: “CCCT compositions (weight fractions of major oxides → elements)”.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> — <code class="docutils literal notranslate"><span class="pre">CFLIBSResult.concentrations</span></code> docstring says “Element concentrations (number/mole fractions, sum to 1)”. Confirmed with <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure.py</span></code> which labels the closure output “element -&gt; number (mole) fraction (sum=1)”.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/pds/validation.py:80-83</span></code> — <code class="docutils literal notranslate"><span class="pre">quantified_elements</span></code> property returns <code class="docutils literal notranslate"><span class="pre">entry.expected_elements</span></code> (weight fractions) directly, with no conversion.</p></li>
+<li><p>No <code class="docutils literal notranslate"><span class="pre">mole_to_weight</span></code> or equivalent function exists anywhere in <code class="docutils literal notranslate"><span class="pre">cflibs/pds/</span></code>. The conversion utility <code class="docutils literal notranslate"><span class="pre">mass_to_number_fractions</span></code> exists in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/synthetic_corpus.py</span></code> but is not accessible from <code class="docutils literal notranslate"><span class="pre">cflibs/pds/</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs-method.md</span></code> confirms: “CF-LIBS closure gives C_s = mole (number) fractions… Völker (2024) quantified errors up to 353% from omitting molar-mass conversion.”</p></li>
+</ul>
+<p>The mismatch is confirmed: corpus stores weight fractions, pipeline outputs mole fractions, and no conversion helper exists in the pds package. Any caller comparing <code class="docutils literal notranslate"><span class="pre">PDSValidationDataset.quantified_elements</span></code> against <code class="docutils literal notranslate"><span class="pre">CFLIBSResult.concentrations</span></code> directly would compute systematically wrong residuals. Finding is real.</p>
+</section>
+<hr class="docutils" />
+<section id="f5-1-pdscache-fetch-has-no-network-mock-and-post-download-validation-is-unexercised">
+<h3>F5-1 · PDSCache.fetch() has no network mock and post-download validation is unexercised<a class="headerlink" href="#f5-1-pdscache-fetch-has-no-network-mock-and-post-download-validation-is-unexercised" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong> (downgraded from HIGH — see reasoning)</p>
+<p>Code verification:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cache.py:116-127</span></code> — confirmed: <code class="docutils literal notranslate"><span class="pre">response.read()</span></code> loads whole file; no <code class="docutils literal notranslate"><span class="pre">is_cached()</span></code> call after the write; <code class="docutils literal notranslate"><span class="pre">MemoryError</span></code> is not in the caught exception tuple <code class="docutils literal notranslate"><span class="pre">(urllib.error.URLError,</span> <span class="pre">urllib.error.HTTPError,</span> <span class="pre">OSError)</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_pds.py</span></code> — confirmed: <code class="docutils literal notranslate"><span class="pre">TestPDSCache</span></code> covers <code class="docutils literal notranslate"><span class="pre">is_cached</span></code>, <code class="docutils literal notranslate"><span class="pre">cached_path</span></code>, <code class="docutils literal notranslate"><span class="pre">clear</span></code>, <code class="docutils literal notranslate"><span class="pre">status</span></code> only. Zero <code class="docutils literal notranslate"><span class="pre">fetch()</span></code> tests, zero <code class="docutils literal notranslate"><span class="pre">urlopen</span></code> mocks.</p></li>
+<li><p>Note: <code class="docutils literal notranslate"><span class="pre">shutil</span></code> is already imported in <code class="docutils literal notranslate"><span class="pre">cache.py</span></code> (line 19), so the streaming-write fix is trivial.</p></li>
+</ul>
+<p>Severity downgrade rationale: The census rated this HIGH, but the impact is bounded. <code class="docutils literal notranslate"><span class="pre">cflibs.pds</span></code> is an I/O utility with no downstream wiring (F2-2 is confirmed). A corrupt downloaded file would produce a clear <code class="docutils literal notranslate"><span class="pre">csv.Error</span></code> at parse time, not silent composition errors. The MemoryError risk is negligible for PDS CSV files (&lt; a few MB). The missing <code class="docutils literal notranslate"><span class="pre">is_cached()</span></code> post-write check means an HTML error page would only be caught at parse time, not at download time — a UX annoyance, not a safety hazard. The test gap is real and should be fixed, but HIGH overstates the risk given the isolation of this code.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="verification-of-additional-medium-severity-findings-selected">
+<h2>Verification of Additional MEDIUM-Severity Findings (Selected)<a class="headerlink" href="#verification-of-additional-medium-severity-findings-selected" title="Link to this heading"></a></h2>
+<section id="f1-2-scct5-scct7-compositions-copy-pasted-from-ccct3-ccct2-with-k-silently-dropped">
+<h3>F1-2 · SCCT5/SCCT7 compositions copy-pasted from CCCT3/CCCT2 with K silently dropped<a class="headerlink" href="#f1-2-scct5-scct7-compositions-copy-pasted-from-ccct3-ccct2-with-k-silently-dropped" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong> (confirmed)</p>
+<p>Code verification:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">corpus.py:233-241</span></code> (SCCT5): <code class="docutils literal notranslate"><span class="pre">{&quot;Si&quot;:</span> <span class="pre">0.207,</span> <span class="pre">&quot;Al&quot;:</span> <span class="pre">0.049,</span> <span class="pre">&quot;Mg&quot;:</span> <span class="pre">0.110,</span> <span class="pre">&quot;Fe&quot;:</span> <span class="pre">0.086,</span> <span class="pre">&quot;Ca&quot;:</span> <span class="pre">0.053,</span> <span class="pre">&quot;Na&quot;:</span> <span class="pre">0.009,</span> <span class="pre">&quot;Ti&quot;:</span> <span class="pre">0.005,</span> <span class="pre">&quot;O&quot;:</span> <span class="pre">None}</span></code> — K absent.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">corpus.py:143-154</span></code> (CCCT3): identical Si/Al/Mg/Fe/Ca/Na/Ti values <strong>plus</strong> <code class="docutils literal notranslate"><span class="pre">&quot;K&quot;:</span> <span class="pre">0.002</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">corpus.py:244-253</span></code> (SCCT7): <code class="docutils literal notranslate"><span class="pre">{&quot;Si&quot;:</span> <span class="pre">0.243,</span> <span class="pre">...,</span> <span class="pre">&quot;Ti&quot;:</span> <span class="pre">0.003,</span> <span class="pre">&quot;O&quot;:</span> <span class="pre">None}</span></code> — K absent.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">corpus.py:132-142</span></code> (CCCT2): identical values <strong>plus</strong> <code class="docutils literal notranslate"><span class="pre">&quot;K&quot;:</span> <span class="pre">0.003</span></code>.</p></li>
+</ul>
+<p>The numerical copy-paste is exact (all non-K values match to 3 decimal places). Whether the SCCT targets share the same rock material as the CCCT targets is unverified in the code — the comment says “similar to”, not “identical to”, and no primary citation is given for the SCCT values. K lines (766/769 nm) are strong in LIBS and omitting a known ~0.2-0.3% K from the ground-truth denominator will produce systematic bias. Finding is real.</p>
+<p>Adversarial note: it is plausible that the SCCT and CCCT targets are different cuts of the same rock samples and K was intentionally omitted from the SCCT reference because its concentration was below the relevant detection limit for SuperCam — but this is not documented in the code, so the finding stands as a documentation/data-quality issue.</p>
+</section>
+<hr class="docutils" />
+<section id="f2-2-pdsvalidationdataset-is-a-dead-end-schema-bridge-not-wired-downstream">
+<h3>F2-2 · PDSValidationDataset is a dead-end schema bridge — not wired downstream<a class="headerlink" href="#f2-2-pdsvalidationdataset-is-a-dead-end-schema-bridge-not-wired-downstream" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong> (confirmed)</p>
+<p>Code verification:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">&quot;PDSValidationDataset|map_chemcam_to_validation|map_supercam_to_validation&quot;</span></code> across all of <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> excluding <code class="docutils literal notranslate"><span class="pre">pds/validation.py</span></code> and <code class="docutils literal notranslate"><span class="pre">tests/test_pds.py</span></code> → <strong>zero results</strong>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs/validation/</span></code> have no imports from <code class="docutils literal notranslate"><span class="pre">cflibs.pds.validation</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PDSValidationDataset</span></code> is used only in <code class="docutils literal notranslate"><span class="pre">tests/test_pds.py</span></code> (test-only consumption, not pipeline wiring).</p></li>
+</ul>
+<p>Finding is confirmed. The bridge module is real code but is not wired to any downstream consumer. It is not dead in a harmful sense (it works), but its docstring claims it “Connects the PDS ingestion layer to the existing round-trip validation and benchmark infrastructure” — a claim that is currently false.</p>
+</section>
+<hr class="docutils" />
+<section id="f3-1-pdscache-fetch-reads-entire-file-into-memory-before-writing">
+<h3>F3-1 · PDSCache.fetch() reads entire file into memory before writing<a class="headerlink" href="#f3-1-pdscache-fetch-reads-entire-file-into-memory-before-writing" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: MEDIUM</strong> (confirmed, not upgraded)</p>
+<p>Code verification:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cache.py:119</span></code>: <code class="docutils literal notranslate"><span class="pre">f.write(response.read())</span></code> — whole-file read confirmed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">shutil</span></code> is already imported at line 19; the streaming fix <code class="docutils literal notranslate"><span class="pre">shutil.copyfileobj(response,</span> <span class="pre">f)</span></code> is a one-liner.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">MemoryError</span></code> gap is real but inconsequential for the file sizes involved.</p></li>
+<li><p>Absence of post-write <code class="docutils literal notranslate"><span class="pre">is_cached()</span></code> check is confirmed — the function returns <code class="docutils literal notranslate"><span class="pre">dest</span></code> at line 127 without validation.</p></li>
+</ul>
+<p>Finding is confirmed. The streaming fix is trivial given <code class="docutils literal notranslate"><span class="pre">shutil</span></code> is already imported.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="findings-the-census-missed">
+<h2>Findings the Census MISSED<a class="headerlink" href="#findings-the-census-missed" title="Link to this heading"></a></h2>
+<section id="m1-ccct4-k-omission-inconsistent-with-fabre-et-al-2011">
+<h3>M1 · CCCT4 K omission inconsistent with Fabre et al. (2011)<a class="headerlink" href="#m1-ccct4-k-omission-inconsistent-with-fabre-et-al-2011" title="Link to this heading"></a></h3>
+<p><strong>Severity: LOW</strong><br />
+<strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">corpus.py:155-166</span></code></p>
+<p>CCCT4 (Shergottite) composition in the corpus lists Si/Al/Fe/Mg/Ca/Na/K/Ti but <code class="docutils literal notranslate"><span class="pre">K:</span> <span class="pre">0.001</span></code>. This is fine. However, the Shergottite composition per Fabre et al. (2011) for CCCT-4 gives K₂O &lt; 0.06 wt% which converts to K &lt; 0.0005 wt fraction — an order of magnitude smaller than <code class="docutils literal notranslate"><span class="pre">K:</span> <span class="pre">0.001</span></code>. This may be a rounding issue or a different source, but it is not cited. Low severity because K at 0.001 is negligible for LIBS analysis.</p>
+</section>
+<section id="m2-pdsvalidationdataset-expected-elements-type-annotation-is-unguarded">
+<h3>M2 · PDSValidationDataset.expected_elements type annotation is unguarded<a class="headerlink" href="#m2-pdsvalidationdataset-expected-elements-type-annotation-is-unguarded" title="Link to this heading"></a></h3>
+<p><strong>Severity: LOW</strong><br />
+<strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">validation.py:48-49</span></code>, <code class="docutils literal notranslate"><span class="pre">validation.py:80-83</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">PDSValidationDataset.expected_elements:</span> <span class="pre">Dict[str,</span> <span class="pre">Optional[float]]</span></code> passes <code class="docutils literal notranslate"><span class="pre">None</span></code> values for qualitatively-expected elements. The <code class="docutils literal notranslate"><span class="pre">quantified_elements</span></code> property correctly filters these out. However, any caller that iterates over <code class="docutils literal notranslate"><span class="pre">expected_elements</span></code> directly (not via <code class="docutils literal notranslate"><span class="pre">quantified_elements</span></code>) and attempts <code class="docutils literal notranslate"><span class="pre">float(v)</span></code> on a <code class="docutils literal notranslate"><span class="pre">None</span></code> value will raise a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> with no guard. Since <code class="docutils literal notranslate"><span class="pre">PDSValidationDataset</span></code> is not wired downstream, this is currently unexploited, but it is a latent API hazard.</p>
+</section>
+<section id="m3-ccct9-ti-alloy-does-not-sum-to-1-0-o-intentionally-absent">
+<h3>M3 · CCCT9 Ti alloy does not sum to 1.0 (O intentionally absent)<a class="headerlink" href="#m3-ccct9-ti-alloy-does-not-sum-to-1-0-o-intentionally-absent" title="Link to this heading"></a></h3>
+<p><strong>Severity: NONE (confirmed correct)</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">corpus.py:179-185</span></code> — CCCT9: <code class="docutils literal notranslate"><span class="pre">{&quot;Ti&quot;:</span> <span class="pre">0.895,</span> <span class="pre">&quot;Al&quot;:</span> <span class="pre">0.061,</span> <span class="pre">&quot;V&quot;:</span> <span class="pre">0.040,</span> <span class="pre">&quot;Fe&quot;:</span> <span class="pre">0.004}</span></code> sums to 1.000 exactly (Ti-6Al-4V specification: 6% Al, 4% V nominal, balance Ti). O is absent because Ti alloys are metallic, not oxide matrices. This is correct. The census did not flag it, and the verifier confirms it is not a finding.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary-table">
+<h2>Summary Table<a class="headerlink" href="#summary-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ID</p></th>
+<th class="head"><p>Census Severity</p></th>
+<th class="head"><p>REAL?</p></th>
+<th class="head"><p>Confirmed Severity</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1-1</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p>CF-LIBS mole fracs vs weight frac corpus, no conversion helper</p></td>
+</tr>
+<tr class="row-odd"><td><p>F5-1</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>Test gap real; impact bounded (I/O-only, not downstream)</p></td>
+</tr>
+<tr class="row-even"><td><p>F1-2</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>K silently dropped in SCCT copy-pastes</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2-2</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>PDSValidationDataset unwired despite docstring claim</p></td>
+</tr>
+<tr class="row-even"><td><p>F3-1</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>Whole-file read; shutil already imported; trivial fix</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1</p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+<td><p>LOW</p></td>
+<td><p>CCCT4 K value order-of-magnitude discrepancy vs Fabre (2011)</p></td>
+</tr>
+<tr class="row-even"><td><p>M2</p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+<td><p>LOW</p></td>
+<td><p>expected_elements None-unsafe for non-quantified callers</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: HIGH (F1-1)</strong></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

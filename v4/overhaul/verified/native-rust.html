@@ -1,0 +1,344 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: native/cflibs-core (Rust) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: native/cflibs-core (Rust)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/native-rust.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-native-cflibs-core-rust">
+<h1>Adversarial Verification: native/cflibs-core (Rust)<a class="headerlink" href="#adversarial-verification-native-cflibs-core-rust" title="Link to this heading"></a></h1>
+<p><strong>Verifier methodology:</strong> Independent re-read of <code class="docutils literal notranslate"><span class="pre">native/cflibs-core/src/{partition.rs,comb_matching.rs,lib.rs}</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cflibs/plasma/partition.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py</span></code>, and <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/host.py</span></code>
+via ripgrep + targeted Read. Each finding was re-derived from first principles before verdict.</p>
+<hr class="docutils" />
+<section id="finding-1-batch-partition-functions-missing-t-min-t-max-clamp-g0-floor">
+<h2>Finding 1 — <code class="docutils literal notranslate"><span class="pre">batch_partition_functions</span></code> missing t_min/t_max clamp + g₀ floor<a class="headerlink" href="#finding-1-batch-partition-functions-missing-t-min-t-max-clamp-g0-floor" title="Link to this heading"></a></h2>
+<p><strong>REAL:</strong> TRUE (the code is as described) — but severity is <strong>OVERSTATED</strong>.</p>
+<p><strong>Corrected severity:</strong> MEDIUM (was HIGH)</p>
+<p><strong>Reasoning:</strong> The census is correct that <code class="docutils literal notranslate"><span class="pre">partition.rs:48–59</span></code> evaluates the quartic-in-ln-T polynomial
+without any clamp to <code class="docutils literal notranslate"><span class="pre">[t_min,</span> <span class="pre">t_max]</span></code> or floor at <code class="docutils literal notranslate"><span class="pre">g0</span></code>, and that the Python <code class="docutils literal notranslate"><span class="pre">polynomial_partition_function</span></code>
+at <code class="docutils literal notranslate"><span class="pre">partition.py:929–939</span></code> does apply those guards when the kwargs are supplied. The 560× Ca I error at
+100 000 K and the sub-unity Nb I value at 500 K are real if the function is called outside the fit
+window without guards. However, the adversarial check reveals a critical mitigating fact the census
+missed: <code class="docutils literal notranslate"><span class="pre">PartitionFunctionEvaluator.evaluate_batch</span></code> has <strong>zero production callers</strong> in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>. The
+method is defined at <code class="docutils literal notranslate"><span class="pre">partition.py:1106–1151</span></code> and appears only in <code class="docutils literal notranslate"><span class="pre">tests/test_comb_rust.py</span></code>. No module
+under <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> invokes it. Furthermore, the NumPy fallback path inside <code class="docutils literal notranslate"><span class="pre">evaluate_batch</span></code> (line 1150)
+also calls <code class="docutils literal notranslate"><span class="pre">polynomial_partition_function</span></code> without <code class="docutils literal notranslate"><span class="pre">t_min</span></code>/<code class="docutils literal notranslate"><span class="pre">t_max</span></code>/<code class="docutils literal notranslate"><span class="pre">g0</span></code>, so both the Rust and Python
+paths of this function lack the guard — they are mutually consistent at the wrong behavior. The fix
+recommendation remains valid, but the production impact is currently zero (the function is dead code in
+the shipped pipeline). Severity is MEDIUM rather than HIGH: real latent hazard for anyone who wires
+<code class="docutils literal notranslate"><span class="pre">evaluate_batch</span></code> into a new caller, but no current physics-correctness regression.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-kdet-filter-elements-dead-under-default-shift-coherence-veto-true-pipeline">
+<h2>Finding 2 — <code class="docutils literal notranslate"><span class="pre">kdet_filter_elements</span></code> dead under default <code class="docutils literal notranslate"><span class="pre">shift_coherence_veto=True</span></code> pipeline<a class="headerlink" href="#finding-2-kdet-filter-elements-dead-under-default-shift-coherence-veto-true-pipeline" title="Link to this heading"></a></h2>
+<p><strong>REAL:</strong> TRUE</p>
+<p><strong>Corrected severity:</strong> HIGH (confirmed as stated)</p>
+<p><strong>Reasoning:</strong> Independent verification confirms the exact guard at <code class="docutils literal notranslate"><span class="pre">line_detection.py:2187</span></code>:
+<code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">HAS_RUST_CORE</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">shift_coherence:</span></code>. The <code class="docutils literal notranslate"><span class="pre">shift_coherence</span></code> parameter arrives from
+<code class="docutils literal notranslate"><span class="pre">_apply_kdet_filter</span></code> line 1026 as <code class="docutils literal notranslate"><span class="pre">shift_coherence=shift_coherence_veto</span></code>, which defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code> at
+the <code class="docutils literal notranslate"><span class="pre">detect_lines_and_match_transitions</span></code> signature (line 1126). Under the default configuration,
+<code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">shift_coherence</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>, so the Rust branch is never entered. The comment at
+<code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/host.py:1148</span></code> explicitly states “the density-score branch
+(<code class="docutils literal notranslate"><span class="pre">shift_coherence_veto=False</span></code>: Rust + density) is not ported and falls [back]”, confirming this is an
+intentional architectural gap, not a bug. The Rust <code class="docutils literal notranslate"><span class="pre">kdet_filter_elements</span></code> function is thus unreachable
+in the default production pipeline. The census description is fully accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-3-no-cross-backend-parity-test-for-scan-comb-shifts-dispatch">
+<h2>Finding 3 — No cross-backend parity test for <code class="docutils literal notranslate"><span class="pre">scan_comb_shifts</span></code> dispatch<a class="headerlink" href="#finding-3-no-cross-backend-parity-test-for-scan-comb-shifts-dispatch" title="Link to this heading"></a></h2>
+<p><strong>REAL:</strong> TRUE</p>
+<p><strong>Corrected severity:</strong> MEDIUM (confirmed as stated, but with an important upgrade note)</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">tests/test_comb_rust.py</span></code> calls <code class="docutils literal notranslate"><span class="pre">scan_comb_shifts</span></code> directly on synthetic data but does
+NOT compare <code class="docutils literal notranslate"><span class="pre">_scan_comb_shifts_dispatch_rust</span></code> against pure-Python <code class="docutils literal notranslate"><span class="pre">_scan_comb_shifts</span></code> on the same
+realistic input. This coverage gap is confirmed. However, the divergence risk is higher than the census
+implies because of an undetected algorithmic difference (see Missed Finding A below): the greedy
+matching orientation differs between Rust and Python, meaning the parity gap is not merely a
+test-infrastructure problem but may be a real result divergence on edge-case inputs. MEDIUM severity
+is correct but underestimates the urgency.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-4-parallelism-inverted-parallel-over-shifts-serial-over-elements">
+<h2>Finding 4 — Parallelism inverted (parallel over shifts, serial over elements)<a class="headerlink" href="#finding-4-parallelism-inverted-parallel-over-shifts-serial-over-elements" title="Link to this heading"></a></h2>
+<p><strong>REAL:</strong> TRUE</p>
+<p><strong>Corrected severity:</strong> MEDIUM (confirmed as stated)</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">comb_matching.rs:197–241</span></code> uses <code class="docutils literal notranslate"><span class="pre">shifts.par_iter()</span></code> to parallelize the outer shift loop
+while iterating elements serially inside each task. With typical N_shifts ≈ 200–400 and N_elements
+≈ 30–80 after kdet filtering, this layout produces fewer Rayon tasks with higher per-task cost than the
+transposed layout would. The census’s fix suggestion (flatten to <code class="docutils literal notranslate"><span class="pre">(shift,</span> <span class="pre">element)</span></code> pairs in a single
+<code class="docutils literal notranslate"><span class="pre">par_iter()</span></code>) is algorithmically sound. Benefit depends on workload, so profiling before applying is
+the right guidance. Confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-temp-1-0-guard-silently-accepts-t-0">
+<h2>Finding 5 — <code class="docutils literal notranslate"><span class="pre">temp</span> <span class="pre">&lt;=</span> <span class="pre">1.0</span></code> guard silently accepts T &lt; 0<a class="headerlink" href="#finding-5-temp-1-0-guard-silently-accepts-t-0" title="Link to this heading"></a></h2>
+<p><strong>REAL:</strong> TRUE</p>
+<p><strong>Corrected severity:</strong> LOW (confirmed as stated)</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">partition.rs:48–49</span></code> returns <code class="docutils literal notranslate"><span class="pre">1.0</span></code> for any <code class="docutils literal notranslate"><span class="pre">temp</span> <span class="pre">&lt;=</span> <span class="pre">1.0</span></code>, including negative values.
+The Python reference (<code class="docutils literal notranslate"><span class="pre">partition.py:929</span></code>) does the same: <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">T_K</span> <span class="pre">&lt;=</span> <span class="pre">1.0:</span> <span class="pre">return</span> <span class="pre">1.0</span> <span class="pre">if</span> <span class="pre">g0</span> <span class="pre">is</span> <span class="pre">None</span> <span class="pre">else</span> <span class="pre">max(1.0,</span> <span class="pre">float(g0))</span></code>. Both paths agree, and LIBS plasmas are always &gt;&gt; 1 K in practice.
+Consistent behavior with no production impact. LOW severity confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-6-no-end-to-end-test-of-apply-kdet-filter-rust-dispatch-branch">
+<h2>Finding 6 — No end-to-end test of <code class="docutils literal notranslate"><span class="pre">_apply_kdet_filter</span></code> Rust dispatch branch<a class="headerlink" href="#finding-6-no-end-to-end-test-of-apply-kdet-filter-rust-dispatch-branch" title="Link to this heading"></a></h2>
+<p><strong>REAL:</strong> TRUE</p>
+<p><strong>Corrected severity:</strong> MEDIUM (confirmed as stated)</p>
+<p><strong>Reasoning:</strong> The Rust kdet branch is guarded by <code class="docutils literal notranslate"><span class="pre">HAS_RUST_CORE</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">shift_coherence</span></code>
+(line 2187). <code class="docutils literal notranslate"><span class="pre">tests/test_comb_rust.py</span></code> calls <code class="docutils literal notranslate"><span class="pre">kdet_filter_elements</span></code> directly, bypassing the
+<code class="docutils literal notranslate"><span class="pre">_apply_kdet_filter</span></code> dispatch logic entirely. If the argument mapping or return-type conversion in
+<code class="docutils literal notranslate"><span class="pre">_kdet_dispatch_rust</span></code> were broken, the test suite would silently fall back to Python and not report a
+failure. The coverage gap is real.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-7-partition-parity-tests-use-unclamped-python-cannot-catch-finding-1">
+<h2>Finding 7 — Partition parity tests use unclamped Python — cannot catch Finding 1<a class="headerlink" href="#finding-7-partition-parity-tests-use-unclamped-python-cannot-catch-finding-1" title="Link to this heading"></a></h2>
+<p><strong>REAL:</strong> TRUE</p>
+<p><strong>Corrected severity:</strong> MEDIUM (confirmed as stated)</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">test_comb_rust.py:276</span></code> compares <code class="docutils literal notranslate"><span class="pre">batch_partition_functions</span></code> against
+<code class="docutils literal notranslate"><span class="pre">polynomial_partition_function(float(temp),</span> <span class="pre">list(coefficients[0]))</span></code> with no <code class="docutils literal notranslate"><span class="pre">t_min</span></code>/<code class="docutils literal notranslate"><span class="pre">t_max</span></code>/<code class="docutils literal notranslate"><span class="pre">g0</span></code>
+arguments. Both paths therefore extrapolate identically, so the test confirms raw polynomial parity
+but cannot detect the clamping divergence described in Finding 1. The test at T=50 000 K for Ca I
+coefficients would pass even though both paths are 560× wrong. Confirmed.</p>
+</section>
+<hr class="docutils" />
+<section id="missed-findings">
+<h2>Missed Findings<a class="headerlink" href="#missed-findings" title="Link to this heading"></a></h2>
+<section id="missed-finding-a-architecture-medium">
+<h3>Missed Finding A — ARCHITECTURE / MEDIUM<a class="headerlink" href="#missed-finding-a-architecture-medium" title="Link to this heading"></a></h3>
+<p><strong>Title:</strong> Greedy matching orientation is TRANSPOSED between Rust and Python <code class="docutils literal notranslate"><span class="pre">scan_comb_shifts</span></code></p>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">native/cflibs-core/src/comb_matching.rs:14–52</span></code> (<code class="docutils literal notranslate"><span class="pre">count_matches</span></code>) vs
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:1921–1989</span></code> (<code class="docutils literal notranslate"><span class="pre">_match_transitions_to_peaks</span></code> as called by
+<code class="docutils literal notranslate"><span class="pre">_score_comb_for_element</span></code>)</p>
+<p><strong>Evidence:</strong></p>
+<ul class="simple">
+<li><p>Rust <code class="docutils literal notranslate"><span class="pre">count_matches</span></code> (lines 14–52): outer loop over <strong>peaks</strong>, pick nearest unused <strong>transition</strong> for
+each peak.</p></li>
+<li><p>Python <code class="docutils literal notranslate"><span class="pre">_match_transitions_to_peaks</span></code> (lines 1950–1988, called with <code class="docutils literal notranslate"><span class="pre">used_peaks=None</span></code>): outer loop
+over <strong>transitions</strong>, pick nearest unused <strong>peak</strong> for each transition.</p></li>
+</ul>
+<p><strong>Consequence:</strong> These are transposes of the same greedy bipartite-matching approximation. On inputs
+where the bipartite graph is a perfect matching (one-to-one correspondence, no ambiguity), both
+produce the same count. But when multiple peaks cluster near a single transition wavelength, or when
+multiple transitions fall within tolerance of one peak, the two algorithms make different greedy
+choices and can produce different <code class="docutils literal notranslate"><span class="pre">matched_lines</span></code> counts — and therefore different <code class="docutils literal notranslate"><span class="pre">precision</span></code>,
+<code class="docutils literal notranslate"><span class="pre">recall</span></code>, <code class="docutils literal notranslate"><span class="pre">f1_score</span></code>, and <code class="docutils literal notranslate"><span class="pre">passes</span></code> flags for the same element at the same shift. Since
+<code class="docutils literal notranslate"><span class="pre">_scan_comb_shifts</span></code> uses the Rust path as the primary path when <code class="docutils literal notranslate"><span class="pre">HAS_RUST_CORE</span></code> is True and the Python
+path only as a fallback, any such divergence is silent in production. The existing parity tests
+(Finding 3) use only clean 1:1 synthetic data and would not catch this.</p>
+<p><strong>Fix:</strong> Add a parity test with a deliberately ambiguous input — e.g. two peaks near one transition and
+one peak near two transitions — and assert that Rust and Python produce identical <code class="docutils literal notranslate"><span class="pre">matched_lines</span></code>. If
+they diverge, align the greedy orientation (prefer transition-outer to match the Python semantics,
+which was the original design).</p>
+</section>
+<section id="missed-finding-b-architecture-low">
+<h3>Missed Finding B — ARCHITECTURE / LOW<a class="headerlink" href="#missed-finding-b-architecture-low" title="Link to this heading"></a></h3>
+<p><strong>Title:</strong> F1 tie-breaking epsilon differs between Rust (<code class="docutils literal notranslate"><span class="pre">1e-12</span></code>) and Python (<code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> rtol=1e-5)</p>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">native/cflibs-core/src/comb_matching.rs:267</span></code> vs
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:1845</span></code></p>
+<p><strong>Evidence:</strong></p>
+<ul class="simple">
+<li><p>Rust: <code class="docutils literal notranslate"><span class="pre">(sr.total_f1</span> <span class="pre">-</span> <span class="pre">prev.total_f1).abs()</span> <span class="pre">&lt;</span> <span class="pre">1e-12</span></code> for the “treat as equal” condition.</p></li>
+<li><p>Python: <code class="docutils literal notranslate"><span class="pre">np.isclose(total_f1,</span> <span class="pre">prev_f1)</span></code> which uses default rtol=1e-5, atol=1e-8.</p></li>
+</ul>
+<p><strong>Consequence:</strong> When two shifts produce F1 values that differ by, say, 3e-7 (well within <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code>
+tolerance but above 1e-12), the Python path treats them as tied and tiebreaks by match count, while
+the Rust path picks the strictly higher F1 directly. This can cause different <code class="docutils literal notranslate"><span class="pre">best_shift</span></code> selections
+in borderline cases. LOW severity because the absolute F1 difference in a real tie scenario is
+typically sub-floating-point noise, but it is a semantic divergence the parity tests do not cover.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="corrected-severity-summary">
+<h2>Corrected Severity Summary<a class="headerlink" href="#corrected-severity-summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Dimension</p></th>
+<th class="head"><p>Original Sev</p></th>
+<th class="head"><p>Confirmed?</p></th>
+<th class="head"><p>Corrected Sev</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Physics-correctness</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">evaluate_batch</span></code> has no production callers</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Architecture</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p>kdet Rust branch dead under default config</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Architecture</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p>Urgency understated (see Missed A)</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Performance</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p>Confirmed</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Complexity</p></td>
+<td><p>LOW</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>LOW</strong></p></td>
+<td><p>Consistent behavior, no prod impact</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Test-gaps</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p>Confirmed</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Test-gaps</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p>Confirmed</p></td>
+</tr>
+<tr class="row-odd"><td><p>A</p></td>
+<td><p>Architecture (MISSED)</p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p>Transposed greedy matching orientation</p></td>
+</tr>
+<tr class="row-even"><td><p>B</p></td>
+<td><p>Architecture (MISSED)</p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+<td><p><strong>LOW</strong></p></td>
+<td><p>F1 tie-breaking epsilon mismatch</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity:</strong> HIGH (Finding 2: kdet_filter_elements dead under default config)</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

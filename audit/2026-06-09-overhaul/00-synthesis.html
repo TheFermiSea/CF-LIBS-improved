@@ -1,0 +1,221 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026-06-09 Overhaul Audit — Synthesis &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">2026-06-09 Overhaul Audit — Synthesis</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/00-synthesis.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="overhaul-audit-synthesis">
+<h1>2026-06-09 Overhaul Audit — Synthesis<a class="headerlink" href="#overhaul-audit-synthesis" title="Link to this heading"></a></h1>
+<p>Six parallel audits (forward physics, inversion solver, identification, pipeline defaults,
+repo cleanliness, literature SOTA) of the full CF-LIBS pipeline, each grounded in
+peer-reviewed literature and live measurements on real BHVO-2 ChemCam data. Detailed
+findings with file:line evidence and citations live in <code class="docutils literal notranslate"><span class="pre">01-…06-</span></code> in this directory.
+Tracking epic: <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-zjg9</span></code>.</p>
+<section id="headline-diagnosis">
+<h2>Headline diagnosis<a class="headerlink" href="#headline-diagnosis" title="Link to this heading"></a></h2>
+<p>The codebase is <em>engineered</em> well (ruff/complexity clean, strong test count) but ships
+<strong>correctness bugs in the physics data path</strong> and <strong>defaults that bypass its own validated
+improvements</strong>. Measured on the same code, same spectra, same elements:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>BHVO-2 RMSE (wt%)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span></code> defaults</p></td>
+<td><p><strong>10.29</strong> (Fe=39 vs cert 8.6, converged=True, zero warnings)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--saha-boltzmann-graph</span> <span class="pre">--closure-mode</span> <span class="pre">oxide</span></code></p></td>
+<td><p><strong>4.03</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Literature honesty check</p></td>
+<td><p>no published <em>calibration-free</em> basalt result beats ~4; the 1.3–3.5 wt% figures are multivariate-calibrated (06 §Q5)</p></td>
+</tr>
+</tbody>
+</table>
+<p>So: 4.03 is already near CF-SOTA, the defaults throw away a 2.55× improvement, and the
+remaining gap to sub-2 wt% requires <em>added physics</em> (self-absorption handled by default,
+forward-fitting/two-zone, or one-point calibration), not tuning.</p>
+</section>
+<section id="top-correctness-bugs-verified-live">
+<h2>Top correctness bugs (verified live)<a class="headerlink" href="#top-correctness-bugs-verified-live" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Forward model drops ~98% of lines</strong> — populations keyed by raw float
+<code class="docutils literal notranslate"><span class="pre">level.energy_ev</span></code> (<code class="docutils literal notranslate"><span class="pre">plasma/saha_boltzmann.py:364</span></code>) but looked up with
+<code class="docutils literal notranslate"><span class="pre">round(E_k_ev,</span> <span class="pre">8)</span></code> from the differently-sourced lines table
+(<code class="docutils literal notranslate"><span class="pre">radiation/emissivity.py:74</span></code>, <code class="docutils literal notranslate"><span class="pre">spectrum_model.py:38,215,247</span></code>): 110/6127 lines match.
+Poisons <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">forward</span></code>, NIST-parity scripts, and <strong>all synthetic benchmark corpora</strong>.
+(01-F1)</p></li>
+<li><p><strong>U_II(Na)=15.0 hardcoded fallback</strong> — DB has zero Na II/Li II/H II levels; the
+25/15/2 fallback ladder fires where true closed-shell U≈1.0. At 1 eV Na is ≳99%
+ionized → ~15× Na over-attribution: the original “Na=98%” blowup mechanism, still live.
+(02-F1)</p></li>
+<li><p><strong>Neutral partition functions 5–40% low</strong> (K I −40%, Na I −30%, Ca I −25% vs
+Barklem &amp; Collet 2016) — <code class="docutils literal notranslate"><span class="pre">datagen_v2.py:167</span></code> regex misses high-Rydberg levels.
+Deflates alkalis/alkaline-earths, inflates Fe through Σ C=1. (01-F3)</p></li>
+<li><p><strong>n_e never measured</strong> — full Stark machinery exists, no path constructs a
+<code class="docutils literal notranslate"><span class="pre">StarkDiagnosticLine</span></code>; every solve uses the self-admittedly invalid 1-atm pressure
+balance. (02-F2)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">total_species_density_cm3</span></code> silently ignored</strong> in <code class="docutils literal notranslate"><span class="pre">radiation/kernels.py</span></code>
+(Bayesian forward): spectra bit-identical across a 10× density change. (05 §test-triage)</p></li>
+<li><p><strong>Intensity floor unit-mixing</strong> — <code class="docutils literal notranslate"><span class="pre">max(area,</span> <span class="pre">peak_height)</span></code> mixes counts·nm with
+counts (1.5–3 ln-unit Boltzmann distortions). (02-F6)</p></li>
+<li><p><strong>Production element ID uses the worst identifier</strong> — the comb-gate cascade
+(comb F1=0.012) gates <code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">invert</span></code> while the benchmarked best, hybrid_union
+(F1=0.673), sits unwired. Single-line FP door admits Ag/Sn/W/Bi. (03 §1,3)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">converged=True</span></code> on garbage</strong> — the lax solve path omits the keystone gate and
+quality keys; no CLI path surfaces degeneracy/ne-fallback/dropped-element warnings.
+(02-F8, 04 §3)</p></li>
+</ol>
+</section>
+<section id="structural-insights">
+<h2>Structural insights<a class="headerlink" href="#structural-insights" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>SB-graph ≡ common-slope under equal weights</strong> (proved numerically to 1e-14): its gain
+comes from dropping w∝I weighting, so the weight cap is a band-aid; the principled fix
+is a total-error σ_y model with a systematic floor. (02-F7)</p></li>
+<li><p><strong>Self-absorption correction is a positive-feedback loop</strong> (τ from recovered
+composition, no observable gate) — explains “SA makes intercepts worse”. Fix:
+width-ratio / doublet-ratio gating (already implemented, unwired) or
+Völker &amp; Gornushkin closed-form. (02-F4, 06 §Q2)</p></li>
+<li><p><strong>Five inconsistent line-strength metrics</strong>, none using U(T); NIST <code class="docutils literal notranslate"><span class="pre">rel_int</span></code>
+(non-quantitative per NIST) is still load-bearing, including in the synthetic-truth
+forward model. (03 §5)</p></li>
+<li><p><strong>ps-LIBS (1 ps, 1040 nm)</strong>: literature supports CF advantages (narrower lines, less
+SA) but a short early LTE window (~100–400 ns gate delays). No continuum model is
+defensible for gated ps acquisition. (06 §Q6, 01)</p></li>
+</ul>
+</section>
+<section id="overhaul-plan">
+<h2>Overhaul plan<a class="headerlink" href="#overhaul-plan" title="Link to this heading"></a></h2>
+<p><strong>Wave 1 — correctness + defaults (beads z3cg, 16m7, cxxq, l4a8, +salvage):</strong>
+population matching fix; partition-function data integrity (B&amp;C 2016 patch + fallback
+ladder); intensity-floor removal + lax-gate parity + degeneracy honesty; best-path
+defaults (geological preset = SB-graph + oxide), batch rewire, example-config fix, CLI
+trust surface; salvage wt-pf g2/g4 test fixes → full suite green.</p>
+<p><strong>Wave 2 — physics upgrades:</strong> hybrid_union as production identifier (benchmark-gated);
+Stark-n_e wiring; observable-gated self-absorption ON by default; spectral-response
+E(λ) hook for the ps instrument; multi-line Boltzmann-coherence presence test;
+total-error weighting; JAX Saha stage III + IPD; regenerate synthetic corpora post-W1.</p>
+<p><strong>Wave 3 — cleanliness:</strong> delete 7 legacy root scripts + 18 flat shims + ~100 stale
+branches; consolidate remaining duplicate mass tables; archive one-off scripts; fix
+CLAUDE.md falsehoods; re-baseline benchmarks.</p>
+<p><strong>Gates (every wave):</strong> BHVO-2 best-path RMSE ≤ 4.03 + per-element sanity; full-suite
+diff vs baseline; ID benchmark for any identifier-scoring change; physics-only AST scan.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

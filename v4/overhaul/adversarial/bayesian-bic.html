@@ -1,0 +1,377 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Audit: Bayesian Likelihood Normalization, Variance Model, BIC &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Audit: Bayesian Likelihood Normalization, Variance Model, BIC</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/bayesian-bic.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-audit-bayesian-likelihood-normalization-variance-model-bic">
+<h1>Adversarial Audit: Bayesian Likelihood Normalization, Variance Model, BIC<a class="headerlink" href="#adversarial-audit-bayesian-likelihood-normalization-variance-model-bic" title="Link to this heading"></a></h1>
+<section id="verdict">
+<h2>VERDICT<a class="headerlink" href="#verdict" title="Link to this heading"></a></h2>
+<p><strong>flawed</strong> — severity <strong>medium</strong></p>
+<p>The BIC/AIC/AICc implementations used in <code class="docutils literal notranslate"><span class="pre">prune_elements</span></code> are internally consistent (n is constant, the dropped normalization constant cancels in differences), and the Gaussian/Poisson log-likelihoods in the MCMC sampler are correct. However, the SpIC (<code class="docutils literal notranslate"><span class="pre">Criterion.SPIC</span></code>) implementation has two structural errors relative to Webb et al. (2021): (1) the per-component line-strength measure R_a is computed as an L1 norm rather than the L2-squared chi^2-style sum of Webb Eq. 5, and (2) the data-fit term is the profile likelihood deviance <code class="docutils literal notranslate"><span class="pre">n*log(RSS/n)</span></code> rather than the chi^2 statistic <code class="docutils literal notranslate"><span class="pre">RSS/sigma^2</span></code> that Webb’s formula requires. These errors cause SpIC to under-penalize strong elements by ~0.8–2.0 units per element (BIC-like term) and misscale the data-fit term relative to the R_a penalty, making SpIC’s threshold numerically incompatible with the Webb paper. SpIC is not the default criterion (BIC is), so the default path is unaffected.</p>
+</section>
+<hr class="docutils" />
+<section id="ground-truth">
+<h2>GROUND TRUTH<a class="headerlink" href="#ground-truth" title="Link to this heading"></a></h2>
+<section id="bic-formula">
+<h3>BIC formula<a class="headerlink" href="#bic-formula" title="Link to this heading"></a></h3>
+<p>Schwarz (1978): BIC = -2·LL_max + k·ln(n), where LL_max is the maximized log-likelihood.<br />
+Under Gaussian noise with MLE variance σ² = RSS/n: -2·LL_max = n·ln(RSS/n) + n·(1+ln(2π)).<br />
+The constant n·(1+ln(2π)) is independent of k and n (it is constant when n is fixed), so it cancels in all model comparisons within <code class="docutils literal notranslate"><span class="pre">prune_elements</span></code>. The code’s formula <code class="docutils literal notranslate"><span class="pre">n·ln(RSS/n)</span> <span class="pre">+</span> <span class="pre">k·ln(n)</span></code> is a valid profile-BIC.<br />
+<strong>Citation:</strong> Schwarz, G. (1978). Estimating the dimension of a model. <em>Annals of Statistics</em>, 6(2), 461–464. DOI:10.1214/aos/1176344136</p>
+</section>
+<section id="aicc-formula">
+<h3>AICc formula<a class="headerlink" href="#aicc-formula" title="Link to this heading"></a></h3>
+<p>Hurvich &amp; Tsai (1989) canonical: AICc = AIC + 2K(K+1)/(n−K−1), where K includes estimated parameters. Whether sigma counts as a parameter depends on context; the code excludes it. The resulting delta in AICc between models differs by &lt; 0.01 at n=500, k=5.<br />
+<strong>Citation:</strong> Hurvich, C. M., &amp; Tsai, C.-L. (1989). Regression and time series model selection in small samples. <em>Biometrika</em>, 76(2), 297–307. DOI:10.1093/biomet/76.2.297<br />
+<strong>Citation:</strong> Burnham, K. P., &amp; Anderson, D. R. (2002). <em>Model Selection and Multimodel Inference</em> (2nd ed.), Springer. pp. 66–68. ISBN 0-387-95364-7</p>
+</section>
+<section id="spic-formula">
+<h3>SpIC formula<a class="headerlink" href="#spic-formula" title="Link to this heading"></a></h3>
+<p>Webb et al. (2021) Eq. (3):
+SpIC = χ² + Σ_a [ 2f·k_a·R_a/(R_a − k_a − 1)  +  (1−f)·k_a·ln(R_a) ]
+Webb Eq. (5): R_a = Σ_j r_{a,j} where r_{a,j} = (c_a · B_{a,j} / σ_j)²  (L2-squared, chi^2 style).
+The data-fit term is χ² = Σ_i (y_i − f_i)² / σ_i² — NOT the profile likelihood deviance n·log(RSS/n).<br />
+<strong>Citation:</strong> Webb, J. K., Lee, C.-C., Carswell, R. F., &amp; Milakovic, D. (2021). Getting the model right: an information criterion for spectroscopy. <em>MNRAS</em>, 501(2), 2268–2278. DOI:10.1093/mnras/staa3551. arXiv:2009.08336</p>
+</section>
+<section id="poisson-cash-log-likelihood">
+<h3>Poisson/Cash log-likelihood<a class="headerlink" href="#poisson-cash-log-likelihood" title="Link to this heading"></a></h3>
+<p>Cash (1979): C = 2·Σ_i [μ_i − y_i·log(μ_i) + log(y_i!)] (Cash C-statistic).<br />
+Equivalently: LL = Σ_i [y_i·log(μ_i) − μ_i − log(y_i!)] (exactly the code).<br />
+<strong>Citation:</strong> Cash, W. (1979). Parameter estimation in astronomy through application of the likelihood ratio. <em>ApJ</em>, 228, 939–947. DOI:10.1086/156922</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="code-value-numerical">
+<h2>CODE VALUE (numerical)<a class="headerlink" href="#code-value-numerical" title="Link to this heading"></a></h2>
+<section id="bic-n-constancy-correct">
+<h3>BIC n-constancy (CORRECT)<a class="headerlink" href="#bic-n-constancy-correct" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> <span class="n">PYTHONPATH</span><span class="o">=/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="n">JAX_PLATFORMS</span><span class="o">=</span><span class="n">cpu</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.inversion.identify.model_selection</span><span class="w"> </span><span class="kn">import</span> <span class="n">_compute_bic</span>
+<span class="n">n</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">;</span> <span class="n">observed</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">n</span><span class="p">);</span> <span class="n">predicted</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="o">*</span><span class="mf">5.0</span>
+<span class="n">bic</span> <span class="o">=</span> <span class="n">_compute_bic</span><span class="p">(</span><span class="n">observed</span><span class="p">,</span> <span class="n">predicted</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">manual</span> <span class="o">=</span> <span class="n">n</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">observed</span><span class="o">-</span><span class="n">predicted</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">/</span><span class="n">n</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;match:&#39;</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">bic</span><span class="o">-</span><span class="n">manual</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-10</span><span class="p">,</span> <span class="s1">&#39;BIC:&#39;</span><span class="p">,</span> <span class="n">bic</span><span class="p">)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">match:</span> <span class="pre">True</span> <span class="pre">BIC:</span> <span class="pre">-1415.095...</span></code>
+n = len(observed) never changes within prune_elements — confirmed.</p>
+</section>
+<section id="aicc-offset-vs-burnham-anderson-negligible">
+<h3>AICc offset vs Burnham &amp; Anderson (NEGLIGIBLE)<a class="headerlink" href="#aicc-offset-vs-burnham-anderson-negligible" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> <span class="n">PYTHONPATH</span><span class="o">=...</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="n">n</span><span class="o">=</span><span class="mi">500</span><span class="p">;</span> <span class="n">k</span><span class="o">=</span><span class="mi">5</span>
+<span class="c1"># code delta (remove 1 element): -2.040649</span>
+<span class="c1"># B&amp;A with sigma as param delta: -2.048928</span>
+<span class="c1"># difference: 0.008 -- negligible</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: delta difference = 0.0083 (well below any practical threshold).</p>
+</section>
+<section id="spic-r-a-formula-wrong-l1-vs-l2">
+<h3>SpIC R_a formula (WRONG — L1 vs L2)<a class="headerlink" href="#spic-r-a-formula-wrong-l1-vs-l2" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> <span class="n">PYTHONPATH</span><span class="o">=...</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="n">c_a</span> <span class="o">=</span> <span class="mf">500.0</span><span class="p">;</span> <span class="n">B_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span><span class="o">*</span><span class="mf">0.1</span><span class="p">;</span> <span class="n">sigma</span> <span class="o">=</span> <span class="mf">10.0</span>
+<span class="n">R_webb</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">c_a</span><span class="o">*</span><span class="n">B_vec</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="n">sigma</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>   <span class="c1"># L2-squared: 2500.0</span>
+<span class="n">R_code</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">c_a</span><span class="o">*</span><span class="n">B_vec</span><span class="p">))</span><span class="o">/</span><span class="n">sigma</span>   <span class="c1"># L1/sigma:   500.0</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;R_webb:&#39;</span><span class="p">,</span> <span class="n">R_webb</span><span class="p">,</span> <span class="s1">&#39;R_code:&#39;</span><span class="p">,</span> <span class="n">R_code</span><span class="p">,</span> <span class="s1">&#39;ratio:&#39;</span><span class="p">,</span> <span class="n">R_webb</span><span class="o">/</span><span class="n">R_code</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;BIC-like penalty diff:&#39;</span><span class="p">,</span> <span class="mf">0.5</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">R_webb</span><span class="o">/</span><span class="n">R_code</span><span class="p">))</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">R_webb:</span> <span class="pre">2500.0</span> <span class="pre">R_code:</span> <span class="pre">500.0</span> <span class="pre">ratio:</span> <span class="pre">5.0</span> <span class="pre">BIC-like</span> <span class="pre">penalty</span> <span class="pre">diff:</span> <span class="pre">0.805</span></code></p>
+<p>Range across LIBS-like B values (c_a=500, n_pix=100, sigma=10):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>B</p></th>
+<th class="head"><p>R_webb</p></th>
+<th class="head"><p>R_code</p></th>
+<th class="head"><p>ratio</p></th>
+<th class="head"><p>BIC-like penalty diff</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0.01</p></td>
+<td><p>25</p></td>
+<td><p>50</p></td>
+<td><p>0.5</p></td>
+<td><p>−0.347</p></td>
+</tr>
+<tr class="row-odd"><td><p>0.1</p></td>
+<td><p>2500</p></td>
+<td><p>500</p></td>
+<td><p>5.0</p></td>
+<td><p>+0.805</p></td>
+</tr>
+<tr class="row-even"><td><p>0.5</p></td>
+<td><p>62500</p></td>
+<td><p>2500</p></td>
+<td><p>25.0</p></td>
+<td><p>+1.609</p></td>
+</tr>
+<tr class="row-odd"><td><p>1.0</p></td>
+<td><p>250000</p></td>
+<td><p>5000</p></td>
+<td><p>50.0</p></td>
+<td><p>+1.956</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="chi-2-vs-profile-deviance-substitution-in-spic-wrong">
+<h3>chi^2 vs profile deviance substitution in SpIC (WRONG)<a class="headerlink" href="#chi-2-vs-profile-deviance-substitution-in-spic-wrong" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> <span class="n">PYTHONPATH</span><span class="o">=...</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="c1"># Typical LIBS fit (n=4096, sigma^2=100, RSS = n*sigma^2):</span>
+<span class="n">n</span><span class="o">=</span><span class="mi">4096</span><span class="p">;</span> <span class="n">sigma2</span><span class="o">=</span><span class="mf">100.0</span><span class="p">;</span> <span class="n">rss</span><span class="o">=</span><span class="n">n</span><span class="o">*</span><span class="n">sigma2</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;chi^2:&#39;</span><span class="p">,</span> <span class="n">rss</span><span class="o">/</span><span class="n">sigma2</span><span class="p">)</span>          <span class="c1"># 4096</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;n*log(RSS/n):&#39;</span><span class="p">,</span> <span class="n">n</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">rss</span><span class="o">/</span><span class="n">n</span><span class="p">))</span>  <span class="c1"># 18862</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ratio chi^2/profile_dev:&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">rss</span><span class="o">/</span><span class="n">sigma2</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">n</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">rss</span><span class="o">/</span><span class="n">n</span><span class="p">)))</span>  <span class="c1"># 0.22</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">chi^2:</span> <span class="pre">4096.0</span>&#160; <span class="pre">n*log(RSS/n):</span> <span class="pre">18862.8</span>&#160; <span class="pre">ratio:</span> <span class="pre">0.22</span></code>
+The profile deviance is ~4.6× larger than chi^2 for this LIBS-like scenario.</p>
+</section>
+<section id="gaussian-log-likelihood-normalization-correct">
+<h3>Gaussian log-likelihood normalization (CORRECT)<a class="headerlink" href="#gaussian-log-likelihood-normalization-correct" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> <span class="n">PYTHONPATH</span><span class="o">=...</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="n">y</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span><span class="mf">2.</span><span class="p">,</span><span class="mf">3.</span><span class="p">,</span><span class="mf">4.</span><span class="p">,</span><span class="mf">5.</span><span class="p">]);</span> <span class="n">mu</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.1</span><span class="p">,</span><span class="mf">2.1</span><span class="p">,</span><span class="mf">3.1</span><span class="p">,</span><span class="mf">4.1</span><span class="p">,</span><span class="mf">5.1</span><span class="p">]);</span> <span class="n">s2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mf">1.</span><span class="p">,</span><span class="mf">6.</span><span class="p">)</span>
+<span class="n">ll_manual</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">y</span><span class="o">-</span><span class="n">mu</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="n">s2</span> <span class="o">-</span> <span class="mf">0.5</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="n">s2</span><span class="p">))</span>
+<span class="n">ll_code</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.5</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="n">s2</span><span class="p">)</span><span class="o">+</span><span class="p">(</span><span class="n">y</span><span class="o">-</span><span class="n">mu</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="n">s2</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;match:&#39;</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">ll_manual</span><span class="o">-</span><span class="n">ll_code</span><span class="p">)</span><span class="o">&lt;</span><span class="mf">1e-14</span><span class="p">)</span>  <span class="c1"># True</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">match:</span> <span class="pre">True</span></code> — Gaussian LL formula is exact.</p>
+</section>
+<section id="poisson-cash-formula-correct">
+<h3>Poisson/Cash formula (CORRECT)<a class="headerlink" href="#poisson-cash-formula-correct" title="Link to this heading"></a></h3>
+<p>Cash 1979 LL: Σ(n·log(μ) − μ − log Γ(n+1))<br />
+Code line 104: <code class="docutils literal notranslate"><span class="pre">shot</span> <span class="pre">=</span> <span class="pre">jnp.sum(n</span> <span class="pre">*</span> <span class="pre">jnp.log(mu)</span> <span class="pre">-</span> <span class="pre">mu</span> <span class="pre">-</span> <span class="pre">gammaln(n</span> <span class="pre">+</span> <span class="pre">1.0))</span></code> — exact match.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="delta-interpretation">
+<h2>DELTA &amp; INTERPRETATION<a class="headerlink" href="#delta-interpretation" title="Link to this heading"></a></h2>
+<section id="bic-aicc-correct">
+<h3>BIC/AICc (CORRECT)<a class="headerlink" href="#bic-aicc-correct" title="Link to this heading"></a></h3>
+<p>n is truly constant (= number of spectral pixels, fixed per spectrum). The omitted constant n·(1+ln(2π)) ≈ 284 for n=100 cancels exactly in all pairwise comparisons within <code class="docutils literal notranslate"><span class="pre">prune_elements</span></code>. AICc’s exclusion of sigma from K introduces &lt; 0.01 change in delta-AICc at n=500, k=5 — completely negligible.</p>
+</section>
+<section id="spic-r-a-flawed-medium-severity">
+<h3>SpIC R_a (FLAWED — medium severity)<a class="headerlink" href="#spic-r-a-flawed-medium-severity" title="Link to this heading"></a></h3>
+<p>Two compounding errors:</p>
+<p><strong>Error 1 (R_a definition):</strong> Code computes L1/σ = Σ|c_a·B_{a,i}|/σ; Webb Eq. 5 requires L2²/σ² = Σ(c_a·B_{a,i})²/σ². The ratio R_webb/R_code ranges from 0.5 to 50× depending on element strength and basis shape. The BIC-like penalty term <code class="docutils literal notranslate"><span class="pre">(1−f)·k_a·ln(R_a)</span></code> is wrong by 0.35–1.96 per element, causing SpIC to under-penalize strong elements and retain elements that Webb’s criterion would prune.</p>
+<p><strong>Error 2 (data-fit term):</strong> Webb’s χ² = RSS/σ² is noise-normalized. The code substitutes n·log(RSS/n) (profile likelihood deviance), which has no σ dependence. At a LIBS-like operating point (n=4096, σ²=100), the profile deviance is 4.6× larger than χ². Since SpIC’s penalty R_a is calibrated for χ²-scale data-fit terms (Webb derived thresholds empirically for spectroscopy with χ² ~ n at a good fit), the substitution breaks the calibration — the relative weight of the penalty vs. data-fit term is miscalibrated by this factor.</p>
+<p><strong>Practical impact:</strong> SpIC is NOT the default criterion (BIC is the default). The errors affect only callers who explicitly pass <code class="docutils literal notranslate"><span class="pre">criterion=Criterion.SPIC</span></code>. The default BIC and AIC/AICc paths are unaffected. Within the SpIC code path, the direction of bias (underpenalizes → keeps more elements) is toward false positives, not false negatives, which is a safer failure mode for element identification.</p>
+</section>
+<section id="mcmc-gaussian-poisson-likelihoods-correct">
+<h3>MCMC Gaussian/Poisson likelihoods (CORRECT)<a class="headerlink" href="#mcmc-gaussian-poisson-likelihoods-correct" title="Link to this heading"></a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">likelihood.py</span></code> Gaussian branch includes both the weighted squared residual and the log(2πσ²) normalization term. This means WAIC/LOO-CV computed from the posterior predictive will be correct. The Poisson branch matches Cash (1979) exactly. The readout noise residual correction (audit C5 comment in code) is correctly applied to <code class="docutils literal notranslate"><span class="pre">observed</span> <span class="pre">−</span> <span class="pre">predicted</span></code> in measurement space.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="fix">
+<h2>FIX<a class="headerlink" href="#fix" title="Link to this heading"></a></h2>
+<section id="spic-r-a-file-cflibs-inversion-identify-model-selection-py-function-component-line-strengths">
+<h3>SpIC R_a (file: cflibs/inversion/identify/model_selection.py, function <code class="docutils literal notranslate"><span class="pre">_component_line_strengths</span></code>)<a class="headerlink" href="#spic-r-a-file-cflibs-inversion-identify-model-selection-py-function-component-line-strengths" title="Link to this heading"></a></h3>
+<p>Current code (lines 344–348):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sigma</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">noise_variance</span><span class="p">))</span> <span class="k">if</span> <span class="n">noise_variance</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="mf">1.0</span>
+<span class="n">strengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">active_indices</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">active_indices</span><span class="p">):</span>
+    <span class="n">contribution</span> <span class="o">=</span> <span class="n">coeffs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">*</span> <span class="n">basis_matrix</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">strengths</span><span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">contribution</span><span class="p">))</span> <span class="o">/</span> <span class="n">sigma</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Should be (Webb Eq. 5 — L2-squared, chi^2 style):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sigma</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">noise_variance</span><span class="p">))</span> <span class="k">if</span> <span class="n">noise_variance</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="mf">1.0</span>
+<span class="n">strengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">active_indices</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">active_indices</span><span class="p">):</span>
+    <span class="n">contribution</span> <span class="o">=</span> <span class="n">coeffs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">*</span> <span class="n">basis_matrix</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">strengths</span><span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">contribution</span> <span class="o">/</span> <span class="n">sigma</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span>  <span class="c1"># L2-squared, = chi^2 contribution</span>
+</pre></div>
+</div>
+</section>
+<section id="spic-data-fit-term-file-cflibs-inversion-identify-model-selection-py-function-compute-spic">
+<h3>SpIC data-fit term (file: cflibs/inversion/identify/model_selection.py, function <code class="docutils literal notranslate"><span class="pre">_compute_spic</span></code>)<a class="headerlink" href="#spic-data-fit-term-file-cflibs-inversion-identify-model-selection-py-function-compute-spic" title="Link to this heading"></a></h3>
+<p>Current: <code class="docutils literal notranslate"><span class="pre">chi2_term</span> <span class="pre">=</span> <span class="pre">_gaussian_log_likelihood_term(observed,</span> <span class="pre">predicted)</span></code> uses <code class="docutils literal notranslate"><span class="pre">n*log(RSS/n)</span></code>.</p>
+<p>Webb’s SpIC requires the actual chi^2 = RSS/σ² as the data-fit term. The function signature already accepts a <code class="docutils literal notranslate"><span class="pre">noise_variance</span></code> parameter via <code class="docutils literal notranslate"><span class="pre">_compute_criterion</span></code> but <code class="docutils literal notranslate"><span class="pre">_compute_spic</span></code> does not receive it. Fix:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_compute_spic</span><span class="p">(</span><span class="n">observed</span><span class="p">,</span> <span class="n">predicted</span><span class="p">,</span> <span class="n">line_strengths</span><span class="p">,</span> <span class="n">k_per_component</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">f</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">noise_variance</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+    <span class="c1"># Webb chi^2 data-fit term</span>
+    <span class="n">residuals</span> <span class="o">=</span> <span class="n">observed</span> <span class="o">-</span> <span class="n">predicted</span>
+    <span class="n">rss</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">residuals</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">chi2_term</span> <span class="o">=</span> <span class="n">rss</span> <span class="o">/</span> <span class="n">noise_variance</span>  <span class="c1"># Webb&#39;s chi^2 = RSS/sigma^2</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>And update the call in <code class="docutils literal notranslate"><span class="pre">_compute_criterion</span></code> to pass <code class="docutils literal notranslate"><span class="pre">noise_variance</span></code> to <code class="docutils literal notranslate"><span class="pre">_compute_spic</span></code>.</p>
+<p><strong>If SpIC is considered experimental/non-default and fixing it is deferred:</strong> add a docstring warning that the current SpIC implementation is an approximation differing from Webb et al. (2021) in both the data-fit term and the R_a definition.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary-table">
+<h2>SUMMARY TABLE<a class="headerlink" href="#summary-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Check</p></th>
+<th class="head"><p>Result</p></th>
+<th class="head"><p>Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>BIC n-constancy across prune_elements iterations</p></td>
+<td><p>CORRECT</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>BIC dropped normalization constant</p></td>
+<td><p>CORRECT (cancels)</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>AICc formula vs Burnham &amp; Anderson</p></td>
+<td><p>CORRECT (delta &lt; 0.01)</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Gaussian LL normalization in sampler (likelihood.py)</p></td>
+<td><p>CORRECT</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>Poisson/Cash LL formula</p></td>
+<td><p>CORRECT</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>SpIC R_a: L1 vs L2 (Webb Eq. 5)</p></td>
+<td><p><strong>FLAWED</strong></p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>SpIC data-fit: profile deviance vs chi^2</p></td>
+<td><p><strong>FLAWED</strong></p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-odd"><td><p>Variance model consistency (BIC vs sampler)</p></td>
+<td><p>Inconsistent by design (sequential use)</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

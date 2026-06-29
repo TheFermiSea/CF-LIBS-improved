@@ -1,0 +1,192 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BHVO-2 composition-accuracy root-cause diagnosis (measured, falsifiable) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">BHVO-2 composition-accuracy root-cause diagnosis (measured, falsifiable)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/2026-06-04-bhvo2-composition-root-cause.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="bhvo-2-composition-accuracy-root-cause-diagnosis-measured-falsifiable">
+<h1>BHVO-2 composition-accuracy root-cause diagnosis (measured, falsifiable)<a class="headerlink" href="#bhvo-2-composition-accuracy-root-cause-diagnosis-measured-falsifiable" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-04   <strong>Branch:</strong> feat/element-presence-redesign (off dev &#64; e4a9544, post #218/#219)
+<strong>Tooling:</strong> <code class="docutils literal notranslate"><span class="pre">scripts/measure_bhvo2_presence.py</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/probe_al_detection.py</span></code>
+<strong>Data:</strong> <code class="docutils literal notranslate"><span class="pre">data/bhvo2_usgs/{chemcam_bhvo2_loc1,csa_bhvo2_1000pulse}_spectrum.csv</span></code>
+<strong>Cert:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/reference_compositions.py::BHVO2_BASALT_USGS</span></code> (10 majors, mass frac)</p>
+<section id="tl-dr">
+<h2>TL;DR<a class="headerlink" href="#tl-dr" title="Link to this heading"></a></h2>
+<p>The CF-LIBS pipeline produces <strong>garbage composition on real BHVO-2</strong>, and the
+binding constraints are <strong>upstream of and different from</strong> the 29p1
+element-presence/comb hypothesis. Measured, in order of how-binding:</p>
+<ol class="arabic simple">
+<li><p><strong>Solver closure degeneracy (deepest).</strong> Given a clean multi-element line
+set the inversion collapses to one or two elements. Fed <strong>9 Mg + 9 Fe</strong>
+observation lines (correct wavelengths), it returns <strong>Mg = 0.0 %, Fe = 0.4 %</strong>
+and dumps all mass into Na (68 %) + Ca (30 %). Production (cert-10) output is
+<strong>Mn = 40.8 %</strong> (cert 0.13!) on ChemCam, <strong>Fe = 61.5 %</strong> on CSA.</p></li>
+<li><p><strong>Wavelength calibration.</strong> ChemCam BHVO-2 has a constant <strong>+0.10 nm</strong> offset
+on every line; the global shift-scan applies <strong>−0.15 nm</strong> (wrong sign), so
+real lines never align. CSA has a <strong>non-constant</strong> dispersion error
+(Mg −0.10, Ca +0.01, Na −0.29, Si +0.40) that a single global shift cannot fix.</p></li>
+<li><p><strong>Detection-gate cascade.</strong> Even with correct alignment, <code class="docutils literal notranslate"><span class="pre">kdet</span></code> prefilter +
+<code class="docutils literal notranslate"><span class="pre">comb_min_matches=3</span></code> + <code class="docutils literal notranslate"><span class="pre">LineSelector(min_lines_per_element,</span> <span class="pre">min_energy_spread_ev=2.0)</span></code>
+drop the real majors (Al’s 4 resonance lines span only 0.88 eV &lt; 2.0).</p></li>
+<li><p>(downstream, rarely reached) <code class="docutils literal notranslate"><span class="pre">rel_int&gt;=100</span></code> SQL floor deletes Al’s real lines
+(rel_int 24-26) <strong>and every NULL-rel_int line</strong>; resonance exclusion; the
+<code class="docutils literal notranslate"><span class="pre">_transition_strength</span></code> unit-mixing bug (rel_int ~tens vs A_ki ~1e8).</p></li>
+</ol>
+</section>
+<section id="falsifiable-measurements">
+<h2>Falsifiable measurements<a class="headerlink" href="#falsifiable-measurements" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>scenario (ChemCam loc1)</p></th>
+<th class="head"><p>result</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Production, cert-10 only</p></td>
+<td><p>RMSE 14.18; Mn 40.8 / Fe 21.9 / Si 18.7; Al=Mg=Na=K=P=0</p></td>
+</tr>
+<tr class="row-odd"><td><p>Production, cert-10 + {Ag,Sn,W,Bi}</p></td>
+<td><p><strong>Bi 70 %, Ag 21 %</strong>, all real majors ~0</p></td>
+</tr>
+<tr class="row-even"><td><p>Floor OFF</p></td>
+<td><p>Na blows up to 96 % (confirms floor’s purpose; naive removal is wrong)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Aligned (−0.10) + kdet off + comb relaxed, detect-only</p></td>
+<td><p>all 10 elements get ≥1 line; Al’s 4 resonance lines match within Δ≤0.016 nm</p></td>
+</tr>
+<tr class="row-even"><td><p>Aligned + sane gates + cert-10, full solve</p></td>
+<td><p><strong>Na 68 / Ca 30, Mg 0, Fe 0.4, Si 0</strong> (solver degeneracy)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="conclusion-for-29p1">
+<h2>Conclusion for 29p1<a class="headerlink" href="#conclusion-for-29p1" title="Link to this heading"></a></h2>
+<p>The element-presence comb redesign (<code class="docutils literal notranslate"><span class="pre">_transition_strength</span></code> + coherence veto)
+is <strong>necessary-but-far-from-sufficient</strong>. It cannot move the north-star metric
+while the solver collapses on clean input and the wavelength calibration is
+broken. Re-scope: fix solver degeneracy + wavelength calibration + detection
+cascade FIRST; element-presence/FP logic last.</p>
+</section>
+<section id="the-al-recovery-cascade-why-al-0">
+<h2>The Al-recovery cascade (why Al = 0)<a class="headerlink" href="#the-al-recovery-cascade-why-al-0" title="Link to this heading"></a></h2>
+<p>Al peaks are real and strong (396.15 h=0.25, 394.40 h=0.16, in DB with
+A_ki ~1e8). Al is dropped by, in order: wavelength offset &gt; tolerance →
+kdet prefilter → comb_min_matches=3 → rel_int floor → resonance exclusion.
+Every gate must pass; the first four already fail.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

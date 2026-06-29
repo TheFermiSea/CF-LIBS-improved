@@ -1,0 +1,368 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRITIC — Completeness review of BLUEPRINT.md &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CRITIC — Completeness review of BLUEPRINT.md</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/v4/overhaul/CRITIC.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="critic-completeness-review-of-blueprint-md">
+<h1>CRITIC — Completeness review of BLUEPRINT.md<a class="headerlink" href="#critic-completeness-review-of-blueprint-md" title="Link to this heading"></a></h1>
+<p><strong>Reviewer:</strong> Completeness critic
+<strong>Date:</strong> 2026-06-25
+<strong>Inputs:</strong> <code class="docutils literal notranslate"><span class="pre">blueprint/BLUEPRINT.md</span></code> (only blueprint file present; <code class="docutils literal notranslate"><span class="pre">blueprint/ARCHITECTURE.md</span></code>
+does NOT exist — see Gap-0), all 21 <code class="docutils literal notranslate"><span class="pre">verified/*.md</span></code> reports, <code class="docutils literal notranslate"><span class="pre">literature/*.md</span></code> checklists,
+<code class="docutils literal notranslate"><span class="pre">reference/*.md</span></code>.
+<strong>Method:</strong> ripgrep + Read. For every verified-REAL finding I checked whether a blueprint
+milestone item addresses it (by file:line / theme, since the blueprint references findings by
+per-file ID). Below are concrete MISSING / WRONG items with the follow-up that closes each.</p>
+<p>The blueprint is strong on the two headline accuracy levers (M2 McWhirter ΔE, M3 mole↔mass) and
+on the SAFE-NOW layering/constants work. The gaps are concentrated in: (a) <strong>HIGH-severity
+verified-REAL findings that were silently dropped</strong> (not in the FALSE-exclusion list, just absent),
+(b) <strong>architecture/test-gap findings with no home</strong> (because there is no ARCHITECTURE.md), and
+(c) <strong>literature-checklist items never investigated by the census</strong>.</p>
+<hr class="docutils" />
+<section id="gap-0-process-the-promised-architecture-md-does-not-exist">
+<h2>GAP-0 (process) — The promised ARCHITECTURE.md does not exist<a class="headerlink" href="#gap-0-process-the-promised-architecture-md-does-not-exist" title="Link to this heading"></a></h2>
+<p>The blueprint header line 10 admits “No <code class="docutils literal notranslate"><span class="pre">blueprint/ARCHITECTURE.md</span></code> was present; the target
+architecture is inferred … inline per milestone.” The orchestrator instructed me to read it too;
+it is genuinely absent. Consequence: there is <strong>no target-state diagram</strong>, so every architecture
+finding (monolith split, domain-type homes, dead-end schemas, duplicate-impl consolidation) has no
+anchor and several were dropped (Gaps 7–10). Inline per-milestone architecture is fine for the
+domain-type moves in M1, but it left the <em>non-domain-type</em> architecture findings homeless.</p>
+<p><strong>Follow-up:</strong> one architecture-synthesis agent to produce ARCHITECTURE.md (target module map +
+the 3 “consolidate vs parity-bind” DESIGN-DECISIONS already named: radiation/manifold forward
+impls M6-4, instrument response curves, Rust↔Python comb). Then re-slot Gaps 7–10 against it.</p>
+</section>
+<hr class="docutils" />
+<section id="a-high-severity-verified-real-findings-missing-from-the-plan">
+<h2>A. HIGH-severity verified-REAL findings MISSING from the plan<a class="headerlink" href="#a-high-severity-verified-real-findings-missing-from-the-plan" title="Link to this heading"></a></h2>
+<p>These are all confirmed REAL at HIGH severity in <code class="docutils literal notranslate"><span class="pre">verified/</span></code> and are <strong>not</strong> in the FALSE-exclusion
+list at the end of the blueprint — they were simply not carried into any milestone.</p>
+<section id="gap-1-hpc-finding-1-nuts-init-to-uniform-instead-of-map-warm-start-high-systemic-3-sites">
+<h3>GAP-1 — hpc Finding 1: NUTS <code class="docutils literal notranslate"><span class="pre">init_to_uniform</span></code> instead of MAP warm-start (HIGH, systemic ×3 sites)<a class="headerlink" href="#gap-1-hpc-finding-1-nuts-init-to-uniform-instead-of-map-warm-start-high-systemic-3-sites" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">verified/hpc.md</span></code> F1: all three MCMC call sites (<code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:205</span></code>,
+<code class="docutils literal notranslate"><span class="pre">inversion/solve/bayesian/samplers.py</span></code>, <code class="docutils literal notranslate"><span class="pre">two_zone.py</span></code>) use <code class="docutils literal notranslate"><span class="pre">init_to_uniform(radius=0.5)</span></code>.
+Literature <code class="docutils literal notranslate"><span class="pre">bayesian-oe.md</span> <span class="pre">§2.7</span> <span class="pre">/</span> <span class="pre">NUTS</span> <span class="pre">config</span></code> mandates <code class="docutils literal notranslate"><span class="pre">init_to_value</span></code> from the classical-solver
+MAP. The CF-LIBS posterior is exponential in T → uniform init can land off posterior mass →
+unconverged chains / wrong composition. This is an <strong>accuracy/reliability</strong> finding (top of mission
+priority), not latency, yet it is absent. The blueprint only has M5-9 (Poisson likelihood) and M4-2
+(R-hat gating) for the Bayesian path — neither fixes initialization.
+<strong>Follow-up:</strong> add an M5 item “warm-start NUTS from classical MAP at all 3 sites (BENCHMARK-GATED on
+the Bayesian held-out set; convergence-rate + posterior-accuracy metric)”. Search:
+<code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">-n</span> <span class="pre">&quot;init_to_uniform|init_to_value|init_strategy&quot;</span> <span class="pre">cflibs/</span></code>.</p>
+</section>
+<section id="gap-2-validation-finding-3-revised-noisemodel-shot-noise-circularity-high">
+<h3>GAP-2 — validation Finding 3-revised: NoiseModel shot-noise circularity (HIGH)<a class="headerlink" href="#gap-2-validation-finding-3-revised-noisemodel-shot-noise-circularity-high" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">verified/validation.md</span></code> F3-revised (REAL/HIGH): <code class="docutils literal notranslate"><span class="pre">round_trip.py:588-615</span></code> adds background <em>before</em>
+shot noise, applies Poisson to signal+background, then uses the noise-realized intensity as its own
+variance estimate (circular). The blueprint’s exclusion list drops F2 and <strong>F3-original</strong> as FALSE,
+but <strong>F3-revised is a different, REAL, HIGH finding</strong> and reads as if it were excluded by association.
+It directly corrupts the uncertainty/reliability signal that M4 depends on.
+<strong>Follow-up:</strong> add to M4 (forward-physics) “fix NoiseModel: shot noise on clean signal pre-background;
+variance from noise-model params not the realization”. Pairs naturally with M4-5/M4-8.</p>
+</section>
+<section id="gap-3-validation-finding-5-no-solver-injection-seam-in-roundtripvalidator-high">
+<h3>GAP-3 — validation Finding 5: no solver-injection seam in RoundTripValidator (HIGH)<a class="headerlink" href="#gap-3-validation-finding-5-no-solver-injection-seam-in-roundtripvalidator-high" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">verified/validation.md</span></code> F5 (REAL/HIGH): <code class="docutils literal notranslate"><span class="pre">round_trip.py:779</span></code> hardwires <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code> via
+deferred import; <code class="docutils literal notranslate"><span class="pre">RoundTripValidator.__init__</span></code> takes no <code class="docutils literal notranslate"><span class="pre">solver_factory</span></code>. The validator therefore
+<strong>cannot gate regressions in the Bayesian / joint / closed-form solvers</strong> — exactly the solvers M5
+and M4 modify. This is an enabling gap for the whole benchmark-gated program.
+<strong>Follow-up:</strong> SAFE-NOW item (constructor <code class="docutils literal notranslate"><span class="pre">solver_factory</span></code> param, default to iterative) — should be
+in <strong>M0</strong> alongside M0-2 because it is gate infrastructure, not a late refactor.</p>
+</section>
+<section id="gap-4-benchmark-finding-2-lod-uses-25th-percentile-as-blank-proxy-high">
+<h3>GAP-4 — benchmark Finding 2: LOD uses 25th-percentile as blank proxy (HIGH)<a class="headerlink" href="#gap-4-benchmark-finding-2-lod-uses-25th-percentile-as-blank-proxy-high" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">verified/benchmark.md</span></code> F2 (REAL/HIGH): <code class="docutils literal notranslate"><span class="pre">metrics.py:550</span></code> computes LOD = 3·std(residuals of bottom
+25%) — not 3σ_blank. Inflates LOD and <strong>misfires the <code class="docutils literal notranslate"><span class="pre">traces</span></code> stratum gate</strong> (a reliability gate).
+Completely absent from the blueprint (M0-2 stands up the harness but does not touch LOD).
+<strong>Follow-up:</strong> M0-2 or a new M0/M4 item: document the deviation + decide a defensible LOD estimator
+(needs a blank/zero-concentration concept in <code class="docutils literal notranslate"><span class="pre">BenchmarkSpectrum</span></code>). DESIGN-DECISION flavour.</p>
+</section>
+<section id="gap-5-evolution-finding-2-1-enforcement-mode-warn-config-fiction-high-security-footgun">
+<h3>GAP-5 — evolution Finding 2.1: <code class="docutils literal notranslate"><span class="pre">enforcement_mode=&quot;warn&quot;</span></code> config fiction (HIGH security footgun)<a class="headerlink" href="#gap-5-evolution-finding-2-1-enforcement-mode-warn-config-fiction-high-security-footgun" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">verified/evolution.md</span></code> F2.1 (REAL/HIGH): the field is validated + frozen but <strong>no driver consumes
+it</strong>; a future driver reading <code class="docutils literal notranslate"><span class="pre">enforcement_mode==&quot;warn&quot;</span></code> would skip <code class="docutils literal notranslate"><span class="pre">assert_physics_only</span></code> and let
+ML-violating candidates through — a physics-only-constraint bypass. M1-20 only fixes the
+exec/eval/compile + binary-diff scanner gaps; it does not address this. (Also evolution NEW-A:
+<code class="docutils literal notranslate"><span class="pre">builtins.exec</span></code> attribute form still bypasses — fold into M1-20.)
+<strong>Follow-up:</strong> add to M1-20 (or a sibling SAFE-NOW item): either remove <code class="docutils literal notranslate"><span class="pre">enforcement_mode</span></code> or wire
+a real consumer that cannot skip the blocklist; add the documented behaviour test (F5.3).</p>
+</section>
+<section id="gap-6-hpc-finding-4-native-rust-finding-2-both-high-under-served">
+<h3>GAP-6 — hpc Finding 4 + native-rust Finding 2 (both HIGH) under-served<a class="headerlink" href="#gap-6-hpc-finding-4-native-rust-finding-2-both-high-under-served" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>hpc F4 (HIGH): SBATCH heredoc hardcodes <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.bayesian</span> <span class="pre">import</span> <span class="pre">...</span></code> as a
+string literal; CLAUDE.md says flat paths already moved — generated scripts on disk silently break.
+M4-4 covers the <code class="docutils literal notranslate"><span class="pre">__main__</span></code>/docstring (NEW-A) but <strong>not</strong> the brittle hardcoded import path.</p></li>
+<li><p>native-rust F2 (HIGH, highest in that report): <code class="docutils literal notranslate"><span class="pre">kdet_filter_elements</span></code> Rust branch is <strong>dead under
+the default <code class="docutils literal notranslate"><span class="pre">shift_coherence_veto=True</span></code></strong> pipeline. Not represented at all; M0-3 only adds a
+Rust-vs-Python comb parity fixture, which does not exercise the dead kdet branch.
+<strong>Follow-up:</strong> (a) M4-4 acceptance should add “stop hardcoding bayesian import path / generate it
+from a single source”; (b) a DESIGN-DECISION item: is the dead Rust kdet branch intended (port it,
+or delete it + document)? Search <code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">-n</span> <span class="pre">&quot;shift_coherence_veto|kdet_filter_elements&quot;</span> <span class="pre">cflibs/</span></code>.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="b-architecture-consolidation-findings-with-no-home-need-architecture-md-gap-0">
+<h2>B. Architecture / consolidation findings with NO home (need ARCHITECTURE.md, Gap-0)<a class="headerlink" href="#b-architecture-consolidation-findings-with-no-home-need-architecture-md-gap-0" title="Link to this heading"></a></h2>
+<section id="gap-7-inv-preprocess-f5-high-arch-f6-medium-monolith-misplaced-module">
+<h3>GAP-7 — inv-preprocess F5 (HIGH-arch) + F6 (MEDIUM): monolith + misplaced module<a class="headerlink" href="#gap-7-inv-preprocess-f5-high-arch-f6-medium-monolith-misplaced-module" title="Link to this heading"></a></h3>
+<p>F5: <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py</span></code> is a verified 2119-line monolith on the calibration hot path (with a
+documented history of coverage-gate bugs). F6: <code class="docutils literal notranslate"><span class="pre">outliers.py</span></code> belongs in <code class="docutils literal notranslate"><span class="pre">common/</span></code> and is broadly
+re-exported (not the “single-constant coupling” the census claimed). Neither is in the blueprint;
+M7-8 only touches the RANSAC math inside the monolith. Splitting the monolith is a prerequisite for
+safely doing M7-2/M7-8 and for testing the flag-gated paths (F10).
+<strong>Follow-up:</strong> ARCHITECTURE.md target for <code class="docutils literal notranslate"><span class="pre">preprocess/</span></code>; then a SAFE-NOW (behavior-preserving)
+split item gated by import-parity + the existing calibration tests.</p>
+</section>
+<section id="gap-8-radiation-f2-legacy-magic-number-default-mode-f4-inconsistent-instrument-broadening">
+<h3>GAP-8 — radiation F2 (LEGACY magic-number default mode) + F4 (inconsistent instrument broadening)<a class="headerlink" href="#gap-8-radiation-f2-legacy-magic-number-default-mode-f4-inconsistent-instrument-broadening" title="Link to this heading"></a></h3>
+<p>F2 (MEDIUM): <code class="docutils literal notranslate"><span class="pre">BroadeningMode.LEGACY</span></code> is the silent <strong>default</strong> with a physically-unmotivated
+<code class="docutils literal notranslate"><span class="pre">0.01·sqrt(T/0.86)</span></code> sigma and <strong>no DeprecationWarning</strong>. F4 (MEDIUM): resolving-power instruments use
+a midpoint-wavelength scalar sigma (3× error across 250–750 nm at R=1000) and an unexplained
+<code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code> 0.01-vs-10.0 split. The blueprint fixes the Olivero constants (M1-6) and
+vectorizes loops (M7-1) but never touches the <strong>default broadening mode</strong> — an accuracy default.
+<strong>Follow-up:</strong> DESIGN-DECISION (which default mode) + BENCHMARK-GATED flip of the LEGACY default;
+SAFE-NOW DeprecationWarning + per-wavelength sigma for R-mode downstream convolution.
+radiation F6 (<code class="docutils literal notranslate"><span class="pre">CFLIBS_DISABLE_STARK_T_FACTOR</span></code> deprecated-but-live) and Missed-B (pseudo-Voigt
+normalization) are LOW — fold into M7-7 / M1-13 respectively.</p>
+</section>
+<section id="gap-9-pds-f2-2-dead-end-schema-f1-2-copy-paste-truth-with-k-dropped-missing">
+<h3>GAP-9 — pds F2-2 (dead-end schema) + F1-2 (copy-paste truth with K dropped) missing<a class="headerlink" href="#gap-9-pds-f2-2-dead-end-schema-f1-2-copy-paste-truth-with-k-dropped-missing" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">verified/pds.md</span></code>: F1-1 (mole/mass basis) is covered by M3-1/M3-3. But F2-2 (<code class="docutils literal notranslate"><span class="pre">PDSValidationDataset</span></code>
+is a dead-end bridge not wired downstream) and <strong>F1-2 (SCCT5/SCCT7 compositions copy-pasted from
+CCCT3/CCCT2 with K silently dropped)</strong> are absent. F1-2 is a <em>data-correctness</em> bug in the truth
+corpus — it will silently corrupt any benchmark using those targets, independent of M3.
+<strong>Follow-up:</strong> SAFE-NOW data-fix item for F1-2 (verify against ChemCam published comps); decide
+wire-or-delete for the dead-end schema (ARCHITECTURE.md).</p>
+</section>
+<section id="gap-10-native-rust-missed-a-transposed-greedy-matching-medium-silent-prod-divergence">
+<h3>GAP-10 — native-rust Missed-A (transposed greedy matching, MEDIUM, silent prod divergence)<a class="headerlink" href="#gap-10-native-rust-missed-a-transposed-greedy-matching-medium-silent-prod-divergence" title="Link to this heading"></a></h3>
+<p>M0-3 adds “Rust vs Python comb on <em>ambiguous</em> input” — good, that fixture would catch Missed-A.
+But the blueprint never lists the <strong>fix</strong> (align greedy orientation) or Missed-B (F1 tie-break
+epsilon 1e-12 vs np.isclose). If the parity fixture fails (it likely will on ambiguous input), there
+is no milestone item to land the alignment.
+<strong>Follow-up:</strong> add an M5/M6 item “align Rust↔Python comb greedy orientation + tie-break epsilon to
+the Python semantics (BENCHMARK-GATED on the ID benchmark — this is an identifier-scoring change,
+which memory warns has regressed F1 before).”</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="c-literature-checklist-items-the-census-never-investigated-true-blind-spots">
+<h2>C. Literature-checklist items the census never investigated (true blind spots)<a class="headerlink" href="#c-literature-checklist-items-the-census-never-investigated-true-blind-spots" title="Link to this heading"></a></h2>
+<p>These appear in <code class="docutils literal notranslate"><span class="pre">literature/*.md</span></code> “What Correct Code MUST Do” / pitfall lists but have <strong>no
+corresponding verified finding and no blueprint item</strong> — meaning no agent ever checked the code
+against them. Each needs a targeted audit before we can claim the checklist is closed.</p>
+<section id="gap-11-airvacuum-wavelength-convention-broadening-rt-p10-cflibs-method">
+<h3>GAP-11 — Air↔vacuum wavelength convention (broadening-rt P10, cflibs-method)<a class="headerlink" href="#gap-11-airvacuum-wavelength-convention-broadening-rt-p10-cflibs-method" title="Link to this heading"></a></h3>
+<p>A classic LIBS systematic (NIST lists air wavelengths &gt;200 nm; atomic constants and Doppler/Stark
+math want vacuum). No verified finding examined whether the DB, line-matching tolerance, and
+forward model are consistent on air-vs-vacuum. A 0.05–0.1 nm systematic here would swamp the
+sub-pixel-centroiding gains of M7-8.
+<strong>Follow-up:</strong> one audit agent: <code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">-ni</span> <span class="pre">&quot;vacuum|air.?wavelength|n_air|edlen|ciddor&quot;</span> <span class="pre">cflibs/</span></code> +
+check <code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code>/<code class="docutils literal notranslate"><span class="pre">ingest_kurucz_atomic.py</span></code> provenance; report convention consistency.</p>
+</section>
+<section id="gap-12-ipd-partition-function-truncation-consistency-saha-boltzmann-lte-p2-critical-pitfall">
+<h3>GAP-12 — IPD/partition-function truncation consistency (saha-boltzmann-lte P2, CRITICAL pitfall)<a class="headerlink" href="#gap-12-ipd-partition-function-truncation-consistency-saha-boltzmann-lte-p2-critical-pitfall" title="Link to this heading"></a></h3>
+<p>The literature flags as CRITICAL that the partition-function sum MUST be truncated at the same
+energy (IPD-lowered) used in the Saha equation. plasma F-items cover the DH IPD value (M0-1) and the
+dead <code class="docutils literal notranslate"><span class="pre">model</span></code> param (M1-17), but <strong>no finding verifies the truncation-consistency invariant</strong> between
+<code class="docutils literal notranslate"><span class="pre">partition.py</span></code> and the Saha solver. radiation F3 (dual population paths) hints at divergence but
+does not test this specific invariant.
+<strong>Follow-up:</strong> add to M0-1 / M2 an explicit invariant test: partition sum cutoff == Saha IPD cutoff
+(parity across the SpectrumModel vs kernel paths flagged in radiation F3).</p>
+</section>
+<section id="gap-13-bayesian-likelihood-normalization-signal-dependent-variance-bayesian-oe-p2-4-2-5">
+<h3>GAP-13 — Bayesian likelihood normalization &amp; signal-dependent variance (bayesian-oe P2.4/2.5)<a class="headerlink" href="#gap-13-bayesian-likelihood-normalization-signal-dependent-variance-bayesian-oe-p2-4-2-5" title="Link to this heading"></a></h3>
+<p>M5-9 evaluates Poisson-vs-Gaussian, but the literature also flags (a) signal-dependent vs fixed
+variance and (b) dropped log-likelihood normalization constants (matters for model comparison /
+BIC). inv-identify uses BIC model selection; if normalization is dropped inconsistently, BIC
+comparisons are biased. No finding checked this.
+<strong>Follow-up:</strong> fold a normalization-constant + variance-model audit into M5-9’s acceptance.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="d-classification-ordering-errors-in-the-plan-as-written">
+<h2>D. Classification / ordering errors in the plan as written<a class="headerlink" href="#d-classification-ordering-errors-in-the-plan-as-written" title="Link to this heading"></a></h2>
+<section id="gap-14-m3-2-marked-benchmark-gated-but-is-also-a-correctness-fix-that-must-change-the-baseline">
+<h3>GAP-14 — M3-2 marked BENCHMARK-GATED but is also a <em>correctness</em> fix that must change the baseline<a class="headerlink" href="#gap-14-m3-2-marked-benchmark-gated-but-is-also-a-correctness-fix-that-must-change-the-baseline" title="Link to this heading"></a></h3>
+<p>M3 (mole→mass) is correctly benchmark-gated, but the framing “ships default-OFF behind a flag” is
+<strong>wrong for a scoring-path correctness bug</strong>: the current scoring is provably comparing number
+fractions to mass-fraction truth (benchmark F1, CRITICAL, Völker 353%). Leaving the corrected path
+default-OFF means the <em>committed baseline remains wrong</em>. The flag is fine for rollout safety, but
+the acceptance must state the corrected numbers <strong>become</strong> the baseline (the blueprint hints this in
+M3-2 “committed as the new baseline” — make it explicit that the OLD baseline is known-wrong and
+must be retired, not treated as a regression when numbers move).
+<strong>Follow-up:</strong> clarify M3-2 acceptance: a moved composition number here is the <em>fix landing</em>, not a
+regression; the gate compares against ground truth, not against the old (wrong) baseline.</p>
+</section>
+<section id="gap-15-m0-3-parity-fixtures-are-the-gate-for-8-later-items-but-are-xfail-until-fixed">
+<h3>GAP-15 — M0-3 parity fixtures are the gate for ~8 later items but are “xfail until fixed”<a class="headerlink" href="#gap-15-m0-3-parity-fixtures-are-the-gate-for-8-later-items-but-are-xfail-until-fixed" title="Link to this heading"></a></h3>
+<p>M0-3 xfail-marks known divergences (radiation F3, manifold F10, inv-solve F6/F10, native-rust). That
+is correct, but several BENCHMARK-GATED items (M6-2/M6-3/M6-4, M5-7) <strong>depend on these xfails being
+flipped to real asserts</strong>, and no item explicitly owns “un-xfail after fix”. Risk: a fix lands, the
+xfail silently keeps passing as xfail, and the parity is never actually enforced.
+<strong>Follow-up:</strong> each fix item that resolves an M0-3 xfail must include “flip xfail→assert” in its
+acceptance. Add this as a standing rule in M0-3’s description.</p>
+</section>
+<section id="gap-16-m5-ordering-identifier-scoring-changes-m5-2-m5-3-native-rust-comb-need-the-id">
+<h3>GAP-16 — M5 ordering: identifier-scoring changes (M5-2, M5-3, native-rust comb) need the ID<a class="headerlink" href="#gap-16-m5-ordering-identifier-scoring-changes-m5-2-m5-3-native-rust-comb-need-the-id" title="Link to this heading"></a></h3>
+<p>benchmark (M0-2 covers composition F1/Aitchison/RMSEP but the memory + plan repeatedly cite an
+<strong>ID F1 benchmark</strong> as a separate gate). M0-2’s acceptance only names composition metrics. The
+identifier items (M5-2/M5-3/M5-5/M5-6 and the missing GAP-10 comb fix) are gated on something M0-2
+does not stand up.
+<strong>Follow-up:</strong> extend M0-2 (or add M0-2b) to also emit the <strong>ID F1/recall</strong> benchmark on the
+synthetic ID corpus (<code class="docutils literal notranslate"><span class="pre">scripts/benchmark_synthetic_identifiers.py</span></code>), since memory shows identifier
+changes have regressed F1 (−0.041) before and MUST be gated on ID metrics, not composition.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="e-lower-priority-items-absent-but-worth-a-single-sweep-not-blocking">
+<h2>E. Lower-priority items absent but worth a single sweep (not blocking)<a class="headerlink" href="#e-lower-priority-items-absent-but-worth-a-single-sweep-not-blocking" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>benchmark F6 (8 inline <code class="docutils literal notranslate"><span class="pre">CFLIBS_FF_*</span></code> flags) + A1 (Aitchison ε vs RMSE 0 padding asymmetry) + A2
+(silent simplified-model fallback lacks <code class="docutils literal notranslate"><span class="pre">TruthType.SIMULATED_UNPHYSICAL</span></code>) — A2 is MEDIUM and a
+<strong>silent-corruption</strong> risk in generated data; deserves at least a flag/warning item near M4-5.</p></li>
+<li><p>evolution F1.2/2.2/4.1/4.2/5.2 (doc + config-default debt) — one housekeeping item.</p></li>
+<li><p>hpc F5/F6/F7/F8/F9 (mutable default, SBATCH dup, pickle gather, PRNG split, mem-fraction) —
+one HPC housekeeping item (M4-4 sibling); F8 PRNG-split is the only one with a faint accuracy edge.</p></li>
+<li><p>instrument F3 (edge-flush background includes signal), F5 (3 response-curve impls), F10 (sigma=0 →
+NaN, no guard), F11 (no pytree round-trip test) — F10 is a latent crash; should be SAFE-NOW in M1.
+F5 is an ARCHITECTURE.md consolidation candidate.</p></li>
+<li><p>inv-common F1/F2/F3 (<code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance</span></code> discards instrument FWHM; <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code>
+dropped through <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> and ignored in <code class="docutils literal notranslate"><span class="pre">y_uncertainty</span></code>) — F2/F3 are <strong>accuracy</strong>
+(uncertainty propagation) and only the doc-fix F4 is in the blueprint (M1-12). Add F1/F2/F3.</p></li>
+<li><p>inv-identify NEW-1 (LOGIC/MEDIUM) — not slotted; check against M5-1.</p></li>
+<li><p>plasma F6 (architecture) / F9 (documented) — fold into ARCHITECTURE.md.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="highest-leverage-follow-ups-do-these-first">
+<h2>Highest-leverage follow-ups (do these first)<a class="headerlink" href="#highest-leverage-follow-ups-do-these-first" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Create ARCHITECTURE.md</strong> (Gap-0) — unblocks Gaps 7/8/9/10 and the M6-4 decision.</p></li>
+<li><p><strong>Re-instate the 6 dropped HIGH findings</strong> as milestone items: hpc-F1 warm-start (GAP-1),
+validation-F3rev noise (GAP-2), validation-F5 solver seam → move to M0 (GAP-3), benchmark-F2 LOD
+(GAP-4), evolution-F2.1 enforcement_mode (GAP-5), hpc-F4 + native-rust-F2 (GAP-6).</p></li>
+<li><p><strong>Add an ID-F1 benchmark to M0</strong> (GAP-16) so the M5 identifier items have their correct gate.</p></li>
+<li><p><strong>Audit the 3 never-checked literature pitfalls</strong>: air/vacuum (GAP-11), IPD/PF truncation
+consistency (GAP-12), Bayesian likelihood normalization/variance (GAP-13).</p></li>
+<li><p><strong>Fix the data bug</strong> pds-F1-2 (GAP-9) — silent K-dropped copy-paste truth corrupts benchmarks.</p></li>
+<li><p><strong>Tighten M3-2 framing</strong> (GAP-14) and add “flip xfail→assert” to every M0-3-dependent fix (GAP-15).</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

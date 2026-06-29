@@ -1,0 +1,412 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stark Broadening as Electron-Density Diagnostic in LIBS &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Stark Broadening as Electron-Density Diagnostic in LIBS</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/literature/stark-ne.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="stark-broadening-as-electron-density-diagnostic-in-libs">
+<h1>Stark Broadening as Electron-Density Diagnostic in LIBS<a class="headerlink" href="#stark-broadening-as-electron-density-diagnostic-in-libs" title="Link to this heading"></a></h1>
+<section id="governing-equations-canonical-form">
+<h2>1. Governing Equations — Canonical Form<a class="headerlink" href="#governing-equations-canonical-form" title="Link to this heading"></a></h2>
+<section id="physical-basis">
+<h3>1.1 Physical Basis<a class="headerlink" href="#physical-basis" title="Link to this heading"></a></h3>
+<p>In a dense plasma, free electrons and ions exert quasi-static electric microfields on emitting atoms, shifting and splitting energy levels (Stark effect). For most atoms heavier than hydrogen (non-hydrogenic, quadratic Stark effect) the perturbation is proportional to E², giving a Lorentzian line shape dominated by electron-impact broadening, which scales <strong>linearly with electron density</strong> n_e. Hydrogen and hydrogen-like ions experience the linear Stark effect (proportional to E) and require separate treatment.</p>
+</section>
+<section id="non-hydrogenic-lines-griem-semiclassical-formula">
+<h3>1.2 Non-Hydrogenic Lines: Griem Semiclassical Formula<a class="headerlink" href="#non-hydrogenic-lines-griem-semiclassical-formula" title="Link to this heading"></a></h3>
+<p><strong>Canonical FWHM expression (Griem 1964/1974):</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ_S [Å] = 2w(T) · (n_e / n_ref)
+           + 3.5 · A(T) · (n_e / n_ref)^(1/4) · [1 − 3/(4 N_D^(1/3))] · w(T)
+</pre></div>
+</div>
+<p>where:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>Definition</p></th>
+<th class="head"><p>Units</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Δλ_S</p></td>
+<td><p>Stark FWHM (full width at half maximum)</p></td>
+<td><p>Å</p></td>
+</tr>
+<tr class="row-odd"><td><p>w(T)</p></td>
+<td><p>electron-impact half-half-width at reference density; a.k.a. electron impact width parameter</p></td>
+<td><p>Å</p></td>
+</tr>
+<tr class="row-even"><td><p>A(T)</p></td>
+<td><p>ion-broadening parameter (dimensionless, tabulated alongside w)</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>n_e</p></td>
+<td><p>plasma electron number density</p></td>
+<td><p>cm⁻³</p></td>
+</tr>
+<tr class="row-even"><td><p>n_ref</p></td>
+<td><p>reference electron density</p></td>
+<td><p>cm⁻³</p></td>
+</tr>
+<tr class="row-odd"><td><p>N_D</p></td>
+<td><p>number of particles in the Debye sphere = (4π/3) λ_D³ n_e</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reference densities used in standard tables:</strong></p>
+<ul class="simple">
+<li><p>Neutral atom lines (e.g., Mg I, Al I, Si I, Ca I): <strong>n_ref = 10¹⁶ cm⁻³</strong></p></li>
+<li><p>Singly ionized lines (e.g., Ca II, Mg II): <strong>n_ref = 10¹⁷ cm⁻³</strong></p></li>
+</ul>
+<p>This convention is used by the GRIEM database (griem.obspm.fr), Griem (1974), and most subsequent tabulations. The STARK-B database (stark-b.obspm.fr) uses a wider density range and lists w directly in Å.</p>
+<p><strong>Term anatomy:</strong></p>
+<ul class="simple">
+<li><p>First term <code class="docutils literal notranslate"><span class="pre">2w(n_e</span> <span class="pre">/</span> <span class="pre">n_ref)</span></code>: electron-impact (collisional) broadening — always present, Lorentzian.</p></li>
+<li><p>Second term <code class="docutils literal notranslate"><span class="pre">3.5A(...)w(...)</span></code>: quasi-static ion broadening correction — can often be neglected when <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">≪</span> <span class="pre">w</span></code> or at moderate density. The factor <code class="docutils literal notranslate"><span class="pre">[1</span> <span class="pre">−</span> <span class="pre">3/(4</span> <span class="pre">N_D^(1/3))]</span></code> is the Debye-shielding correction; as N_D → ∞ (dilute plasma) this approaches 1.0.</p></li>
+</ul>
+<p><strong>Temperature dependence of w(T) and A(T):</strong></p>
+<p>w(T) varies weakly with T (often as T^(−1/4) to T^(−1/2) for impact broadening in the semiclassical limit, but direction depends on transition). Tabulated values are provided at multiple T in the GRIEM and STARK-B databases (typically 5,000–80,000 K). Always interpolate from the table rather than assuming T-independence; errors of 10–30% result from using w at a wrong temperature.</p>
+<p><strong>Scaling to arbitrary n_e:</strong></p>
+<p>Since w is tabulated at n_ref, to find n_e from a measured Δλ_S:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_e ≈ (Δλ_S / (2w)) · n_ref          [dominant, when ion term is small]
+</pre></div>
+</div>
+<p>When the ion term is non-negligible, solve iteratively: compute N_D from an initial n_e estimate, evaluate the full expression, update n_e.</p>
+</section>
+<section id="hydrogen-hydrogen-like-lines-linear-stark-effect">
+<h3>1.3 Hydrogen / Hydrogen-Like Lines (Linear Stark Effect)<a class="headerlink" href="#hydrogen-hydrogen-like-lines-linear-stark-effect" title="Link to this heading"></a></h3>
+<p>Hydrogen lines (Balmer series) undergo linear Stark effect; the profile shape is more complex (not purely Lorentzian) and depends on both n_e and T. Three theoretical frameworks are in use:</p>
+<section id="vidalcoopersmith-vcs-tables-1973">
+<h4>Vidal–Cooper–Smith (VCS) tables (1973)<a class="headerlink" href="#vidalcoopersmith-vcs-tables-1973" title="Link to this heading"></a></h4>
+<p>Provides tabulated reduced-half-widths α₁/₂ for Balmer lines. The NIST compendium form:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ_{1/2}^{S,H} [Å] = (2.50 × 10⁻⁹) · α₁/₂(n_e, T) · n_e^(2/3)
+</pre></div>
+</div>
+<p>where n_e is in cm⁻³ and α₁/₂ is tabulated for each line over n_e = 10¹⁵–10¹⁸ cm⁻³ and T = 5,000–30,000 K.</p>
+<p>Note: this n_e^(2/3) scaling is approximate; the true dependence encoded in α₁/₂ varies somewhat with n_e and T.</p>
+</section>
+<section id="gigosos-cardenoso-1996-gigosos-et-al-2003-computer-simulation-tables">
+<h4>Gigosos &amp; Cardeñoso (1996) / Gigosos et al. (2003) computer-simulation tables<a class="headerlink" href="#gigosos-cardenoso-1996-gigosos-et-al-2003-computer-simulation-tables" title="Link to this heading"></a></h4>
+<p>Preferred for modern LIBS work because they incorporate ion-dynamics effects naturally. They provide FWHM as a function of n_e and T including reduced mass μ of the perturber–emitter system.</p>
+<p>Power-law fits to Gigosos simulation data (from the ar5iv.labs review of arXiv:2201.08783):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Hα (656.28 nm):  Δλ_{Hα} [nm] ≈ 1.3 · (n_e / 10¹⁷)^(0.64 ± 0.03)
+Hβ (486.13 nm):  Δλ_{Hβ} [nm] ≈ 4.5 · (n_e / 10¹⁷)^(0.71 ± 0.03)
+</pre></div>
+</div>
+<p>n_e in cm⁻³. Valid ranges: Hα: 10¹⁵–10¹⁹ cm⁻³; Hβ: 3×10¹⁵–8×10¹⁸ cm⁻³.</p>
+<p><strong>Inversion for n_e from Hβ FWHM (Gigosos-based):</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_e [cm⁻³] = 10¹⁷ · (Δλ_{Hβ,Stark} [nm] / 4.5)^(1/0.71)
+</pre></div>
+</div>
+</section>
+<section id="konjevic-et-al-empirical-formula-recommended-for-libs-h">
+<h4>Konjevic et al. empirical formula (recommended for LIBS Hβ)<a class="headerlink" href="#konjevic-et-al-empirical-formula-recommended-for-libs-h" title="Link to this heading"></a></h4>
+<p>Multiple experimental calibrations (e.g., Konjevic &amp; Roberts 1976; Pérez et al. 1991; Dems &amp; Konjevic) have produced:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>n_e [cm⁻³] ≈ C · (Δλ_{Hβ,Stark} [Å])^1.4
+</pre></div>
+</div>
+<p>with C ≈ 3.85 × 10¹⁵ (calibrated against Thomson scattering at low–moderate densities).</p>
+<p><strong>Hα vs. Hβ trade-offs in LIBS:</strong></p>
+<ul class="simple">
+<li><p>Hα (656.28 nm): stronger signal, but saturates at high n_e and suffers severe self-absorption in H-rich targets.</p></li>
+<li><p>Hβ (486.13 nm): weaker but more linear; preferred for quantitative n_e above ~10¹⁶ cm⁻³.</p></li>
+</ul>
+</section>
+</section>
+<section id="line-shift-stark-shift">
+<h3>1.4 Line Shift (Stark Shift)<a class="headerlink" href="#line-shift-stark-shift" title="Link to this heading"></a></h3>
+<p>The center wavelength of Stark-broadened lines also shifts:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ_shift [Å] = D(T) · (n_e / n_ref) ∓ 2A · (n_e / n_ref)^(1/4) · [1 − 3/(4N_D^(1/3))] · w
+</pre></div>
+</div>
+<p>where D(T) is the electron-impact shift parameter (tabulated alongside w). The shift must be subtracted from the peak position before using the line for spectral identification or wavelength calibration. Typical Stark shifts in LIBS plasmas (n_e ~ 10¹⁷ cm⁻³) are 0.01–0.1 Å, comparable to or larger than the line center accuracy needed for elemental identification.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="deconvolving-stark-lorentzian-from-doppler-instrument-voigt">
+<h2>2. Deconvolving Stark Lorentzian from Doppler + Instrument Voigt<a class="headerlink" href="#deconvolving-stark-lorentzian-from-doppler-instrument-voigt" title="Link to this heading"></a></h2>
+<p>The observed spectral profile is a convolution of multiple broadening mechanisms:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mechanism</p></th>
+<th class="head"><p>Profile type</p></th>
+<th class="head"><p>FWHM</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Instrumental</p></td>
+<td><p>Gaussian (usually)</p></td>
+<td><p>Δλ_inst (measured from calibration lamp)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Doppler (thermal)</p></td>
+<td><p>Gaussian</p></td>
+<td><p>Δλ_D = λ_0 · (8 ln 2 · k_B T / (M c²))^(1/2)</p></td>
+</tr>
+<tr class="row-even"><td><p>Natural linewidth</p></td>
+<td><p>Lorentzian</p></td>
+<td><p>Δλ_nat (negligible in LIBS, ~fm)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Stark</p></td>
+<td><p>Lorentzian</p></td>
+<td><p>Δλ_S (dominant Lorentzian term in LIBS)</p></td>
+</tr>
+<tr class="row-even"><td><p>van der Waals / resonance</p></td>
+<td><p>Lorentzian</p></td>
+<td><p>Small at low pressures; often neglected</p></td>
+</tr>
+</tbody>
+</table>
+<p>Since the convolution of two Gaussians is Gaussian and the convolution of two Lorentzians is Lorentzian, the combined observed profile is approximately <strong>Voigt</strong>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ_G_total = sqrt(Δλ_inst² + Δλ_D²)       [Gaussian component]
+Δλ_L_total = Δλ_S + Δλ_nat + Δλ_vdW       [Lorentzian component, ≈ Δλ_S]
+</pre></div>
+</div>
+<section id="voigt-fwhm-thompsoncoxhastings-1987-approximation">
+<h3>2.1 Voigt FWHM — Thompson–Cox–Hastings (1987) Approximation<a class="headerlink" href="#voigt-fwhm-thompsoncoxhastings-1987-approximation" title="Link to this heading"></a></h3>
+<p>The Voigt total FWHM f_V is related to Gaussian f_G and Lorentzian f_L by the Thompson 5th-power formula:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>f_V^5 = f_G^5 + 2.69269·f_G^4·f_L + 2.42843·f_G^3·f_L²
+       + 4.47163·f_G^2·f_L³ + 0.07842·f_G·f_L^4 + f_L^5
+</pre></div>
+</div>
+<p>Accuracy: ±0.02%.</p>
+<p><strong>Simpler Olivero–Longbothum (1977) approximation:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>f_V ≈ 0.5343·f_L + sqrt(0.2169·f_L² + f_G²)
+</pre></div>
+</div>
+<p>Accuracy: ±0.02%. This is the formula commonly used for LIBS line-shape inversion.</p>
+</section>
+<section id="extracting-stark-fwhm-from-measured-voigt">
+<h3>2.2 Extracting Stark FWHM from Measured Voigt<a class="headerlink" href="#extracting-stark-fwhm-from-measured-voigt" title="Link to this heading"></a></h3>
+<p><strong>Procedure:</strong></p>
+<ol class="arabic simple">
+<li><p>Measure instrumental FWHM Δλ_inst from a narrow calibration source (e.g., pencil lamp, Hg lamp line) at the wavelength of interest.</p></li>
+<li><p>Estimate Doppler FWHM Δλ_D from temperature T (from Boltzmann plot or simultaneous fit).</p></li>
+<li><p>Form total Gaussian width: <code class="docutils literal notranslate"><span class="pre">f_G</span> <span class="pre">=</span> <span class="pre">sqrt(Δλ_inst²</span> <span class="pre">+</span> <span class="pre">Δλ_D²)</span></code>.</p></li>
+<li><p>Fit the observed line with a Voigt profile to extract f_V (or fit pseudo-Voigt to get both f_G and f_L simultaneously).</p></li>
+<li><p>Solve for f_L (= Δλ_S) using the Olivero–Longbothum inversion or the Thompson formula numerically.</p></li>
+<li><p>Apply n_e formula for the chosen line.</p></li>
+</ol>
+<p><strong>Important: Doppler width in LIBS is usually small.</strong> For metal lines (M ~ 50 amu) at T ~ 10,000 K:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ_D [nm] ≈ 7.16 × 10⁻⁷ · λ_0[nm] · sqrt(T[K] / M[amu])
+           ≈ 0.001–0.005 nm for λ ~ 300–500 nm
+</pre></div>
+</div>
+<p>This is typically smaller than the instrument function (~0.02–0.1 nm for most grating spectrometers) and much smaller than Stark broadening at LIBS densities (~0.05–1 nm at n_e ~ 10¹⁷ cm⁻³). The Doppler contribution may be ignored for heavy species; it matters for H and light elements.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-references">
+<h2>3. Key References<a class="headerlink" href="#key-references" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Griem, H.R. (1964).</strong> <em>Plasma Spectroscopy.</em> McGraw-Hill, New York.
+— Original semiclassical theory; defines w, A, D parameters and the FWHM formula for non-hydrogenic lines.</p></li>
+<li><p><strong>Griem, H.R. (1974).</strong> <em>Spectral Line Broadening by Plasmas.</em> Academic Press, New York.
+— Extended tables of w(T), A(T), D(T) at n_ref = 10¹⁶ (neutrals) and 10¹⁷ cm⁻³ (ions); still primary reference for parameter tables.</p></li>
+<li><p><strong>Vidal, C.R., Cooper, J., &amp; Smith, E.W. (1973).</strong> Hydrogen Stark-broadening tables. <em>Astrophysical Journal Supplement Series</em>, <strong>25</strong>, 37–136. https://tf.nist.gov/general/pdf/407.pdf
+— VCS tables providing α₁/₂ parameters for H Balmer lines; basis for NIST hydrogen Stark-broadening formulas.</p></li>
+<li><p><strong>Gigosos, M.A., &amp; Cardeñoso, V. (1996).</strong> New plasma diagnosis tables of hydrogen Stark broadening including ion dynamics. <em>Journal of Physics B</em>, <strong>29</strong>, 4795–4838. DOI: 10.1088/0953-4075/29/20/029
+— Computer simulation tables for Hα, Hβ, Hγ; accounts for ion dynamics; the modern standard for hydrogen LIBS diagnostics.</p></li>
+<li><p><strong>Gigosos, M.A., González, M.Á., &amp; Cardeñoso, V. (2003).</strong> Computer simulated Balmer-alpha, -beta and -gamma Stark line profiles for non-equilibrium plasmas diagnostics. <em>Spectrochimica Acta Part B</em>, <strong>58</strong>, 1489–1504. DOI: 10.1016/S0584-8547(03)00097-1
+— Extended simulations including non-equilibrium (two-temperature) cases; provides diagnostic maps for n_e vs. T.</p></li>
+<li><p><strong>Konjevic, N. (1999).</strong> Plasma broadening and shifting of non-hydrogenic spectral lines: present status and applications. <em>Physics Reports</em>, <strong>316</strong>, 339–401. DOI: 10.1016/S0370-1573(98)00132-X
+— Comprehensive review of experimental measurements and theory for non-hydrogenic lines; recommended procedure for LIBS n_e diagnostics; covers accuracy and error sources.</p></li>
+<li><p><strong>Olivero, J.J., &amp; Longbothum, R.L. (1977).</strong> Empirical fits to the Voigt line width: a brief review. <em>Journal of Quantitative Spectroscopy and Radiative Transfer</em>, <strong>17</strong>, 233–236. DOI: 10.1016/0022-4073(77)90161-3
+— Canonical reference for the f_V ≈ 0.5343·f_L + sqrt(0.2169·f_L² + f_G²) approximation.</p></li>
+<li><p><strong>Thompson, P., Cox, D.E., &amp; Hastings, J.B. (1987).</strong> Rietveld refinement of Debye–Scherrer synchrotron X-ray data from Al₂O₃. <em>Journal of Applied Crystallography</em>, <strong>20</strong>, 79–83.
+— Defines the Thompson–Cox–Hastings 5th-power Voigt FWHM approximation; ±0.02% accuracy.</p></li>
+<li><p><strong>Surmick, D.M., &amp; Parigger, C.G. (2014).</strong> Empirical formulae for electron density diagnostics from H_α and H_β Stark broadening. <em>International Review of Atomic and Molecular Physics</em>, <strong>5(2)</strong>, 73–81.
+— Practical power-law fitting of Gigosos tables to get n_e directly from measured Hα or Hβ FWHM; recommended for LIBS.</p></li>
+<li><p><strong>Kunze, H.-J. (2009).</strong> <em>Introduction to Plasma Spectroscopy.</em> Springer. ISBN 978-3-642-02232-9.
+— Graduate textbook; Chapter 5 derives Stark broadening theory from first principles; Chapter 8 covers diagnostic applications including LIBS; excellent on error analysis and deconvolution.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="common-implementation-pitfalls-and-correct-treatment">
+<h2>4. Common Implementation Pitfalls and Correct Treatment<a class="headerlink" href="#common-implementation-pitfalls-and-correct-treatment" title="Link to this heading"></a></h2>
+<section id="pitfall-1-wrong-reference-density">
+<h3>Pitfall 1: Wrong reference density<a class="headerlink" href="#pitfall-1-wrong-reference-density" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Using n_ref = 10¹⁷ cm⁻³ for a neutral atom line whose table uses n_ref = 10¹⁶ cm⁻³, or vice versa.
+<strong>Effect:</strong> Factor-of-10 error in n_e.
+<strong>Fix:</strong> Check the database entry header. GRIEM database and Griem (1974): n_ref = 10¹⁶ for neutrals (I), 10¹⁷ for singly ionized (II).</p>
+</section>
+<section id="pitfall-2-hwhm-vs-fwhm-confusion-with-w">
+<h3>Pitfall 2: HWHM vs. FWHM confusion with w<a class="headerlink" href="#pitfall-2-hwhm-vs-fwhm-confusion-with-w" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> The tabulated w(T) is a <strong>half-half-width</strong> (i.e., half of the Lorentzian HWHM, or quarter-width). In Griem’s notation, the Lorentzian FWHM from electron impact alone is <strong>2w</strong> (the factor of 2 is explicit in the formula).
+<strong>Effect:</strong> Factor-of-2 error in n_e.
+<strong>Fix:</strong> Always write Δλ_S = 2w·(n_e/n_ref) + ion_term; never omit the factor of 2.</p>
+</section>
+<section id="pitfall-3-ignoring-temperature-dependence-of-w-t">
+<h3>Pitfall 3: Ignoring temperature dependence of w(T)<a class="headerlink" href="#pitfall-3-ignoring-temperature-dependence-of-w-t" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Using w at one temperature for a plasma where T may differ by 2–3×.
+<strong>Effect:</strong> Errors of 20–50% in n_e.
+<strong>Fix:</strong> Use the T from a simultaneous Boltzmann plot to select the correct w(T) from the table, interpolating between tabulated temperatures.</p>
+</section>
+<section id="pitfall-4-not-subtracting-stark-shift-before-fitting">
+<h3>Pitfall 4: Not subtracting Stark shift before fitting<a class="headerlink" href="#pitfall-4-not-subtracting-stark-shift-before-fitting" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Fitting the Lorentzian center without correcting for Stark shift, then using the shifted center for wavelength identification.
+<strong>Effect:</strong> Mistaken line identification; systematic wavelength offset.
+<strong>Fix:</strong> Fit the full profile (center + width); note the shift D(T); subtract D from the peak wavelength before cross-matching with the atomic database.</p>
+</section>
+<section id="pitfall-5-ignoring-instrumental-broadening">
+<h3>Pitfall 5: Ignoring instrumental broadening<a class="headerlink" href="#pitfall-5-ignoring-instrumental-broadening" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Taking the measured FWHM directly as Δλ_S.
+<strong>Effect:</strong> Overestimates n_e, especially when Δλ_inst ≳ Δλ_S.
+<strong>Fix:</strong> Always subtract instrumental (and Doppler) Gaussian contribution via the Voigt deconvolution (Olivero–Longbothum or Thompson formula) before applying the Stark formula.</p>
+</section>
+<section id="pitfall-6-applying-the-non-hydrogenic-formula-to-h-lines-or-vice-versa">
+<h3>Pitfall 6: Applying the non-hydrogenic formula to H lines (or vice versa)<a class="headerlink" href="#pitfall-6-applying-the-non-hydrogenic-formula-to-h-lines-or-vice-versa" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Using the linear <code class="docutils literal notranslate"><span class="pre">2w·(n_e/n_ref)</span></code> formula for Hα or Hβ, which follow a sublinear power law (~n_e^0.65–0.71).
+<strong>Effect:</strong> Highly inaccurate n_e (errors &gt;50% at n_e outside calibration point).
+<strong>Fix:</strong> For hydrogen lines, use Gigosos tables or the empirical power-law fits; for non-hydrogenic lines, use the Griem/Konjevic tables.</p>
+</section>
+<section id="pitfall-7-self-absorption-distorting-h-stark-width">
+<h3>Pitfall 7: Self-absorption distorting Hα Stark width<a class="headerlink" href="#pitfall-7-self-absorption-distorting-h-stark-width" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Using Hα width for n_e in H-rich or dense plasmas where self-absorption narrows the apparent profile.
+<strong>Effect:</strong> Underestimated Stark width → underestimated n_e.
+<strong>Fix:</strong> Check Hα/Hβ intensity ratio against optically thin prediction. Prefer Hβ when self-absorption is suspected; it is typically optically thinner than Hα.</p>
+</section>
+<section id="pitfall-8-ion-broadening-term-applied-with-wrong-sign-debye-factor">
+<h3>Pitfall 8: Ion broadening term applied with wrong sign / Debye factor<a class="headerlink" href="#pitfall-8-ion-broadening-term-applied-with-wrong-sign-debye-factor" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Applying the ion broadening correction with incorrect sign or without the Debye factor [1 − 3/(4 N_D^(1/3))].
+<strong>Effect:</strong> Ion broadening term is overestimated at very high n_e (when N_D is small).
+<strong>Fix:</strong> Compute N_D = (4π/3)·λ_D³·n_e with λ_D = sqrt(ε_0 k_B T / (n_e e²)) in CGS; apply the correction faithfully. In practice, for LIBS at n_e ~ 10¹⁷ cm⁻³, T ~ 10,000 K, N_D ~ 10–100 and the correction is ~10–30%.</p>
+</section>
+<section id="pitfall-9-using-lines-with-significant-van-der-waals-resonance-broadening">
+<h3>Pitfall 9: Using lines with significant van der Waals / resonance broadening<a class="headerlink" href="#pitfall-9-using-lines-with-significant-van-der-waals-resonance-broadening" title="Link to this heading"></a></h3>
+<p><strong>Error:</strong> Applying Stark formula to low-lying resonance lines (e.g., Ca II 393 nm, Mg II 280 nm) at late LIBS times when neutral gas pressure is high.
+<strong>Effect:</strong> Non-Stark Lorentzian broadening mimics electron-density signal.
+<strong>Fix:</strong> Use lines insensitive to pressure broadening (high-excitation non-resonance lines) or account for van der Waals width separately. Apply at early gating times when plasma is still hot and Stark term dominates.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="what-correct-code-must-do-checklist">
+<h2>5. What Correct Code MUST Do (Checklist)<a class="headerlink" href="#what-correct-code-must-do-checklist" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>[ ] <strong>w(T) interpolation:</strong> Look up electron-impact width w at the measured plasma temperature T by interpolating from the reference table (e.g., GRIEM database, Griem 1974, STARK-B). Do NOT use a single fixed T.</p></li>
+<li><p>[ ] <strong>Correct factor of 2:</strong> Compute Stark FWHM as <code class="docutils literal notranslate"><span class="pre">Δλ_S</span> <span class="pre">=</span> <span class="pre">2</span> <span class="pre">*</span> <span class="pre">w</span> <span class="pre">*</span> <span class="pre">(n_e</span> <span class="pre">/</span> <span class="pre">n_ref)</span></code> (plus optional ion term). w is a half-half-width; the factor of 2 is mandatory.</p></li>
+<li><p>[ ] <strong>Correct n_ref per line type:</strong> Use n_ref = 1e16 cm⁻³ for neutral lines, 1e17 cm⁻³ for singly ionized lines (match whichever convention the table uses).</p></li>
+<li><p>[ ] <strong>Ion broadening correction:</strong> When A is available and n_e is known, apply the <code class="docutils literal notranslate"><span class="pre">3.5·A·(n_e/n_ref)^(1/4)·[1</span> <span class="pre">−</span> <span class="pre">3/(4·N_D^(1/3))]·w</span></code> correction term. Compute N_D consistently.</p></li>
+<li><p>[ ] <strong>Voigt deconvolution before using FWHM:</strong> Subtract instrumental (Gaussian) broadening via <code class="docutils literal notranslate"><span class="pre">f_G</span> <span class="pre">=</span> <span class="pre">sqrt(Δλ_inst²</span> <span class="pre">+</span> <span class="pre">Δλ_D²)</span></code> and then solve Olivero–Longbothum or Thompson formula to isolate Lorentzian f_L = Δλ_S from measured Voigt f_V.</p></li>
+<li><p>[ ] <strong>Doppler width computation:</strong> Compute Δλ_D = (λ_0/c)·sqrt(8·ln(2)·k_B·T/M) for completeness even if small; include in total Gaussian.</p></li>
+<li><p>[ ] <strong>Hydrogen lines use Gigosos/VCS tables, not linear formula:</strong> For Hα/Hβ, call into the simulation tables (or use calibrated power-law fits); do not apply the non-hydrogenic linear formula.</p></li>
+<li><p>[ ] <strong>Stark shift correction:</strong> Retrieve D(T) from the same table as w(T); subtract the predicted Stark shift from the line center before wavelength matching.</p></li>
+<li><p>[ ] <strong>Self-absorption check:</strong> Flag Hα/Hβ ratio against expected optically thin value; warn if self-absorption may compromise Hα width.</p></li>
+<li><p>[ ] <strong>Uncertainty reporting:</strong> Propagate w-table uncertainty (~10–30% from theory/experiment scatter per Konjevic 1999) plus T uncertainty (via dΔλ/dT) into the final n_e uncertainty.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

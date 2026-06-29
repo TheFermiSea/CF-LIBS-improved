@@ -1,0 +1,220 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benchmark-gate findings — 2026-06-19 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Benchmark-gate findings — 2026-06-19</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/benchmarks/GATE-FINDINGS-2026-06-19.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="benchmark-gate-findings-2026-06-19">
+<h1>Benchmark-gate findings — 2026-06-19<a class="headerlink" href="#benchmark-gate-findings-2026-06-19" title="Link to this heading"></a></h1>
+<p>The Phase-3 discipline: implement a cited SOTA method as <strong>opt-in</strong>, then <strong>benchmark-gate</strong>
+it on the scoreboard (flag-off vs flag-on) and flip the default <strong>only on a measured win</strong>.
+This file records what the gate found. The point of the gate is to <em>prevent</em> adopting changes
+that don’t actually help — the repo has regressed 3× on ungated algorithm changes.</p>
+<section id="b1-errors-in-variables-odr-boltzmann-fit-reject-keep-opt-in">
+<h2>B1 — errors-in-variables (ODR) Boltzmann fit → <strong>REJECT (keep opt-in)</strong><a class="headerlink" href="#b1-errors-in-variables-odr-boltzmann-fit-reject-keep-opt-in" title="Link to this heading"></a></h2>
+<p><strong>Result:</strong> on <code class="docutils literal notranslate"><span class="pre">synthetic_fixedforward</span></code> (the self-contained dataset available off-cluster),
+<code class="docutils literal notranslate"><span class="pre">use_odr=true</span></code> produced ΔF1 = +0.000 and ΔRMSE = +0.000 — <em>identical to 3 decimals</em> — both at
+the default <code class="docutils literal notranslate"><span class="pre">odr_x_uncertainty=0.0</span></code> and at a generous <code class="docutils literal notranslate"><span class="pre">odr_x_uncertainty=0.1</span></code> eV.</p>
+<p><strong>Two verified reasons it is inert, not just weak:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Wrong code path for the production preset.</strong> The geological preset runs with
+<code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code>, so temperature is determined by the multi-element common-slope /
+Saha-Boltzmann-graph fit (<code class="docutils literal notranslate"><span class="pre">iterative.py:_common_slope_kernel</span></code> / <code class="docutils literal notranslate"><span class="pre">_fit_saha_boltzmann_graph</span></code>),
+<strong>not</strong> the per-element <code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter</span></code> that B1’s <code class="docutils literal notranslate"><span class="pre">use_odr</span></code> patches. <code class="docutils literal notranslate"><span class="pre">boltzmann_fitter.fit</span></code>
+is never called on the production solve path under the graph preset — so the flag cannot move the
+result. To make ODR matter it would have to be implemented inside the common-slope kernel.</p></li>
+<li><p><strong>E_k is precise.</strong> Even on a per-element Boltzmann plot, errors-in-variables only helps when the
+x-axis (upper-level energy E_k) carries real uncertainty. NIST upper-level energies are known to
+≪ 0.01 eV, so the EIV correction is negligible by construction — <code class="docutils literal notranslate"><span class="pre">use_odr</span></code> with <code class="docutils literal notranslate"><span class="pre">odr_x_uncertainty≈0</span></code>
+<em>mathematically degenerates to OLS</em> (asserted by B1’s own unit test).</p></li>
+</ol>
+<p><strong>Disposition:</strong> <code class="docutils literal notranslate"><span class="pre">use_odr</span></code> stays as a correct, tested, default-off opt-in (harmless; may matter for a
+future non-graph preset), but is <strong>not</strong> adopted as a default. The gate did its job: it stopped a
+“high-leverage” literature method from being adopted as a no-op.</p>
+</section>
+<section id="sa-observable-self-absorption-correction-the-1-literature-lever-reject-keep-opt-in">
+<h2>SA-observable — self-absorption correction (the #1 literature lever) → <strong>REJECT (keep opt-in)</strong><a class="headerlink" href="#sa-observable-self-absorption-correction-the-1-literature-lever-reject-keep-opt-in" title="Link to this heading"></a></h2>
+<p>Full adoption gate, <code class="docutils literal notranslate"><span class="pre">apply_self_absorption=&quot;observable&quot;</span></code> vs default-off, 9 datasets (incl. holdout), n≤100,
+seed 20260610, run on the cluster (jobs 3265 + 3267):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>dataset</p></th>
+<th class="head text-right"><p>ΔF1</p></th>
+<th class="head"><p>composition RMSE base→SA</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>chemcam_calib</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>4.991 → <strong>4.712</strong> (−5.6%, better)</p></td>
+</tr>
+<tr class="row-odd"><td><p>csa_planetary</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>22.428 → 22.428 (neutral)</p></td>
+</tr>
+<tr class="row-even"><td><p>bhvo2_chemcam (holdout)</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>2.486 → <strong>2.547</strong> (+2.5%, worse)</p></td>
+</tr>
+<tr class="row-odd"><td><p>supercam_labcal</p></td>
+<td class="text-right"><p>−0.005</p></td>
+<td><p>2.902 → <strong>2.970</strong> (+2.3%, worse)</p></td>
+</tr>
+<tr class="row-even"><td><p>supercam_scct (holdout)</p></td>
+<td class="text-right"><p>−0.003</p></td>
+<td><p>4.064 → <strong>4.343</strong> (+6.8%, worse)</p></td>
+</tr>
+<tr class="row-odd"><td><p>emslibs2019 (holdout)</p></td>
+<td class="text-right"><p>−0.002</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>aalto / silva2022 / synthetic_fixedforward</p></td>
+<td class="text-right"><p>0</p></td>
+<td><p>neutral / unchanged</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Verdict: matrix-dependent, net-negative → REJECT.</strong> Observable-SA improves ChemCam-calib composition RMSE
+but <strong>regresses BHVO-2, SuperCam-labcal, and SuperCam-SCCT</strong>, and slightly degrades ID F1 on three datasets.
+Aggregate RMSE and F1 both worsen. Critically it <strong>regressed BHVO-2 again — the exact dataset a prior SA
+path was deleted for</strong> (audit <code class="docutils literal notranslate"><span class="pre">02-inversion-solver.md</span></code> F4). The gate caught the regression history about to
+repeat; a global default-flip would have been the 4th SA regression. <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code> stays opt-in.</p>
+<p><strong>Refined physical reading:</strong> SA correction is real where self-absorption is strong (ChemCam-calib) but the
+current observable trigger <strong>over-corrects where lines are near-thin</strong> (BHVO-2 / SuperCam), injecting error.
+A genuine win needs a <em>sharper trigger</em> (correct a line only on strong, multi-observable self-absorption
+evidence — doublet-ratio AND Planck-ceiling AND Stark-width agreement), not the current wholesale mode. That
+is a real, well-scoped follow-up — but it is <strong>not</strong> a default we can flip today.</p>
+</section>
+<section id="two-verdicts-so-far-the-gate-is-doing-its-job">
+<h2>Two verdicts so far — the gate is doing its job<a class="headerlink" href="#two-verdicts-so-far-the-gate-is-doing-its-job" title="Link to this heading"></a></h2>
+<p>Both literature methods gated to date were <strong>rejected for verified reasons</strong>: B1 ODR (inert — wrong code
+path + precise E_k) and SA-observable (matrix-dependent net regression). Zero regressions adopted; one
+historical regression (BHVO-2 SA) actively prevented. Honest negative results are the point — they stop the
+repo repeating the ungated-change regressions that motivated the gate.</p>
+</section>
+<section id="what-a-real-accuracy-win-requires-next-phase">
+<h2>What a real accuracy win requires (next phase)<a class="headerlink" href="#what-a-real-accuracy-win-requires-next-phase" title="Link to this heading"></a></h2>
+<p>The gate is proven to work end-to-end (plumbing → scoreboard → verdict). To demonstrate an actual
+improvement over the literature baseline, a candidate must be (a) wired into the <strong>active</strong> solve path
+(the common-slope/SB-graph kernel, the <code class="docutils literal notranslate"><span class="pre">self_absorption_mode</span></code> handler, or the Saha balance) — not just
+a standalone physics class — and (b) gated on the <strong>composition-truth datasets</strong> (chemcam_calib,
+csa_planetary, supercam_*), whose data lives only on the cluster’s staged repo. The most promising
+candidates on physical grounds (literature-backed, act on the dominant error terms): <strong>CD-SB / C-sigma
+self-absorption</strong> (turns the worst lines into signal) and the <strong>multiplet-aware common-slope fit</strong>
+(more usable lines, less blend bias). These are tracked for the next benchmark-gated batch.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,269 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jitpipe stage contracts + tolerance tiers (ADR-0004 §4 / §5.4) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">jitpipe stage contracts + tolerance tiers (ADR-0004 §4 / §5.4)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jitpipe/contracts.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="jitpipe-stage-contracts-tolerance-tiers-adr-0004-4-5-4">
+<h1>jitpipe stage contracts + tolerance tiers (ADR-0004 §4 / §5.4)<a class="headerlink" href="#jitpipe-stage-contracts-tolerance-tiers-adr-0004-4-5-4" title="Link to this heading"></a></h1>
+<p>The jittable pipeline (<code class="docutils literal notranslate"><span class="pre">cflibs.jitpipe</span></code>) is a parallel re-implementation of the
+reference inversion pipeline (ADR-0004 D1). Each stage carries a <strong>parity
+contract</strong> against its reference adapter (<code class="docutils literal notranslate"><span class="pre">cflibs.jitpipe.parity</span></code>), graded by a
+<strong>tolerance tier</strong>.</p>
+<section id="precision-policy-adr-0004-5-3">
+<h2>Precision policy (ADR-0004 §5.3)<a class="headerlink" href="#precision-policy-adr-0004-5-3" title="Link to this heading"></a></h2>
+<p>All jitpipe device arrays are float64 under <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span></code>/<code class="docutils literal notranslate"><span class="pre">cuda</span></code>
+(<code class="docutils literal notranslate"><span class="pre">jax_enable_x64=True</span></code>; <code class="docutils literal notranslate"><span class="pre">conftest.py</span></code> forces it for tests). Metal (no fp64) is
+out of scope for jitpipe. Per-line metadata uses the narrowest exact integer
+dtype (i16/i8/i32/u8) that holds the DB values.</p>
+</section>
+<section id="tolerance-tiers-k-s-d-b">
+<h2>Tolerance tiers (K / S / D / B)<a class="headerlink" href="#tolerance-tiers-k-s-d-b" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tier</p></th>
+<th class="head"><p>Scope</p></th>
+<th class="head"><p>Default contract</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>K</strong></p></td>
+<td><p>atomic-data passthrough (snapshot fields consumed verbatim by kernels)</p></td>
+<td><p><strong>exact</strong> (<code class="docutils literal notranslate"><span class="pre">rtol=atol=0</span></code>, NaN-aware)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>S</strong></p></td>
+<td><p>Saha-Boltzmann scalar physics (partition U, ionization fractions)</p></td>
+<td><p>tight (<code class="docutils literal notranslate"><span class="pre">rtol≈1e-10</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>D</strong></p></td>
+<td><p>detection / identification scores (thresholded, discrete decisions)</p></td>
+<td><p>decision-equivalence (same lines selected)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>B</strong></p></td>
+<td><p>full-pipeline plasma parameters (T, n_e, concentrations)</p></td>
+<td><p>loose (physics-level, set per stage in J7)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="per-stage-contract-registry">
+<h2>Per-stage contract registry<a class="headerlink" href="#per-stage-contract-registry" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stage</p></th>
+<th class="head"><p>Module</p></th>
+<th class="head"><p>Bead</p></th>
+<th class="head"><p>Tier</p></th>
+<th class="head"><p>Reference adapter</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>snapshot bridge (forward)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">snapshot.to_atomic_snapshot</span></code></p></td>
+<td><p>J0</p></td>
+<td><p>K</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parity.reference_atomic_snapshot</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>snapshot bridge (lax)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">snapshot.to_lax_snapshot</span></code></p></td>
+<td><p>J0</p></td>
+<td><p>K</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parity.reference_lax_snapshot</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>preprocess</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">preprocess.py</span></code></p></td>
+<td><p>J1</p></td>
+<td><p>D</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parity.preprocess_parity</span></code> (stub)</p></td>
+</tr>
+<tr class="row-odd"><td><p>detect</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">detect.py</span></code></p></td>
+<td><p>J2</p></td>
+<td><p>D</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parity.detect_parity</span></code> (stub)</p></td>
+</tr>
+<tr class="row-even"><td><p>calibrate</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">calibrate.py</span></code></p></td>
+<td><p>J3</p></td>
+<td><p>D</p></td>
+<td><p>(J3)</p></td>
+</tr>
+<tr class="row-odd"><td><p>identify</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">identify.py</span></code></p></td>
+<td><p>J4</p></td>
+<td><p>D</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parity.identify_parity</span></code> (stub)</p></td>
+</tr>
+<tr class="row-even"><td><p>fit (Boltzmann)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">fit.py</span></code></p></td>
+<td><p>J5</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parity.fit_parity</span></code> (stub)</p></td>
+</tr>
+<tr class="row-odd"><td><p>self-absorption</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">selfabs.py</span></code></p></td>
+<td><p>J5</p></td>
+<td><p>S</p></td>
+<td><p>(J5)</p></td>
+</tr>
+<tr class="row-even"><td><p>stark n_e</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">stark.py</span></code></p></td>
+<td><p>J6</p></td>
+<td><p>S</p></td>
+<td><p>(J6)</p></td>
+</tr>
+<tr class="row-odd"><td><p>solve (iterative)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve.py</span></code></p></td>
+<td><p>J7</p></td>
+<td><p>B</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parity.solve_parity</span></code> (stub)</p></td>
+</tr>
+<tr class="row-even"><td><p>forward</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">forward.py</span></code></p></td>
+<td><p>J7</p></td>
+<td><p>K/S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kernels.forward_model</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>J0 status:</strong> the two snapshot-bridge contracts (tier K) are implemented and
+tested (<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_snapshot.py::test_forward_bridge_parity</span></code>,
+<code class="docutils literal notranslate"><span class="pre">test_lax_bridge_parity</span></code>) against both legacy builders for a 15-element
+candidate set. Per-stage contracts J1–J7 are registered here but their
+adapters are stubs until the stages land.</p>
+</section>
+<section id="eager-fallback-semantics-spec-2-ac7">
+<h2>Eager-fallback semantics (spec §2, AC7)<a class="headerlink" href="#eager-fallback-semantics-spec-2-ac7" title="Link to this heading"></a></h2>
+<p>The canonical scalar partition fallbacks (<code class="docutils literal notranslate"><span class="pre">PipelineSnapshot.canonical_fallback</span></code>)
+are evaluated <strong>eagerly at snapshot build</strong> — what was a lazy per-solve probe in
+the reference lax solver (<code class="docutils literal notranslate"><span class="pre">iterative.py:479-490</span></code>) becomes a one-time
+process-level cost. Closed-shell ions get their exact U (e.g. Na II → 1.0, not
+the 15.0 placeholder); other missing-data species get the canonical stage
+defaults (U_I = 25.0, U_II = 15.0). The forward-kernel <code class="docutils literal notranslate"><span class="pre">partition_coeffs</span></code> are
+the <code class="docutils literal notranslate"><span class="pre">partition_spec_for</span></code> direct-sum re-fit (concrete, no NaN); the lax-path
+<code class="docutils literal notranslate"><span class="pre">partition_coeffs_stored</span></code> keeps the raw table poly with the NaN sentinel.</p>
+</section>
+<section id="boundary-invariants">
+<h2>Boundary invariants<a class="headerlink" href="#boundary-invariants" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Only <code class="docutils literal notranslate"><span class="pre">host.py</span></code> / <code class="docutils literal notranslate"><span class="pre">snapshot.py</span></code> / <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> may import SQLite-backed code
+(<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_import_hygiene.py</span></code>).</p></li>
+<li><p>Nothing outside <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> imports <code class="docutils literal notranslate"><span class="pre">cflibs.jitpipe</span></code> (ADR-0004 D1).</p></li>
+<li><p>Physics-only constraint inherited: ruff TID251 bans sklearn/torch/etc.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

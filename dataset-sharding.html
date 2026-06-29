@@ -1,0 +1,346 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dataset Sharding for Parallel Benchmark Execution (T2.2) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Dataset Sharding for Parallel Benchmark Execution (T2.2)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/dataset-sharding.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="dataset-sharding-for-parallel-benchmark-execution-t2-2">
+<h1>Dataset Sharding for Parallel Benchmark Execution (T2.2)<a class="headerlink" href="#dataset-sharding-for-parallel-benchmark-execution-t2-2" title="Link to this heading"></a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">scripts/run_unified_benchmark.py</span> <span class="pre">--dataset-shard</span> <span class="pre">N/K</span></code> splits the Vrabel
+2020 50,000-spectrum soil benchmark across multiple cluster nodes so
+that each node processes a disjoint slice of the full corpus. After all
+K shards complete, <code class="docutils literal notranslate"><span class="pre">scripts/aggregate_shards.py</span></code> merges their
+per-shard <code class="docutils literal notranslate"><span class="pre">results.parquet</span></code> files into a single unified table.</p>
+<section id="when-to-use-sharding">
+<h2>When to use sharding<a class="headerlink" href="#when-to-use-sharding" title="Link to this heading"></a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--dataset-shard</span></code> when you want <strong>population-level precision</strong> on
+the full Vrabel 50k benchmark but a single node can’t process all
+50,000 spectra inside the wall-clock window:</p>
+<ul class="simple">
+<li><p><strong>Before sharding (current cluster setup):</strong> vasp-01 / vasp-02 /
+vasp-03 each run <code class="docutils literal notranslate"><span class="pre">--vrabel-max-shots</span> <span class="pre">10</span></code> (10 shots/sample × 100
+samples = 1,000 spectra/cell). Three identifier×composition cells
+produce 3 × 1,000 = 3,000 spectra of evidence.</p></li>
+<li><p><strong>After sharding:</strong> vasp-01 / vasp-02 / vasp-03 each run
+<code class="docutils literal notranslate"><span class="pre">--vrabel-max-shots</span> <span class="pre">0</span> <span class="pre">--dataset-shard</span> <span class="pre">{1,2,3}/3</span></code>. Each cell sees
+~16,667 spectra of the <strong>same</strong> full corpus. Three shards merge into
+a single 50,000-spectrum result.</p></li>
+</ul>
+<p>The bootstrap-CI math says SE shrinks as <code class="docutils literal notranslate"><span class="pre">1/sqrt(n)</span></code>. Going from 1,000
+to 50,000 spectra gives a <strong>7×</strong> CI tightening on every population
+statistic (mean d_A, F1, RMSE) for the same wall time.</p>
+<p>Do <strong>NOT</strong> use sharding for BHVO-2 (12 spectra) or NIST SRM 612
+(&lt;100 spectra) — those are too small to benefit, and per-shard sample
+counts would be statistically uninformative. The loader explicitly
+skips sharding for these datasets.</p>
+</section>
+<section id="cli-usage">
+<h2>CLI usage<a class="headerlink" href="#cli-usage" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Single-shard runs (one per node — different machines)</span>
+python<span class="w"> </span>scripts/run_unified_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--vrabel-max-shots<span class="w"> </span><span class="m">0</span><span class="w"> </span>--dataset-shard<span class="w"> </span><span class="m">1</span>/3<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--id-workflows<span class="w"> </span>correlation<span class="w"> </span>--composition-workflows<span class="w"> </span>iterative_jax<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-dir<span class="w"> </span>/scratch/cf-libs-bench/shard-1
+
+python<span class="w"> </span>scripts/run_unified_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--vrabel-max-shots<span class="w"> </span><span class="m">0</span><span class="w"> </span>--dataset-shard<span class="w"> </span><span class="m">2</span>/3<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--id-workflows<span class="w"> </span>correlation<span class="w"> </span>--composition-workflows<span class="w"> </span>iterative_jax<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-dir<span class="w"> </span>/scratch/cf-libs-bench/shard-2
+
+python<span class="w"> </span>scripts/run_unified_benchmark.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--vrabel-max-shots<span class="w"> </span><span class="m">0</span><span class="w"> </span>--dataset-shard<span class="w"> </span><span class="m">3</span>/3<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--id-workflows<span class="w"> </span>correlation<span class="w"> </span>--composition-workflows<span class="w"> </span>iterative_jax<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output-dir<span class="w"> </span>/scratch/cf-libs-bench/shard-3
+
+<span class="c1"># Merge into one result</span>
+python<span class="w"> </span>scripts/aggregate_shards.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>/scratch/cf-libs-bench/shard-1/results.parquet<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>/scratch/cf-libs-bench/shard-2/results.parquet<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>/scratch/cf-libs-bench/shard-3/results.parquet<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--output<span class="w"> </span>/scratch/cf-libs-bench/merged/results.parquet
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--dataset-shard</span></code> accepts <code class="docutils literal notranslate"><span class="pre">N/K</span></code> strings with <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">≤</span> <span class="pre">N</span> <span class="pre">≤</span> <span class="pre">K</span> <span class="pre">≤</span> <span class="pre">16</span></code>.
+<code class="docutils literal notranslate"><span class="pre">1/1</span></code> (the default) is equivalent to “no sharding”.</p>
+</section>
+<section id="partition-scheme-stride">
+<h2>Partition scheme: stride<a class="headerlink" href="#partition-scheme-stride" title="Link to this heading"></a></h2>
+<p>Each shard takes a <strong>strided</strong> slice of the loaded
+BenchmarkDataset’s spectra list:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>shard 1/3 → spectra[0::3]   →  indices [0, 3, 6, 9, ...]
+shard 2/3 → spectra[1::3]   →  indices [1, 4, 7, 10, ...]
+shard 3/3 → spectra[2::3]   →  indices [2, 5, 8, 11, ...]
+</pre></div>
+</div>
+<p>Stride is preferred over contiguous blocks (<code class="docutils literal notranslate"><span class="pre">spectra[0:n],</span> <span class="pre">[n:2n],</span> <span class="pre">[2n:]</span></code>) because:</p>
+<ul class="simple">
+<li><p><strong>Load balance:</strong> if per-sample shot counts are uneven (e.g.
+<code class="docutils literal notranslate"><span class="pre">--vrabel-max-shots</span> <span class="pre">50</span></code> caps the bigger samples), stride mixes heavy
+and light samples evenly across nodes. Contiguous blocks can
+concentrate all heavy samples on one shard.</p></li>
+<li><p><strong>Sample coverage:</strong> every shard sees a proportional sample from each
+of the 100 Vrabel CRMs, so per-CRM statistics are well-defined inside
+every shard.</p></li>
+<li><p><strong>Audit simplicity:</strong> the disjoint cover property
+(<code class="docutils literal notranslate"><span class="pre">union</span> <span class="pre">=</span> <span class="pre">full</span> <span class="pre">corpus,</span> <span class="pre">no</span> <span class="pre">overlap</span></code>) is trivial to verify from the
+stride formula. The aggregator enforces it as a runtime invariant.</p></li>
+</ul>
+<p>See <code class="docutils literal notranslate"><span class="pre">docs/archive/dataset-sharding-consultation.md</span></code> for the full design
+discussion (Codex + Gemini consultation).</p>
+</section>
+<section id="sharding-is-applied-after-the-per-sample-shot-cap">
+<h2>Sharding is applied <strong>after</strong> the per-sample shot cap<a class="headerlink" href="#sharding-is-applied-after-the-per-sample-shot-cap" title="Link to this heading"></a></h2>
+<p>The loader caps shots per Vrabel sample first (<code class="docutils literal notranslate"><span class="pre">--vrabel-max-shots</span></code>),
+then <code class="docutils literal notranslate"><span class="pre">apply_dataset_shard</span></code> slices the resulting BenchmarkDataset.</p>
+<p>This means:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">--vrabel-max-shots</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">--dataset-shard</span></code></p></th>
+<th class="head"><p>Spectra per shard</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">10</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1/1</span></code></p></td>
+<td><p>1,000 (10×100)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">10</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1/3</span></code></p></td>
+<td><p>~333</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">0</span></code> (no cap)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1/1</span></code></p></td>
+<td><p>50,000</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">0</span></code> (no cap)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1/3</span></code></p></td>
+<td><p>~16,667</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">50</span></code> (default)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1/3</span></code></p></td>
+<td><p>~1,667</p></td>
+</tr>
+</tbody>
+</table>
+<p>The headline use case is the <strong>bottom-right cell</strong> — full corpus / 3,
+yielding the 7× CI tightening described above.</p>
+</section>
+<section id="cross-shard-determinism">
+<h2>Cross-shard determinism<a class="headerlink" href="#cross-shard-determinism" title="Link to this heading"></a></h2>
+<p>Sharding is <strong>seed-independent</strong>: the partition is fully determined by
+<code class="docutils literal notranslate"><span class="pre">(shard_n,</span> <span class="pre">shard_k)</span></code> and the deterministic ordering of
+<code class="docutils literal notranslate"><span class="pre">BenchmarkDataset.spectra</span></code> (sorted by sample ID inside the Vrabel
+loader). Run shard 1/3 today, run shard 1/3 next week, you get the
+exact same 16,667 spectra.</p>
+<p>Each shard run should pass <code class="docutils literal notranslate"><span class="pre">--seed</span> <span class="pre">&lt;S&gt;</span></code> (the same <code class="docutils literal notranslate"><span class="pre">S</span></code> for all K shards
+in the same experiment) so that downstream RNG-using paths
+(<code class="docutils literal notranslate"><span class="pre">--perturb</span></code>, bootstrap CI in summaries) produce comparable results.
+The seed does NOT affect partition membership.</p>
+</section>
+<section id="per-row-provenance">
+<h2>Per-row provenance<a class="headerlink" href="#per-row-provenance" title="Link to this heading"></a></h2>
+<p>Every shard run writes its <code class="docutils literal notranslate"><span class="pre">shard_n</span></code> / <code class="docutils literal notranslate"><span class="pre">shard_k</span></code> into the parquet’s
+run-metadata columns (added in v1 schema, see
+<code class="docutils literal notranslate"><span class="pre">docs/results-parquet-schema.md</span></code>). Each spectrum also carries
+<code class="docutils literal notranslate"><span class="pre">shard_n</span></code> / <code class="docutils literal notranslate"><span class="pre">shard_k</span></code> in <code class="docutils literal notranslate"><span class="pre">annotations</span></code>, surfaced as a JSON-encoded
+<code class="docutils literal notranslate"><span class="pre">annotations_json</span></code> column. Downstream consumers can therefore:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span><span class="w"> </span><span class="n">shard_n</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">n_spectra</span><span class="p">,</span><span class="w"> </span><span class="k">AVG</span><span class="p">(</span><span class="n">d_a</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">mean_d_a</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">read_parquet</span><span class="p">(</span><span class="s1">&#39;merged/results.parquet&#39;</span><span class="p">)</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">record_kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;composition&#39;</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">scored</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">shard_n</span>
+<span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">shard_n</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>…to verify the partition is statistically balanced post-merge.</p>
+</section>
+<section id="aggregator-behaviour">
+<h2>Aggregator behaviour<a class="headerlink" href="#aggregator-behaviour" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">scripts/aggregate_shards.py</span></code>:</p>
+<ol class="arabic simple">
+<li><p>Loads each input Parquet.</p></li>
+<li><p>Validates that schemas match (no silent column drops).</p></li>
+<li><p>Concatenates with <code class="docutils literal notranslate"><span class="pre">pyarrow.concat_tables</span></code>.</p></li>
+<li><p><strong>Enforces the disjoint-cover invariant</strong> — if any two shards
+produce a row with the same <code class="docutils literal notranslate"><span class="pre">(record_kind,</span> <span class="pre">spectrum_id,</span> <span class="pre">id_workflow_name,</span> <span class="pre">composition_workflow_name,</span> <span class="pre">outer_split_id)</span></code> tuple,
+the aggregator exits with code 2 (“Shard overlap detected”).</p></li>
+<li><p>Writes the merged Parquet to <code class="docutils literal notranslate"><span class="pre">--output</span></code>.</p></li>
+</ol>
+<p>Exit codes: <code class="docutils literal notranslate"><span class="pre">0</span></code> success, <code class="docutils literal notranslate"><span class="pre">1</span></code> schema mismatch or I/O error, <code class="docutils literal notranslate"><span class="pre">2</span></code>
+overlap detected. Pass <code class="docutils literal notranslate"><span class="pre">--allow-overlap</span></code> to bypass the check (only
+useful when intentionally merging non-shard files).</p>
+</section>
+<section id="bootstrap-ci-math">
+<h2>Bootstrap-CI math<a class="headerlink" href="#bootstrap-ci-math" title="Link to this heading"></a></h2>
+<p>Two valid ways to compute population-level confidence intervals on a
+sharded run:</p>
+<section id="option-a-pooled-summary-statistics-law-of-total-variance">
+<h3>Option A: Pooled summary statistics (Law of Total Variance)<a class="headerlink" href="#option-a-pooled-summary-statistics-law-of-total-variance" title="Link to this heading"></a></h3>
+<p>If each shard reports mean <code class="docutils literal notranslate"><span class="pre">m_i</span></code> with standard error <code class="docutils literal notranslate"><span class="pre">s_i</span></code> over <code class="docutils literal notranslate"><span class="pre">n_i</span></code>
+spectra, the pooled estimator over <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">=</span> <span class="pre">Σ</span> <span class="pre">n_i</span></code> total spectra has:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>M_pooled = Σ (n_i * m_i) / N
+Var_pooled = Σ [n_i * (s_i² + (m_i - M_pooled)²)] / N
+</pre></div>
+</div>
+<p>The cross-shard term <code class="docutils literal notranslate"><span class="pre">(m_i</span> <span class="pre">-</span> <span class="pre">M_pooled)²</span></code> captures between-shard
+variance and is necessary when shard sample counts are unequal.</p>
+<p><strong>Use this when:</strong> all shards report only summary statistics (e.g. for
+fast dashboards) and the statistic is a sample mean.</p>
+</section>
+<section id="option-b-re-bootstrap-from-the-merged-parquet">
+<h3>Option B: Re-bootstrap from the merged Parquet<a class="headerlink" href="#option-b-re-bootstrap-from-the-merged-parquet" title="Link to this heading"></a></h3>
+<p>Once <code class="docutils literal notranslate"><span class="pre">aggregate_shards.py</span></code> produces the merged Parquet, bootstrap the
+<strong>merged row table</strong> directly. This is the recommended path:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">duckdb</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">con</span> <span class="o">=</span> <span class="n">duckdb</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+<span class="n">rows</span> <span class="o">=</span> <span class="n">con</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    SELECT d_a FROM read_parquet(&#39;merged/results.parquet&#39;)</span>
+<span class="s2">    WHERE record_kind = &#39;composition&#39; AND scored</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchnumpy</span><span class="p">()[</span><span class="s2">&quot;d_a&quot;</span><span class="p">]</span>
+
+<span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">boot_means</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">rows</span><span class="p">),</span> <span class="n">replace</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10_000</span><span class="p">)</span>
+<span class="p">])</span>
+<span class="n">ci_lo</span><span class="p">,</span> <span class="n">ci_hi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">boot_means</span><span class="p">,</span> <span class="p">[</span><span class="mf">2.5</span><span class="p">,</span> <span class="mf">97.5</span><span class="p">])</span>
+</pre></div>
+</div>
+<p><strong>Use this when:</strong> the statistic is non-linear (median, percentile,
+rank-correlation, Friedman/Nemenyi ranks). The merged row table is the
+canonical input; bootstrap from it.</p>
+</section>
+</section>
+<section id="implementation-notes">
+<h2>Implementation notes<a class="headerlink" href="#implementation-notes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Loader entry point: <code class="docutils literal notranslate"><span class="pre">cflibs.benchmark.loaders.apply_dataset_shard</span></code>.</p></li>
+<li><p>Shard is plumbed through <code class="docutils literal notranslate"><span class="pre">cflibs.benchmark.unified.load_default_datasets</span></code>
+via a new <code class="docutils literal notranslate"><span class="pre">dataset_shard:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span></code> kwarg.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code> and <code class="docutils literal notranslate"><span class="pre">parameter_sweep.py</span></code> both accept
+<code class="docutils literal notranslate"><span class="pre">--dataset-shard</span> <span class="pre">N/K</span></code>; the latter forwards via <code class="docutils literal notranslate"><span class="pre">--config-args</span></code>.</p></li>
+<li><p>Parquet schema v1 gained two new nullable columns: <code class="docutils literal notranslate"><span class="pre">shard_n</span></code>
+(int32), <code class="docutils literal notranslate"><span class="pre">shard_k</span></code> (int32). Existing readers that ignore unknown
+columns are unaffected.</p></li>
+<li><p>See <code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_dataset_shard.py</span></code> for the disjoint-cover
+invariant, CLI parser, and aggregator behaviour tests (12 tests,
+&lt;1 s).</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

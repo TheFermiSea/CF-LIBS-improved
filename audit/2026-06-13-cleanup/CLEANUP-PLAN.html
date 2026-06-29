@@ -1,0 +1,914 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Cleanup &amp; Simplification Plan &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Cleanup &amp; Simplification Plan</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-13-cleanup/CLEANUP-PLAN.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-cleanup-simplification-plan">
+<h1>CF-LIBS Cleanup &amp; Simplification Plan<a class="headerlink" href="#cf-libs-cleanup-simplification-plan" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-13
+<strong>Branch baseline:</strong> <code class="docutils literal notranslate"><span class="pre">dev</span></code> &#64; <code class="docutils literal notranslate"><span class="pre">2214c20</span></code> (== <code class="docutils literal notranslate"><span class="pre">main</span></code> per branch-topology memory)
+<strong>Synthesized from:</strong> the six 2026-06-13 read-only audit dimensions
+(reference-deprecation, dead-legacy-paths, repo-scaffolding, import-shims,
+test-redundancy) cross-checked against on-disk dev state.</p>
+<blockquote>
+<div><p><strong>This is a PLAN ONLY.</strong> No cleanup is performed here. Each item lists its
+gate; nothing reference-touching moves until its gate is satisfied.</p>
+</div></blockquote>
+<hr class="docutils" />
+<section id="executive-summary">
+<h2>1. Executive Summary<a class="headerlink" href="#executive-summary" title="Link to this heading"></a></h2>
+<section id="total-cleanup-opportunity">
+<h3>Total cleanup opportunity<a class="headerlink" href="#total-cleanup-opportunity" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Bucket</p></th>
+<th class="head"><p>Approx. magnitude</p></th>
+<th class="head"><p>When</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Branch/worktree/disk hygiene</p></td>
+<td><p>~150 local + ~66 remote branch refs, <strong>~2.4 GB</strong> worktree disk</p></td>
+<td><p>safe now</p></td>
+</tr>
+<tr class="row-odd"><td><p>Superseded build/campaign scripts (archive)</p></td>
+<td><p>~6.4 KLOC moved-to-archive (HPC ~3.4K + campaign1 ~3.0K) + ~4.1 KLOC orphaned root drivers</p></td>
+<td><p>safe now</p></td>
+</tr>
+<tr class="row-even"><td><p>Dead never-run code (orchestration shells)</p></td>
+<td><p>~0 LOC safe now; ~1.0 KLOC gated to M3 (lax driver + Jax subclass + benchmark workflow)</p></td>
+<td><p>mostly M3</p></td>
+</tr>
+<tr class="row-odd"><td><p>Import-shim / facade slimming</p></td>
+<td><p>~25–40 LOC deletable now; ~430 LOC gated on a public-API decision (not jitpipe)</p></td>
+<td><p>now / API decision</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Reference-only inversion compute</strong> (run_pipeline path)</p></td>
+<td><p><strong>~14,000 LOC</strong> removable in stages, <strong>net ~14,080</strong> after preserving ~268 LOC shared kernels/constants</p></td>
+<td><p>after M3 + shadow + oracle</p></td>
+</tr>
+<tr class="row-odd"><td><p>Reference-stage test retirement</p></td>
+<td><p>~4,500–6,000 LOC oracle-only; ~700 LOC dead JAX-flag scaffolding; ~260 LOC mock_db dedup</p></td>
+<td><p>mixed</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Headline number:</strong> roughly <strong>14 KLOC of production reference-inversion compute</strong>
+becomes removable <em>in staged steps after jitpipe is promoted (M3)</em>, on top of
+<strong>~10 KLOC of scripts/tests/scaffolding</strong> that is removable or archivable on
+lighter gates — but <strong>zero of the 14 KLOC is removable today</strong> because jitpipe
+is mid-build (<code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/pipeline.py</span></code> <code class="docutils literal notranslate"><span class="pre">run_one</span></code>/<code class="docutils literal notranslate"><span class="pre">run_batch</span></code> are J0
+skeletons; the <code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">{reference,jit}</span></code> flag is not wired).</p>
+</section>
+<section id="the-35-biggest-wins">
+<h3>The 3–5 biggest wins<a class="headerlink" href="#the-35-biggest-wins" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Branch + worktree massacre (safe now, ~2.4 GB).</strong> ~150 local + ~66 remote
+merged/squashed branch refs and 21+5+30 stale worktrees reclaim <strong>~2.4 GB</strong>
+with zero source risk. The single largest immediate, risk-free win.</p></li>
+<li><p><strong>Archive superseded benchmark machinery (safe now, ~6.4 KLOC).</strong>
+<code class="docutils literal notranslate"><span class="pre">scripts/hpc/</span></code> (~3.4 KLOC) and <code class="docutils literal notranslate"><span class="pre">scripts/campaign1/</span></code> (~3.0 KLOC) are
+fully superseded by <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/scoreboard.py</span></code> with zero production/CI
+references — move to <code class="docutils literal notranslate"><span class="pre">scripts/archive/</span></code>.</p></li>
+<li><p><strong>The 14 KLOC reference-inversion deprecation (the prize, gated on M3).</strong>
+<code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> (2475) + <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py</span></code> (1661) +
+<code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> solve body (~3000) + <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> orchestrator (~880) + the
+LOW/MED-risk per-stage kernels (~4820) are the real simplification — but only
+after promotion + ≥2-release shadow + an independent oracle.</p></li>
+<li><p><strong>Dead lax solve path (~1.0 KLOC, gated to M3-Stage-B).</strong> <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> +
+<code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code> + pure_callback closure trio + the deprecated
+<code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code> subclass + its <code class="docutils literal notranslate"><span class="pre">iterative_jax</span></code> benchmark workflow
+<strong>never route in production today</strong> and are explicitly superseded by jitpipe’s
+<code class="docutils literal notranslate"><span class="pre">scan_solve</span></code> (ADR-0004 §3 C4) — the cleanest large deletion, deferred only
+because its <em>component kernels</em> are reused by jitpipe and its tests are
+jitpipe’s parity anchor.</p></li>
+<li><p><strong>Small bookkeeping sweeps (safe now).</strong> Delete dead <code class="docutils literal notranslate"><span class="pre">physics/cdsb.py</span></code> module
+(+ its test), drop <code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> (trailing-s) stale dir, remove
+<code class="docutils literal notranslate"><span class="pre">tests/validation/validation/</span></code> nested dup, close beads 38xr/4ig9, fix stale
+CLAUDE.md flat-path / manifold-generator claims.</p></li>
+</ol>
+</section>
+<section id="the-one-hard-constraint-adr-0004-d6-the-oracle-gate">
+<h3>The one hard constraint — ADR-0004 D6 (the oracle gate)<a class="headerlink" href="#the-one-hard-constraint-adr-0004-d6-the-oracle-gate" title="Link to this heading"></a></h3>
+<blockquote>
+<div><p>The reference pipeline (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py::run_pipeline</span></code> and every
+stage it orchestrates) is the <strong>frozen parity oracle</strong>. Pre-M3, any
+jit/reference divergence is a <em>presumed jit bug</em>. Post-M3 the reference stays
+the parity oracle (<code class="docutils literal notranslate"><span class="pre">--pipeline=reference</span></code>) for <strong>≥2 releases</strong> (bug-fix-only,
+each paired with a parity-test update), then demotes to a validation oracle.
+<strong>Final removal of any reference-touching code requires an independent oracle
+(NIST parity + golden corpus) and a ROADMAP entry.</strong></p>
+</div></blockquote>
+<p>Consequence: nothing on the <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> path — code <em>or</em> its parity tests —
+is removed until jitpipe is <strong>PROMOTED (M3)</strong> with an oracle preserved. The
+shared JAX kernels jitpipe imports are <strong>never deleted, only relocated</strong>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="prioritized-dependency-ordered-master-table">
+<h2>2. Prioritized, Dependency-Ordered Master Table<a class="headerlink" href="#prioritized-dependency-ordered-master-table" title="Link to this heading"></a></h2>
+<p>Sorted by gate: <strong>safe now → once jitpipe default → after M3 promotion →
+after 2-release shadow + independent oracle</strong>. Within a gate, lower-risk first.
+LOC are approximate. <code class="docutils literal notranslate"><span class="pre">file:line</span></code> from dev &#64; <code class="docutils literal notranslate"><span class="pre">2214c20</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Target</p></th>
+<th class="head"><p>Action</p></th>
+<th class="head"><p>LOC</p></th>
+<th class="head"><p>GATE</p></th>
+<th class="head"><p>Risk</p></th>
+<th class="head"><p>Evidence (dedup’d)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>SAFE NOW</strong></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>~150 local merged/squashed branches (74 <code class="docutils literal notranslate"><span class="pre">cx/*</span></code>, 21 <code class="docutils literal notranslate"><span class="pre">overhaul/*</span></code>, 5 <code class="docutils literal notranslate"><span class="pre">arch/c*</span></code>, <code class="docutils literal notranslate"><span class="pre">fix/wave*</span></code>, <code class="docutils literal notranslate"><span class="pre">fix/pre-g1..g5</span></code>)</p></td>
+<td><p>remove</p></td>
+<td><p>0 (refs)</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">cherry</span> <span class="pre">dev</span> <span class="pre">&lt;b&gt;</span></code>=0 for all <code class="docutils literal notranslate"><span class="pre">cx/*</span></code>/<code class="docutils literal notranslate"><span class="pre">arch/c*</span></code>; <code class="docutils literal notranslate"><span class="pre">overhaul/*</span></code> reached dev via squash PRs (#283/#287); <code class="docutils literal notranslate"><span class="pre">fix/pre-g*</span></code> are dev ancestors. <strong>Exception:</strong> <code class="docutils literal notranslate"><span class="pre">cx/wave3-cdsb</span></code>/<code class="docutils literal notranslate"><span class="pre">cx/wave3-lineselect</span></code> carry 2 unmerged refactor commits — diff first</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>~66 remote merged branch refs (<code class="docutils literal notranslate"><span class="pre">origin/cx/*</span></code>, <code class="docutils literal notranslate"><span class="pre">origin/overhaul/*</span></code>, <code class="docutils literal notranslate"><span class="pre">origin/fix/*</span></code>)</p></td>
+<td><p>remove</p></td>
+<td><p>0 (refs)</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>Remote mirrors of #1. Keep <code class="docutils literal notranslate"><span class="pre">origin/{main,dev,jitpipe,gh-pages,adr/0002-jittable-pipeline}</span></code> + 3 active <code class="docutils literal notranslate"><span class="pre">fix-*</span></code> hotfix branches</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.worktrees/{w1-*,w2-*,w3-*,w4-*,w5-*,w6-*,w7-*}</span></code> (21 worktrees, <strong>~1.3 GB</strong>)</p></td>
+<td><p>remove</p></td>
+<td><p>0 (~1.3 GB disk)</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>All on <code class="docutils literal notranslate"><span class="pre">overhaul/*</span></code> branches in dev. <strong>Exception:</strong> <code class="docutils literal notranslate"><span class="pre">.worktrees/w7-integration</span></code> has 4 tracked mods (<code class="docutils literal notranslate"><span class="pre">scripts/campaign1/{README,objective}.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/{benchmark/test_jax_workflows,campaign1/test_fitness_v2}.py</span></code>) — salvage first</p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/wt-pf/{g1..g5}</span></code> (5 worktrees, ~171 MB)</p></td>
+<td><p>remove</p></td>
+<td><p>0 (disk)</p></td>
+<td><p>safe now (salvage g2/g4)</p></td>
+<td><p>med</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">fix/pre-g*</span></code> MERGED-anc into dev. <strong>Salvage:</strong> g2-cli-drift + g4-benchpause hold <em>uncommitted</em> tracked test fixes (<code class="docutils literal notranslate"><span class="pre">test_analyze_invert_no_drift.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_bench_pause.py</span></code>) — never actioned from prior audit</p></td>
+</tr>
+<tr class="row-odd"><td><p>5</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">.claude/worktrees/agent-a{0,1,4,7}*</span></code> (4 stale, ~part of 964 MB)</p></td>
+<td><p>archive</p></td>
+<td><p>0 (disk)</p></td>
+<td><p>safe now</p></td>
+<td><p>med</p></td>
+<td><p>Locked at <code class="docutils literal notranslate"><span class="pre">7043445</span></code> with stale “locked claude agent (pid …)” marker — verify pid dead, unlock+remove. (26 <code class="docutils literal notranslate"><span class="pre">wf_*</span></code> jitpipe worktrees → <strong>KEEP</strong>, see gated table)</p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scripts/hpc/</span></code> (6 files: submit_full_campaign, run_benchmark_sweep, generate_synthetic_benchmark, generate_basis_libraries, train_ml_classifier, analyze_benchmark_results)</p></td>
+<td><p>archive → <code class="docutils literal notranslate"><span class="pre">scripts/archive/hpc-campaign/</span></code></p></td>
+<td><p>~3434</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>Self-contained SLURM chain; <code class="docutils literal notranslate"><span class="pre">rg</span></code> external refs = 0 except <code class="docutils literal notranslate"><span class="pre">pyproject.toml:212</span></code> (sklearn TID251 exemption for train_ml_classifier — drop on move). No CI. Superseded by <code class="docutils literal notranslate"><span class="pre">scoreboard.py</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scripts/campaign1/</span></code> (driver, holdout_eval, knob_space, objective, rescore, splits, README, slurm/)</p></td>
+<td><p>archive → <code class="docutils literal notranslate"><span class="pre">scripts/archive/campaign1/</span></code></p></td>
+<td><p>~2998</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>Optuna TPE knob-search; README documents best==baseline negative result. No prod/CI refs. Preserve README as negative-result record. (Alt: keep as dormant phase-B infra)</p></td>
+</tr>
+<tr class="row-even"><td><p>8</p></td>
+<td><p>Orphaned root benchmark drivers: <code class="docutils literal notranslate"><span class="pre">run_comprehensive_benchmark.py</span></code> (746), <code class="docutils literal notranslate"><span class="pre">run_experiments.py</span></code> (608), <code class="docutils literal notranslate"><span class="pre">run_experiments_advanced.py</span></code> (633), <code class="docutils literal notranslate"><span class="pre">sweep_alias_fixes.py</span></code> (899), <code class="docutils literal notranslate"><span class="pre">run_accuracy_ablation.py</span></code> (1135)</p></td>
+<td><p>consolidate (archive after per-file diff)</p></td>
+<td><p>~4021</p></td>
+<td><p>safe now (per-file check)</p></td>
+<td><p>med</p></td>
+<td><p>Pre-scoreboard one-shot drivers; near-dup <code class="docutils literal notranslate"><span class="pre">run_experiments*</span></code> pair. Ext refs only to <code class="docutils literal notranslate"><span class="pre">benchmark/unified.py</span></code> + docs. <strong>KEEP</strong> <code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code> + <code class="docutils literal notranslate"><span class="pre">parameter_sweep.py</span></code> (still wired). <strong>Memory:</strong> <code class="docutils literal notranslate"><span class="pre">sweep_alias_fixes.py</span></code> is identifier-scoring → archive (benchmark-gate), never blind-delete</p></td>
+</tr>
+<tr class="row-odd"><td><p>9</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/cdsb.py</span></code> (CDSBLineObservation, create_cdsb_observation, from_transition) + <code class="docutils literal notranslate"><span class="pre">tests/test_cdsb.py</span></code> (148)</p></td>
+<td><p>remove</p></td>
+<td><p>194 (+148 test)</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>CDSBPlotter algo already deleted (<code class="docutils literal notranslate"><span class="pre">cdsb.py:8</span></code>). Module imported ONLY by <code class="docutils literal notranslate"><span class="pre">inversion/__init__.py</span></code> re-export + <code class="docutils literal notranslate"><span class="pre">tests/test_cdsb.py</span></code>. <strong>Verified:</strong> <code class="docutils literal notranslate"><span class="pre">self_absorption.py</span></code> mentions CDSB in <em>docstrings only</em> (no import); <code class="docutils literal notranslate"><span class="pre">run_experiments.py</span></code>/<code class="docutils literal notranslate"><span class="pre">run_accuracy_ablation.py</span></code> use their own local <code class="docutils literal notranslate"><span class="pre">_apply_cdsb_pipeline</span></code>/<code class="docutils literal notranslate"><span class="pre">apply_cdsb_correction</span></code>, NOT this module. Drop file + test + 3 <code class="docutils literal notranslate"><span class="pre">__init__</span></code> export entries (:100-102, :284-286)</p></td>
+</tr>
+<tr class="row-even"><td><p>10</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tests/validation/validation/</span></code> (nested dup dir, contains <code class="docutils literal notranslate"><span class="pre">accuracy/</span></code>)</p></td>
+<td><p>archive/remove</p></td>
+<td><p>dir</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>Accidentally-committed nested dup; the pyproject ruff <code class="docutils literal notranslate"><span class="pre">validation/validation</span></code> exclude is already gone, so it’s lint-active dead weight. <strong>Verified present</strong> on disk. Confirm not a live fixture first</p></td>
+</tr>
+<tr class="row-odd"><td><p>11</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> (trailing-s) stale dir + bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-4ig9</span></code></p></td>
+<td><p>remove + close bead</p></td>
+<td><p>~0</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p><strong>Verified:</strong> <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">ls-files</span> <span class="pre">cflibs/benchmarks/</span></code> returns nothing (source shim already deleted); only untracked <code class="docutils literal notranslate"><span class="pre">__pycache__</span></code> remains. Scrub merge-comments in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/__init__.py:97,112,114</span></code>, close bead 4ig9</p></td>
+</tr>
+<tr class="row-even"><td><p>12</p></td>
+<td><p>bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-38xr</span></code> (kill shim round-trip)</p></td>
+<td><p>archive (verify+close)</p></td>
+<td><p>0</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p><strong>Verified done:</strong> all 30 old flat paths raise <code class="docutils literal notranslate"><span class="pre">ModuleNotFoundError</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">cflibs.inversion.solver</span></code> fails); acceptance grep <code class="docutils literal notranslate"><span class="pre">^from</span> <span class="pre">cflibs.inversion.[a-z]*$</span></code> = 0 matches. Round-trip eliminated by PR #210 (<code class="docutils literal notranslate"><span class="pre">55a7e68</span></code>) + <code class="docutils literal notranslate"><span class="pre">33e24b0</span></code>. Just close it</p></td>
+</tr>
+<tr class="row-odd"><td><p>13</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/__init__.py</span></code> — private underscore symbols in <code class="docutils literal notranslate"><span class="pre">__all__</span></code> (<code class="docutils literal notranslate"><span class="pre">_atomic_data_arrays_from_snapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">_compute_instrument_sigma</span></code>, <code class="docutils literal notranslate"><span class="pre">_resolve_total_species_density_cm3</span></code>)</p></td>
+<td><p>remove from <code class="docutils literal notranslate"><span class="pre">__all__</span></code></p></td>
+<td><p>~6</p></td>
+<td><p>safe now (verify test deps)</p></td>
+<td><p>low</p></td>
+<td><p>Re-exported privates; only <code class="docutils literal notranslate"><span class="pre">test_bayesian_forward_model_kernel_migration.py</span></code> references — keep importable from <code class="docutils literal notranslate"><span class="pre">.atomic</span></code>, stop re-exporting from facade</p></td>
+</tr>
+<tr class="row-even"><td><p>14</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/__init__.py:220-223</span></code> — <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code>/<code class="docutils literal notranslate"><span class="pre">JointConvergenceStatus</span></code> collision aliasing</p></td>
+<td><p>inline / document canonical</p></td>
+<td><p>~4</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>Name defined in BOTH <code class="docutils literal notranslate"><span class="pre">solve/joint_optimizer.py:67</span></code> and <code class="docutils literal notranslate"><span class="pre">solve/bayesian/priors.py:170</span></code>; aggregator disambiguates. Document which is canonical; bundle into #20 aggregator slim</p></td>
+</tr>
+<tr class="row-odd"><td><p>15</p></td>
+<td><p>CLAUDE.md stale claims: “shims exist at all old flat paths” + “Cluster Notes” <code class="docutils literal notranslate"><span class="pre">manifold-generator.py</span></code> warning</p></td>
+<td><p>remove (doc)</p></td>
+<td><p>2–3 lines</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p><strong>Verified:</strong> flat-path import fails (#12); root <code class="docutils literal notranslate"><span class="pre">manifold-generator.py</span></code> does not exist (only canonical <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py</span></code>). On-disk CLAUDE.md:198 already correct; scrub the contradicting lines</p></td>
+</tr>
+<tr class="row-even"><td><p>16</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scripts/archive/migrations/</span></code> (20 applied DB migrations)</p></td>
+<td><p>leave-as-is / optional delete</p></td>
+<td><p>~20 files</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>Already archived; built DB committed at <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>. <strong>Caution:</strong> <code class="docutils literal notranslate"><span class="pre">patch_partition_functions_bc2016.py</span></code>/<code class="docutils literal notranslate"><span class="pre">fit_partition_coefficients.py</span></code>/<code class="docutils literal notranslate"><span class="pre">regenerate_partition_functions.py</span></code> touched by recent commits (789f31b, dbf785d) — verify not in-flight before any delete</p></td>
+</tr>
+<tr class="row-odd"><td><p>17</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-09-overhaul/*</span></code> (10) + <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-10-goalfirst/*</span></code> (4)</p></td>
+<td><p>archive → <code class="docutils literal notranslate"><span class="pre">docs/archive/audit/</span></code></p></td>
+<td><p>14 files</p></td>
+<td><p>safe now (caveats)</p></td>
+<td><p>med</p></td>
+<td><p>Completed-wave history. <strong>Caveat:</strong> <code class="docutils literal notranslate"><span class="pre">04-pipeline-defaults.md</span></code> is the parity ref for campaign1 knob defaults + basis of unmerged <code class="docutils literal notranslate"><span class="pre">audit/04-pipeline-defaults</span></code> branch (31 commits) — disposition that branch first. <code class="docutils literal notranslate"><span class="pre">05-repo-cleanliness.md</span></code> is <em>this plan’s superseded predecessor</em></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>DEPENDS ON A PUBLIC-API DECISION (not jitpipe)</strong></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>18</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/samplers.py:443,667</span></code> — <code class="docutils literal notranslate"><span class="pre">NumPyroNUTSSampler</span></code>/<code class="docutils literal notranslate"><span class="pre">DynestyNestedSampler</span></code> inverted-canonical aliases</p></td>
+<td><p>consolidate (pick one direction)</p></td>
+<td><p>~20</p></td>
+<td><p>API decision</p></td>
+<td><p>med</p></td>
+<td><p>“Canonical” names have ZERO callers; “legacy” <code class="docutils literal notranslate"><span class="pre">MCMCSampler</span></code>/<code class="docutils literal notranslate"><span class="pre">NestedSampler</span></code> are the real API (<code class="docutils literal notranslate"><span class="pre">test_bayesian.py</span></code>, <code class="docutils literal notranslate"><span class="pre">benchmark/unified.py:2502</span></code>, <code class="docutils literal notranslate"><span class="pre">bayesian_sparse_id.py:110</span></code>). Drop unused aliases OR migrate+rename — alias currently points wrong way</p></td>
+</tr>
+<tr class="row-even"><td><p>19</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">forward_models/__init__.py</span></code> registry: <code class="docutils literal notranslate"><span class="pre">hermann_two_region</span></code> + <code class="docutils literal notranslate"><span class="pre">lte_with_self_absorption</span></code> (+ helpers)</p></td>
+<td><p>remove</p></td>
+<td><p>~120 of 220</p></td>
+<td><p>once jitpipe default (low-value)</p></td>
+<td><p>low</p></td>
+<td><p>ZERO refs outside <code class="docutils literal notranslate"><span class="pre">forward_models/__init__.py</span></code> + <code class="docutils literal notranslate"><span class="pre">test_forward_models_registry.py</span></code>. Whole package imported only by its own test. Keep <code class="docutils literal notranslate"><span class="pre">single_zone_lte</span></code> + plumbing</p></td>
+</tr>
+<tr class="row-odd"><td><p>20</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/__init__.py</span></code> — lazy aggregator (<code class="docutils literal notranslate"><span class="pre">__getattr__</span></code> + <code class="docutils literal notranslate"><span class="pre">_MODULE_EXPORTS</span></code>, ~130 symbols)</p></td>
+<td><p>retarget-imports then deprecate</p></td>
+<td><p>~400</p></td>
+<td><p>public-API deprecation decision</p></td>
+<td><p>med</p></td>
+<td><p>Near-dead internally (5 <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion</span> <span class="pre">import</span> <span class="pre">X</span></code> lines repo-wide; 3 are docstrings). BUT documented public API + pinned by <code class="docutils literal notranslate"><span class="pre">tests/test_import_safety.py</span></code>. Retarget 2 internal callers, deprecate on release boundary — do NOT delete outright. Reference-independent</p></td>
+</tr>
+<tr class="row-even"><td><p>21</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/__init__.py</span></code> legacy export entries (SelfAbsorptionCorrector, CurveOfGrowthAnalyzer, estimate_optical_depth_from_intensity_ratio, CDSB×3, IterativeCFLIBSSolverJax)</p></td>
+<td><p>retarget-imports</p></td>
+<td><p>~14</p></td>
+<td><p>tie each to its symbol’s gate</p></td>
+<td><p>low</p></td>
+<td><p>Each removable symbol re-exported twice (<code class="docutils literal notranslate"><span class="pre">__all__</span></code> + lazy map). CDSB entries → safe now (with #9); SelfAbsorptionCorrector → after-oracle; IterativeCFLIBSSolverJax → after M3. Vestigial public surface, not load-bearing (single-maintainer)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>ONCE jitpipe IS DEFAULT (benchmark adapter exists)</strong></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>22</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py:2260-2390</span></code> <code class="docutils literal notranslate"><span class="pre">_iterative_jax_*</span></code> + <code class="docutils literal notranslate"><span class="pre">iterative_jax</span></code> workflow registration</p></td>
+<td><p>remove</p></td>
+<td><p>~130</p></td>
+<td><p>once jitpipe benchmark adapter replaces it (≈M3)</p></td>
+<td><p>low</p></td>
+<td><p>Parallel benchmark workflow distinct from scored scoreboard. Only consumer of deprecated <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code>. One test xfails (“Agent B solver hasn’t landed”). Removal doesn’t touch scoreboard scoring</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>AFTER M3 PROMOTION (Stage-B: reference is bug-fix-only oracle)</strong></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>23</p></td>
+<td><p>KEEP <code class="docutils literal notranslate"><span class="pre">jitpipe-*</span></code>/<code class="docutils literal notranslate"><span class="pre">verify-*</span></code>/<code class="docutils literal notranslate"><span class="pre">integ-*</span></code> local branches, <code class="docutils literal notranslate"><span class="pre">origin/jitpipe</span></code>, 26 <code class="docutils literal notranslate"><span class="pre">.claude/worktrees/wf_*</span></code> worktrees, <code class="docutils literal notranslate"><span class="pre">.worktrees/{integ-j8,stage}</span></code>, <code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-residual</span></code></p></td>
+<td><p><strong>do-not-prune</strong> until M3</p></td>
+<td><p>—</p></td>
+<td><p>after M3</p></td>
+<td><p>high</p></td>
+<td><p>In-progress jitpipe stage work, genuinely unmerged (<code class="docutils literal notranslate"><span class="pre">jitpipe-j8</span></code> unmerged=7). Pruning loses stage work. <code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-residual</span></code> (13 unmerged commits) needs explicit merge-or-abandon</p></td>
+</tr>
+<tr class="row-odd"><td><p>24</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> lax shells: <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> (L2227-2380) + <code class="docutils literal notranslate"><span class="pre">solve()</span></code> routing (L1603-1612) + <code class="docutils literal notranslate"><span class="pre">_LaxFallback</span></code> (L213-220)</p></td>
+<td><p>remove</p></td>
+<td><p>~170</p></td>
+<td><p>after M3 (Stage-B; FIRST removal)</p></td>
+<td><p>med</p></td>
+<td><p><strong>Dead in production today:</strong> routing needs <code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">saha_boltzmann_graph</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">diags</span></code>, but all presets set <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code> + wire Stark diags → always <code class="docutils literal notranslate"><span class="pre">_solve_python</span></code>. ADR §3 C4 supersedes. <strong>KEEP component kernels</strong> (#31)</p></td>
+</tr>
+<tr class="row-even"><td><p>25</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py:721-865</span></code> <code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code> driver</p></td>
+<td><p>remove</p></td>
+<td><p>~145</p></td>
+<td><p>after M3 + jitpipe internalizes parity anchor</p></td>
+<td><p>med</p></td>
+<td><p>Sole non-test caller is <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code>. jitpipe <code class="docutils literal notranslate"><span class="pre">solve.py:342</span></code> has its own <code class="docutils literal notranslate"><span class="pre">scan_solve</span></code>. <strong>Blocker:</strong> jitpipe/tests (<code class="docutils literal notranslate"><span class="pre">solve.py:84,147,246</span></code>, <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py</span></code>) currently use it as parity anchor — move/duplicate the anchor first</p></td>
+</tr>
+<tr class="row-odd"><td><p>26</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py:543-657</span></code> <code class="docutils literal notranslate"><span class="pre">_make_closure_callback</span></code>/<code class="docutils literal notranslate"><span class="pre">_closure_via_callback</span></code>/<code class="docutils literal notranslate"><span class="pre">_host_closure</span></code> (pure_callback ILR)</p></td>
+<td><p>remove</p></td>
+<td><p>~115</p></td>
+<td><p>after M3 + retarget parity test</p></td>
+<td><p>med</p></td>
+<td><p>Single non-test caller is <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code>. Serializes under vmap, non-differentiable (ADR §4 row 9/§6.1); jitpipe uses native masked closures. <code class="docutils literal notranslate"><span class="pre">test_parity_j7.py</span></code> imports <code class="docutils literal notranslate"><span class="pre">_make_closure_callback</span></code> — retarget first</p></td>
+</tr>
+<tr class="row-even"><td><p>27</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py:3023-3246</span></code> <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code> subclass (+ <code class="docutils literal notranslate"><span class="pre">solve()</span></code> override, <code class="docutils literal notranslate"><span class="pre">_saha_and_fit_jax</span></code>, <code class="docutils literal notranslate"><span class="pre">jax_backend</span></code>)</p></td>
+<td><p>remove</p></td>
+<td><p>224</p></td>
+<td><p>after M3 (benchmark removal can pair earlier with #22)</p></td>
+<td><p>med</p></td>
+<td><p>Self-documented <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">deprecated::</span> <span class="pre">T1-3</span></code>, emits DeprecationWarning. Not used by run_pipeline; only <code class="docutils literal notranslate"><span class="pre">benchmark/unified.py:2309</span></code> + tests + <code class="docutils literal notranslate"><span class="pre">__init__</span></code>. Routes to dead <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code>. Reuses kept kernels</p></td>
+</tr>
+<tr class="row-odd"><td><p>28</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py:1711-1739</span></code> <code class="docutils literal notranslate"><span class="pre">_pressure_balance_ne</span></code> + fallback branch in <code class="docutils literal notranslate"><span class="pre">_update_ne_python</span></code> (:1773-1779) + lax kernel (:2358)</p></td>
+<td><p>remove (needs replacement n_e policy)</p></td>
+<td><p>~50</p></td>
+<td><p>after M3 AND a degradation policy chosen</p></td>
+<td><p>high</p></td>
+<td><p>NOT dead — it’s the runtime FALLBACK when Stark yields no n_e (reachable in prod even under stark_ne=True). jitpipe keeps pressure balance “only as flagged fallback” (§6.1). <strong>Do not leave a bare hole</strong> — needs deliberate replacement, not blind delete. lax variant dies with #24</p></td>
+</tr>
+<tr class="row-even"><td><p>29</p></td>
+<td><p>Tests pinning lax path: <code class="docutils literal notranslate"><span class="pre">test_lax_quality_parity.py</span></code> (153) + lax tests in <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py</span></code> (~380)</p></td>
+<td><p>remove</p></td>
+<td><p>~533</p></td>
+<td><p>after M3</p></td>
+<td><p>med</p></td>
+<td><p>ADR §3 C4 retires the driver. <code class="docutils literal notranslate"><span class="pre">test_parity_j7.py</span></code> already supersedes parity. <strong>KEEP</strong> <code class="docutils literal notranslate"><span class="pre">test_lax_quality_parity</span></code> IF joint-WLS doesn’t reproduce degenerate-composition keystone-gate semantics — verify vs jitpipe <code class="docutils literal notranslate"><span class="pre">solve.py</span></code> first</p></td>
+</tr>
+<tr class="row-odd"><td><p>30</p></td>
+<td><p>Env-flag tests in <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py</span></code> (lines ~440-540): feature_flag_default_off, <em><em>seeds_from_env</em></em>, <em><em>overrides_env</em></em> (5 tests)</p></td>
+<td><p>remove</p></td>
+<td><p>~100</p></td>
+<td><p>after M3 (with #24/#25)</p></td>
+<td><p>low</p></td>
+<td><p>Pin <code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_LAX_WHILE_LOOP</span></code>/<code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_JAX_BOLTZMANN</span></code> env plumbing for the superseded path. Pure scaffolding, no physics coverage lost</p></td>
+</tr>
+<tr class="row-even"><td><p>31</p></td>
+<td><p><strong>SHARED JAX kernels</strong> — <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code>: <code class="docutils literal notranslate"><span class="pre">_saha_correct_kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">_eval_partition_jax</span></code>, <code class="docutils literal notranslate"><span class="pre">_saha_ratio_per_element</span></code>, <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">LoopState</span></code> (~238) + <code class="docutils literal notranslate"><span class="pre">boltzmann_jax.py</span></code> (239) + <code class="docutils literal notranslate"><span class="pre">softmax_closure.py</span></code> (129) + <code class="docutils literal notranslate"><span class="pre">closure.OXIDE_OXYGEN_PER_CATION</span></code> + <code class="docutils literal notranslate"><span class="pre">pipeline.py:59-86</span></code> <code class="docutils literal notranslate"><span class="pre">ANALYSIS_PRESETS</span></code>/<code class="docutils literal notranslate"><span class="pre">DEFAULT_ANALYSIS_PRESET</span></code> (~30) + <code class="docutils literal notranslate"><span class="pre">radiation/{kernels,profiles}.py</span></code></p></td>
+<td><p><strong>DO-NOT-REMOVE</strong> (relocate-only after M3)</p></td>
+<td><p>~268+ (NOT removable)</p></td>
+<td><p>never delete (relocate-only post-M3)</p></td>
+<td><p>high</p></td>
+<td><p>jitpipe imports ALL of these (<code class="docutils literal notranslate"><span class="pre">fit.py:42</span></code>, <code class="docutils literal notranslate"><span class="pre">solve.py:52-58</span></code>, <code class="docutils literal notranslate"><span class="pre">snapshot.py:422</span></code>, <code class="docutils literal notranslate"><span class="pre">parity.py:51</span></code>, <code class="docutils literal notranslate"><span class="pre">host.py:311</span></code>, <code class="docutils literal notranslate"><span class="pre">forward_id.py:60</span></code>, <code class="docutils literal notranslate"><span class="pre">stark.py:61</span></code>). D3 “reuse, never copy” twins. May RELOCATE into <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe</span></code> or shared <code class="docutils literal notranslate"><span class="pre">_jax_kernels</span></code> after M3 — as a move (retarget-imports), never a delete</p></td>
+</tr>
+<tr class="row-odd"><td><p>32</p></td>
+<td><p>KEEP <code class="docutils literal notranslate"><span class="pre">docs/jax-port/*-consultation.md</span></code> (5 docs)</p></td>
+<td><p>do-not-archive until M3</p></td>
+<td><p>—</p></td>
+<td><p>after M3</p></td>
+<td><p>med</p></td>
+<td><p>Look historical but are ACTIVE jitpipe design inputs (referenced by ADR-0004 + J1/J3 specs). Prevent mistaken deletion</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>AFTER 2-RELEASE SHADOW + INDEPENDENT ORACLE (Stage-C/Removal)</strong></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>33</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">physics/preprocessing.py</span></code> (748) + <code class="docutils literal notranslate"><span class="pre">physics/line_selection.py</span></code> (451) + <code class="docutils literal notranslate"><span class="pre">physics/boltzmann.py</span></code> (1127) + <code class="docutils literal notranslate"><span class="pre">physics/closure.py</span></code> (1033 minus shared constant) + <code class="docutils literal notranslate"><span class="pre">physics/stark_ne.py</span></code> (663) + <code class="docutils literal notranslate"><span class="pre">self_absorption_observable.py</span></code> (684) + <code class="docutils literal notranslate"><span class="pre">self_absorption_inputs.py</span></code> (114)</p></td>
+<td><p>remove (lower-risk per-stage kernels FIRST)</p></td>
+<td><p>~4820</p></td>
+<td><p>Stage-C: after ≥2-release shadow</p></td>
+<td><p>med</p></td>
+<td><p>Reference compute for jitpipe rows 1,5,6,7,8,9; jitpipe <code class="docutils literal notranslate"><span class="pre">preprocess/detect/fit/stark/selfabs</span></code> replace them. Per-stage tolerance contracts ADR §4. closure.py matrix/oxide also feeds <code class="docutils literal notranslate"><span class="pre">matrix_effects.py</span></code> (#37)</p></td>
+</tr>
+<tr class="row-even"><td><p>34</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">physics/self_absorption.py:657+</span></code> <code class="docutils literal notranslate"><span class="pre">SelfAbsorptionCorrector</span></code> + <code class="docutils literal notranslate"><span class="pre">CurveOfGrowthAnalyzer</span></code></p></td>
+<td><p>remove (surgical class-level)</p></td>
+<td><p>~300–550</p></td>
+<td><p>Stage-C: after shadow + oracle</p></td>
+<td><p>high</p></td>
+<td><p>Superseded by <code class="docutils literal notranslate"><span class="pre">ObservableSelfAbsorptionCorrector</span></code> (prod wires only that, <code class="docutils literal notranslate"><span class="pre">iterative.py:1035</span></code>). <strong>KEEP live helpers</strong> <code class="docutils literal notranslate"><span class="pre">correct_via_doublet_ratio</span></code>/<code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> (used by observable path + mirrored by jitpipe <code class="docutils literal notranslate"><span class="pre">selfabs.py</span></code>). Parity-bearing (§4 row 7)</p></td>
+</tr>
+<tr class="row-odd"><td><p>35</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">identify/line_detection.py</span></code> (2475) — detect_line_observations + comb + kdet + Rust dispatch</p></td>
+<td><p>remove</p></td>
+<td><p>~2475</p></td>
+<td><p>Removal: M3 + 2-rel shadow + independent oracle</p></td>
+<td><p>high</p></td>
+<td><p>Sole production identifier (<code class="docutils literal notranslate"><span class="pre">pipeline.py:550</span></code>). Highest-concentration hazard (ADR §4 row 4, R8). Rust comb/kdet (D7) die with it. Survive as oracle longest</p></td>
+</tr>
+<tr class="row-even"><td><p>36</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">preprocess/wavelength_calibration.py</span></code> (1661) — segmented-RANSAC + seam detect</p></td>
+<td><p>remove</p></td>
+<td><p>~1661</p></td>
+<td><p>Removal: M3 + 2-rel shadow + independent oracle</p></td>
+<td><p>high</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline.py:552-554</span></code>. MED-HIGH behavioral risk (§4 row 3); mandates ye6t coverage fixtures + reference self-variance study (random_seed=42). Keep as validation oracle longest of front-end</p></td>
+</tr>
+<tr class="row-odd"><td><p>37</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> production solve body: <code class="docutils literal notranslate"><span class="pre">_solve_python</span></code> (L2101-2226) + <code class="docutils literal notranslate"><span class="pre">_fit_saha_boltzmann_graph</span></code> + <code class="docutils literal notranslate"><span class="pre">_solve_sb_graph_lstsq</span></code> (L2818-2888) + <code class="docutils literal notranslate"><span class="pre">_saha_and_fit_jax</span></code> (L3086-3193) + <code class="docutils literal notranslate"><span class="pre">_build_padded_arrays_from_obs</span></code> + <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code> wrapper</p></td>
+<td><p>remove</p></td>
+<td><p>~3000 (file ~3247 − ~238 shared)</p></td>
+<td><p>Removal: M3 + 2-rel shadow + oracle (LAST solve step)</p></td>
+<td><p>high</p></td>
+<td><p>Sole production solver (<code class="docutils literal notranslate"><span class="pre">pipeline.py:804</span></code>). GN-step-0 ≡ SB-graph parity anchor (§6.1) — SB-graph kernels must outlive the Python loop. Plus <code class="docutils literal notranslate"><span class="pre">matrix_effects.py</span></code> (1131, on prod path via closure matrix mode) removable with this stage</p></td>
+</tr>
+<tr class="row-even"><td><p>38</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline.py::run_pipeline</span></code> + <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> + <code class="docutils literal notranslate"><span class="pre">_run_solver</span></code> (~880 orchestration)</p></td>
+<td><p>remove <strong>dead last</strong></p></td>
+<td><p>~880 (keep ~30 ANALYSIS_PRESETS)</p></td>
+<td><p>Removal: M3 + ≥2-rel shadow + independent oracle + ROADMAP entry</p></td>
+<td><p>high</p></td>
+<td><p>THE governing-rule oracle (ADR §2 D6). <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> is the production path. Preserve <code class="docutils literal notranslate"><span class="pre">ANALYSIS_PRESETS</span></code> (#31). Removed after everything else</p></td>
+</tr>
+<tr class="row-odd"><td><p>39</p></td>
+<td><p>Reference physics-stage tests duplicated by jitpipe parity: <code class="docutils literal notranslate"><span class="pre">test_wavelength_calibration.py</span></code> (514), <code class="docutils literal notranslate"><span class="pre">test_solver_jax_parity.py</span></code> (273), <code class="docutils literal notranslate"><span class="pre">test_boltzmann_jax_composition.py</span></code> (378), self-absorption-math in <code class="docutils literal notranslate"><span class="pre">test_self_absorption.py</span></code>, SB-graph in <code class="docutils literal notranslate"><span class="pre">test_boltzmann.py</span></code></p></td>
+<td><p>retarget/tag oracle-only, then trim</p></td>
+<td><p>~1800 oracle-only (~400-600 trimmable)</p></td>
+<td><p>Removal: after shadow + oracle</p></td>
+<td><p>high</p></td>
+<td><p>Each jitpipe J-parity test runs the REAL reference fn as oracle → coverage duplicated. But D6 makes these the parity contract — KEEP (tag “oracle-only”) until reference removed. Only safe-to-trim now: genuine same-math-twice numeric cases</p></td>
+</tr>
+<tr class="row-even"><td><p>40</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">identify/{alias,comb,correlation,spectral_nnls,hybrid,model_selection}.py</span></code> JAX-twin tests: <code class="docutils literal notranslate"><span class="pre">test_alias_jax_nnls.py</span></code> (427), <code class="docutils literal notranslate"><span class="pre">test_alias_jax_boltzmann.py</span></code> (241), <code class="docutils literal notranslate"><span class="pre">test_comb_jax_correlate.py</span></code> (260), <code class="docutils literal notranslate"><span class="pre">test_correlation_jax_classic.py</span></code> (224), <code class="docutils literal notranslate"><span class="pre">test_model_selection_jax.py</span></code> (200), <code class="docutils literal notranslate"><span class="pre">test_nnls_jax_kernel.py</span></code> (209)</p></td>
+<td><p>remove</p></td>
+<td><p>~1560</p></td>
+<td><p>after M3 (jitpipe identify default)</p></td>
+<td><p>med</p></td>
+<td><p>Test opt-in JAX twins (use_jax_correlate/use_jax_classic, default False, never set in pipeline). ADR §1.4 “seeds, not the rewrite”. <strong>KEEP</strong> <code class="docutils literal notranslate"><span class="pre">test_line_detection_jax.py</span></code> (431) — tests use_jax_kdet path that IS production-routed</p></td>
+</tr>
+<tr class="row-odd"><td><p>41</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_solver.py::test_solver_electron_density_pressure_balance</span></code> (L250-317)</p></td>
+<td><p>remove</p></td>
+<td><p>~67</p></td>
+<td><p>after M3</p></td>
+<td><p>med</p></td>
+<td><p>Pins 1-atm pressure-balance-as-primary (audit 02-F2 demoted). <code class="docutils literal notranslate"><span class="pre">test_iterative_ne_stark.py</span></code> covers the fallback against independent oracle. Keep rest of test_solver.py</p></td>
+</tr>
+<tr class="row-even"><td><p>42</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_cdsb.py</span></code> (148)</p></td>
+<td><p>remove (with #9)</p></td>
+<td><p>148</p></td>
+<td><p>after M3 OR safe-now-with-#9</p></td>
+<td><p>med</p></td>
+<td><p>See #9. If cdsb.py module removed now, this test goes with it; otherwise gated to jitpipe selfabs J5 replacement</p></td>
+</tr>
+<tr class="row-odd"><td><p>43</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py</span></code> (4391) reference-measurement paths vs <code class="docutils literal notranslate"><span class="pre">scoreboard.py</span></code></p></td>
+<td><p>consolidate/retire</p></td>
+<td><p>~4391 (partial)</p></td>
+<td><p>after M3 + 2-rel shadow</p></td>
+<td><p>high</p></td>
+<td><p>Old harness; scoreboard.py (588) + registry (221) is new entrypoint. <strong>scoreboard IS the jitpipe parity oracle</strong> — do NOT retire any reference-measurement path until M3 + NIST/golden oracle preserved</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>MOCK / DEDUP (safe now, cross-cutting)</strong></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>44</p></td>
+<td><p>Duplicated <code class="docutils literal notranslate"><span class="pre">mock_db</span></code> fixture (<code class="docutils literal notranslate"><span class="pre">MagicMock(spec=AtomicDatabase)</span></code>, coeffs <code class="docutils literal notranslate"><span class="pre">[3.2188,...]</span></code>, U=25) in 13 test files</p></td>
+<td><p>consolidate to conftest</p></td>
+<td><p>~260 → ~20</p></td>
+<td><p>safe now</p></td>
+<td><p>low</p></td>
+<td><p>Verbatim dup (docstrings literally say “Mirror the … mock fixture”). Promote one parametrizable <code class="docutils literal notranslate"><span class="pre">mock_db</span></code> to <code class="docutils literal notranslate"><span class="pre">tests/inversion/conftest.py</span></code> + <code class="docutils literal notranslate"><span class="pre">tests/conftest.py</span></code>. Touches no reference physics</p></td>
+</tr>
+</tbody>
+</table>
+<section id="out-of-scope-re-classifications-do-not-treat-as-reference-deprecation">
+<h3>Out-of-scope re-classifications (do NOT treat as reference-deprecation)<a class="headerlink" href="#out-of-scope-re-classifications-do-not-treat-as-reference-deprecation" title="Link to this heading"></a></h3>
+<p>These were flagged by auditors as belonging to a <em>different</em> dimension — listed
+so they are not mistakenly swept into the M3 reference-removal:</p>
+<ul class="simple">
+<li><p><strong>Benchmark-harness identifiers</strong> (NOT on run_pipeline; its identifier is
+<code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code>): standalone <code class="docutils literal notranslate"><span class="pre">identify/{alias</span> <span class="pre">(4926),</span> <span class="pre">comb</span> <span class="pre">(1373),</span> <span class="pre">correlation</span> <span class="pre">(1187),</span> <span class="pre">spectral_nnls</span> <span class="pre">(725),</span> <span class="pre">hybrid</span> <span class="pre">(418),</span> <span class="pre">hybrid_consensus</span> <span class="pre">(451),</span> <span class="pre">model_selection</span> <span class="pre">(508)}</span></code> — separate dead-code/benchmark dimension.</p></li>
+<li><p><strong>Alternate solvers</strong> (test + <code class="docutils literal notranslate"><span class="pre">__init__</span></code> only, not CLI/scoreboard-routed):
+<code class="docutils literal notranslate"><span class="pre">solve/{closed_form</span> <span class="pre">(757),</span> <span class="pre">coarse_to_fine</span> <span class="pre">(659),</span> <span class="pre">joint_optimizer</span> <span class="pre">(1040),</span> <span class="pre">spectral_refiner</span> <span class="pre">(398)}</span></code> — niche subsumed by jitpipe <code class="docutils literal notranslate"><span class="pre">solve.py</span></code> post-M3 but
+they are not the frozen oracle.</p></li>
+<li><p><strong>Permanent host (never jit-ported):</strong> <code class="docutils literal notranslate"><span class="pre">solve/bayesian/*</span></code> (sampler loop, §5.1.3),
+<code class="docutils literal notranslate"><span class="pre">runtime/</span></code> (4154), parts of <code class="docutils literal notranslate"><span class="pre">preprocess/{deconvolution,outliers,response_correction}</span></code>.</p></li>
+<li><p><strong>Not inversion at all:</strong> <code class="docutils literal notranslate"><span class="pre">common/pca.py</span></code> (949, manifold infra).</p></li>
+<li><p><strong>Two snapshot types NOT yet retireable:</strong> both <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>
+(<code class="docutils literal notranslate"><span class="pre">core/jax_runtime.py:430</span></code>) and <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:382</span></code>) are
+actively bridged by jitpipe <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> — last thing to go, after M3 +
+a separate forward-kernel migration. <strong>Not actionable.</strong></p></li>
+<li><p><strong>Closure modes</strong> (standard/matrix/oxide/ilr/pwlr/dirichlet_residual): all are
+intentional user-selectable surface, ALL lifted into jitpipe (§4 row 9; ilr is
+provably ≡standard, kept for the parity identity). <strong>Not duplication.</strong></p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="a-safe-now-jitpipe-independent">
+<h2>3a. SAFE NOW (jitpipe-independent)<a class="headerlink" href="#a-safe-now-jitpipe-independent" title="Link to this heading"></a></h2>
+<p>Everything here can land before jitpipe exists. None touches the frozen
+<code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> oracle. Group by sub-task; each is independently committable.</p>
+<section id="a-branch-worktree-pruning-2-4-gb-0-source-loc-table-15">
+<h3>A. Branch &amp; worktree pruning (~2.4 GB, 0 source LOC) — table #1–5<a class="headerlink" href="#a-branch-worktree-pruning-2-4-gb-0-source-loc-table-15" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Salvage first</strong> (never actioned from prior audit): diff &amp; commit the
+uncommitted test edits in <code class="docutils literal notranslate"><span class="pre">wt-pf/g2-cli-drift</span></code>
+(<code class="docutils literal notranslate"><span class="pre">tests/cli/test_analyze_invert_no_drift.py</span></code>) and <code class="docutils literal notranslate"><span class="pre">wt-pf/g4-benchpause</span></code>
+(<code class="docutils literal notranslate"><span class="pre">tests/scripts/test_bench_pause.py</span></code>); salvage the 4 tracked mods in
+<code class="docutils literal notranslate"><span class="pre">.worktrees/w7-integration</span></code>.</p></li>
+<li><p><strong>Delete merged local branches</strong> (#1) — diff-check the 2 <code class="docutils literal notranslate"><span class="pre">cx/wave3-*</span></code>
+exceptions; <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">branch</span> <span class="pre">-D</span></code> the rest.</p></li>
+<li><p><strong>Delete remote mirrors</strong> (#2) — <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">push</span> <span class="pre">origin</span> <span class="pre">--delete</span> <span class="pre">…</span> <span class="pre">&amp;&amp;</span> <span class="pre">git</span> <span class="pre">fetch</span> <span class="pre">--prune</span></code>.
+Keep <code class="docutils literal notranslate"><span class="pre">main/dev/jitpipe/gh-pages/adr/0002</span></code> + 3 active hotfix branches.</p></li>
+<li><p><strong>Remove completed-wave worktrees</strong> (#3, #4) — <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">worktree</span> <span class="pre">remove</span></code>.</p></li>
+<li><p><strong>Unlock + remove 4 stale <code class="docutils literal notranslate"><span class="pre">agent-a*</span></code> worktrees</strong> (#5) — verify pid dead.</p></li>
+<li><p><strong>DO NOT</strong> prune the 26 <code class="docutils literal notranslate"><span class="pre">wf_*</span></code> jitpipe worktrees, <code class="docutils literal notranslate"><span class="pre">integ-j8</span></code>, <code class="docutils literal notranslate"><span class="pre">stage</span></code>,
+<code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-residual</span></code> (#23 — gated to M3).</p></li>
+</ol>
+</section>
+<section id="b-superseded-build-campaign-script-archival-6-4-kloc-table-68">
+<h3>B. Superseded build/campaign script archival (~6.4 KLOC) — table #6–8<a class="headerlink" href="#b-superseded-build-campaign-script-archival-6-4-kloc-table-68" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">scripts/hpc/</span></code> → <code class="docutils literal notranslate"><span class="pre">scripts/archive/hpc-campaign/</span></code>; drop the <code class="docutils literal notranslate"><span class="pre">pyproject.toml:212</span></code>
+sklearn TID251 exemption on move.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scripts/campaign1/</span></code> → <code class="docutils literal notranslate"><span class="pre">scripts/archive/campaign1/</span></code> (README preserved).</p></li>
+<li><p>Per-file diff the 5 orphaned root drivers; archive the stale ones. KEEP
+<code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code> + <code class="docutils literal notranslate"><span class="pre">parameter_sweep.py</span></code>. Treat <code class="docutils literal notranslate"><span class="pre">sweep_alias_fixes.py</span></code>
+as benchmark-gated (archive, not delete).</p></li>
+</ul>
+</section>
+<section id="c-dead-module-filesystem-sweeps-table-911-1617">
+<h3>C. Dead-module + filesystem sweeps — table #9–11, #16–17<a class="headerlink" href="#c-dead-module-filesystem-sweeps-table-911-1617" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Delete <code class="docutils literal notranslate"><span class="pre">physics/cdsb.py</span></code> + <code class="docutils literal notranslate"><span class="pre">tests/test_cdsb.py</span></code> + 3 <code class="docutils literal notranslate"><span class="pre">__init__</span></code> export entries (#9).</p></li>
+<li><p>Remove <code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> stale dir; scrub merge-comments; close bead 4ig9 (#11).</p></li>
+<li><p>Archive/remove <code class="docutils literal notranslate"><span class="pre">tests/validation/validation/</span></code> after confirming non-fixture (#10).</p></li>
+<li><p>Archive <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-09-overhaul/*</span></code> + <code class="docutils literal notranslate"><span class="pre">2026-06-10-goalfirst/*</span></code> to
+<code class="docutils literal notranslate"><span class="pre">docs/archive/audit/</span></code> — <em>after</em> dispositioning the <code class="docutils literal notranslate"><span class="pre">audit/04-pipeline-defaults</span></code>
+branch (#17).</p></li>
+</ul>
+</section>
+<section id="d-import-shim-facade-slimming-reference-independent-table-1214-18-20-21-cdsb">
+<h3>D. Import-shim / facade slimming (reference-independent) — table #12–14, #18, #20, #21(cdsb)<a class="headerlink" href="#d-import-shim-facade-slimming-reference-independent-table-1214-18-20-21-cdsb" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Close bead 38xr (verify-and-close; work already done) (#12).</p></li>
+<li><p>Drop private underscore symbols from <code class="docutils literal notranslate"><span class="pre">bayesian/__init__.py</span></code> <code class="docutils literal notranslate"><span class="pre">__all__</span></code> (#13).</p></li>
+<li><p>Resolve the <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code>/<code class="docutils literal notranslate"><span class="pre">JointConvergenceStatus</span></code> collision doc (#14).</p></li>
+<li><p>Resolve the inverted Bayesian sampler aliases — pick one direction (#18).</p></li>
+<li><p>Aggregator slim (#20) needs a <strong>public-API deprecation decision</strong> (it’s a
+documented public surface) — not jitpipe-gated, but not a blind delete.</p></li>
+</ul>
+</section>
+<section id="e-test-dedup-table-44">
+<h3>E. Test dedup — table #44<a class="headerlink" href="#e-test-dedup-table-44" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Promote the 13-site <code class="docutils literal notranslate"><span class="pre">mock_db</span></code> fixture to conftest.</p></li>
+</ul>
+</section>
+<section id="f-doc-corrections-table-15">
+<h3>F. Doc corrections — table #15<a class="headerlink" href="#f-doc-corrections-table-15" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Scrub the stale CLAUDE.md flat-path claim + <code class="docutils literal notranslate"><span class="pre">manifold-generator.py</span></code> warning.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="b-gated-on-jitpipe-promotion">
+<h2>3b. GATED ON jitpipe PROMOTION<a class="headerlink" href="#b-gated-on-jitpipe-promotion" title="Link to this heading"></a></h2>
+<p>Nothing here lands until jitpipe is built and promoted. The reference is the
+contract until then.</p>
+<section id="stage-a-oracle-preserved-now-m3-nothing-removed">
+<h3>Stage A — ORACLE-PRESERVED (now → M3): <strong>nothing removed</strong><a class="headerlink" href="#stage-a-oracle-preserved-now-m3-nothing-removed" title="Link to this heading"></a></h3>
+<p>The reference is the frozen contract. Every jit/reference divergence is a
+presumed jit bug recorded in a divergence ledger. Items #23 (keep jitpipe
+branches/worktrees) and #32 (keep jax-port consultation docs) are <em>do-not-touch</em>
+flags for this window.</p>
+</section>
+<section id="stage-b-bugfix-only-after-m3-promotion-the-2-release-shadow">
+<h3>Stage B — BUGFIX-ONLY (after M3 promotion, the ≥2-release shadow)<a class="headerlink" href="#stage-b-bugfix-only-after-m3-promotion-the-2-release-shadow" title="Link to this heading"></a></h3>
+<p>Reference kept as <code class="docutils literal notranslate"><span class="pre">--pipeline=reference</span></code>, bug-fix-only, each fix paired with a
+parity-test update. Removable here (the never-ran legacy lax path goes FIRST,
+once jitpipe internalizes its own parity anchor):</p>
+<ul class="simple">
+<li><p>#24 <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> shell, #25 <code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code>, #26 pure_callback closure
+trio, #27 <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code>, #22 <code class="docutils literal notranslate"><span class="pre">iterative_jax</span></code> benchmark workflow.</p></li>
+<li><p>#28 pressure-balance fallback — <strong>only with a replacement n_e policy</strong>.</p></li>
+<li><p>Tests: #29, #30, #40, #41, #42.</p></li>
+<li><p>#19 forward_models extra registry entries (low-value).</p></li>
+<li><p>#31 shared kernels — may RELOCATE (move, never delete).</p></li>
+</ul>
+</section>
+<section id="stage-c-validation-oracle-after-2-release-shadow">
+<h3>Stage C — VALIDATION-ORACLE (after ≥2-release shadow)<a class="headerlink" href="#stage-c-validation-oracle-after-2-release-shadow" title="Link to this heading"></a></h3>
+<p>Reference demoted from parity contract to validation oracle. Remove lower-risk
+per-stage kernels:</p>
+<ul class="simple">
+<li><p>#33 (preprocessing, line_selection, boltzmann, closure-non-shared, stark,
+selfabs-observable ~4820), #34 (SelfAbsorptionCorrector classes).</p></li>
+<li><p>#39 retarget remaining reference-stage tests to oracle-only, trim true dups.</p></li>
+</ul>
+</section>
+<section id="stage-d-removal-needs-independent-oracle-nist-parity-golden-corpus-roadmap">
+<h3>Stage D — REMOVAL (needs independent oracle = NIST parity + golden corpus + ROADMAP)<a class="headerlink" href="#stage-d-removal-needs-independent-oracle-nist-parity-golden-corpus-roadmap" title="Link to this heading"></a></h3>
+<p>High-risk front-end + production solver + orchestrator, removed last:</p>
+<ul class="simple">
+<li><p>#35 <code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> (+ Rust comb/kdet D7), #36 <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py</span></code>,
+#37 <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> solve body (+ <code class="docutils literal notranslate"><span class="pre">matrix_effects.py</span></code>), #43 <code class="docutils literal notranslate"><span class="pre">unified.py</span></code>
+reference-measurement paths.</p></li>
+<li><p>#38 <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> orchestrator — <strong>dead last</strong>, preserving <code class="docutils literal notranslate"><span class="pre">ANALYSIS_PRESETS</span></code>.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="staged-execution-roadmap-mapped-to-jitpipe-milestones">
+<h2>4. Staged Execution Roadmap (mapped to jitpipe milestones)<a class="headerlink" href="#staged-execution-roadmap-mapped-to-jitpipe-milestones" title="Link to this heading"></a></h2>
+<p>ADR-0004 milestone map: <strong>M1 = J8</strong> (CPU end-to-end parity), <strong>M2 = J9</strong>
+(throughput on one V100S), <strong>M3 = J12</strong> (full-board superiority + promotion).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Phase</p></th>
+<th class="head"><p>Trigger</p></th>
+<th class="head"><p>Do</p></th>
+<th class="head"><p>Net LOC / disk</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>P0 — Now (pre-J1)</strong></p></td>
+<td><p>none</p></td>
+<td><p>§3a A–F: branch/worktree massacre, script archival, dead-module sweeps, shim slimming, mock dedup, doc fixes. Close beads 38xr/4ig9</p></td>
+<td><p>~2.4 GB disk + ~6.4 KLOC archived + ~0.5 KLOC deleted</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>P0.5 — Public-API decision</strong></p></td>
+<td><p>maintainer decision</p></td>
+<td><p>#18 sampler aliases, #20 aggregator deprecation plan, #14 collision doc</p></td>
+<td><p>~430 LOC reviewable, retarget-only</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>P1 — At M2 (J9)</strong></p></td>
+<td><p>jitpipe runs end-to-end + benchmark adapter exists</p></td>
+<td><p>#22 retire <code class="docutils literal notranslate"><span class="pre">iterative_jax</span></code> benchmark workflow once the jitpipe scoreboard adapter (ADR §8.1 J9/J10) replaces it. Prep: move jitpipe’s parity anchor off <code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code> (unblocks #25)</p></td>
+<td><p>~130 LOC</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>P2 — At/after M3 (J12), Stage-B (≥2-rel shadow)</strong></p></td>
+<td><p>promotion ADR signed; <code class="docutils literal notranslate"><span class="pre">--pipeline=reference</span></code> shadow live</p></td>
+<td><p>#24–#28 lax shells + Jax subclass + pressure-balance (with policy); #19; #29/#30/#40/#41/#42 tests; #31 relocate shared kernels</p></td>
+<td><p>~1.0 KLOC code + ~2.3 KLOC tests</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>P3 — Stage-C (after ≥2-rel shadow)</strong></p></td>
+<td><p>reference demoted to validation oracle</p></td>
+<td><p>#33 per-stage kernels (~4820); #34 SA classes; #39 oracle-only test retag/trim</p></td>
+<td><p>~5.3 KLOC + ~0.6 KLOC tests</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>P4 — Stage-D (Removal)</strong></p></td>
+<td><p>independent oracle (NIST parity + golden corpus) + ROADMAP entry</p></td>
+<td><p>#35 line_detection (+Rust D7); #36 wavelength_calibration; #37 solve body (+matrix_effects); #43 unified.py paths; <strong>then #38 run_pipeline dead last</strong></p></td>
+<td><p>~9.1 KLOC</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Pick-up rule:</strong> P0 / P0.5 are independent and can land in any order now. P2–P4
+are strictly ordered by ADR D6 stages — never skip a stage, never delete before
+its gate, and preserve an oracle at every step.</p>
+</section>
+<hr class="docutils" />
+<section id="risks-how-to-verify-safe-high-risk-items">
+<h2>5. Risks &amp; How to Verify Safe (high-risk items)<a class="headerlink" href="#risks-how-to-verify-safe-high-risk-items" title="Link to this heading"></a></h2>
+<p>General rule for every code deletion: <strong>prove zero callers before removing.</strong> Use
+the Serena ladder, not bare grep:
+<code class="docutils literal notranslate"><span class="pre">find_referencing_symbols(name_path=&quot;X&quot;,</span> <span class="pre">relative_path=&quot;cflibs/&quot;)</span></code>, then confirm
+across <code class="docutils literal notranslate"><span class="pre">tests/</span></code> + <code class="docutils literal notranslate"><span class="pre">scripts/</span></code>. For non-Python (Rust/YAML/TOML) fall back to <code class="docutils literal notranslate"><span class="pre">rg</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Item</p></th>
+<th class="head"><p>Specific risk</p></th>
+<th class="head"><p>Verification gate before action</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>#31 shared kernels</p></td>
+<td><p>Deleting any breaks jitpipe (D3 twins)</p></td>
+<td><p>Confirm jitpipe imports (<code class="docutils literal notranslate"><span class="pre">fit.py:42</span></code>, <code class="docutils literal notranslate"><span class="pre">solve.py:52-58</span></code>, <code class="docutils literal notranslate"><span class="pre">snapshot.py:422</span></code>, <code class="docutils literal notranslate"><span class="pre">parity.py:51</span></code>, <code class="docutils literal notranslate"><span class="pre">host.py:311</span></code>). NEVER delete — only relocate-with-retarget after M3; run jitpipe parity suite after any move</p></td>
+</tr>
+<tr class="row-odd"><td><p>#25 <code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code></p></td>
+<td><p>jitpipe + <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py</span></code> use it as parity anchor</p></td>
+<td><p>Move/duplicate the anchor into jitpipe FIRST; re-run <code class="docutils literal notranslate"><span class="pre">test_parity_j7.py</span></code> green; only then remove</p></td>
+</tr>
+<tr class="row-even"><td><p>#26 pure_callback trio</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_parity_j7.py</span></code> imports <code class="docutils literal notranslate"><span class="pre">_make_closure_callback</span></code></p></td>
+<td><p>Retarget that import to jitpipe’s native closure before deleting</p></td>
+</tr>
+<tr class="row-odd"><td><p>#28 pressure-balance fallback</p></td>
+<td><p>NOT dead — degraded-spectrum n_e fallback; removing changes behavior</p></td>
+<td><p>Choose + implement a replacement n_e degradation policy first; do not leave a bare hole. Verify via <code class="docutils literal notranslate"><span class="pre">test_iterative_ne_stark.py</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>#34 SelfAbsorptionCorrector</p></td>
+<td><p>Shares module with LIVE <code class="docutils literal notranslate"><span class="pre">correct_via_doublet_ratio</span></code>/<code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> (used by observable path + jitpipe <code class="docutils literal notranslate"><span class="pre">selfabs.py</span></code>)</p></td>
+<td><p>Surgical class-level removal only; keep the live helpers; confirm <code class="docutils literal notranslate"><span class="pre">ObservableSelfAbsorptionCorrector</span></code> is the proven oracle (§4 row 7)</p></td>
+</tr>
+<tr class="row-odd"><td><p>#35 line_detection</p></td>
+<td><p>Sole production identifier; highest-concentration hazard (R8)</p></td>
+<td><p>Survive as parity oracle through Stage-B/C; remove only with NIST+golden oracle preserved; Rust comb/kdet die WITH it (verify no other Rust consumer)</p></td>
+</tr>
+<tr class="row-even"><td><p>#36 wavelength_calibration</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">random_seed=42</span></code> makes the reference itself seed-dependent</p></td>
+<td><p>Run reference self-variance study + ye6t coverage fixtures before freezing/removing bands</p></td>
+</tr>
+<tr class="row-odd"><td><p>#37 / #38 solve body + run_pipeline</p></td>
+<td><p>The governing-rule oracles</p></td>
+<td><p>Removed dead-last, after independent oracle + ROADMAP entry; preserve <code class="docutils literal notranslate"><span class="pre">ANALYSIS_PRESETS</span></code> table (#31)</p></td>
+</tr>
+<tr class="row-even"><td><p>#9 cdsb.py</p></td>
+<td><p>Audit said “safe now” but <code class="docutils literal notranslate"><span class="pre">tests/test_cdsb.py</span></code> still imports it</p></td>
+<td><p>Delete the test in the same change (verified: no prod/script imports of the <em>module</em> — scripts use their own local cdsb funcs)</p></td>
+</tr>
+<tr class="row-odd"><td><p>#43 unified.py</p></td>
+<td><p>scoreboard IS the jitpipe parity oracle</p></td>
+<td><p>Do NOT retire any reference-measurement path until M3 + NIST/golden oracle preserved</p></td>
+</tr>
+<tr class="row-even"><td><p>#20 aggregator</p></td>
+<td><p>Documented public API + pinned by <code class="docutils literal notranslate"><span class="pre">test_import_safety.py</span></code></p></td>
+<td><p>Public-API deprecation decision + release boundary; retarget internal callers; never delete outright</p></td>
+</tr>
+<tr class="row-odd"><td><p>#1–#5 branches/worktrees</p></td>
+<td><p>Losing genuinely-unmerged work</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">cherry</span></code>/<code class="docutils literal notranslate"><span class="pre">merge-tree</span></code> per branch; salvage uncommitted edits in g2/g4/w7-integration; KEEP all jitpipe/verify/integ refs</p></td>
+</tr>
+</tbody>
+</table>
+<section id="corrections-to-the-audit-inputs-verified-on-dev-2214c20">
+<h3>Corrections to the audit inputs (verified on dev &#64; 2214c20)<a class="headerlink" href="#corrections-to-the-audit-inputs-verified-on-dev-2214c20" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">physics/cdsb.py</span></code> is module-import-only.</strong> Confirmed <code class="docutils literal notranslate"><span class="pre">self_absorption.py</span></code>
+references CDSB only in <strong>docstrings</strong> (no import); <code class="docutils literal notranslate"><span class="pre">run_experiments.py</span></code> /
+<code class="docutils literal notranslate"><span class="pre">run_accuracy_ablation.py</span></code> define their <strong>own local</strong> <code class="docutils literal notranslate"><span class="pre">_apply_cdsb_pipeline</span></code> /
+<code class="docutils literal notranslate"><span class="pre">apply_cdsb_correction</span></code> — they do NOT import <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.cdsb</span></code>.
+So #9 is genuinely safe-now <em>provided</em> <code class="docutils literal notranslate"><span class="pre">tests/test_cdsb.py</span></code> is removed with it.</p></li>
+<li><p><strong>Flat-path shims are gone</strong> (<code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">cflibs.inversion.solver</span></code> → ModuleNotFoundError);
+bead 38xr’s acceptance grep returns zero. The injected CLAUDE.md “shims exist”
+claim is stale (#15).</p></li>
+<li><p><strong>Root <code class="docutils literal notranslate"><span class="pre">manifold-generator.py</span></code> does not exist</strong>; CLAUDE.md warning is stale (#15).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> is untracked-only</strong> (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">ls-files</span></code> empty); a 0-LOC
+filesystem sweep (#11).</p></li>
+<li><p><strong>Milestones:</strong> M1=J8, M2=J9, M3=J12 (ADR-0004 §8.1/§8.3) — used for §4.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

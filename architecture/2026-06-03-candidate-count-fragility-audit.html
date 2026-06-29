@@ -1,0 +1,306 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Candidate-Count Fragility Audit — Identifier Pipeline (post-#216) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Candidate-Count Fragility Audit — Identifier Pipeline (post-#216)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/2026-06-03-candidate-count-fragility-audit.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="candidate-count-fragility-audit-identifier-pipeline-post-216">
+<h1>Candidate-Count Fragility Audit — Identifier Pipeline (post-#216)<a class="headerlink" href="#candidate-count-fragility-audit-identifier-pipeline-post-216" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-03
+<strong>Worktree / HEAD:</strong> <code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-audit</span></code> &#64; <code class="docutils literal notranslate"><span class="pre">6b8fbf3</span></code> (<code class="docutils literal notranslate"><span class="pre">fix(hybrid):</span> <span class="pre">recover</span> <span class="pre">hybrid_union</span> <span class="pre">recall</span> <span class="pre">—</span> <span class="pre">disable</span> <span class="pre">NNLS</span> <span class="pre">mass</span> <span class="pre">floor</span> <span class="pre">in</span> <span class="pre">union</span> <span class="pre">arm</span> <span class="pre">(#216)</span></code>)
+<strong>Scope:</strong> The CF-LIBS element-identifier pipeline (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code>), the <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> production-best arm, and the standalone/benchmark identifiers.
+<strong>Question under audit:</strong> Was the #216 bug a near-isolated case, or is <em>“detection thresholds calibrated on small synthetic candidate sets that silently break at real 22–38-element candidate counts”</em> a <strong>systemic</strong> pattern in the identifier pipeline?</p>
+<hr class="docutils" />
+<section id="headline-verdict">
+<h2>1. Headline Verdict<a class="headerlink" href="#headline-verdict" title="Link to this heading"></a></h2>
+<p><strong>NOT systemic. #216 was a near-isolated case.</strong> The exact #216 failure shape — <em>a per-element score gated against a quantity that is <strong>summed over all candidate elements</strong>, so the effective bar tightens monotonically as the candidate count grows</em> — was found in <strong>exactly one live place and one latent place</strong>, and both are the <strong>same mechanism</strong> (NNLS <code class="docutils literal notranslate"><span class="pre">coeff</span> <span class="pre">/</span> <span class="pre">Σ(all_candidate_coeffs)</span></code>):</p>
+<ul class="simple">
+<li><p>The <strong>production-best <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> arm is already fixed and empirically count-flat</strong> (recall 0.800 at n=10/20/38; §2). #216’s <code class="docutils literal notranslate"><span class="pre">nnls_min_relative_coeff=0.0</span></code> default in <code class="docutils literal notranslate"><span class="pre">HybridIdentifier</span></code> is the correct and sufficient fix for the shipped union path.</p></li>
+<li><p>The <strong>only other instance of the true #216 monotonic-tightening shape</strong> is the <em>standalone</em> <code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier</span></code> default (<code class="docutils literal notranslate"><span class="pre">min_relative_coeff=0.05</span></code>), which #216 deliberately left in place — and which <strong>no default CLI inversion path consumes</strong> (<code class="docutils literal notranslate"><span class="pre">invert</span></code>/<code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> take user-supplied <code class="docutils literal notranslate"><span class="pre">--elements</span></code> and never instantiate an identifier). Its blast radius is the standalone/benchmark NNLS arm only.</p></li>
+</ul>
+<p>Every <em>other</em> candidate that the hunt flagged as “#216-shaped” was <strong>adversarially refuted</strong> by direct reproduction (§4):</p>
+<ul class="simple">
+<li><p>The ALIAS <code class="docutils literal notranslate"><span class="pre">_apply_relative_cl_gate</span></code> and the comb/correlation median gates use <strong><code class="docutils literal notranslate"><span class="pre">max()</span></code> or <code class="docutils literal notranslate"><span class="pre">median()</span></code> over candidates, not <code class="docutils literal notranslate"><span class="pre">sum()</span></code></strong>. Their effective bar does <strong>not</strong> rise with raw count. Reproductions show ALIAS pinned at <code class="docutils literal notranslate"><span class="pre">max*0.1</span></code> independent of n, and the median gates moving the <em>opposite</em> direction (loosening as junk candidates accumulate) — the inverse of #216’s “silent-on-synthetic, fails-on-real” property.</p></li>
+<li><p>The ALIAS gate is realism-sensitive to <em>dominance</em> (one strong element suppressing a true minor), which is a real but <strong>different</strong> fragility class, and on real ChemCam data it is <strong>masked upstream</strong> by the R²≥0.85 and ion-stage-pooling gates the 2026-06-03 composition-pipeline diagnosis already names as the binding constraints — so it has <strong>no measurable effect on production output</strong> at real candidate breadth.</p></li>
+</ul>
+<p>The defensible conclusion: the count-scaling defect is <strong>localized to the NNLS sum-normalized gate</strong>, which exists in exactly two forms (union arm — fixed; standalone — left intentionally). It is <strong>not</strong> a pervasive design idiom across the identifier family. The meta-risk that <em>is</em> real and broad is <strong>synthetic-only calibration provenance</strong> (§5) — many thresholds have only ever been validated on the 11-candidate synthetic corpus — but that is a validation-coverage gap, not the count-scaling bug class.</p>
+</section>
+<hr class="docutils" />
+<section id="the-empirical-count-scaling-curve-the-load-bearing-evidence">
+<h2>2. The Empirical Count-Scaling Curve (the load-bearing evidence)<a class="headerlink" href="#the-empirical-count-scaling-curve-the-load-bearing-evidence" title="Link to this heading"></a></h2>
+<p>Controlled experiment on <strong>one fixed real BHVO-2 spectrum</strong> (<code class="docutils literal notranslate"><span class="pre">/tmp/cflibs-audit/data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv</span></code>, 6144 px, 240.8–905.6 nm). True 10 elements (BHVO2 basalt): Si Ti Al Fe Mn Mg Ca Na K P, all present in the 83-element basis (<code class="docutils literal notranslate"><span class="pre">/tmp/real_basis/basis_fwhm_0.1nm.h5</span></code>). Candidate count varied by subsetting basis rows (NNLS denominator) and the ALIAS element list together; +10/+28 distractor sets are monotone-nested. Full run reproducible in ~7.6 s.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Identifier (config)</p></th>
+<th class="head"><p>n=10</p></th>
+<th class="head"><p>n=20</p></th>
+<th class="head"><p>n=38</p></th>
+<th class="head"><p>Verdict</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong><code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code></strong> (production; <code class="docutils literal notranslate"><span class="pre">require_both=False</span></code>, <code class="docutils literal notranslate"><span class="pre">nnls_min_relative_coeff=0.0</span></code>)</p></td>
+<td><p><strong>0.800</strong></p></td>
+<td><p><strong>0.800</strong></p></td>
+<td><p><strong>0.800</strong></p></td>
+<td><p><strong>FLAT — #216 fixed on the production arm.</strong> Si/Al/Na retained at all counts; only K,P missed at every count (a constant, count-independent miss).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> <em>counterfactual</em> <code class="docutils literal notranslate"><span class="pre">nnls_min_relative_coeff=0.05</span></code> (pre-#216)</p></td>
+<td><p>0.600</p></td>
+<td><p>0.500</p></td>
+<td><p>0.500</p></td>
+<td><p>Reproduces the exact #216 regression (Si dropped 10→20). Proves the rig is faithful and that the <strong>0.0 default is the only thing standing between production and the regression.</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier</span></code> standalone <strong>DEFAULT</strong> (<code class="docutils literal notranslate"><span class="pre">min_relative_coeff=0.05</span></code>)</p></td>
+<td><p>0.600</p></td>
+<td><p>0.500</p></td>
+<td><p>0.500</p></td>
+<td><p><strong>COUNT-DEPENDENT DROP.</strong> Si (most abundant, 23.3 wt%) silently cut 10→20.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier</span></code> <code class="docutils literal notranslate"><span class="pre">min_relative_coeff=0.0</span></code></p></td>
+<td><p>0.600</p></td>
+<td><p>0.600</p></td>
+<td><p>0.600</p></td>
+<td><p><strong>FLAT</strong> — confirms the 0.05 floor is the <em>sole</em> cause.</p></td>
+</tr>
+<tr class="row-even"><td><p>ALIAS strict defaults</p></td>
+<td><p>0.000</p></td>
+<td><p>0.000</p></td>
+<td><p>0.000</p></td>
+<td><p>Flat, but pathologically zero recall on this real spectrum (a <em>separate</em> R²/ion-stage issue per the diagnosis, <strong>not</strong> count-dependent).</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Mechanism, quantified (Si, <code class="docutils literal notranslate"><span class="pre">min_rel=0.0</span></code> so nothing gated):</strong> Si <code class="docutils literal notranslate"><span class="pre">concentration_estimate</span> <span class="pre">=</span> <span class="pre">coeff</span> <span class="pre">/</span> <span class="pre">Σ(candidate</span> <span class="pre">coeffs)</span></code> = <strong>0.0523</strong> at n=10 (&gt;0.05, detected) → <strong>0.0474</strong> at n=20 (&lt;0.05, cut) → <strong>0.0447</strong> at n=38 (cut). Si SNR is essentially <strong>constant</strong> across counts (6.77 / 6.75 / 6.74). Only the <em>relative fraction</em> shrinks because the denominator (total coefficient mass) grows with added distractors. This is the #216 mechanism reproduced exactly on an independent real spectrum: a major element falls below a rising relative bar purely because more candidates were offered.</p>
+<p><strong>Analytic confirmation (uniform candidate set, share = 1/n vs floor 0.05):</strong> n=11→0.0909 PASS, n=20→0.0500 PASS, <strong>n=21→0.0476 DROP</strong>, n=38→0.0263 DROP, n=83→0.0120 DROP. Crosses exactly at n≈20.</p>
+<p><strong>Precision-side count dependence (complementary, not a recall regression):</strong> <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> false positives grow with count — <code class="docutils literal notranslate"><span class="pre">+FP=[]</span></code> at n=10, <code class="docutils literal notranslate"><span class="pre">+FP=[Pb,V]</span></code> at n=20 and n=38. Precision falls 1.00→0.80 while recall stays 0.800. This is expected behaviour for a recall-favouring union arm (precision is recovered downstream) and originates in the ALIAS arm scoring more offered candidates, <em>not</em> in any count-sensitive relative floor.</p>
+<p><strong>Curve summary line:</strong> <em>Post-#216, the production <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> recall-vs-candidate-count curve is FLAT (0.800 at n=10/20/38). The count-dependent collapse (0.60→0.50) survives ONLY in the standalone <code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier</span></code> default (<code class="docutils literal notranslate"><span class="pre">min_relative_coeff=0.05</span></code>), which is off every shipped CLI inversion path. ALIAS recall is count-flat (max-normalized gate); the comb/correlation median gates move the opposite direction from #216 (loosen, not tighten, as candidates grow).</em></p>
+</section>
+<hr class="docutils" />
+<section id="ranked-confirmed-fragilities">
+<h2>3. Ranked Confirmed Fragilities<a class="headerlink" href="#ranked-confirmed-fragilities" title="Link to this heading"></a></h2>
+<p>Severity reflects mechanism reality AND production reach. “Production” = touches a shipped user-facing inversion or the production-best <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> identifier’s <em>output</em>.</p>
+<section id="rank-1-f1-standalone-nnls-sum-normalized-mass-floor-the-surviving-216-instance">
+<h3>Rank 1 — F1: Standalone NNLS sum-normalized mass floor (the surviving #216 instance)<a class="headerlink" href="#rank-1-f1-standalone-nnls-sum-normalized-mass-floor-the-surviving-216-instance" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>ID:</strong> <code class="docutils literal notranslate"><span class="pre">F1-nnls-standalone-mass-floor</span></code></p></li>
+<li><p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/spectral_nnls.py:517</span></code> (<code class="docutils literal notranslate"><span class="pre">total_element_signal</span> <span class="pre">=</span> <span class="pre">np.sum(element_coeffs)</span></code> over ALL candidates), <code class="docutils literal notranslate"><span class="pre">:524</span></code> (<code class="docutils literal notranslate"><span class="pre">concentration</span> <span class="pre">=</span> <span class="pre">coeff/total_element_signal</span></code>), <code class="docutils literal notranslate"><span class="pre">:535</span></code> (<code class="docutils literal notranslate"><span class="pre">detected</span> <span class="pre">…</span> <span class="pre">and</span> <span class="pre">concentration</span> <span class="pre">&gt;=</span> <span class="pre">self.min_relative_coeff</span></code>), default <code class="docutils literal notranslate"><span class="pre">DEFAULT_MIN_RELATIVE_COEFF=0.05</span></code> at <code class="docutils literal notranslate"><span class="pre">:44</span></code>.</p></li>
+<li><p><strong>Mechanism:</strong> Byte-for-byte the #216 bug. The denominator is the sum over all candidate coefficients (83 for the real basis), so the per-element bar is structurally ~1/n-weighted and tightens monotonically with candidate count. #216 (6b8fbf3) did <strong>not</strong> remove it; it only set <code class="docutils literal notranslate"><span class="pre">HybridIdentifier.nnls_min_relative_coeff=0.0</span></code> (<code class="docutils literal notranslate"><span class="pre">hybrid.py:109</span></code>, forwarded <code class="docutils literal notranslate"><span class="pre">:173</span></code>) to bypass it in the union arm.</p></li>
+<li><p><strong>Severity:</strong> medium. <strong>Production:</strong> false. Consumed only by the <code class="docutils literal notranslate"><span class="pre">nnls</span></code>/<code class="docutils literal notranslate"><span class="pre">spectral_nnls</span></code> benchmark workflows (<code class="docutils literal notranslate"><span class="pre">unified.py:1798</span></code> builds <code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier</span></code> without <code class="docutils literal notranslate"><span class="pre">min_relative_coeff</span></code> → inherits 0.05) and benchmark scripts. <strong>Immune:</strong> <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> (overrides to 0.0); CLI <code class="docutils literal notranslate"><span class="pre">invert</span></code>/<code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> (no identifier-selection flag exists; they run <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> + solver on user-supplied elements); the Bayesian prefilter (<code class="docutils literal notranslate"><span class="pre">select_candidate_elements</span></code> reads <code class="docutils literal notranslate"><span class="pre">metadata['nnls_coefficient']/['nnls_snr']</span></code>, never <code class="docutils literal notranslate"><span class="pre">detected</span></code> — the floor is inert there).</p></li>
+<li><p><strong>Real-data evidence:</strong> standalone NNLS on real BHVO-2, 83-element basis: recall 0.40 &#64;0.05 vs 0.80 &#64;0.00; majors cut despite strong SNR — Al(0.033/8.2), Mg(0.030/11.0), Na(0.013/5.7), Si(0.036/9.3). Corpus-wide (12 BHVO-2 spectra): mean true-major recall 0.475 &#64;0.05 vs 0.650 &#64;0.00.</p></li>
+<li><p><strong>Fix:</strong> Replace the sum-normalized gate with a count-invariant criterion (absolute coefficient SNR is already computed; or normalize by top-K / max coefficient with a re-calibrated floor — note #216 found 5%-of-max re-admits the synthetic FP, so max-norm needs its own real-data calibration). Minimum: default the standalone identifier to recall-favouring (<code class="docutils literal notranslate"><span class="pre">0.0</span></code>) as the union arm does, or document standalone NNLS as synthetic-precision-only and unsafe above ~15 real candidates. The docstring at <code class="docutils literal notranslate"><span class="pre">:333-341</span></code> already acknowledges this scaling defect.</p></li>
+</ul>
+</section>
+<section id="rank-2-f2-alias-global-relative-cl-gate-dominance-sensitive-not-count-dependent">
+<h3>Rank 2 — F2: ALIAS global relative-CL gate (dominance-sensitive, NOT count-dependent)<a class="headerlink" href="#rank-2-f2-alias-global-relative-cl-gate-dominance-sensitive-not-count-dependent" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>ID:</strong> <code class="docutils literal notranslate"><span class="pre">F2-alias-relative-cl-gate</span></code></p></li>
+<li><p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py:1266-1268</span></code> (global branch: <code class="docutils literal notranslate"><span class="pre">relative_threshold</span> <span class="pre">=</span> <span class="pre">max_CL</span> <span class="pre">*</span> <span class="pre">relative_cl_threshold</span></code>; <code class="docutils literal notranslate"><span class="pre">e.confidence</span> <span class="pre">&lt;</span> <span class="pre">relative_threshold</span> <span class="pre">→</span> <span class="pre">detected=False</span></code>), default <code class="docutils literal notranslate"><span class="pre">relative_cl_threshold=0.1</span></code> at <code class="docutils literal notranslate"><span class="pre">:835</span></code>, <code class="docutils literal notranslate"><span class="pre">relative_cl_per_ion_stage=False</span></code> at <code class="docutils literal notranslate"><span class="pre">:836</span></code>, invoked unconditionally at <code class="docutils literal notranslate"><span class="pre">:1874</span></code>; NOT overridden by <code class="docutils literal notranslate"><span class="pre">HybridIdentifier</span></code> (<code class="docutils literal notranslate"><span class="pre">hybrid.py:196-204</span></code> builds a bare <code class="docutils literal notranslate"><span class="pre">ALIASIdentifier</span></code>).</p></li>
+<li><p><strong>Mechanism:</strong> Production-wired (the gate <em>does</em> run in the <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> ALIAS arm). But the aggregate is <strong><code class="docutils literal notranslate"><span class="pre">max()</span></code>, not <code class="docutils literal notranslate"><span class="pre">sum()</span></code></strong> — the bar is pinned at <code class="docutils literal notranslate"><span class="pre">max_CL</span> <span class="pre">*</span> <span class="pre">0.1</span></code> and does <strong>not</strong> rise with raw count. It rises only with <em>dominance</em>: a single high-CL major element drags the floor up under weaker true minors (the documented Vrabel s019 / PR #172 case where Al I at CL=0.95 force-cuts Mg II at CL=0.026). This is a real fragility but a <strong>different class</strong> from #216.</p></li>
+<li><p><strong>Severity:</strong> low. <strong>Production:</strong> false (no measurable effect on shipped output at real breadth). On real 38-candidate ChemCam BHVO-2, toggling the gate on/off (<code class="docutils literal notranslate"><span class="pre">relative_cl_threshold</span></code> 0.1 vs 0.0) leaves the final detected set unchanged (<code class="docutils literal notranslate"><span class="pre">['Ca','Mg']</span></code> either way, recall 2/10, 0 FP). The recall collapse is driven entirely by the upstream R²≥0.85 and ion-stage-pooling gates (composition-pipeline diagnosis §3); at n=38 the elements F2 would cut are already gone before F2 runs. F2 only becomes load-bearing on the <em>smaller</em> n=11 set (where it cuts Fe at CL=0.042 because Ca dominates).</p></li>
+<li><p><strong>Real-data evidence (refutes count-dependence):</strong> floor = <code class="docutils literal notranslate"><span class="pre">max_CL*0.1</span></code> is bit-for-bit identical at n=11 vs n=38 across 3 locations × 2 resolving powers (e.g. RP5000 loc1: 0.081592 at n11 = 0.081592 at n38, Δ=0). Adding 27 candidates raised the bar by exactly 0.</p></li>
+<li><p><strong>Fix:</strong> Default <code class="docutils literal notranslate"><span class="pre">relative_cl_per_ion_stage=True</span></code> so a dominant neutral cannot suppress a true ion (the documented Al I → Mg II case; shipped test <code class="docutils literal notranslate"><span class="pre">tests/test_alias_unit.py:403-442</span></code> already asserts the per-ion-stage recovery), <strong>or</strong> thread <code class="docutils literal notranslate"><span class="pre">relative_cl_threshold</span></code>/<code class="docutils literal notranslate"><span class="pre">relative_cl_per_ion_stage</span></code> through <code class="docutils literal notranslate"><span class="pre">HybridIdentifier</span></code> so the union arm can opt to recall-favouring. Add a real-data assertion that a known minor true element survives. Note: this fix is independent of the count-scaling question — it is dominance hardening.</p></li>
+</ul>
+</section>
+<section id="rank-3-f4-alias-fast-screening-top-k-cap-count-dependent-latent-only">
+<h3>Rank 3 — F4: ALIAS fast-screening top-K cap (count-dependent, latent only)<a class="headerlink" href="#rank-3-f4-alias-fast-screening-top-k-cap-count-dependent-latent-only" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>ID:</strong> <code class="docutils literal notranslate"><span class="pre">F4-alias-fast-screening-topK</span></code></p></li>
+<li><p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py:2569</span></code> (keep top <code class="docutils literal notranslate"><span class="pre">max_screening_candidates</span></code>), default <code class="docutils literal notranslate"><span class="pre">12</span></code> at <code class="docutils literal notranslate"><span class="pre">:834</span></code>, gated by the <code class="docutils literal notranslate"><span class="pre">len(self.elements)</span> <span class="pre">&lt;=</span> <span class="pre">10</span></code> skip at <code class="docutils literal notranslate"><span class="pre">:1406</span></code>; <code class="docutils literal notranslate"><span class="pre">_always_test={'H'}</span></code> at <code class="docutils literal notranslate"><span class="pre">:1233</span></code>.</p></li>
+<li><p><strong>Mechanism:</strong> A hard rank cutoff over the full candidate list (genuinely count-dependent: as n grows, a true minor is more likely displaced below rank 12 before scoring).</p></li>
+<li><p><strong>Severity:</strong> low. <strong>Production:</strong> false. The cap is <strong>gated off</strong> for ≤10-element lists (<code class="docutils literal notranslate"><span class="pre">:1406</span></code>), and every shipped real CRM feeds ≤10 candidates (<code class="docutils literal notranslate"><span class="pre">bhvo2_usgs</span></code>:10, <code class="docutils literal notranslate"><span class="pre">bir1_usgs</span></code>:10, <code class="docutils literal notranslate"><span class="pre">nist_srm_612</span></code>:4, <code class="docutils literal notranslate"><span class="pre">vrabel2020</span></code>:10; <code class="docutils literal notranslate"><span class="pre">dataset.elements</span> <span class="pre">=</span> <span class="pre">sorted(true_composition.keys())</span></code>, <code class="docutils literal notranslate"><span class="pre">loaders.py:690</span></code>). The <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> ALIAS arm sets <code class="docutils literal notranslate"><span class="pre">alias_elements</span> <span class="pre">=</span> <span class="pre">self.elements</span></code> (≤10), so screening is <strong>skipped</strong>. The “22–38 candidates” in the audit framing is the NNLS basis count (83), which is the F1 surface, not the ALIAS screening surface.</p></li>
+<li><p><strong>Evidence:</strong> Verified count-dependent in isolation (<code class="docutils literal notranslate"><span class="pre">repro_screening.py</span></code>: at n=22 drops true Fe+Na, at n=83 drops Fe+Na+P). End-to-end verified inert: monkeypatch spy shows the <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> ALIAS arm calls <code class="docutils literal notranslate"><span class="pre">_fast_screening</span></code> with an empty list (screening skipped); standalone ALIAS recall is 2/10 at n=10/22/38 identically (displaced elements already killed upstream by ion-stage/R² gates).</p></li>
+<li><p><strong>Fix:</strong> Scale <code class="docutils literal notranslate"><span class="pre">max_screening_candidates</span></code> with candidate count, or gate purely on the per-element <code class="docutils literal notranslate"><span class="pre">score&gt;=0.3</span></code> floor without a hard rank cap. Latent landmine if any future caller passes &gt;13 candidates to ALIAS (e.g. <code class="docutils literal notranslate"><span class="pre">nist_steel</span></code>’s 13–31-element compositions, currently un-auto-registered). Validate all real true elements survive screening at n=38 before any such path ships.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="what-was-checked-and-found-sound-count-invariant">
+<h2>4. What Was Checked and Found SOUND (count-invariant)<a class="headerlink" href="#what-was-checked-and-found-sound-count-invariant" title="Link to this heading"></a></h2>
+<p>These were flagged as #216-shaped by the hunt and <strong>adversarially refuted</strong> by direct reproduction. They are NOT in the count-dependent monotonic-tightening class.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ID</p></th>
+<th class="head"><p>Location</p></th>
+<th class="head"><p>Why sound (count-invariant)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>ALIAS relative-CL gate</strong> (<code class="docutils literal notranslate"><span class="pre">F2</span></code>/<code class="docutils literal notranslate"><span class="pre">ALIAS-RELCL-GATE</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:1267</span></code></p></td>
+<td><p>Aggregate is <code class="docutils literal notranslate"><span class="pre">max()</span></code>, not <code class="docutils literal notranslate"><span class="pre">sum()</span></code>. Bar = <code class="docutils literal notranslate"><span class="pre">max_CL*0.1</span></code> is identical at n=11 and n=38 (Δ=0, verified on real data across 3 locations × 2 RPs). Tightens with <em>dominance</em>, not count. (Realism-sensitive — see Rank 2 — but not the count-scaling bug.)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Correlation median gate</strong> (<code class="docutils literal notranslate"><span class="pre">CORR-MEDIAN-GATE</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">correlation.py:374-384</span></code></p></td>
+<td><p>Aggregate is <code class="docutils literal notranslate"><span class="pre">median()</span></code>. The hunt’s own cited medians (0.304→0.262→0.228 as n=11→22→38) and bars (0.456→0.393→0.342) <strong>fall</strong> as n grows — a <em>loosening</em> gate, the opposite of #216’s monotonic tightening. No distribution reproduces “passes synthetic / fails only at real 22–38.” Benchmark-only (<code class="docutils literal notranslate"><span class="pre">hybrid_consensus_*</span></code>); never in <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> or any CLI path.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Comb median gate</strong> (<code class="docutils literal notranslate"><span class="pre">COMB-MEDIAN-GATE</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">comb.py:650-658</span></code></p></td>
+<td><p>Identical to above with scale 2.0. Direct mechanism test: holding a fixed true set and adding junk, bar <strong>falls</strong> 0.800 (n=5) → 0.200 (n=15/30); fraction of true elements cut <strong>drops</strong> 5/5 → 0/5 as junk grows. Harshest in the <em>small-n synthetic</em> regime, loosens on real data — inverse of #216. Benchmark-only voter; comb is NOT in <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>kdet rarity prefilter</strong> (<code class="docutils literal notranslate"><span class="pre">F3-kdet-rarity-prefilter</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1287,1316,1319</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kdet_fraction</span> <span class="pre">=</span> <span class="pre">best_candidates/total_peaks</span></code> — <code class="docutils literal notranslate"><span class="pre">total_peaks</span></code> is fixed by the spectrum, zero <code class="docutils literal notranslate"><span class="pre">n_candidates</span></code> dependence. The median-density pivot moves the bar the <strong>backwards</strong> direction: on a dense real set the median rises and the effective bar <em>loosens</em> (5.27%→3.68% for a moderate element). Flip scan: every flip is “passes real, fails synthetic.” True-element-protective in the realistic regime. CLI/comb arm only, not in <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Correlation vector sum-norm</strong> (<code class="docutils literal notranslate"><span class="pre">CORR-VECTOR-SUMNORM</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">correlation.py:638,643</span></code></p></td>
+<td><p>The <em>exact</em> #216 sum-denominator shape (<code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">weight[e]/Σ(all</span> <span class="pre">weights)</span></code>), and genuinely count-dependent — but <strong>gated off in production</strong>: the benchmark forces <code class="docutils literal notranslate"><span class="pre">mode='classic'</span></code> (<code class="docutils literal notranslate"><span class="pre">unified.py:1430</span></code>), and vector mode requires a configured FAISS index + embedder that no default path sets. Latent sibling, not an active regression.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>ALIAS synthetic-calibrated scalars / R² gate</strong> (<code class="docutils literal notranslate"><span class="pre">F9</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:830-851</span></code>, <code class="docutils literal notranslate"><span class="pre">unified.py:985-998</span></code></p></td>
+<td><p>CL = <code class="docutils literal notranslate"><span class="pre">k_det·P_SNR·P_maj·P_ab</span></code> is purely per-element; <code class="docutils literal notranslate"><span class="pre">detection_threshold</span></code> and <code class="docutils literal notranslate"><span class="pre">adaptive_dt</span></code> scale by the element’s OWN expected line count, never by <code class="docutils literal notranslate"><span class="pre">n_candidates</span></code>. The strict <code class="docutils literal notranslate"><span class="pre">r2_gate_mode='fixed'</span></code>/0.85 path is benchmark/preset-only; production <code class="docutils literal notranslate"><span class="pre">HybridIdentifier</span></code> inherits <code class="docutils literal notranslate"><span class="pre">adaptive_t</span></code> + <code class="docutils literal notranslate"><span class="pre">r2_gate_t_quality_threshold=15000.0</span></code> (post-#215), which spans the full ps-LIBS regime (verified: strict 0.85 only rejects at est_T≥15000 K, never across 5800–13774 K). Provenance concern survives (never re-swept on real n=38) but not count-dependent.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>F7: NNLS concentration-threshold sweep</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">unified.py:1984-1987</span></code></p></td>
+<td><p>A <em>second</em> instance of the #216 sum-denominator class, but it is a benchmark <em>experiment</em> workflow, not a shipping path. Its sweep optima are candidate-count-specific (documented). Low severity, off production.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>F8: <code class="docutils literal notranslate"><span class="pre">is_element_detected</span></code> Mn/Na/K floors</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">common/element_id.py:279-283</span></code></p></td>
+<td><p>Hardcoded per-element 0.15 score / 2-line floors. Synthetic-calibrated and a real recall risk for the exact majors #216 hit (Na/K), but <strong>not count-dependent</strong> (absolute per-element floors). A provenance concern, not a count-scaling bug.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="recommended-actions">
+<h2>5. Recommended Actions<a class="headerlink" href="#recommended-actions" title="Link to this heading"></a></h2>
+<section id="targeted-fixes-in-priority-order">
+<h3>Targeted fixes (in priority order)<a class="headerlink" href="#targeted-fixes-in-priority-order" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>F1 (Rank 1) — close the surviving #216 instance.</strong> Make the standalone <code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier</span></code> gate count-invariant: gate on absolute coefficient SNR (already computed) or top-K-normalized coefficient with a re-calibrated floor, OR default standalone <code class="docutils literal notranslate"><span class="pre">min_relative_coeff=0.0</span></code> to match the union arm, OR document standalone NNLS as synthetic-precision-only and unsafe above ~15 real candidates. (<code class="docutils literal notranslate"><span class="pre">spectral_nnls.py:44,517,524,535</span></code>.)</p></li>
+<li><p><strong>F2 (Rank 2) — dominance-harden ALIAS</strong> (independent of count-scaling): default <code class="docutils literal notranslate"><span class="pre">relative_cl_per_ion_stage=True</span></code> (<code class="docutils literal notranslate"><span class="pre">alias.py:836</span></code>) or thread the override through <code class="docutils literal notranslate"><span class="pre">HybridIdentifier</span></code> (<code class="docutils literal notranslate"><span class="pre">hybrid.py:196-204</span></code>) so a dominant element cannot silently suppress a true minor. The shipped test <code class="docutils literal notranslate"><span class="pre">tests/test_alias_unit.py:403-442</span></code> already pins the per-ion-stage recovery.</p></li>
+<li><p><strong>F4 (Rank 3) — defuse the latent screening cap</strong> before any &gt;13-candidate ALIAS caller ships: scale <code class="docutils literal notranslate"><span class="pre">max_screening_candidates</span></code> with n, or rely on the per-element <code class="docutils literal notranslate"><span class="pre">score&gt;=0.3</span></code> floor (<code class="docutils literal notranslate"><span class="pre">alias.py:834,2569</span></code>).</p></li>
+<li><p><strong>Latent siblings (<code class="docutils literal notranslate"><span class="pre">CORR-VECTOR-SUMNORM</span></code>, <code class="docutils literal notranslate"><span class="pre">F7</span></code>)</strong> — if correlation vector mode or the NNLS concentration sweep is ever promoted to a real-data path, replace the sum-normalized share with an absolute / fixed-reference score first; carry a per-path floor like #216’s. Until then, document as unvalidated at 22–38 candidates.</p></li>
+</ol>
+</section>
+<section id="the-meta-fix-the-real-systemic-gap">
+<h3>The meta-fix (the real systemic gap)<a class="headerlink" href="#the-meta-fix-the-real-systemic-gap" title="Link to this heading"></a></h3>
+<p>The count-scaling <em>bug</em> is localized, but the audit confirms a broad <strong>validation-coverage</strong> gap: nearly every identifier threshold’s only provenance is the <strong>11-candidate synthetic corpus</strong> (or pre-reorg flat code), never the real 22–38-candidate BHVO-2/ChemCam distribution. The composition-pipeline diagnosis §7 Q1 already concedes the Wave-1/2 lift estimates are “bounded by reproductions on narrow synthetic spectra, not the real n=33 baseline.”</p>
+<p><strong>Institute a count-varying / real-data threshold-validation gate.</strong> Concretely:</p>
+<ul class="simple">
+<li><p>Add a CI regression that runs each identifier (NNLS standalone, ALIAS, <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>) on the fixed real BHVO-2 spectrum at <strong>n = {true-count, +10, +28}</strong> and asserts <strong>recall does not degrade with candidate count</strong> (the §2 rig — ~7.6 s, fully reproducible — is the template). This would have caught #216 and would catch any future sum-normalized gate.</p></li>
+<li><p>For every threshold default (<code class="docutils literal notranslate"><span class="pre">min_relative_coeff</span></code>, <code class="docutils literal notranslate"><span class="pre">relative_cl_threshold</span></code>, <code class="docutils literal notranslate"><span class="pre">detection_threshold</span></code>, <code class="docutils literal notranslate"><span class="pre">boltzmann_r2_min</span></code>, comb/correlation scales, the Mn/Na/K floors, <code class="docutils literal notranslate"><span class="pre">min_peak_height</span></code>, the comb acceptance floors), require a documented real-data provenance comment or a real-data sweep result. Replace <code class="docutils literal notranslate"><span class="pre">test_strict_alias_still_registered_unchanged</span></code>-style “no-change” pins (which are <em>not</em> calibration) with assertions tied to real-data recall/precision.</p></li>
+<li><p>Prefer count-invariant or noise-model-anchored floors over candidate-aggregate-relative floors wherever a gate must ship on a real-data path (absolute SNR, MAD-based n-sigma, fraction-of-explained-energy), so no future gate silently re-introduces the #216 shape.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="bottom-line">
+<h2>6. Bottom Line<a class="headerlink" href="#bottom-line" title="Link to this heading"></a></h2>
+<p>#216 was a <strong>near-isolated case</strong>, not the tip of a systemic count-scaling iceberg. The production-best <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> arm is empirically count-flat (recall 0.800 at n=10/20/38). The only surviving true #216-shaped gate is the standalone NNLS floor, which no shipped CLI inversion consumes. The other “siblings” the hunt surfaced are either <code class="docutils literal notranslate"><span class="pre">max()</span></code>/<code class="docutils literal notranslate"><span class="pre">median()</span></code>-based (not count-tightening — several actually <em>loosen</em> on real data), gated off in production, or masked upstream. The genuinely broad risk is <strong>synthetic-only threshold provenance</strong>, addressed by the meta-fix: a real-data, count-varying validation gate for every identifier threshold.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

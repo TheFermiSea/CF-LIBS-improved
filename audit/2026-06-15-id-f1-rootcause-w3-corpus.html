@@ -1,0 +1,183 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>w3 diagnostic ID corpus (ak3.2.0) — provenance pointer &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">w3 diagnostic ID corpus (ak3.2.0) — provenance pointer</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/audit/2026-06-15-id-f1-rootcause-w3-corpus.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="w3-diagnostic-id-corpus-ak3-2-0-provenance-pointer">
+<h1>w3 diagnostic ID corpus (ak3.2.0) — provenance pointer<a class="headerlink" href="#w3-diagnostic-id-corpus-ak3-2-0-provenance-pointer" title="Link to this heading"></a></h1>
+<p>Regenerated diagnostic synthetic ID corpus that fixes the two structural
+confounds proven in <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-15-id-f1-rootcause.md</span></code>:</p>
+<ol class="arabic simple">
+<li><p><strong>Window</strong> — moved from the deep-UV iron-group line forest (224–265 nm,
+ideal-detector F1 ceiling ~0.31) to the vis-NIR (385–850 nm), where all 10
+non-Fe panel elements have &gt;=50% genuinely Fe-separable strong lines
+(measured via <code class="docutils literal notranslate"><span class="pre">scripts/analyze_window_separability.py</span></code>).</p></li>
+<li><p><strong>Panel hygiene</strong> — every panel element is now exercised. The old ak3.1.3
+corpus left Al/Co/Cu/Mg/Si/Ti/V in no recipe; the diagnostic set puts every
+element in &gt;=4 recipes (Mg=4 min, Fe=12 max).</p></li>
+</ol>
+<section id="location-untracked-large-blobs">
+<h2>Location (untracked — large blobs)<a class="headerlink" href="#location-untracked-large-blobs" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">data/synthetic_corpus/w3_diagwindow_v1/</span></code> (gitignored — regenerable):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">corpus.json</span></code> (~24 MB), <code class="docutils literal notranslate"><span class="pre">corpus.h5</span></code> (~6.7 MB)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">manifest.json</span></code>, <code class="docutils literal notranslate"><span class="pre">manifest.jsonl</span></code>, <code class="docutils literal notranslate"><span class="pre">summary.json</span></code></p></li>
+</ul>
+<p>The ak3.1.3 baseline (<code class="docutils literal notranslate"><span class="pre">data/synthetic_corpus/corpus.json</span></code>, name
+<code class="docutils literal notranslate"><span class="pre">w2_fixedforward_v1</span></code>) is left untouched as the comparison baseline.</p>
+</section>
+<section id="build-invocation-deterministic-seed-42">
+<h2>Build invocation (deterministic, seed 42)<a class="headerlink" href="#build-invocation-deterministic-seed-42" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span>python<span class="w"> </span>scripts/build_synthetic_id_corpus.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--db-path<span class="w"> </span>ASD_da/libs_production.db<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--output-dir<span class="w"> </span>data/synthetic_corpus<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dataset-name<span class="w"> </span>w3_diagwindow_v1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--version<span class="w"> </span>ak3.2.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--recipe-set<span class="w"> </span>diagnostic<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--seed<span class="w"> </span><span class="m">42</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--elements<span class="w"> </span><span class="s2">&quot;Fe,Ni,Cr,Mn,Cu,Ti,Si,Al,V,Mg,Co&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--lambda-min<span class="w"> </span><span class="m">385</span><span class="w"> </span>--lambda-max<span class="w"> </span><span class="m">850</span><span class="w"> </span>--pixels<span class="w"> </span><span class="m">2560</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--temperature-range-eV<span class="w"> </span><span class="m">0</span>.8,1.8<span class="w"> </span>--log-ne-range<span class="w"> </span><span class="m">16</span>.3,18.0<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--snr-db<span class="w"> </span><span class="m">30</span>,40<span class="w"> </span>--continuum-level<span class="w"> </span><span class="m">0</span>.03<span class="w"> </span>--resolving-power<span class="w"> </span><span class="m">700</span>,1000<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--shift-nm<span class="o">=</span><span class="s2">&quot;-1.0,1.0&quot;</span><span class="w"> </span>--warp-quadratic-nm<span class="w"> </span><span class="m">0</span>.0
+</pre></div>
+</div>
+<p>Builder change: commit <code class="docutils literal notranslate"><span class="pre">88e816e4</span></code> (<code class="docutils literal notranslate"><span class="pre">diagnostic_recipes()</span></code> + window/version/
+max-spectra CLI hooks). Builds on the noise-overestimation fix <code class="docutils literal notranslate"><span class="pre">28f0e8b4</span></code> and
+stratified-sampling reporting <code class="docutils literal notranslate"><span class="pre">a800919f</span></code>.</p>
+</section>
+<section id="realized-corpus-facts-verified">
+<h2>Realized corpus facts (verified)<a class="headerlink" href="#realized-corpus-facts-verified" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">n_spectra</span></code> = 184 (23 diagnostic recipes x 8 perturbations, 8 per recipe)</p></li>
+<li><p>Realized wavelength axis: 384.0–849.0 nm, 2560 px, step ~0.182 nm
+(the forward model clips/rounds the requested 385–850 nm endpoints)</p></li>
+<li><p>Perturbation axes: SNR {30,40} dB, continuum 0.03, RP {700,1000},
+shift {-1.0,+1.0} nm, warp 0.0 → 8 combos/recipe</p></li>
+<li><p>Present-element union == panel exactly: Al Co Cr Cu Fe Mg Mn Ni Si Ti V (11/11)</p></li>
+<li><p>Per-element recipe coverage: Al 8, Co 5, Cr 8, Cu 8, Fe 12, Mg 4, Mn 11,
+Ni 10, Si 9, Ti 6, V 5</p></li>
+<li><p>Physics spot-check (<code class="docutils literal notranslate"><span class="pre">pure_Cr_0000</span></code>, T~9610 K, ne~1.3e17, shift -1.0 nm):
+all 7 top peaks (396, 424, 426, 428, 449, 520, 529 nm) map to genuine Cr DB
+lines within &lt;=0.38 nm (5/7 within 0.3 nm; the two larger residuals are the
+-1.0 nm shift perturbation against RP=700 grid quantization) — physics-sane.</p></li>
+</ul>
+<p>Expected F1 ceiling lift vs ak3.1.3: 0.31 -&gt; 0.65–0.80 (re-measure after a
+benchmark run with <code class="docutils literal notranslate"><span class="pre">scripts/benchmark_synthetic_identifiers.py</span></code>).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

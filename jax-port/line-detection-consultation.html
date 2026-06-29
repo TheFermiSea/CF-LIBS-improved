@@ -1,0 +1,366 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JAX port consultation — line_detection.py &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">JAX port consultation — <code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jax-port/line-detection-consultation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="jax-port-consultation-line-detection-py">
+<h1>JAX port consultation — <code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code><a class="headerlink" href="#jax-port-consultation-line-detection-py" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p><strong>SUPERSEDED (historical):</strong> This 2026-05-12 consultation is kept only as ADR
+provenance. Its central recommendation — the rule <em>against</em> porting
+<code class="docutils literal notranslate"><span class="pre">find_peaks</span></code> — was premised on B=1 CPU work and was <strong>explicitly reversed by
+<a class="reference internal" href="../adr/ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §1.3</strong>. The shipped
+<code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> kernels implement the ported peak-detection this doc argued
+against. Do not treat the conclusions below as current guidance.</p>
+</div></blockquote>
+<p><strong>Date:</strong> 2026-05-12
+<strong>Issue:</strong> <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-wstf</span></code> (partial — line_detection.py scope)
+<strong>Branch:</strong> <code class="docutils literal notranslate"><span class="pre">feat/jax-line-detection</span></code>
+<strong>Authors:</strong> Claude Opus 4.7 (engineer), GPT-5.3-Codex (reviewer #1), Gemini-3-Flash-Preview (reviewer #2)</p>
+<section id="question">
+<h2>Question<a class="headerlink" href="#question" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py</span></code> (1075 lines) is the next module
+in the CF-LIBS identifier pipeline JAX port (issue <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-wstf</span></code>,
+follow-on to PR #118 which ported the Boltzmann fit). The file’s tricky
+function is <code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks(normalized,</span> <span class="pre">height,</span> <span class="pre">distance,</span> <span class="pre">prominence)</span></code>,
+which produces a <strong>variable-length array of peak indices</strong> — JAX’s static-shape
+model is hostile to this.</p>
+<p>The user’s instruction was explicit: <em>“fully and correctly port everything to
+JAX (unless it doesn’t make sense). Your job is to make the call.”</em></p>
+<p>So we polled two reasoning models and audited the file ourselves before
+writing any code.</p>
+</section>
+<section id="file-audit-1075-lines">
+<h2>File audit (1075 lines)<a class="headerlink" href="#file-audit-1075-lines" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symbol</p></th>
+<th class="head"><p>LOC</p></th>
+<th class="head"><p>Operation</p></th>
+<th class="head"><p>JAX-portable?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_build_observation_from_fit</span></code></p></td>
+<td><p>48-87</p></td>
+<td><p>Scalar arithmetic, returns dataclass</p></td>
+<td><p>No — object overhead, no batch benefit</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_build_observation</span></code></p></td>
+<td><p>90-151</p></td>
+<td><p>Per-peak trapezoid integration on a small window</p></td>
+<td><p>No — slice indexing into a list returns a dataclass</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code></p></td>
+<td><p>189-556</p></td>
+<td><p>Top-level orchestrator: I/O, dict building, Python control flow</p></td>
+<td><p>No — control flow heavy, calls atomic DB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_load_transitions</span></code></p></td>
+<td><p>559-576</p></td>
+<td><p>DB query</p></td>
+<td><p>No — pure Python / DB I/O</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_transition_strength</span></code></p></td>
+<td><p>579-584</p></td>
+<td><p>3-line scalar</p></td>
+<td><p>No</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_select_comb_transitions</span></code></p></td>
+<td><p>587-598</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sorted()</span></code> of dataclass list</p></td>
+<td><p>No</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_build_shift_grid</span></code></p></td>
+<td><p>601-618</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">np.linspace</span></code>, ~20 elements</p></td>
+<td><p>No — JIT overhead &gt;&gt; work</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_score_comb_for_element</span></code></p></td>
+<td><p>621-675</p></td>
+<td><p>Calls <code class="docutils literal notranslate"><span class="pre">_match_transitions_to_peaks</span></code>, scalar scoring</p></td>
+<td><p>No — variable-length match list</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_scan_comb_shifts</span></code></p></td>
+<td><p>762-873</p></td>
+<td><p>Dict iteration over shifts × elements, score reductions</p></td>
+<td><p>No — already Rust-accelerated via <code class="docutils literal notranslate"><span class="pre">_scan_comb_shifts_rust</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_match_transitions_to_peaks</span></code></p></td>
+<td><p>876-912</p></td>
+<td><p>Greedy assignment with mutable <code class="docutils literal notranslate"><span class="pre">used</span></code> set</p></td>
+<td><p>No — sequential, mutates Python set</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_kdet_filter_elements</span></code></p></td>
+<td><p>915-1000</p></td>
+<td><p>Inner shift-scan kernel (Python fallback path)</p></td>
+<td><p><strong>YES</strong> — fixed-shape (n_shifts, n_peaks) reductions, Rust path already exists; JAX gives a third backend</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_peaks_within_tolerance</span></code></p></td>
+<td><p>1003-1016</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">np.searchsorted</span></code> + comparisons</p></td>
+<td><p><strong>YES</strong> — clean searchsorted + abs + min, all fixed shape</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_match_transition</span></code></p></td>
+<td><p>1019-1031</p></td>
+<td><p>Scalar nearest-match over Python list</p></td>
+<td><p>No</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_estimate_wl_step</span></code></p></td>
+<td><p>1034-1039</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">np.median</span></code> of <code class="docutils literal notranslate"><span class="pre">np.diff</span></code></p></td>
+<td><p>No — sub-microsecond, not worth JIT</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_find_peaks</span></code></p></td>
+<td><p>1042-1075</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> w/ height + distance + prominence</p></td>
+<td><p><strong>DEBATED</strong> — see below</p></td>
+</tr>
+</tbody>
+</table>
+<p>Single-spectrum case (B=1, N=4096): scipy.signal.find_peaks runs in ~0.2ms.
+JAX JIT compile is ~100ms (one-time). For the loop’s amortization to break even
+we’d need &gt;500 spectra per Python process.</p>
+</section>
+<section id="codex-gpt-5-3-codex-recommendation">
+<h2>Codex (gpt-5.3-codex) recommendation<a class="headerlink" href="#codex-gpt-5-3-codex-recommendation" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p><strong>I would not force a full <code class="docutils literal notranslate"><span class="pre">find_peaks(distance,</span> <span class="pre">prominence)</span></code>
+reimplementation in JAX</strong> for your current one-spectrum-at-a-time pipeline.
+Keep that part in SciPy unless/until you batch spectra.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">jax.scipy.signal</span></code> does <strong>not</strong> provide a SciPy-equivalent <code class="docutils literal notranslate"><span class="pre">find_peaks</span></code>
+with full <code class="docutils literal notranslate"><span class="pre">distance</span></code>/<code class="docutils literal notranslate"><span class="pre">prominence</span></code> semantics.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">distance</span></code> requires greedy NMS — implementable with <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> but ugly.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">prominence</span></code> is the painful part: non-local, involves searching
+left/right bases relative to higher peaks. Faithfully matching SciPy
+behavior in JAX is possible but easy to get subtly wrong.</p></li>
+<li><p>For B=1 N=4096, mask representation is plenty fast.</p></li>
+</ul>
+<p><strong>Sober recommendation:</strong></p>
+<ul class="simple">
+<li><p>Keep <code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> on CPU for now.</p></li>
+<li><p>Port to JAX only: normalization / baseline / smoothing, local-max
+candidate mask, tolerance-window matching via vectorized <code class="docutils literal notranslate"><span class="pre">searchsorted</span></code>,
+shift-scan / score reductions across candidate shifts.</p></li>
+<li><p>Keep variable-length peak selection and Pythonic atomic-DB control flow
+at the boundary.</p></li>
+</ul>
+</div></blockquote>
+</section>
+<section id="gemini-3-flash-preview-recommendation">
+<h2>Gemini-3-flash-preview recommendation<a class="headerlink" href="#gemini-3-flash-preview-recommendation" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>This is a classic “JAX Trap.” For B=1 and N&lt;8192, the overhead of JAX’s
+dispatch and the complexity of re-implementing <code class="docutils literal notranslate"><span class="pre">find_peaks</span></code> semantics will
+result in a system that is harder to maintain and likely slower in
+“wall-clock” time for single-shot analysis.</p>
+<p><strong>The Sober Call: Hybrid “Sandwich” Architecture</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Stage 1 (JAX):</strong> Clean the signal (smoothing, baseline removal,
+normalization).</p></li>
+<li><p><strong>Stage 2 (SciPy):</strong> Find the peaks (the natural exit point from JAX
+device back to host).</p></li>
+<li><p><strong>Stage 3 (NumPy/Logic):</strong> Greedy loops, dataclasses, “management”
+code — not “compute” code.</p></li>
+</ol>
+<p>Unless you are running this specific pipeline in a loop <strong>thousands of
+times within a single Python session</strong>, you will never recover the 100ms
+lost to JIT. The exception: batched analysis (B=1000 spectra) or
+differentiation. Since you’re matching against a discrete database,
+differentiation is off the table.</p>
+</div></blockquote>
+</section>
+<section id="decision">
+<h2>Decision<a class="headerlink" href="#decision" title="Link to this heading"></a></h2>
+<p>The two models converge unanimously. <strong><code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> is one of
+those “doesn’t make sense” cases.</strong> It’s a heavily-optimized C/Cython routine
+producing variable-length output; JAX would force us to either pad to a
+worst-case K_max (carrying bookkeeping through the rest of the pipeline) or
+reproduce non-trivial prominence semantics in XLA — both for ~0.2ms of work.</p>
+<section id="what-we-will-jax-port-opt-in">
+<h3>What we WILL JAX-port (opt-in)<a class="headerlink" href="#what-we-will-jax-port-opt-in" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">_peaks_within_tolerance_jax</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">searchsorted</span></code> + abs + min reduction
+over (n_peaks,) and (n_transitions,) sorted arrays. Pure dense
+computation, jit-compiles cleanly. Used inside <code class="docutils literal notranslate"><span class="pre">_kdet_filter_elements</span></code>’s
+hot inner loop.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">_kdet_shift_scan_jax</span></code></strong> — vectorize the <em>shift × element</em> candidate-
+count reduction. For each element, we currently loop over a shift grid
+(~20 entries) and call <code class="docutils literal notranslate"><span class="pre">_peaks_within_tolerance</span></code>. With <code class="docutils literal notranslate"><span class="pre">vmap</span></code> over
+shifts we get a single <code class="docutils literal notranslate"><span class="pre">(n_shifts,)</span></code> candidate-count vector per element.
+This is a clean batch-style win even at B=1.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">detect_peaks_jax</span></code></strong> — the <strong>fallback</strong> local-maxima path that runs
+when scipy is unavailable. Pure boolean-mask computation
+(<code class="docutils literal notranslate"><span class="pre">x[1:-1]</span> <span class="pre">&gt;</span> <span class="pre">x[:-2]</span> <span class="pre">&amp;</span> <span class="pre">x[1:-1]</span> <span class="pre">&gt;</span> <span class="pre">x[2:]</span></code>), jit-friendly. Returns a length-N
+boolean mask which we convert to indices on the host.</p></li>
+</ol>
+</section>
+<section id="what-we-will-not-port-and-why">
+<h3>What we will NOT port — and why<a class="headerlink" href="#what-we-will-not-port-and-why" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> with height + distance + prominence.</strong>
+Variable-length output, non-local prominence semantics. The C
+implementation is ~0.2 ms; JAX JIT overhead is ~100 ms. No batching
+pathway in the current pipeline. Both reviewer models agree this is
+the canonical “JAX trap.” We keep the existing scipy call.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">_match_transitions_to_peaks</span></code></strong> — greedy assignment with mutable
+<code class="docutils literal notranslate"><span class="pre">used_peaks</span></code> set. Could be functionalized as a <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> over
+transitions carrying a bitmask, but: (a) results are dataclass tuples,
+not arrays, so we’d convert back to Python anyway, (b) inner loop is
+~30 lines, ~5 μs per call, dwarfed by atomic-DB Python overhead.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">_scan_comb_shifts</span></code> orchestrator</strong> — already Rust-accelerated. Adding
+a JAX backend for a function that already has a C-extension backend
+is gold-plating.</p></li>
+<li><p><strong>All dataclass / dict-building / scoring logic</strong> — JAX can’t represent
+Python objects in JIT’d code.</p></li>
+</ol>
+</section>
+<section id="opt-in-pattern">
+<h3>Opt-in pattern<a class="headerlink" href="#opt-in-pattern" title="Link to this heading"></a></h3>
+<p>Mirroring PR #118 (<code class="docutils literal notranslate"><span class="pre">use_jax_boltzmann_fit:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></code>), we add
+<code class="docutils literal notranslate"><span class="pre">use_jax_kdet:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></code> to <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>. Default behavior
+is byte-identical; the JAX path is purely additive.</p>
+</section>
+</section>
+<section id="estimated-wins">
+<h2>Estimated wins<a class="headerlink" href="#estimated-wins" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_peaks_within_tolerance_jax</span></code>: ~5x for a single (peaks, transitions)
+pair vs NumPy, but the dominant cost is JIT warmup. Useful as a building
+block.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_kdet_shift_scan_jax</span></code>: ~10-30x on the shift-scan inner loop for a
+single element with 20 shifts × 100 peaks × 30 transitions, by fusing
+the shift dimension into a <code class="docutils literal notranslate"><span class="pre">vmap</span></code>. The Rust path is faster still
+(<code class="docutils literal notranslate"><span class="pre">_kdet_filter_elements_rust</span></code>), but the JAX path is a useful pure-Python
+fallback when the Rust extension is unavailable.</p></li>
+</ul>
+<p>This is intentionally a narrower scope than PR #118’s 500x win.
+<code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> is mostly control flow + symbolic matching; there is
+no large dense linear-algebra kernel hiding in it.</p>
+</section>
+<section id="per-instruction-tracker">
+<h2>Per-instruction tracker<a class="headerlink" href="#per-instruction-tracker" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>[x] PR title MUST list what was ported vs not + why.</p></li>
+<li><p>[x] Tests cover numerical agreement (rtol 1e-5) for ported pieces and
+behavioral parity for the find_peaks call (we keep scipy verbatim).</p></li>
+<li><p>[x] All new paths opt-in via constructor / function kwarg.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

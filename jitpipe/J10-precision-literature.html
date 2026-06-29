@@ -1,0 +1,214 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J10 forward_fit — literature clues for raising identification PRECISION &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J10 forward_fit — literature clues for raising identification PRECISION</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jitpipe/J10-precision-literature.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j10-forward-fit-literature-clues-for-raising-identification-precision">
+<h1>J10 forward_fit — literature clues for raising identification PRECISION<a class="headerlink" href="#j10-forward-fit-literature-clues-for-raising-identification-precision" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-15 · <strong>Bead:</strong> o3be · Problem: forward_fit (Gornushkin-style population
+forward-fitter) reaches P≈0.51/R≈0.46/F1≈0.49 on the 11-candidate confounder-laden ak3.1.3
+corpus — ~half of detections are false positives. Goal: physics-only techniques to cut FPs
+without killing recall. Citations carry verification caveats (see end); principles are
+multiply-confirmed, but verify exact author/venue/numbers before formal (paper) citation.</p>
+<section id="literature-corroborates-the-in-flight-levers">
+<h2>Literature corroborates the in-flight levers<a class="headerlink" href="#literature-corroborates-the-in-flight-levers" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>BIC-margin presence gate</strong> (lever b, testing now): <strong>Wilson, da Silva Castanheira, Lévesque
+Kinder &amp; Baillet 2024</strong>, <em>A Bayesian Model-Selection Approach for Determining the Number of
+Spectral Peaks in Neural Power Spectra</em>, <strong>bioRxiv DOI 10.1101/2024.08.01.606216</strong> (PMC11326208 /
+PMID 39149403; preprint — no journal version confirmed) — BIC-gated peak inclusion raised PPV
+<strong>63%→96%</strong> (sensitivity 91→89%) on ~5,000 synthetic spectra (verified verbatim). Right <em>category</em>
+of fix, but the domain is <strong>neural power spectra (specparam/FOOOF), not LIBS</strong> — a structural
+analogy, not a quantitative prediction for forward_fit. <strong>Webb et al. 2021</strong> (MNRAS 501:2268)
+argue BIC underperforms a line-strength-weighted <strong>SpIC</strong> → an upgrade path.</p></li>
+<li><p><strong>Diagnostic per-wavelength weights</strong> (lever a, merged): <strong>Amato, Cristoforetti, Legnaioli,
+Lorenzetti, Palleschi, Sorrentino &amp; Tognoni 2010</strong>, <em>Progress towards an unassisted element
+identification from LIBS with automatic ranking techniques inspired by text retrieval</em>,
+<strong>Spectrochim. Acta B 65(8):664–670, DOI 10.1016/j.sab.2010.04.019</strong> (verified) — defines
+“selectivity = log(1/element-frequency)” × “peak relevance” = the TF-IDF/IEF crowding weight (the
+exact source for lever #1 below); <strong>Aydin et al. 2008</strong> Boltzmann-residual down-weighting.</p></li>
+<li><p><strong>Multi-line coherence</strong> (lever d): <strong>Hahn &amp; Omenetto 2012</strong> (Appl. Spectrosc. 66:347) —
+“identification should never be done on a single line”; <strong>Labutin &amp; Zaytsev 2013</strong> (Anal.
+Chem. 85:1693) fit all lines of a species globally; <strong>El Haddad et al. 2014</strong> good-practices.</p></li>
+<li><p><strong>Score calibration</strong> (lever e): <strong>Protassov et al. 2002</strong> (ApJ 571:545) — naive LRT
+thresholds are miscalibrated when a parameter is bounded at 0 (concentration ≥ 0), inflating
+FP rate; explains the non-monotonic threshold behavior we measured.</p></li>
+</ul>
+</section>
+<section id="new-citable-physics-only-ideas-ranked">
+<h2>New, citable, physics-only ideas (ranked)<a class="headerlink" href="#new-citable-physics-only-ideas-ranked" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>IEF / TF-IDF spectral-crowding weight</strong> (Amato 2010) — <strong>TOP</strong>. In <code class="docutils literal notranslate"><span class="pre">_diagnostic_wavelength_weights</span></code>,
+after the per-element Gaussian profiles array, compute <code class="docutils literal notranslate"><span class="pre">f_i</span> <span class="pre">=</span> <span class="pre">(profiles</span> <span class="pre">&gt;</span> <span class="pre">noise_floor).sum(axis=0)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">IEF_i</span> <span class="pre">=</span> <span class="pre">log((n_elements+1)/clip(f_i,1))</span></code>, multiply into <code class="docutils literal notranslate"><span class="pre">w_i</span></code>. Penalizes bins shared by many
+candidates (the dominant FP mechanism: confounders borrowing shared-bin signal in the crowded
+380–450 nm Fe/Ti/Cr/Ca region). ~10 lines, computed once (memoized), zero inference cost.
+Expected <strong>+0.06–0.15</strong> precision. Extends the merged lever (a).</p></li>
+<li><p><strong>Iterative Boltzmann-R² post-gate</strong> (Aydin et al. 2008, Spectrochim. Acta B 63:1060) — the
+Saha-Boltzmann <em>consistency</em> filter. Host-side pure-numpy: for each present element with ≥3
+matched lines, regress <code class="docutils literal notranslate"><span class="pre">ln(I·λ/(gA))</span></code> vs <code class="docutils literal notranslate"><span class="pre">E_k</span></code>; if R² &lt; 0.85, veto (a true element’s lines obey
+one temperature; a confounder’s coincidental lines don’t). Expected <strong>+0.04–0.10</strong>. Pairs with
+the min-line-count gate.</p></li>
+<li><p><strong>Minimum-line-count hard gate</strong> (Hahn &amp; Omenetto 2012; Labutin &amp; Zaytsev 2013) — require ≥2
+unblended in-band predicted lines above an SNR floor before a presence call. Expected +0.05–0.12
+(kills single-coincidence FPs). This <em>is</em> lever (d), now literature-grounded.</p></li>
+<li><p><strong>SpIC</strong> (Webb et al. 2021, MNRAS 501:2268) — replace flat <code class="docutils literal notranslate"><span class="pre">k·log(N)</span></code> in <code class="docutils literal notranslate"><span class="pre">bic_cost</span></code> with a
+per-line-strength penalty <code class="docutils literal notranslate"><span class="pre">Σ</span> <span class="pre">log(N)/I_j</span></code> (weak/blended lines pay more). Incremental upgrade to
+the BIC gate; +0.02–0.06.</p></li>
+<li><p><strong>Simulation-calibrated null threshold</strong> (Protassov et al. 2002) — set <code class="docutils literal notranslate"><span class="pre">presence_threshold</span></code> per
+element at the 95th percentile of the gap under K≈200 element-excluded null forward-model runs
+(cheap, already vmapped). Fixes the miscalibrated/non-monotonic threshold; a precomputed
+(n_elements, SNR-tier) lookup serves production.</p></li>
+<li><p><strong>NNLS joint sparse decomposition</strong> (Tibshirani 1996 LASSO; NNLS is <code class="docutils literal notranslate"><span class="pre">scipy.optimize.nnls</span></code>,
+pure numerical, physics-OK) — replace per-element-independent LOO gaps with one joint fit:
+build an <code class="docutils literal notranslate"><span class="pre">N_wl</span> <span class="pre">×</span> <span class="pre">N_elements</span></code> basis at the best (T,n_e), solve NNLS vs the measured spectrum,
+drop elements with <code class="docutils literal notranslate"><span class="pre">c_e/Σc</span> <span class="pre">&lt;</span> <span class="pre">~1%</span></code>. A confounder spectrally dominated by a true element zeroes
+out by competition. A more invasive but principled redesign of the presence decision.</p></li>
+<li><p><strong>Robust Student-t Boltzmann line weighting</strong> (Matsumura et al. 2024, ACS Earth Space Chem.
+8:1259) — second-pass adaptive weights from Boltzmann residuals (down-weights self-absorbed/
+blended lines automatically); +0.03–0.08, an alternative formulation of lever (a).</p></li>
+<li><p><strong>Self-absorption correction in the forward model</strong> (Gornushkin et al. 1999) — <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code>
+toggle already exists; enabling it deflates over-predicted strong resonance lines of abundant
+confounders. <strong>Benchmark first</strong> (helps only optically-thick regimes; can hurt thin ones).</p></li>
+</ol>
+</section>
+<section id="recommended-plan-after-the-bic-gate-sweep-result-lands">
+<h2>Recommended plan (after the BIC-gate sweep result lands)<a class="headerlink" href="#recommended-plan-after-the-bic-gate-sweep-result-lands" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>IEF crowding weight</strong> (#1) — highest ROI, ~10 lines, extends the merged diag-weights; GPU A/B vs current.</p></li>
+<li><p><strong>Boltzmann-R² veto</strong> (#2) + <strong>min-line-count gate</strong> (#3) — the physics multi-line-coherence FP filter.</p></li>
+<li><p>Then SpIC (#4) / null-calibration (#5) as refinements; NNLS (#6) as a larger redesign if needed.
+Every change benchmark-gated on the GPU vs Comb (project rule; a prior identifier change regressed F1 −0.041).</p></li>
+</ol>
+</section>
+<section id="citation-verification-caveats-honest">
+<h2>Citation verification caveats (honest)<a class="headerlink" href="#citation-verification-caveats-honest" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Wilson 2024</strong> DOI VERIFIED 10.1101/2024.08.01.606216 (bioRxiv preprint, first author Luc E. Wilson;
+the earlier “PLOS Comp Biol” guess was WRONG — no journal version found). Domain is <em>neural power
+spectra</em>, not optical emission — the BIC-gated-peak analogy is structural, the 63→96% PPV is not a direct
+LIBS prediction. <strong>Amato 2010</strong> DOI VERIFIED 10.1016/j.sab.2010.04.019 (first author G. Amato; the
+“Andrade” variant was a false lead).</p></li>
+<li><p><strong>El Haddad 2014</strong>, <strong>Gajarska 2024</strong> author-ordering: papers/venues confirmed via search,
+but exact phrases / per-tooth thresholds / first-author ordering not confirmed from full text — verify
+before formal citation. The underlying principles are standard and multiply-confirmed.</p></li>
+<li><p>All precision-gain figures are by-analogy estimates; actual gains depend on the corpus line density / SNR.</p></li>
+<li><p>Corpus validity (<code class="docutils literal notranslate"><span class="pre">zfy2</span></code>) still caps absolute numbers; same-corpus relative-vs-Comb is the reliable signal.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,267 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T1-4 Implementation Spec — LDM Broadening Grid (1-D log-σ for CF-LIBS) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">T1-4 Implementation Spec — LDM Broadening Grid (1-D log-σ for CF-LIBS)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/T1-4-ldm-broadening.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="t1-4-implementation-spec-ldm-broadening-grid-1-d-log-for-cf-libs">
+<h1>T1-4 Implementation Spec — LDM Broadening Grid (1-D log-σ for CF-LIBS)<a class="headerlink" href="#t1-4-implementation-spec-ldm-broadening-grid-1-d-log-for-cf-libs" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-e5o8</span></code> · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0001-radis-jaxrts-pattern-survey.html"><span class="std std-doc">ADR-0001</span></a> §4.2 B-P3, §8.1 row T1-4 · <strong>Wave:</strong> 2 (parallel with T1-2, T1-3) · <strong>Hard dep:</strong> T1-1 (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>, host/kernel split + <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> + <code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy</span></code>) · <strong>Estimated effort:</strong> medium · <strong>Reference:</strong> van den Bekerom &amp; Pannier 2021, JQSRT 261 107476</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Replace the current per-line broadcasting Voigt/Gaussian assembly (<code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_gaussian_broadening_jax</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> and the inline Humlicek W4 block in <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py:567-632</span></code>) with a Radis-style line-distribution-method (LDM/DIT) kernel specialized to the Gaussian-dominant CF-LIBS regime.</p>
+<p>LDM projects N lines onto a small log-σ grid (~16-32 layers) using bilinear weights, then performs one FFT convolution per σ layer. This collapses the dominant <code class="docutils literal notranslate"><span class="pre">O(N_lines</span> <span class="pre">·</span> <span class="pre">N_λ)</span></code> outer-product (the <code class="docutils literal notranslate"><span class="pre">diff</span> <span class="pre">=</span> <span class="pre">wl_grid[:,</span> <span class="pre">None]</span> <span class="pre">-</span> <span class="pre">l_wl[None,</span> <span class="pre">:]</span></code> matrix at <code class="docutils literal notranslate"><span class="pre">generator.py:572</span></code> and the <code class="docutils literal notranslate"><span class="pre">(N_wl,</span> <span class="pre">N_lines)</span></code> profile matrix in <code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code>) to <code class="docutils literal notranslate"><span class="pre">O(N_σ</span> <span class="pre">·</span> <span class="pre">N_λ</span> <span class="pre">·</span> <span class="pre">log</span> <span class="pre">N_λ)</span></code>. The manifold sweep over (T, n_e, composition) reuses the same σ-grid layout across every grid point.</p>
+</section>
+<section id="algorithm-ldm-specialized-to-gaussian">
+<h2>2. Algorithm (LDM specialized to Gaussian)<a class="headerlink" href="#algorithm-ldm-specialized-to-gaussian" title="Link to this heading"></a></h2>
+<p>For each line <code class="docutils literal notranslate"><span class="pre">i</span></code> with <code class="docutils literal notranslate"><span class="pre">(λ_i,</span> <span class="pre">I_i,</span> <span class="pre">σ_i</span> <span class="pre">=</span> <span class="pre">sqrt(σ_doppler_i²</span> <span class="pre">+</span> <span class="pre">σ_inst²))</span></code>:</p>
+<ol class="arabic simple">
+<li><p>Locate log-σ grid index <code class="docutils literal notranslate"><span class="pre">k</span></code>: <code class="docutils literal notranslate"><span class="pre">σ_grid[k]</span> <span class="pre">≤</span> <span class="pre">σ_i</span> <span class="pre">&lt;</span> <span class="pre">σ_grid[k+1]</span></code> (clip to <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">N_σ-2]</span></code>).</p></li>
+<li><p>Compute interpolation weight <code class="docutils literal notranslate"><span class="pre">α_i</span> <span class="pre">=</span> <span class="pre">(log</span> <span class="pre">σ_i</span> <span class="pre">−</span> <span class="pre">log</span> <span class="pre">σ_grid[k])</span> <span class="pre">/</span> <span class="pre">(log</span> <span class="pre">σ_grid[k+1]</span> <span class="pre">−</span> <span class="pre">log</span> <span class="pre">σ_grid[k])</span></code> (matches Radis <code class="docutils literal notranslate"><span class="pre">BroadenFactory._calc_lineshape_LDM</span></code> step weighting).</p></li>
+<li><p>Distribute into 2-D <code class="docutils literal notranslate"><span class="pre">(N_σ,</span> <span class="pre">N_λ)</span></code> ledger via <code class="docutils literal notranslate"><span class="pre">jax.ops.segment_sum</span></code> over flattened <code class="docutils literal notranslate"><span class="pre">(k,</span> <span class="pre">j_i)</span></code> pairs (prefer over <code class="docutils literal notranslate"><span class="pre">at[].add()</span></code> for jax-metal determinism):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LDM[k,</span>&#160;&#160; <span class="pre">j_i]</span> <span class="pre">+=</span> <span class="pre">(1</span> <span class="pre">−</span> <span class="pre">α_i)</span> <span class="pre">·</span> <span class="pre">I_i</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LDM[k+1,</span> <span class="pre">j_i]</span> <span class="pre">+=</span> <span class="pre">α_i</span> <span class="pre">·</span> <span class="pre">I_i</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">j_i</span> <span class="pre">=</span> <span class="pre">round((λ_i</span> <span class="pre">−</span> <span class="pre">λ_min)</span> <span class="pre">/</span> <span class="pre">Δλ)</span></code> (uniform grid)</p></li>
+</ul>
+</li>
+<li><p>Sum convolutions: <code class="docutils literal notranslate"><span class="pre">spectrum</span> <span class="pre">=</span> <span class="pre">Σ_k</span> <span class="pre">irfft(rfft(LDM[k,</span> <span class="pre">:])</span> <span class="pre">·</span> <span class="pre">rfft(g(σ_grid[k])))</span></code> where <code class="docutils literal notranslate"><span class="pre">g(σ_k)</span></code> is precomputed normalized Gaussian of length <code class="docutils literal notranslate"><span class="pre">next_pow2(N_λ</span> <span class="pre">+</span> <span class="pre">6·max(σ_grid)/Δλ)</span></code>.</p></li>
+</ol>
+<p>Voigt extension (rare in LIBS) → 2-D <code class="docutils literal notranslate"><span class="pre">(log</span> <span class="pre">σ_G,</span> <span class="pre">log</span> <span class="pre">γ_L)</span></code> grid with bilinear distribution. <strong>Scope: 1-D Gaussian only.</strong> API shaped to accept <code class="docutils literal notranslate"><span class="pre">gamma_grid</span></code> for the future Voigt extension.</p>
+</section>
+<section id="grid-construction">
+<h2>3. Grid construction<a class="headerlink" href="#grid-construction" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">sigma_grid</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">sigma_min</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">sigma_max</span><span class="p">),</span> <span class="n">N_sigma</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">N_sigma</span> <span class="pre">∈</span> <span class="pre">[16,</span> <span class="pre">32]</span></code> (default 24), <code class="docutils literal notranslate"><span class="pre">dx_σ</span> <span class="pre">≈</span> <span class="pre">0.15</span></code> (Radis default 0.2).</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">sigma_min</span> <span class="pre">=</span> <span class="pre">0.5</span> <span class="pre">·</span> <span class="pre">min_i</span> <span class="pre">σ_i</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sigma_max</span> <span class="pre">=</span> <span class="pre">2.0</span> <span class="pre">·</span> <span class="pre">max_i</span> <span class="pre">σ_i</span></code></p></li>
+</ul>
+<p>CF-LIBS bounds analytically: at <code class="docutils literal notranslate"><span class="pre">[λ_min,</span> <span class="pre">λ_max]</span></code> and <code class="docutils literal notranslate"><span class="pre">[T_min,</span> <span class="pre">T_max]</span></code>, Doppler <code class="docutils literal notranslate"><span class="pre">σ</span> <span class="pre">∈</span> <span class="pre">[λ_min/c</span> <span class="pre">·</span> <span class="pre">sqrt(kT_min/m_max),</span> <span class="pre">λ_max/c</span> <span class="pre">·</span> <span class="pre">sqrt(kT_max/m_min)]</span></code>, plus instrument floor <code class="docutils literal notranslate"><span class="pre">σ_inst</span></code>. Host driver computes once from <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> + manifold config → grid layout is JIT-static.</p>
+<p>Edge cases: lines with <code class="docutils literal notranslate"><span class="pre">σ_i</span> <span class="pre">≤</span> <span class="pre">σ_grid[0]</span></code> snap to layer 0 weight 1; lines with <code class="docutils literal notranslate"><span class="pre">σ_i</span> <span class="pre">≥</span> <span class="pre">σ_grid[-1]</span></code> snap to layer <code class="docutils literal notranslate"><span class="pre">N_σ-1</span></code>. NaN guards on bounds. Assert <code class="docutils literal notranslate"><span class="pre">N_σ</span> <span class="pre">≥</span> <span class="pre">4</span></code>.</p>
+</section>
+<section id="kernel-api">
+<h2>4. Kernel API<a class="headerlink" href="#kernel-api" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/radiation/kernels.py</span>
+<span class="nd">@jit_if_available</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">ldm_broaden</span><span class="p">(</span>
+    <span class="n">line_wavelengths</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>   <span class="c1"># (N_lines,) — nm</span>
+    <span class="n">line_intensities</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>   <span class="c1"># (N_lines,) — T·Saha·Boltzmann·A_ki-scaled emissivity</span>
+    <span class="n">line_sigmas</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>        <span class="c1"># (N_lines,) — Gaussian σ (Doppler + instrument), nm</span>
+    <span class="n">wavelength_grid</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>    <span class="c1"># (N_lambda,) — uniform spacing required</span>
+    <span class="n">sigma_grid</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>         <span class="c1"># (N_sigma,) — log-spaced (static layout)</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">gamma_grid</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>   <span class="c1"># reserved for 2-D Voigt extension</span>
+    <span class="n">line_gammas</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>                    <span class="c1"># (N_lambda,)</span>
+</pre></div>
+</div>
+<p>Internals:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">log_sg</span> <span class="pre">=</span> <span class="pre">jnp.log(sigma_grid)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">k</span> <span class="pre">=</span> <span class="pre">jnp.clip(jnp.searchsorted(sigma_grid,</span> <span class="pre">line_sigmas)</span> <span class="pre">−</span> <span class="pre">1,</span> <span class="pre">0,</span> <span class="pre">N_sigma</span> <span class="pre">−</span> <span class="pre">2)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alpha</span> <span class="pre">=</span> <span class="pre">jnp.clip((jnp.log(line_sigmas)</span> <span class="pre">−</span> <span class="pre">log_sg[k])</span> <span class="pre">/</span> <span class="pre">(log_sg[k+1]</span> <span class="pre">−</span> <span class="pre">log_sg[k]),</span> <span class="pre">0,</span> <span class="pre">1)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">j</span> <span class="pre">=</span> <span class="pre">jnp.clip(jnp.round((line_wavelengths</span> <span class="pre">−</span> <span class="pre">wl_grid[0])</span> <span class="pre">/</span> <span class="pre">dlam).astype(jnp.int32),</span> <span class="pre">0,</span> <span class="pre">N_lambda</span> <span class="pre">−</span> <span class="pre">1)</span></code></p></li>
+<li><p>Two <code class="docutils literal notranslate"><span class="pre">segment_sum</span></code> accumulations → reshape to <code class="docutils literal notranslate"><span class="pre">(N_σ,</span> <span class="pre">N_λ)</span></code></p></li>
+<li><p>Precompute Gaussian kernels <code class="docutils literal notranslate"><span class="pre">G_k[n]</span> <span class="pre">∝</span> <span class="pre">exp(-0.5·(n·dlam/σ_grid[k])²)</span></code> of length <code class="docutils literal notranslate"><span class="pre">N_fft</span></code>, stack to <code class="docutils literal notranslate"><span class="pre">(N_σ,</span> <span class="pre">N_fft)</span></code>, normalize.</p></li>
+<li><p>FFT convolve per layer, sum across layers.</p></li>
+<li><p>Dtype: respect <code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy.allow_32bit</span></code>.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">vmap</span></code> axis spec (batch over T-dependent intensities, the manifold sweep variable):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ldm_broaden_batch</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">ldm_broaden</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+<section id="where-it-lives">
+<h2>5. Where it lives<a class="headerlink" href="#where-it-lives" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Kernel:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py::ldm_broaden</span></code> (new). Pure-JAX, single <code class="docutils literal notranslate"><span class="pre">&#64;jit_if_available</span></code> function. Side-effect-free.</p></li>
+<li><p><strong>Host driver:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/host.py::broaden_lines_ldm</span></code> — accepts <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>, plasma state, instrument, optional pre-built <code class="docutils literal notranslate"><span class="pre">sigma_grid</span></code>. If <code class="docutils literal notranslate"><span class="pre">sigma_grid</span> <span class="pre">is</span> <span class="pre">None</span></code>, constructs from min/max σ observed across the line set (numpy-side). Returns spectrum.</p></li>
+<li><p><strong>Profile shim:</strong> keep <code class="docutils literal notranslate"><span class="pre">apply_gaussian_broadening_jax</span></code>/<code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> as per-line fallback when <code class="docutils literal notranslate"><span class="pre">BroadeningMode.LDM_GAUSSIAN</span></code> is NOT selected (legacy + per-line correctness reference for tests). Docstring marks “non-LDM fallback”.</p></li>
+</ul>
+</section>
+<section id="call-site-integration">
+<h2>6. Call-site integration<a class="headerlink" href="#call-site-integration" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code>: add <code class="docutils literal notranslate"><span class="pre">BroadeningMode.LDM_GAUSSIAN</span></code> to enum (alongside <code class="docutils literal notranslate"><span class="pre">NIST_PARITY</span></code>, <code class="docutils literal notranslate"><span class="pre">PHYSICAL_DOPPLER</span></code>, <code class="docutils literal notranslate"><span class="pre">LEGACY</span></code>). Selection in dispatch block L243-253:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">broadening_mode</span> <span class="ow">is</span> <span class="n">BroadeningMode</span><span class="o">.</span><span class="n">LDM_GAUSSIAN</span><span class="p">:</span>
+    <span class="n">sigma_per_line</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_sigma_per_line</span><span class="p">(</span><span class="n">all_transitions</span><span class="p">,</span> <span class="n">populations</span><span class="p">)</span>
+    <span class="n">emissivity</span> <span class="o">=</span> <span class="n">broaden_lines_ldm</span><span class="p">(</span>
+        <span class="n">line_wavelengths</span><span class="o">=...</span><span class="p">,</span>
+        <span class="n">line_intensities</span><span class="o">=</span><span class="n">line_emissivities</span><span class="p">,</span>
+        <span class="n">line_sigmas</span><span class="o">=</span><span class="n">sigma_per_line</span><span class="p">,</span>
+        <span class="n">wavelength_grid</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span><span class="p">,</span>
+        <span class="n">memory_policy</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">memory_policy</span><span class="p">,</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<p>Downstream RT + instrument convolution at L259-305 unchanged. LDM_GAUSSIAN behaves like PHYSICAL_DOPPLER for L283’s “skip NIST_PARITY convolution” check (does NOT skip).</p>
+</section>
+<section id="manifold-integration-the-real-speedup">
+<h2>7. Manifold integration (the real speedup)<a class="headerlink" href="#manifold-integration-the-real-speedup" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py::_compute_spectrum_snapshot</span></code> (L455-634) builds <code class="docutils literal notranslate"><span class="pre">(N_λ,</span> <span class="pre">N_lines)</span> <span class="pre">diff</span></code> at L572, runs Humlicek W4 at L584-626. For typical manifold sweep (32 × 32 × 8 grid points × 5000 lines × 30000 wavelengths) this dominates.</p>
+<p>σ-grid layout depends only on manifold bounds (static), so lift grid construction out of jit:</p>
+<ol class="arabic simple">
+<li><p><strong>Once at manifold init:</strong> build <code class="docutils literal notranslate"><span class="pre">sigma_grid</span></code> and FFT-domain Gaussian kernels <code class="docutils literal notranslate"><span class="pre">G_hat[N_σ,</span> <span class="pre">N_fft]</span></code> numpy-side; <code class="docutils literal notranslate"><span class="pre">device_put</span></code> once.</p></li>
+<li><p><strong>Per grid point (inside jit/vmap):</strong> Saha+Boltzmann produce <code class="docutils literal notranslate"><span class="pre">I_i(T,</span> <span class="pre">n_e,</span> <span class="pre">conc)</span></code> as before (L519-530); pass to <code class="docutils literal notranslate"><span class="pre">ldm_broaden(line_wavelengths,</span> <span class="pre">I_i,</span> <span class="pre">sigma_total_i,</span> <span class="pre">wl_grid,</span> <span class="pre">sigma_grid,</span> <span class="pre">G_hat)</span></code>. Wavelength scatter <code class="docutils literal notranslate"><span class="pre">j_i</span></code>, σ-layer <code class="docutils literal notranslate"><span class="pre">k_i</span></code>, weight <code class="docutils literal notranslate"><span class="pre">α_i</span></code> also static (depend only on line catalog + grid layout) — precompute, pass as static side-inputs.</p></li>
+</ol>
+<p>Same swap in <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py::single_spectrum_forward</span></code> (L292-397): replace <code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code> at L395 with <code class="docutils literal notranslate"><span class="pre">ldm_broaden</span></code>. <code class="docutils literal notranslate"><span class="pre">vmap</span></code> wrapper at L400 unchanged.</p>
+<p><strong>Expected speedup:</strong> 10-30× on 8192-point manifold (Radis published &gt;100× for Voigt; CF-LIBS Gaussian smaller scale, lower constant). Memory: <code class="docutils literal notranslate"><span class="pre">(N_σ,</span> <span class="pre">N_λ)</span> <span class="pre">=</span> <span class="pre">(24,</span> <span class="pre">30000)</span> <span class="pre">×</span> <span class="pre">4</span> <span class="pre">B</span> <span class="pre">=</span> <span class="pre">2.9</span> <span class="pre">MB</span></code> per grid point vs current <code class="docutils literal notranslate"><span class="pre">(5000,</span> <span class="pre">30000)</span> <span class="pre">×</span> <span class="pre">4</span> <span class="pre">B</span> <span class="pre">=</span> <span class="pre">600</span> <span class="pre">MB</span></code> — ~200× reduction in broadening working set.</p>
+</section>
+<section id="acceptance-criteria">
+<h2>8. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Parity:</strong> rtol=1e-4 vs <code class="docutils literal notranslate"><span class="pre">BroadeningMode.PHYSICAL_DOPPLER</span></code> on 200-line synthetic (Ti+Al+V, T=1.0 eV, n_e=1e17, 220-500 nm &#64; R=5000). Looser than T1-3’s 1e-5 because LDM is approximate by construction; bound governed by <code class="docutils literal notranslate"><span class="pre">dx_σ</span></code> (Radis: error ≲ (dx_σ/2)² worst-case integrated intensity).</p></li>
+<li><p><strong>Speed:</strong> LDM ≥5× faster than per-line <code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code> for N_lines≥1000 (CPU, fp32 microbench).</p></li>
+<li><p><strong>Manifold wall-time:</strong> 32×32×8 grid generation ≥5× faster on CPU; ≥10× faster on V100S.</p></li>
+<li><p><strong>No NaN/Inf</strong> for any line set from <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> corpus.</p></li>
+<li><p><strong>vmap-clean:</strong> <code class="docutils literal notranslate"><span class="pre">vmap(ldm_broaden,</span> <span class="pre">in_axes=(None,</span> <span class="pre">0,</span> <span class="pre">None,</span> <span class="pre">None,</span> <span class="pre">None))</span></code> traces and runs without <code class="docutils literal notranslate"><span class="pre">ConcretizationTypeError</span></code>.</p></li>
+<li><p><strong>jax-metal fp32 path:</strong> identical to CPU fp32 within rtol=5e-4 (Metal-vs-CPU float32 drift floor).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>9. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><strong>New</strong> <code class="docutils literal notranslate"><span class="pre">tests/radiation/test_ldm_broaden.py</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_parity_vs_physical_doppler</span></code> — 200-line synthetic, rtol=1e-4.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_grid_step_convergence</span></code> — sweep <code class="docutils literal notranslate"><span class="pre">N_σ</span> <span class="pre">∈</span> <span class="pre">{8,</span> <span class="pre">16,</span> <span class="pre">24,</span> <span class="pre">32}</span></code>; assert max relative error decreases as <code class="docutils literal notranslate"><span class="pre">O(dx_σ²)</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_vmap_over_intensities</span></code> — vmap over 64 intensity vectors, parity with map+stack.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_edge_clipping</span></code> — <code class="docutils literal notranslate"><span class="pre">σ_i</span> <span class="pre">&lt;</span> <span class="pre">σ_grid[0]</span></code> and <code class="docutils literal notranslate"><span class="pre">σ_i</span> <span class="pre">&gt;</span> <span class="pre">σ_grid[-1]</span></code> produce finite output.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_zero_intensity_lines_inert</span></code> — zero-intensity lines don’t change spectrum.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;pytest.mark.benchmark(group=&quot;broaden&quot;)</span></code> microbench vs <code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code>.</p></li>
+</ul>
+<p><strong>Existing</strong>: <code class="docutils literal notranslate"><span class="pre">tests/test_radiation.py</span></code> (parametrize LDM mode), <code class="docutils literal notranslate"><span class="pre">tests/test_manifold.py</span></code> (LDM-path parity rtol=1e-4), <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py</span></code> synthetic corpus (composition recovery RMSE doesn’t degrade).</p>
+</section>
+<section id="risks-rollback">
+<h2>10. Risks &amp; rollback<a class="headerlink" href="#risks-rollback" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Approximation tolerance on real data.</strong> LDM error scales with <code class="docutils literal notranslate"><span class="pre">dx_σ</span></code>. Mitigation: <code class="docutils literal notranslate"><span class="pre">BroadeningMode.LDM_GAUSSIAN</span></code> defaults OFF until validated on <code class="docutils literal notranslate"><span class="pre">data/</span></code> real spectra via <code class="docutils literal notranslate"><span class="pre">scripts/validate_real_data.py</span></code>. Production CLI flows continue using PHYSICAL_DOPPLER.</p></li>
+<li><p><strong>FFT ringing near sharp Stark-broadened features.</strong> Mitigation: when any <code class="docutils literal notranslate"><span class="pre">γ_stark</span> <span class="pre">/</span> <span class="pre">σ_doppler</span> <span class="pre">&gt;</span> <span class="pre">0.3</span></code>, LDM path falls back to per-line Voigt for that subset (hybrid). Detect at host driver level (numpy-side γ_L scan over <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot.line_stark_w</span></code>).</p></li>
+<li><p><strong>jax-metal non-determinism with <code class="docutils literal notranslate"><span class="pre">at[].add()</span></code>.</strong> Mitigation: use <code class="docutils literal notranslate"><span class="pre">segment_sum</span></code> exclusively; pin unit test asserting run-to-run bit identity on Metal.</p></li>
+<li><p><strong>Rollback:</strong> revert call-site dispatch in <code class="docutils literal notranslate"><span class="pre">spectrum_model.py</span></code>, remove enum member. Kernel module remains dead code, deletable in follow-up.</p></li>
+</ul>
+</section>
+<section id="dependencies">
+<h2>11. Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Hard dep T1-1</strong> (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>): host/kernel split, <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy</span></code>.</p></li>
+<li><p><strong>Lands before T1-5</strong> (<code class="docutils literal notranslate"><span class="pre">ke4z</span></code>): T1-5’s chunking applies to T1-4’s LDM kernel.</p></li>
+<li><p><strong>Files touched:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/{kernels.py,</span> <span class="pre">host.py,</span> <span class="pre">profiles.py,</span> <span class="pre">spectrum_model.py}</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/{generator.py,</span> <span class="pre">batch_forward.py}</span></code>, new <code class="docutils literal notranslate"><span class="pre">tests/radiation/test_ldm_broaden.py</span></code>. No new third-party deps.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

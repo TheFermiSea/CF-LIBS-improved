@@ -1,0 +1,927 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADR-0004 — Ground-up jittable inversion pipeline (cflibs/jitpipe/) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ADR-0004 — Ground-up jittable inversion pipeline (<code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code>)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/adr/ADR-0004-jittable-inversion-pipeline.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adr-0004-ground-up-jittable-inversion-pipeline-cflibs-jitpipe">
+<h1>ADR-0004 — Ground-up jittable inversion pipeline (<code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code>)<a class="headerlink" href="#adr-0004-ground-up-jittable-inversion-pipeline-cflibs-jitpipe" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><strong>Status:</strong> ACCEPTED &amp; IMPLEMENTED — the ADR was accepted by starting J0; J0–J12 have since shipped (<code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code>, ~20 modules; see <a class="reference internal" href="../jitpipe/J12-status.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">docs/jitpipe/J12-status.md</span></code></span></a> for the M3 promotion harness and J9 completion). The original proposal text below (§8 start criteria, “do not start J1–J9 before §8.4”) is retained as historical record of the acceptance gate.</p></li>
+<li><p><strong>Date:</strong> 2026-06-10</p></li>
+<li><p><strong>Authors:</strong> CF-LIBS Architecture working group (Brian Squires + Opus 4.7 design team, four parallel read-only analyses 2026-06-10)</p></li>
+<li><p><strong>Inputs:</strong> four independent design analyses against worktree <code class="docutils literal notranslate"><span class="pre">w4-integration</span></code> (== <code class="docutils literal notranslate"><span class="pre">dev</span></code> tip <code class="docutils literal notranslate"><span class="pre">0720737</span></code>, Phase A scoreboard merged): (1) front-end per-stage jittability with measured padding bounds from 32 real spectra across 8 scoreboard datasets; (2) back-end per-stage jittability with device-memory sizing against <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>; (3) architecture/infrastructure/program mechanics with live adapter measurements; (4) prior-art survey + staging plan + acceptance economics. Conflicts between the analyses are resolved explicitly in §3.</p></li>
+<li><p><strong>Tracking beads:</strong> epic <code class="docutils literal notranslate"><span class="pre">jit-pipeline</span></code> with children J0–J12, specs at <a class="reference internal" href="specs/J0-skeleton-snapshot-contracts.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/J0-skeleton-snapshot-contracts.md</span></code></span></a> … <a class="reference internal" href="specs/J12-scoreboard-promotion-m3.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/J12-scoreboard-promotion-m3.md</span></code></span></a></p></li>
+<li><p><strong>Related:</strong> <a class="reference internal" href="ADR-0001-radis-jaxrts-pattern-survey.html"><span class="std std-doc">ADR-0001</span></a> (host/kernel split, unified forward kernel — this ADR extends both), specs T1-1…T1-6, <code class="docutils literal notranslate"><span class="pre">docs/jax-port/*</span></code> consultations, <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-09-overhaul/*</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-10-goalfirst/optimization-program-design.md</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/benchmarks/SCOREBOARD-2026-06-10-baseline.md</span></code></p></li>
+<li><p><strong>Citation pin:</strong> every <code class="docutils literal notranslate"><span class="pre">file:line</span></code> reference below is against <code class="docutils literal notranslate"><span class="pre">dev</span></code> commit <code class="docutils literal notranslate"><span class="pre">0720737</span></code> unless stated otherwise.</p></li>
+<li><p><strong>Scope:</strong> the decision to build a parallel, fixed-shape, end-to-end jittable (JAX) implementation of the CF-LIBS inversion pipeline targeting 3× V100S (one GPU per SLURM node), its architecture, parity contracts, staging, and promotion/deprecation criteria.</p></li>
+<li><p><strong>Out of scope / non-goals:</strong> bit-identity with the reference pipeline (tolerance contracts only, §5.4); modifying the reference pipeline (it is frozen as the parity oracle); any ML (physics-only constraint applies unchanged — ruff TID251 covers <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> automatically); multi-host <code class="docutils literal notranslate"><span class="pre">pmap</span></code> (one GPU per node ⇒ SLURM-array data parallelism suffices); the Rust native paths (reference-pipeline-only, §2 D7).</p></li>
+</ul>
+<hr class="docutils" />
+<section id="context">
+<h2>1. Context<a class="headerlink" href="#context" title="Link to this heading"></a></h2>
+<section id="the-reference-pipeline-and-its-measured-limits">
+<h3>1.1 The reference pipeline and its measured limits<a class="headerlink" href="#the-reference-pipeline-and-its-measured-limits" title="Link to this heading"></a></h3>
+<p>The production path is <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:666</span></code>): response correction → segmented wavelength calibration (<code class="docutils literal notranslate"><span class="pre">pipeline.py:488</span></code>) → <code class="docutils literal notranslate"><span class="pre">detect_and_select_lines</span></code> (<code class="docutils literal notranslate"><span class="pre">pipeline.py:337</span></code>) → Stark-n_e diagnostic (<code class="docutils literal notranslate"><span class="pre">pipeline.py:762-794</span></code>) → <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver.solve</span></code> (<code class="docutils literal notranslate"><span class="pre">pipeline.py:797-818</span></code>). It is NumPy/SciPy/Rust with data-dependent shapes everywhere before the solve. Measured facts that motivate this ADR:</p>
+<ul class="simple">
+<li><p><strong>Wall time is front-end-dominated.</strong> On bhvo2_chemcam the stage medians are calibration 1.55 s + detection/ID 0.89 s vs <strong>solve 0.01 s</strong> of 2.64 s total (<code class="docutils literal notranslate"><span class="pre">docs/benchmarks/SCOREBOARD-2026-06-10-baseline.md</span></code>). Reference throughput is 0.4–5.1 s/spectrum across datasets.</p></li>
+<li><p><strong>GPUs are idle.</strong> During identifier sweeps on vasp-01/02/03, GPU utilization was <strong>0–24 %, mean ~3 %</strong> — Amdahl-bound on the non-JAX per-spectrum fraction, with <strong>7,394 jit-cache entries</strong> accumulated because variable per-spectrum shapes (<code class="docutils literal notranslate"><span class="pre">n_lines_detected</span></code>) force recompiles (<code class="docutils literal notranslate"><span class="pre">docs/adr/ADR-0001-empirical-analysis-2026-05-13.md:35-36</span></code>). Incremental kernel ports cannot fix an Amdahl + shape-instability problem.</p></li>
+<li><p><strong>The scoreboard’s binding constraint is recall</strong> (R 0.27–0.58 vs P 0.89–1.00 across datasets; <code class="docutils literal notranslate"><span class="pre">SCOREBOARD-2026-06-10-baseline.md:16-27</span></code>), and the audit names forward-fitting / multi-line intensity coherence as the missing structural physics (<code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-09-overhaul/00-synthesis.md:23,80</span></code>, <code class="docutils literal notranslate"><span class="pre">03-identification.md:19,102</span></code>) — which needs 10³–10⁴ forward evaluations per spectrum, infeasible on the CPU reference.</p></li>
+<li><p><strong>The existing lax solve path never runs in production.</strong> The geological preset sets <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">closure_mode=&quot;oxide&quot;</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:60-63,144-146</span></code>) and wires Stark diagnostics into the solve (<code class="docutils literal notranslate"><span class="pre">pipeline.py:762-794</span></code>); <em>either</em> condition forces the Python reference loop — <code class="docutils literal notranslate"><span class="pre">solve()</span></code> only routes to <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> when <code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">self.saha_boltzmann_graph</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">diags</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:1592-1613</span></code>). The lax body jits the legacy algorithm (per-element-centered common-slope plane + 1-atm pressure-balance n_e) that the 2026-06-09 audit demoted (audit 02 finding F2: pressure balance “physically invalid”, <code class="docutils literal notranslate"><span class="pre">iterative.py:1751-1759</span></code>; SB-graph validated RMSE 8→4.29 on BHVO-2).</p></li>
+</ul>
+</section>
+<section id="the-three-motivations-plus-one-derived-benefit">
+<h3>1.2 The three motivations (plus one derived benefit)<a class="headerlink" href="#the-three-motivations-plus-one-derived-benefit" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Batched throughput.</strong> Full-population scoreboard/campaign evaluation: the corpus (~1,264 registered spectra) costs 45–75 CPU-minutes serial today; campaigns subsample 12-of-N per dataset and inherit sampling variance in the fitness signal. A batched GPU pipeline removes that variance at equal cost (§8.3).</p></li>
+<li><p><strong>Forward-eval scale for identification.</strong> The prior-art ceiling is 2.5×10⁷ forward evals/spectrum on a 2013 Tesla K40 (Gornushkin &amp; Völker 2022, §9). At ~10⁵–10⁶ fused forward evals/s on a V100S, 10⁴ evals/spectrum ≈ 10–100 ms — this is the GPU mode of the Campaign-3 identification endgame.</p></li>
+<li><p><strong>Differentiability.</strong> Joint gradient solve over (T, n_e, composition), HMC over the full model, and gradient knob-tuning of continuous pipeline parameters — none possible through the host SciPy/greedy front-end (§6).</p></li>
+<li><p><em>(Derived)</em> <strong>Determinism.</strong> Fixed shapes + seeded counter-based PRNG + <code class="docutils literal notranslate"><span class="pre">--xla_gpu_deterministic_ops=true</span></code> turn scoreboard deltas into pure signal (§5.5).</p></li>
+</ol>
+</section>
+<section id="premise-inversion-of-the-prior-consultations">
+<h3>1.3 Premise inversion of the prior consultations<a class="headerlink" href="#premise-inversion-of-the-prior-consultations" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">docs/jax-port/line-detection-consultation.md</span></code> (2026-05-12) ruled <strong>against</strong> porting <code class="docutils literal notranslate"><span class="pre">find_peaks</span></code> and the matching logic. Its verdict was explicitly premised on B=1 single-spectrum CPU work (“For B=1 N=4096, mask representation is plenty fast”; “Unless you are running this pipeline in a loop thousands of times… The exception: batched analysis (B=1000 spectra) or differentiation”, lines 43-46, 85-89). The motivations above are exactly the carve-out both consultants named. The consultation’s <em>taxonomy</em> of hard parts (variable-length peaks, prominence semantics, greedy used-sets) remains the correct hazard map and is addressed stage-by-stage in §4 and the J-specs. The same inversion applies to the optimization-program design’s QDax ruling (“the bottleneck is the CPU pipeline (seconds/spectrum, not jittable)”, <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-10-goalfirst/optimization-program-design.md</span></code> §1) — this ADR removes that bottleneck rather than working around it.</p>
+</section>
+<section id="what-already-exists-assets-the-rewrite-builds-on">
+<h3>1.4 What already exists (assets the rewrite builds on)<a class="headerlink" href="#what-already-exists-assets-the-rewrite-builds-on" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Asset</p></th>
+<th class="head"><p>Location</p></th>
+<th class="head"><p>State</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Unified jittable forward model (3-stage Saha+IPD, per-line widths, Gaussian/Voigt, slab RT)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py:763</span></code> (<code class="docutils literal notranslate"><span class="pre">forward_model</span></code>); static/traced split documented at <code class="docutils literal notranslate"><span class="pre">kernels.py:28-38</span></code></p></td>
+<td><p>Done (T1-2)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Memory-safe chunked forward (<code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> + checkpoint + overlap-and-add)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kernels.py:1205</span></code> (<code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code>), <code class="docutils literal notranslate"><span class="pre">:1411</span></code>, <code class="docutils literal notranslate"><span class="pre">:927</span></code></p></td>
+<td><p>Done (T1-5)</p></td>
+</tr>
+<tr class="row-even"><td><p>LDM broadening (19× at N_lines=1500; <strong>default OFF pending real-data validation</strong>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/ldm.py</span></code></p></td>
+<td><p>Done (T1-4), validation gap is risk R4</p></td>
+</tr>
+<tr class="row-odd"><td><p>Device-resident padded atomic data, no-sqlite-inside-loop</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py:381</span></code> (<code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code>) and <code class="docutils literal notranslate"><span class="pre">cflibs/core/jax_runtime.py:430</span></code> (<code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>, pytree at <code class="docutils literal notranslate"><span class="pre">:553</span></code>) — <strong>two snapshot types; J0 unifies</strong></p></td>
+<td><p>Done (T1-1/T1-3)</p></td>
+</tr>
+<tr class="row-even"><td><p>lax.while_loop solve with parity/vmap/grad-smoke tests</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py:721,2227</span></code>; <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_iterative_lax.py:183-204,273-287,344-356,415-429</span></code></p></td>
+<td><p>Done (T1-3) but never production-routed (§1.1)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Bit-exact JAX twins of the fit kernels</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_saha_correct_kernel</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:2675</span></code>), <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:2698</span></code>), <code class="docutils literal notranslate"><span class="pre">batched_boltzmann_fit</span></code> (<code class="docutils literal notranslate"><span class="pre">physics/boltzmann_jax.py:111-200</span></code>)</p></td>
+<td><p>Done</p></td>
+</tr>
+<tr class="row-even"><td><p>vmap batch generation pattern</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py:13</span></code></p></td>
+<td><p>Done</p></td>
+</tr>
+<tr class="row-odd"><td><p>Seed JAX kernels in the identifier</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_jax_peaks_within_tolerance</span></code> (<code class="docutils literal notranslate"><span class="pre">identify/line_detection.py:76</span></code>), <code class="docutils literal notranslate"><span class="pre">_jax_kdet_candidate_counts</span></code> (<code class="docutils literal notranslate"><span class="pre">:118</span></code>), pure-JAX alias/comb/correlation ports per <code class="docutils literal notranslate"><span class="pre">docs/jax-port/*</span></code></p></td>
+<td><p>Done (seeds, not the rewrite)</p></td>
+</tr>
+<tr class="row-even"><td><p>Joint optimizer parameterization (log-T, log10-n_e, softmax simplex)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/joint_optimizer.py:16-23,42-48</span></code></p></td>
+<td><p>Done (shipped, physics-legal)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Neither surveyed JAX spectroscopy code (ExoJAX2, jaxrts — §9) has shipped an inversion pipeline; CF-LIBS’s <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> with vmap+grad tests is already <em>ahead</em> of both on the inversion side. The rewrite extends a lead, it does not chase one.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="decision">
+<h2>2. Decision<a class="headerlink" href="#decision" title="Link to this heading"></a></h2>
+<p><strong>Build <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> — a parallel, fixed-shape, end-to-end jittable implementation of the inversion pipeline — promoted (or abandoned) strictly by scoreboard criteria.</strong> Eight binding sub-decisions:</p>
+<ul class="simple">
+<li><p><strong>D1 — Parallel implementation, not a port.</strong> New package <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> (layout in §5.1), module-per-stage, mirroring the reference stage graph. <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> (<code class="docutils literal notranslate"><span class="pre">pipeline.py:666</span></code>) is untouched; no <code class="docutils literal notranslate"><span class="pre">use_jax</span></code> flag inside the reference (the kwarg-flag anti-pattern was already rejected in <code class="docutils literal notranslate"><span class="pre">docs/jax-port/iterative-boltzmann-consultation.md</span></code> Q1). The two implementations meet at exactly two points: the scoreboard CLI dispatch (<code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">{reference,jit}</span></code>, §5.4) and the parity tests.</p></li>
+<li><p><strong>D2 — Fixed shapes end-to-end.</strong> Padded arrays + validity masks, fixed K peaks / L lines / E elements per bucket, all raggedness handled by masks inside the jit graph, all failure signaling by quality flags instead of exceptions (<code class="docutils literal notranslate"><span class="pre">pipeline.py:751-752</span></code>’s <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> becomes a <code class="docutils literal notranslate"><span class="pre">failed</span></code> mask interpreted host-side). This is the non-negotiable design rule derived from the 7,394-cache-entry / 3 %-GPU finding (§1.1).</p></li>
+<li><p><strong>D3 — One-way dependency.</strong> <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code> may import <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.{kernels,ldm,host}</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs.core.jax_runtime</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.common</span></code> dataclasses, and the preset constants at <code class="docutils literal notranslate"><span class="pre">pipeline.py:42-79</span></code> (single source of preset truth — never copied). Nothing outside <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code> imports <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code>. Enforced by an import-hygiene test mirroring <code class="docutils literal notranslate"><span class="pre">tests/test_jax_import_hygiene.py</span></code> (the pattern is load-bearing: <code class="docutils literal notranslate"><span class="pre">kernels.py:72-78</span></code>).</p></li>
+<li><p><strong>D4 — Host/kernel boundary per ADR-0001, applied to the whole pipeline.</strong> SQLite, I/O, CLI/config, diagnostics-dict and warning-string assembly, CCD-seam <em>detection caching</em>, dynesty drivers, Rust paths, <code class="docutils literal notranslate"><span class="pre">runtime/</span></code>/<code class="docutils literal notranslate"><span class="pre">pds/</span></code>/<code class="docutils literal notranslate"><span class="pre">hpc/</span></code>, and the analytical <code class="docutils literal notranslate"><span class="pre">uncertainties</span></code> UQ path stay host-side permanently (full list in §5.1.3). Kernels are pure functions over <code class="docutils literal notranslate"><span class="pre">(PipelineSnapshot,</span> <span class="pre">PipelineParams,</span> <span class="pre">batch</span> <span class="pre">arrays)</span></code> returning fixed-shape pytrees of arrays/masks/uint8 reason codes; thin host wrappers reconstitute today’s result dataclasses (<code class="docutils literal notranslate"><span class="pre">WavelengthCalibrationResult</span></code>, <code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code>, <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> at <code class="docutils literal notranslate"><span class="pre">iterative.py:81</span></code>) so downstream consumers and parity tests see identical types.</p></li>
+<li><p><strong>D5 — Exactness-first front-end; re-derived back-end estimator.</strong> Decision-bearing discrete front-end logic (peak identity, greedy matching, tie-breaks, gate bookkeeping) is ported with <strong>exact reference semantics</strong> as fixed-shape scans — no “parallel approximations” (§3 C1, C2). The back-end production estimator is <strong>re-derived</strong> as a differentiable joint weighted-least-squares solve whose Gauss–Newton step 0 is algebraically identical to the current SB-graph (§3 C4, §6.1) — with the extended fixed-iteration loop kept as initializer and parity anchor.</p></li>
+<li><p><strong>D6 — Promotion by scoreboard, deprecation in stages.</strong> Promotion criteria in §8.2 (M3). Pre-promotion, the reference is the contract: any divergence is presumed a jit bug until adjudicated in a divergence ledger. Post-promotion the reference remains the parity oracle (<code class="docutils literal notranslate"><span class="pre">--pipeline=reference</span></code>) for ≥2 releases, receives bug fixes only (each paired with a parity-test update), then demotes to a validation oracle; final removal requires an independent oracle (NIST parity + golden corpus) and a ROADMAP entry.</p></li>
+<li><p><strong>D7 — Physics-only constraint unchanged.</strong> <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code> lives under <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>, so ruff TID251 bans <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code> etc. automatically; smooth relaxations are explicit <code class="docutils literal notranslate"><span class="pre">jnp</span></code> expressions or reuse the shipped <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.softmax_closure</span></code>. The Rust comb/k-det paths (<code class="docutils literal notranslate"><span class="pre">identify/line_detection.py:33-46</span></code>) serve the reference pipeline only — PyO3 callbacks inside jit kill fusion and vmap; the jit pipeline uses the pure-JAX ports.</p></li>
+<li><p><strong>D8 — fp64 default, policy-gated fp32 island.</strong> §5.3. x64 end-to-end (V100S fp64 = ½ fp32 rate, and the broadening stage is memory-shaped, not FLOP-starved); fp32 opt-in only for the profile-matrix values and identify-stage template scoring, behind a Tier-B shadow gate.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="conflict-resolutions-between-the-four-analyses">
+<h2>3. Conflict resolutions between the four analyses<a class="headerlink" href="#conflict-resolutions-between-the-four-analyses" title="Link to this heading"></a></h2>
+<p>The four analyses were tasked independently and disagree in six places. Resolutions, with reasons, are binding on the J-specs:</p>
+<ul class="simple">
+<li><p><strong>C1 — Peak detection: exact scipy semantics (Analysis 1) vs approximate vision-NMS (Analysis 4 §1.5, J2: Jaccard ≥ 0.90).</strong> <em>We choose exact</em> (Analysis 1): plateau-aware local maxima, exact <code class="docutils literal notranslate"><span class="pre">wlen=None</span></code> prominence via range-query sparse tables, scipy’s greedy distance-NMS as a <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code>, exact <code class="docutils literal notranslate"><span class="pre">peak_widths</span></code>. Reasons: (a) every downstream stage keys off <strong>peak identity</strong> — a 10 % peak-set drift makes Tier-D decision parity (§5.4) untriageable; (b) Analysis 1 showed exactness is achievable in fixed shapes at bounded cost (5–7 pd); (c) the contract “byte-identical index lists” turns the classic silent-divergence trap (plateau/tie semantics, flagged by the consultation doc at <code class="docutils literal notranslate"><span class="pre">line-detection-consultation.md:119-123</span></code>) into a hard test. Jaccard ≥ 0.995 with per-diff triage is the documented <em>fallback</em> contract only.</p></li>
+<li><p><strong>C2 — Wavelength-calibration hypothesis scoring: parity-anchored parallel RANSAC (Analysis 1) vs MAGSAC++ sigma-marginalized soft consensus (Analysis 4 §1.4/J3).</strong> <em>We choose Analysis 1 for the build that must pass parity</em>: exhaustive/stratified vmapped hypothesis evaluation, scoring by the unique-inlier-count upper bound, <strong>exact greedy one-to-one dedupe (<code class="docutils literal notranslate"><span class="pre">_dedupe_one_to_one</span></code>, <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:209-230</span></code>) run only for the winning hypothesis and refine rounds</strong> as a <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code>. Reasons: the ye6t coverage-gate regression fixtures (ChemCam VNIR / BHVO-2 877 nm Al doublet) demand close behavioral parity, and MAGSAC++ changes inlier semantics, so it would have to be revalidated against the scoreboard rather than the reference. MAGSAC++ IRLS is retained as an <strong>optional differentiable variant behind the same kernel interface</strong> for the gradient-tuning path (J2 §opt, J11) — it is the right tool there, not for parity.</p></li>
+<li><p><strong>C3 — Wavelength-axis shape policy: static pad buckets {4096…65536} (Analysis 1) vs exact per-instrument shapes (Analysis 3).</strong> <em>We choose exact shapes</em> (Analysis 3): the grid length is measured constant within each dataset/instrument (§5.2), so one bucket per distinct grid (7 cover all 10 datasets) with zero pad waste; power-of-two padding would waste 22–64 % on silva2022/emslibs2019. A pad <em>ladder</em> exists only for genuinely heterogeneous streams (DAQ runtime). Analysis 1’s measured caps for the <strong>other</strong> axes (P_max, L_max, K_pair, E_max, …) are adopted as the padding-constants table (§5.2) — they are measurement-backed where Analysis 3/4’s K=512/128 peak caps would truncate (2,350 peaks observed on emslibs2019).</p></li>
+<li><p><strong>C4 — Solve: reuse/extend the lax while_loop (Analysis 3 <code class="docutils literal notranslate"><span class="pre">solve.py</span></code> re-host) vs re-derive as joint WLS (Analysis 2 §8) vs research-only joint solve (Analysis 4 J8).</strong> <em>We adopt Analysis 2’s verdict</em>: extend the lax path’s <strong>component kernels and snapshot pattern verbatim</strong> (they are correct and tested), but the production jit estimator is the <strong>joint WLS Gauss–Newton solve</strong> with n_e pinned to the Stark measurement, and the dynamic <code class="docutils literal notranslate"><span class="pre">while_loop</span></code> is replaced by a <strong>fixed-K <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> with converged-state freezing</strong> serving as initializer and parity anchor. Reasons: (a) the lax path is ~70 % of the <em>legacy</em> algorithm but ~40 % of the <em>production</em> algorithm and 0 % of the differentiability goal (§1.1; <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code> ILR default at <code class="docutils literal notranslate"><span class="pre">iterative.py:1046-1050,614-655</span></code> serializes under vmap); (b) audit 02-F10 already recommends “keep the iterative solver as initializer; promote the closed-form/joint estimator” (<code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-09-overhaul/02-inversion-solver.md:322-346</span></code>); (c) the GN-step-0 ≡ SB-graph algebraic identity (§6.1) gives an exact parity anchor, so re-derivation is <em>not</em> a parity leap. We deliberately do <strong>not</strong> keep three solve drivers: scan + joint GN only; the while_loop variant is superseded (Analysis 3’s two-variant proposal is narrowed accordingly).</p></li>
+<li><p><strong>C5 — Throughput gate: ≥10× median spectra/s (Analysis 3 promotion criterion 4) vs ≥50 spectra/s ≈ ≥100× (Analysis 4 M2).</strong> <em>Both, at different gates</em>: M2 (engineering milestone) targets ≥50 spectra/s/GPU amortized over ≥1,000 spectra including compile; M3 (promotion) requires the hard floor ≥10× batched median vs the 0.4–5.1 s/spectrum baseline plus CPU single-spectrum ≤2× reference. M2 missing 50 but clearing 10× does not block promotion; it triggers a gap bead.</p></li>
+<li><p><strong>C6 — Element-axis bound: Analysis 1 measured ≤15 candidate elements (32-spectrum corpus, csa 15) while Analysis 3 quotes csa_planetary as 16 truth + 5 confounders.</strong> Not worth re-adjudicating: <strong>E_max = 32</strong> covers either with headroom; species axis S_max = 48 (Analysis 3 measured 30 species for a 15-element set). The padding-invariance test (§5.4) makes the exact constant a non-risk; K-saturation counters (overflow flags) are mandatory outputs on every padded axis.</p></li>
+</ul>
+<p>Effort-unit reconciliation: Analyses 1–2 estimate in person-days (front-end 33–46 pd; back-end ≈27–44 pd), Analysis 4 in agent-sessions (36–50). Repo history (six T1 beads in ~1–2 days of parallel agents) supports ~2–3× agent leverage over person-day estimates; both are quoted in §8.3 and the truth will be measured at M1.</p>
+</section>
+<hr class="docutils" />
+<section id="per-stage-jittability-summary">
+<h2>4. Per-stage jittability summary<a class="headerlink" href="#per-stage-jittability-summary" title="Link to this heading"></a></h2>
+<p>Full detail (every breaking construct with file:line, kernel sketches, measured bounds) lives in the J-specs; this table is the decision-level summary. “Contract” = what must agree with the reference on identical inputs; tiers per §5.4.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Stage (reference site)</p></th>
+<th class="head"><p>Jit-breaking constructs (headline)</p></th>
+<th class="head"><p>Fixed-shape redesign</p></th>
+<th class="head"><p>Tolerance contract</p></th>
+<th class="head"><p>Effort / risk</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Baseline + noise (<code class="docutils literal notranslate"><span class="pre">preprocess/preprocessing.py:619</span></code> <code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code> baselines; <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code> <code class="docutils literal notranslate"><span class="pre">:320</span></code>)</p></td>
+<td><p>scipy <code class="docutils literal notranslate"><span class="pre">median_filter</span></code>/<code class="docutils literal notranslate"><span class="pre">percentile_filter</span></code>/<code class="docutils literal notranslate"><span class="pre">sparse.spsolve</span></code>; ALS early-break (<code class="docutils literal notranslate"><span class="pre">:272</span></code>); shrinking sigma-clip arrays (<code class="docutils literal notranslate"><span class="pre">:340-349</span></code>)</p></td>
+<td><p>SNIP = direct port (fixed 40 iters); MEDIAN/PERCENTILE = sliding-window sort, row-chunked <code class="docutils literal notranslate"><span class="pre">lax.map</span></code>; ALS = fixed-20 IRLS + banded LDLᵀ scan; noise = masked 3-iter sigma-clip</p></td>
+<td><p>SNIP/MEDIAN/PCTL rtol 1e-12; ALS ≤1e-6·scale(y); noise exact</p></td>
+<td><p>3–4.5 pd / LOW (fp64 mandatory)</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Peak detection (<code class="docutils literal notranslate"><span class="pre">preprocessing.py:524</span></code> <code class="docutils literal notranslate"><span class="pre">detect_peaks</span></code>; <code class="docutils literal notranslate"><span class="pre">identify/line_detection.py:2424</span></code> <code class="docutils literal notranslate"><span class="pre">_find_peaks</span></code> — two parameterizations, one kernel)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code> variable-length output; non-local prominence; greedy height-order distance-NMS; plateau midpoints; <code class="docutils literal notranslate"><span class="pre">peak_widths</span></code> try/except (<code class="docutils literal notranslate"><span class="pre">:474-481</span></code>)</p></td>
+<td><p>run-boundary plateau maxima; exact prominence via (N,⌈log2N⌉) range-query sparse tables; NMS as height-sorted keep/suppress <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> (P_cand_max=8192); widths from prominence bases; <code class="docutils literal notranslate"><span class="pre">(P_max,)</span></code> indices + mask + count</p></td>
+<td><p><strong>byte-identical index lists</strong> vs scipy on corpus + property tests (fallback Jaccard ≥0.995 w/ triage); board ΔF1 ≤ 0.005</p></td>
+<td><p>5–7 pd / MED (plateau/tie semantics)</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Wavelength calibration (<code class="docutils literal notranslate"><span class="pre">preprocess/wavelength_calibration.py:1351</span></code> segmented; <code class="docutils literal notranslate"><span class="pre">:602</span></code> global; RANSAC <code class="docutils literal notranslate"><span class="pre">:256-356</span></code>; gates <code class="docutils literal notranslate"><span class="pre">:96-133,976-1078</span></code>; seams <code class="docutils literal notranslate"><span class="pre">:829</span></code>)</p></td>
+<td><p>600-iter host RNG RANSAC w/ rejection sampling (<code class="docutils literal notranslate"><span class="pre">:240-253</span></code>) + greedy <code class="docutils literal notranslate"><span class="pre">_dedupe_one_to_one</span></code> inside hypothesis loop (<code class="docutils literal notranslate"><span class="pre">:209-230,285</span></code>); re-entrant degrade-to-shift recursion (<code class="docutils literal notranslate"><span class="pre">:1053,1495</span></code>); Python segment loop (<code class="docutils literal notranslate"><span class="pre">:1210</span></code>); <code class="docutils literal notranslate"><span class="pre">fits.sort</span></code> model select (<code class="docutils literal notranslate"><span class="pre">:809</span></code>); seam clamp cascade (<code class="docutils literal notranslate"><span class="pre">:1276-1286</span></code>)</p></td>
+<td><p>banded pairs (P_max=2048, K_pair=48); shift model evaluated exhaustively (every live pair = 1-pt hypothesis); affine/quad H=4096 stratified counter-PRNG hypotheses, H-chunked; upper-bound scoring + exact dedupe scan on winner only; model lattice replaces recursion; segment vmap (SEG_max=16); centered-x normal equations (deliberate deviation, SVD-conditioning)</p></td>
+<td><p>gate outcomes equal (excl. ±5 %-of-threshold cases); corrected axis max</p></td>
+<td><p>Δλ</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Line matching + gates (<code class="docutils literal notranslate"><span class="pre">identify/line_detection.py:1099</span></code> <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>; greedy matcher <code class="docutils literal notranslate"><span class="pre">:1919-1987</span></code>; veto <code class="docutils literal notranslate"><span class="pre">:2287</span></code>; observation build <code class="docutils literal notranslate"><span class="pre">:786</span></code>; intensity <code class="docutils literal notranslate"><span class="pre">:459</span></code>)</p></td>
+<td><p>SQL-per-element + sorted ranking (<code class="docutils literal notranslate"><span class="pre">:1502,1550-1579</span></code>); element dicts; mutable <code class="docutils literal notranslate"><span class="pre">used</span></code> sets; <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> tie-breaks (<code class="docutils literal notranslate"><span class="pre">:1841-1848</span></code>); cross-element peak ownership (<code class="docutils literal notranslate"><span class="pre">:843-860</span></code>); gated-without-consuming-peak (<code class="docutils literal notranslate"><span class="pre">:1958-1975</span></code>); retroactive <code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">observations[...]</span></code> (<code class="docutils literal notranslate"><span class="pre">:971</span></code>)</p></td>
+<td><p>FrontEndSnapshot (E_max=32, K_lines=64, K_comb=32); kdet generalizes existing <code class="docutils literal notranslate"><span class="pre">_jax_kdet_candidate_counts</span></code> (<code class="docutils literal notranslate"><span class="pre">:118</span></code>); comb greedy as 32-step scan carrying used-peak bitmask, vmapped over (S_shift×E_max); quantized-isclose lexicographic selection; ownership scan in (f1,matched)-rank order; drop rule = mask zeroing (peaks stay claimed, exact port of <code class="docutils literal notranslate"><span class="pre">:961-963</span></code>); trapezoid + FWHM-fallback vectorized; ObservationBatch (OBS_max=512) + warning bitmask</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">applied_shift_nm</span></code> exact; accepted/kept element sets identical; obs line-key sets identical (floor Jaccard ≥0.98 triaged); intensities/σ rtol 1e-10; n_gated/dropped maps equal; expected ΔF1 = 0, gate ≤ 0.005; BHVO-2 Sn/Th canaries</p></td>
+<td><p>12–17 pd / HIGH concentration of one-line-to-get-wrong logic — <strong>no semantic drift allowed in this stage</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Line selection (<code class="docutils literal notranslate"><span class="pre">physics/line_selection.py:176-239</span></code>; isolation <code class="docutils literal notranslate"><span class="pre">:362-389</span></code>; top-K <code class="docutils literal notranslate"><span class="pre">:266-290</span></code>)</p></td>
+<td><p>variable-length lists; Python stable sort + truncation; reason strings</p></td>
+<td><p>pure mask transform on (B,L); masked pairwise isolation; <code class="docutils literal notranslate"><span class="pre">lax.top_k</span></code> K=20 with (score, −index) lexicographic packing; uint8 reason codes</p></td>
+<td><p>exact set equality (deterministic index tiebreak); scores rtol 1e-12</p></td>
+<td><p>1–2 pd / LOW</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Boltzmann fits + SB-graph (<code class="docutils literal notranslate"><span class="pre">physics/boltzmann.py:326-842</span></code>; plane <code class="docutils literal notranslate"><span class="pre">iterative.py:1349-1452</span></code>; SB-graph <code class="docutils literal notranslate"><span class="pre">:1454-1539,2776-2886</span></code>; weight cap <code class="docutils literal notranslate"><span class="pre">:2911-2944</span></code>)</p></td>
+<td><p>sigma-clip mask shrinkage + breaks; RANSAC host RNG; <code class="docutils literal notranslate"><span class="pre">np.linalg.lstsq</span></code> on dynamic (N_rows,1+E); masked <code class="docutils literal notranslate"><span class="pre">np.median</span></code></p></td>
+<td><p>sigma-clip → fixed-K masked reweighting over <code class="docutils literal notranslate"><span class="pre">batched_boltzmann_fit</span></code>; Huber fixed-K IRLS; RANSAC → vectorized trials (jax.random); <strong>SB-graph = <code class="docutils literal notranslate"><span class="pre">_saha_correct_kernel</span></code> + <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code> w=1 via arrow-matrix Schur identity</strong> (independently confirmed: <code class="docutils literal notranslate"><span class="pre">02-inversion-solver.md:378</span></code>); sort-based masked median</p></td>
+<td><p>SB-graph slope/intercepts rtol 1e-10 vs lstsq (algebraic identity, property-tested incl. degenerate fixtures); T rtol 1e-8; sigma-clip mask bit-equal off-boundary; RANSAC self-regression only (RNG streams differ by construction)</p></td>
+<td><p>3–5 pd / LOW-MED</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Self-absorption, observable-gated (<code class="docutils literal notranslate"><span class="pre">physics/self_absorption_observable.py:354-427</span></code>; doublet root <code class="docutils literal notranslate"><span class="pre">self_absorption.py:424-447</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">brentq</span></code>; combinatorial pair discovery; order-dependent first-pair-wins (<code class="docutils literal notranslate"><span class="pre">:480</span></code>); float-keyed dicts</p></td>
+<td><p>pair discovery is atomic-data-static → snapshot (P,2) pairs + ρ, r_thin; fixed-60-step bisection (≪ brentq xtol 1e-6); claim resolution via scatter-min over pair indices; Planck ceiling + 64-term COG series port verbatim; suspect pass = masked median + where</p></td>
+<td><p>τ atol 1e-6; corrected I rtol 1e-6; corrected/suspect/cleared sets identical under documented pair-priority contract; counters exact</p></td>
+<td><p>3–5 pd / LOW-MED (adversarial shared-upper-level triplet fixture)</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Stark n_e (<code class="docutils literal notranslate"><span class="pre">physics/stark_ne.py:394-663</span></code>; pinned-Gaussian Voigt fit <code class="docutils literal notranslate"><span class="pre">:257-313</span></code>; solver coupling <code class="docutils literal notranslate"><span class="pre">iterative.py:1250-1280</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scipy.optimize.least_squares</span></code>; <strong>DB query inside candidate loop</strong> (<code class="docutils literal notranslate"><span class="pre">:332-371,356</span></code>); half-max crossing loops; irregular windows</p></td>
+<td><p>Stark metadata → snapshot (28,331/28,727 lines have <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>; literature-grade <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> = 244 — measured); blend gate precomputed; fixed (C, W=64) raw-sample windows; vmapped LM, K≈20, 5×5 damped normal eqs, exp-transform feasibility; gates→masks, top_k 5; masked median/MAD + cohort trim; per-iteration width-law inversion drops into the solve body</p></td>
+<td><p>per-line n_e rtol 1e-3 when both fitters converge (contract on solution, not optimizer path); median rtol 1e-3; candidate-set equality under documented tiebreak; percentile = exact np.percentile interpolation</p></td>
+<td><p>5–10 pd / <strong>MED-HIGH</strong> (window-extraction parity; LM vs scipy-trf on marginal profiles handled by the same gates)</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Closure, 6 modes + keystone gate (<code class="docutils literal notranslate"><span class="pre">physics/closure.py:537-1033</span></code>; gate <code class="docutils literal notranslate"><span class="pre">:495-535</span></code>; lax callbacks <code class="docutils literal notranslate"><span class="pre">iterative.py:567-655</span></code>)</p></td>
+<td><p>dict plumbing; <code class="docutils literal notranslate"><span class="pre">sorted()</span></code> ordering; missing-U <code class="docutils literal notranslate"><span class="pre">continue</span></code>; <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code> for ilr/pwlr/dirichlet (serializes under vmap, non-differentiable)</p></td>
+<td><p>masked linear algebra over (B,E); lift existing lax closures (std/matrix/oxide) one batch axis; <strong>ILR ≡ standard</strong> (identity round-trip, audit-confirmed <code class="docutils literal notranslate"><span class="pre">02-inversion-solver.md:364-365</span></code>) with the 1e-10 clip for parity; PWLR closed-form; Dirichlet <code class="docutils literal notranslate"><span class="pre">where</span></code>; keystone gate in-body (one comparison)</p></td>
+<td><p>std/matrix/oxide rtol 1e-12; ilr/pwlr rtol 1e-10 + ILR≡standard equivalence property; degeneracy flag exact</p></td>
+<td><p>1–2 pd / LOW</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Iterative solve → joint estimator (<code class="docutils literal notranslate"><span class="pre">iterative.py:1783-1964</span></code> Python; <code class="docutils literal notranslate"><span class="pre">:721-863</span></code> lax; routing <code class="docutils literal notranslate"><span class="pre">:1592-1613</span></code>)</p></td>
+<td><p>host seams: SB-graph + Stark routing; <code class="docutils literal notranslate"><span class="pre">pure_callback</span></code> ILR default; pressure-balance-only lax n_e (<code class="docutils literal notranslate"><span class="pre">:2358-2364</span></code>); host keystone gate (<code class="docutils literal notranslate"><span class="pre">:2344-2365</span></code>); corona weighting deferred (<code class="docutils literal notranslate"><span class="pre">:810-818</span></code>); IPD formula drift (<code class="docutils literal notranslate"><span class="pre">:778-781</span></code> vs <code class="docutils literal notranslate"><span class="pre">plasma/saha_boltzmann.py:542+</span></code>); non-differentiable dynamic while_loop; <code class="docutils literal notranslate"><span class="pre">_LaxFallback</span></code> exceptions (<code class="docutils literal notranslate"><span class="pre">:213-220</span></code>)</p></td>
+<td><p>fixed-K scan (max_iterations=20) w/ converged-freeze, SB-graph in-body (row 6 kernel), Stark branch (row 8), native ILR, in-body keystone, unified IPD, validity flags — <strong>as initializer</strong>; production estimator = joint WLS GN/LM over θ=(lnT, α_ILR, β), n_e pinned to Stark w/ MAD penalty (§6.1)</p></td>
+<td><p>inherited rtol 1e-5 vs <code class="docutils literal notranslate"><span class="pre">_solve_python</span></code> incl. SB-graph+oxide+Stark configs current tests cannot cover; GN-step-0 ≡ SB-graph rtol 1e-10; converged (T,C) vs reference on 10 datasets: T rtol 1e-3, per-element C atol 0.5 wt %; covariance vs FD-Hessian rtol 1e-4; grad-finiteness as <strong>hard</strong> asserts</p></td>
+<td><p>10–15 pd / MED</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>Forward model</p></td>
+<td><p>— (already jittable)</p></td>
+<td><p>thin <code class="docutils literal notranslate"><span class="pre">forward.py</span></code> wrapper over <code class="docutils literal notranslate"><span class="pre">kernels.py:763/:1205</span></code> and LDM — <strong>no physics duplication</strong>; <code class="docutils literal notranslate"><span class="pre">kernels.py</span></code> stays the single source of truth (<code class="docutils literal notranslate"><span class="pre">kernels.py:1-26</span></code>)</p></td>
+<td><p>existing kernel contracts (rtol 1e-5, <code class="docutils literal notranslate"><span class="pre">kernels.py:856</span></code>)</p></td>
+<td><p>0 (reuse)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Combined stage effort ≈ 60–90 pd; with program glue (J0, J8–J12) ≈ 85–130 pd ≈ 40–60 agent-sessions (§3 reconciliation, §8.3).</p>
+</section>
+<hr class="docutils" />
+<section id="architecture">
+<h2>5. Architecture<a class="headerlink" href="#architecture" title="Link to this heading"></a></h2>
+<section id="package-layout-boundaries-and-the-snapshot">
+<h3>5.1 Package layout, boundaries, and the snapshot<a class="headerlink" href="#package-layout-boundaries-and-the-snapshot" title="Link to this heading"></a></h3>
+<section id="layout">
+<h4>5.1.1 Layout<a class="headerlink" href="#layout" title="Link to this heading"></a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cflibs</span><span class="o">/</span><span class="n">jitpipe</span><span class="o">/</span>
+  <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># public API: run_batch(), run_one(), PipelineSnapshot, PipelineParams, StaticConfig</span>
+  <span class="n">snapshot</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># PipelineSnapshot builders (HOST-ONLY: SQLite here, never in kernels)</span>
+  <span class="n">params</span><span class="o">.</span><span class="n">py</span>       <span class="c1"># PipelineParams pytree (ALL continuous knobs traced) + StaticConfig (hashable statics = jit cache key)</span>
+  <span class="n">preprocess</span><span class="o">.</span><span class="n">py</span>   <span class="c1"># baseline, noise, response multiply                     (row 1)</span>
+  <span class="n">detect</span><span class="o">.</span><span class="n">py</span>       <span class="c1"># exact find_peaks kernel, both parameterizations        (row 2)</span>
+  <span class="n">calibrate</span><span class="o">.</span><span class="n">py</span>    <span class="c1"># segmented RANSAC wavelength calibration                (row 3)</span>
+  <span class="n">identify</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># line matching + gates; kdet/comb/ALIAS/NNLS scoring    (row 4; reuses docs/jax-port FISTA-NNLS/ALIAS/comb designs)</span>
+  <span class="n">fit</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># selection, Boltzmann/SB-graph, closure                 (rows 5, 6, 9)</span>
+  <span class="n">selfabs</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># observable self-absorption                             (row 7)</span>
+  <span class="n">stark</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># Stark n_e vmapped LM                                   (row 8)</span>
+  <span class="n">solve</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># fixed-K scan initializer + joint WLS estimator         (row 10)</span>
+  <span class="n">forward</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># thin wrapper over radiation/kernels + LDM              (row 11)</span>
+  <span class="n">pipeline</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># the jitted composition: stage graph, bucket dispatch, packed outputs</span>
+  <span class="n">host</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># everything impure: DB→snapshot, padding/bucketing, memory planning</span>
+                  <span class="c1">#   (reuse cflibs/radiation/host.py:164 available_device_bytes, :189 plan_chunks),</span>
+                  <span class="c1">#   unpacking to reference result dataclasses</span>
+  <span class="n">parity</span><span class="o">.</span><span class="n">py</span>       <span class="c1"># stage-by-stage reference adapters, used ONLY by tests + triage</span>
+</pre></div>
+</div>
+</section>
+<section id="pipelinesnapshot-j0">
+<h4>5.1.2 <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> (J0)<a class="headerlink" href="#pipelinesnapshot-j0" title="Link to this heading"></a></h4>
+<p>Unifies the two existing snapshot types (<code class="docutils literal notranslate"><span class="pre">core/jax_runtime.py:430</span></code> <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> for the forward kernel; <code class="docutils literal notranslate"><span class="pre">iterative.py:381</span></code> <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code> for the solver) into one frozen, pytree-registered bundle built <strong>once per process</strong> from a single SQLite scan, cacheable as <code class="docutils literal notranslate"><span class="pre">.npz</span></code> keyed by a DB content hash. Measured against <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> (6.1 MB):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">lines</span></code>: 28,727 rows, 83 elements, 158 (element, stage) species; ~13 f64-equivalent columns incl. Stark metadata (<code class="docutils literal notranslate"><span class="pre">stark_w</span></code> 28,331 rows; source classes konjevic-λ²-scaled 22,951 / interpolated 4,574 / hydrogenic 562 / <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> 244 / null 396), <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code>, resonance flags ≈ <strong>3.0 MB</strong></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">energy_levels</span></code>: 9,448 rows over 144 species, max 676 levels/species (Fe II) → uniform pad (144, 676) g+E+mask ≈ <strong>1.65 MB</strong></p></li>
+<li><p>partition polys 146×5 ≈ 6 KB; canonical scalar fallbacks 175×2 ≈ 3 KB — <strong>eager</strong> at build (the lazy probe at <code class="docutils literal notranslate"><span class="pre">iterative.py:479-490</span></code> becomes one-time cost)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">species_physics</span></code> (ip_ev, atomic_mass) 175×2 ≈ 3 KB; doublet-pair precompute (P,2)+ρ+r_thin &lt; 0.5 MB; oxide factors (<code class="docutils literal notranslate"><span class="pre">closure.py:62-73</span></code>) → per-candidate (E,) vectors</p></li>
+</ul>
+<p><strong>Total ≈ 5–6 MB ≈ 0.04 % of one 16 GB V100S</strong> — the whole DB rides on device; per-spectrum work is pure gather. Candidate sets are <strong>element masks over one per-bucket superset snapshot</strong>, never per-spectrum snapshot rebuilds (this is what makes vmap over heterogeneous candidate sets possible without recompiles). The only host↔device seam per spectrum mirrors the proven <code class="docutils literal notranslate"><span class="pre">_build_padded_arrays_from_obs</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:2986-3020</span></code>) + <code class="docutils literal notranslate"><span class="pre">snapshot.reorder</span></code> (<code class="docutils literal notranslate"><span class="pre">:519-540</span></code>) pattern.</p>
+</section>
+<section id="what-never-moves-to-the-jit-pipeline-permanent-host-surface">
+<h4>5.1.3 What never moves to the jit pipeline (permanent host surface)<a class="headerlink" href="#what-never-moves-to-the-jit-pipeline-permanent-host-surface" title="Link to this heading"></a></h4>
+<p>CLI/argparse + YAML config (<code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py</span></code>, <code class="docutils literal notranslate"><span class="pre">core/config.py</span></code>, <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code> resolution <code class="docutils literal notranslate"><span class="pre">pipeline.py:90,163</span></code>); <code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code> + <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py</span></code> + pooling; <code class="docutils literal notranslate"><span class="pre">cflibs/io/</span></code> + adapters + <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code>; response-curve file parsing/interpolation (<code class="docutils literal notranslate"><span class="pre">preprocess/response_correction.py</span></code> — only the per-channel multiplier array crosses); diagnostics/trust/logging/warning strings (<code class="docutils literal notranslate"><span class="pre">pipeline.py:735-748,826-840</span></code>); CCD-seam <em>caching decisions</em> per instrument; dynesty drivers (<code class="docutils literal notranslate"><span class="pre">solve/bayesian/samplers.py</span></code> — NumPyro NUTS <em>consumes</em> the jit likelihood, the sampler loop stays host, the ExoJAX pattern); Rust native paths; <code class="docutils literal notranslate"><span class="pre">inversion/runtime/</span></code>, <code class="docutils literal notranslate"><span class="pre">pds/</span></code>, <code class="docutils literal notranslate"><span class="pre">hpc/</span></code>; the analytical <code class="docutils literal notranslate"><span class="pre">uncertainties</span></code> UQ path (<code class="docutils literal notranslate"><span class="pre">physics/uncertainty.py</span></code>) — by contrast Monte-Carlo UQ becomes a free vmap on the jit stack; <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code> (calls the jit pipeline as an evaluator, never part of it). Boundary invariants enforced from J0: kernels import neither <code class="docutils literal notranslate"><span class="pre">sqlite3</span></code> nor <code class="docutils literal notranslate"><span class="pre">cflibs.atomic.database</span></code> nor <code class="docutils literal notranslate"><span class="pre">cflibs.io</span></code> nor <code class="docutils literal notranslate"><span class="pre">jitpipe.host</span></code>; every kernel output is a fixed-shape pytree; only registered pytrees cross host→kernel.</p>
+</section>
+</section>
+<section id="shape-batching-policy">
+<h3>5.2 Shape &amp; batching policy<a class="headerlink" href="#shape-batching-policy" title="Link to this heading"></a></h3>
+<p><strong>Measured grid lengths (live adapter run, 2026-06-10)</strong> — constant within each dataset/instrument (checked first 5 spectra per adapter):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head"><p>Grid N_wl</p></th>
+<th class="head"><p>Range (nm)</p></th>
+<th class="head"><p>Spectra</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>synthetic_fixedforward</p></td>
+<td><p>2,560</p></td>
+<td><p>223.6–264.3</p></td>
+<td><p>288</p></td>
+</tr>
+<tr class="row-odd"><td><p>bhvo2_chemcam / chemcam_calib</p></td>
+<td><p>6,144</p></td>
+<td><p>240.8–905.6</p></td>
+<td><p>4 / 240</p></td>
+</tr>
+<tr class="row-even"><td><p>aalto</p></td>
+<td><p>8,188</p></td>
+<td><p>195.5–982.6</p></td>
+<td><p>74</p></td>
+</tr>
+<tr class="row-odd"><td><p>gibbons2024</p></td>
+<td><p>12,274</p></td>
+<td><p>185.7–1049.0</p></td>
+<td><p>175</p></td>
+</tr>
+<tr class="row-even"><td><p>csa_planetary</p></td>
+<td><p>13,490</p></td>
+<td><p>198.1–970.1</p></td>
+<td><p>99</p></td>
+</tr>
+<tr class="row-odd"><td><p>emslibs2019</p></td>
+<td><p>40,002</p></td>
+<td><p>200.0–1000.0</p></td>
+<td><p>282</p></td>
+</tr>
+<tr class="row-even"><td><p>silva2022</p></td>
+<td><p>53,717</p></td>
+<td><p>200.0–780.0</p></td>
+<td><p>102</p></td>
+</tr>
+<tr class="row-odd"><td><p>nist_srm_612 / nist_steel</p></td>
+<td><p>skip-with-log (no data)</p></td>
+<td><p>—</p></td>
+<td><p>0</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Policy:</strong> one compile bucket per distinct instrument grid at the <strong>exact</strong> N_wl (7 buckets cover all 10 datasets; zero wavelength padding — §3 C3). Per-bucket, the wavelength axis, <code class="docutils literal notranslate"><span class="pre">wl_step</span></code>, window widths, and <code class="docutils literal notranslate"><span class="pre">half_width_px</span></code> (<code class="docutils literal notranslate"><span class="pre">line_detection.py:1323</span></code>) are host-computed static ints. Padding constants for the other axes (measured at production gates — <code class="docutils literal notranslate"><span class="pre">threshold_factor=4.0</span></code>, calibration pool 60/element, detection <code class="docutils literal notranslate"><span class="pre">top_k_per_element=60</span></code> per <code class="docutils literal notranslate"><span class="pre">pipeline.py:105</span></code>, candidates = truth ∪ {Ag,Sn,W,Bi,Th} per <code class="docutils literal notranslate"><span class="pre">scoreboard.py:142</span></code>):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Axis</p></th>
+<th class="head"><p>Constant</p></th>
+<th class="head"><p>Observed max</p></th>
+<th class="head"><p>Where observed</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Peaks, calibration path</p></td>
+<td><p>P_max = 2,048</p></td>
+<td><p>1,412</p></td>
+<td><p>silva2022</p></td>
+</tr>
+<tr class="row-odd"><td><p>Peaks, detection path</p></td>
+<td><p>P_max = 2,560</p></td>
+<td><p>2,350</p></td>
+<td><p>emslibs2019</p></td>
+</tr>
+<tr class="row-even"><td><p>Peak NMS candidates</p></td>
+<td><p>P_cand_max = 8,192</p></td>
+<td><p>—</p></td>
+<td><p>pre-NMS local maxima</p></td>
+</tr>
+<tr class="row-odd"><td><p>Calibration line pool</p></td>
+<td><p>L_max = 1,024</p></td>
+<td><p>925</p></td>
+<td><p>csa/bhvo2</p></td>
+</tr>
+<tr class="row-even"><td><p>Per-peak line fan-out (±2.0 nm)</p></td>
+<td><p>K_pair = 48</p></td>
+<td><p>32</p></td>
+<td><p>synthetic/bhvo2</p></td>
+</tr>
+<tr class="row-odd"><td><p>Per-peak in-tolerance transitions</p></td>
+<td><p>K_match = 8</p></td>
+<td><p>5</p></td>
+<td><p>silva/synthetic</p></td>
+</tr>
+<tr class="row-even"><td><p>Elements</p></td>
+<td><p>E_max = 32</p></td>
+<td><p>15–21 (§3 C6)</p></td>
+<td><p>csa_planetary</p></td>
+</tr>
+<tr class="row-odd"><td><p>Species</p></td>
+<td><p>S_max = 48</p></td>
+<td><p>30</p></td>
+<td><p>15-element set</p></td>
+</tr>
+<tr class="row-even"><td><p>Lines/element (detection)</p></td>
+<td><p>K_lines = 64</p></td>
+<td><p>60 (cap)</p></td>
+<td><p>config</p></td>
+</tr>
+<tr class="row-odd"><td><p>Comb lines/element</p></td>
+<td><p>K_comb = 32</p></td>
+<td><p>30 (cap)</p></td>
+<td><p>config</p></td>
+</tr>
+<tr class="row-even"><td><p>Shift grid</p></td>
+<td><p>S_shift = 32</p></td>
+<td><p>21</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_build_shift_grid</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>CCD segments</p></td>
+<td><p>SEG_max = 16</p></td>
+<td><p>11</p></td>
+<td><p>csa_planetary</p></td>
+</tr>
+<tr class="row-even"><td><p>Observations</p></td>
+<td><p>OBS_max = 512</p></td>
+<td><p>—</p></td>
+<td><p>output batch</p></td>
+</tr>
+<tr class="row-odd"><td><p>RANSAC hypotheses</p></td>
+<td><p>H = 4,096 (chunk 256)</p></td>
+<td><p>—</p></td>
+<td><p>affine/quadratic</p></td>
+</tr>
+</tbody>
+</table>
+<p>Overflow on any axis keeps the top-prominence/score entries and sets a truncation flag (mandatory output). <strong>Batch axis:</strong> per-bucket fixed B from the memory envelope; final partial batch padded with a spectrum-validity mask. <code class="docutils literal notranslate"><span class="pre">run_batch(bucket)</span> <span class="pre">=</span> <span class="pre">jit(vmap(stage_chain,</span> <span class="pre">in_axes=(0,</span> <span class="pre">None,</span> <span class="pre">None)))</span></code> — the manifold pattern (<code class="docutils literal notranslate"><span class="pre">batch_forward.py:13,459</span></code>) generalized.</p>
+<p><strong>16 GB memory envelope (fp64, ~40 % XLA headroom; design to 16 GB even though cluster notes record 32 GB — safe on either):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Working set / spectrum</p></th>
+<th class="head"><p>B on 16 GB</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Dense Voigt (N_lines×N_wl), silva2022</p></td>
+<td><p>16,384×53,717×8 = 7.0 GB</p></td>
+<td><p>forbidden on large grids</p></td>
+</tr>
+<tr class="row-odd"><td><p>Chunked scan (<code class="docutils literal notranslate"><span class="pre">kernels.py:1205</span></code>), N_chunk=4,096</p></td>
+<td><p>537 MB live/chunk</p></td>
+<td><p><strong>8–16</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Chunked, fp32 profile island (§5.3)</p></td>
+<td><p>268 MB</p></td>
+<td><p>~32</p></td>
+</tr>
+<tr class="row-odd"><td><p>LDM (<code class="docutils literal notranslate"><span class="pre">ldm.py</span></code>, n_sigma=24 at <code class="docutils literal notranslate"><span class="pre">:69</span></code>), silva2022</p></td>
+<td><p>≈60 MB</p></td>
+<td><p><strong>64–128</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>LDM, chemcam 6,144 grid</p></td>
+<td><p>≈8 MB</p></td>
+<td><p>512+</p></td>
+</tr>
+<tr class="row-odd"><td><p>Identify (Gram-form NNLS ≤100 components)</p></td>
+<td><p>&lt;10 MB</p></td>
+<td><p>whole-registry</p></td>
+</tr>
+<tr class="row-even"><td><p>Solve ((E,)-shaped state)</p></td>
+<td><p>KBs</p></td>
+<td><p>all ~1,264 spectra at once</p></td>
+</tr>
+<tr class="row-odd"><td><p>Sliding-median window matrix (worst: 53,717×1,001)</p></td>
+<td><p>430 MB → row-chunk to 33 MB live</p></td>
+<td><p>non-binding</p></td>
+</tr>
+<tr class="row-even"><td><p>RANSAC residual matrix (H×C)</p></td>
+<td><p>chunk H→256 → ≤100 MB live</p></td>
+<td><p>non-binding</p></td>
+</tr>
+</tbody>
+</table>
+<p>Conclusions: identify + solve batch the whole board in one shot; the broadening stage dictates B; <strong>LDM is the batching enabler and its real-data validation is an early-milestone dependency (risk R4)</strong>; chunked Voigt at B=8–16 is the fallback and still beats CPU by orders of magnitude. <code class="docutils literal notranslate"><span class="pre">donate_argnums</span></code> on the B×N_wl intensity buffers (none exists in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> today — free win); keep the existing <code class="docutils literal notranslate"><span class="pre">jax.checkpoint</span></code> policy (<code class="docutils literal notranslate"><span class="pre">kernels.py:1055-1076</span></code>) and remat the broadening stage for reverse-mode end-to-end gradients.</p>
+</section>
+<section id="precision-policy">
+<h3>5.3 Precision policy<a class="headerlink" href="#precision-policy" title="Link to this heading"></a></h3>
+<p><strong>Default x64 end-to-end.</strong> The codebase already votes x64: tests force CPU+x64 (<code class="docutils literal notranslate"><span class="pre">tests/conftest.py:20,25</span></code>); <code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy</span></code> defaults <code class="docutils literal notranslate"><span class="pre">allow_32bit=False</span></code> (<code class="docutils literal notranslate"><span class="pre">core/jax_runtime.py:300-328</span></code>); <code class="docutils literal notranslate"><span class="pre">hpc/gpu_config.py:43-56,75-76,152-155</span></code> declares x64 required for cluster GPU; the Weideman Voigt backend delivers ~15 digits only in f64 (<code class="docutils literal notranslate"><span class="pre">radiation/profiles.py:416-442</span></code>).</p>
+<p><strong>Must be fp64 (non-negotiable):</strong> Saha three-stage populations + IPD (<code class="docutils literal notranslate"><span class="pre">kernels.py:425,292</span></code> — exponents reach ~50; the repo’s log-basis partition bug produced an 18-orders error, <code class="docutils literal notranslate"><span class="pre">kernels.py:124-127</span></code>, bead ddwh); partition functions (poly <code class="docutils literal notranslate"><span class="pre">kernels.py:119</span></code> + direct sums over ≤676 IPD-truncated levels, <code class="docutils literal notranslate"><span class="pre">jax_runtime.py:483-486,543-550</span></code>); Boltzmann/common-slope WLS + solve (rtol 1e-5 unreachable in fp32); Stark-width n_e; LDM log-σ interpolation weights (<code class="docutils literal notranslate"><span class="pre">ldm.py:180-195</span></code>); the preprocessing LLS round-trip and ALS λ=1e6 Gram (do not run row-1/2 kernels fp32).</p>
+<p><strong>fp32-tolerable (opt-in, policy-gated):</strong> profile/broadening matrix <em>values</em> (hooks exist: <code class="docutils literal notranslate"><span class="pre">radiation/host.py:210-211</span></code> dtype_bytes=4; <code class="docutils literal notranslate"><span class="pre">ldm.py:166</span></code> defers to policy) — compute populations fp64, cast at the broadening input boundary, accumulate bin sums in fp64; identify-stage template scoring (decisions thresholded at ~1e-2). Mechanism: extend <code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy</span></code> with per-stage dtype fields; an fp32-profile configuration enters scored runs only after a Tier-B shadow shows |ΔF1| ≤ 0.005. Never fp32 in the Stark-width Voigt path (<code class="docutils literal notranslate"><span class="pre">profiles.py:425-434</span></code> is the authority).</p>
+</section>
+<section id="parity-testing-harness">
+<h3>5.4 Parity &amp; testing harness<a class="headerlink" href="#parity-testing-harness" title="Link to this heading"></a></h3>
+<p><strong>Tiered tolerance contracts (bit-identity is a non-goal):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tier</p></th>
+<th class="head"><p>Contract</p></th>
+<th class="head"><p>Precedent</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>K</strong> (kernel/stage-pure)</p></td>
+<td><p>rtol 1e-5 (tighter where §4 says so, down to 1e-12 for pure-algebra stages and <em>exact</em> for discrete decisions)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py:5</span></code> (all six closure modes); <code class="docutils literal notranslate"><span class="pre">kernels.py:856</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>S</strong> (stage-with-iteration)</p></td>
+<td><p>rtol 1e-3, atol 1e-4; iteration counts within 1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_solver_jax_parity.py:4-12</span></code>; <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py:8</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>D</strong> (decision)</p></td>
+<td><p>identified-element sets + presence calls exact-match on ≥98 % of a frozen golden corpus; every divergence adjudicated in a ledger</p></td>
+<td><p>new</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>B</strong> (board)</p></td>
+<td><p>shadow scoreboard: aggregate</p></td>
+<td><p>ΔF1</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Per-stage golden tests</strong> <code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_{preprocess,detect,calibrate,identify,fit,selfabs,stark,solve,forward,pipeline}.py</span></code>: committed <code class="docutils literal notranslate"><span class="pre">.npz</span></code> fixtures + sha256 (one real spectrum per dataset via the adapters, plus synthetic edge cases — empty candidate sets, single-line elements, saturated lines, overlapping doublets); <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> adapters feed <em>identical padded inputs</em> to reference and jit; replicate all four acceptance patterns from <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py</span></code> per stage — numeric parity, <strong>vmap smoke</strong> (batch 16), <strong>grad smoke→hard assert</strong>, <strong>no-SQLite-inside-kernel</strong> (<code class="docutils literal notranslate"><span class="pre">:415-429</span></code>); plus <strong>padding invariance</strong> (re-run at next pad size must be bit-identical on the valid region — the test that catches mask bugs, the dominant failure mode of fixed-shape rewrites). CI on CPU x64 in subsets under the 600 s agent watchdog (CLAUDE.md sub-agent rules). Wavelength calibration additionally requires the <strong>reference self-variance study</strong> (≈10 seeds on the 32-spectrum corpus) before its bands are frozen — the reference is itself seed-dependent (<code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:615</span></code>, <code class="docutils literal notranslate"><span class="pre">random_seed=42</span></code>).</p>
+<p><strong>Scoreboard integration:</strong> <code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">{reference,jit}</span></code> on the scoreboard subparser (<code class="docutils literal notranslate"><span class="pre">cli/main.py:1255-1290</span></code>) threaded through <code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code> (<code class="docutils literal notranslate"><span class="pre">scoreboard.py:274</span></code>) → <code class="docutils literal notranslate"><span class="pre">_score_spectrum</span></code> (<code class="docutils literal notranslate"><span class="pre">:132</span></code>). Everything score-defining is shared and untouched: candidate policy (<code class="docutils literal notranslate"><span class="pre">:142</span></code>), presence rule, seeded sampling (<code class="docutils literal notranslate"><span class="pre">:193-198</span></code>), micro-averaged confusion (<code class="docutils literal notranslate"><span class="pre">:214-217</span></code>), failure policy (<code class="docutils literal notranslate"><span class="pre">:159-166</span></code>). The jit path emits the identical per-spectrum record schema incl. <code class="docutils literal notranslate"><span class="pre">stage_timings_s</span></code> (batched stages report batch_time/B with B recorded); <code class="docutils literal notranslate"><span class="pre">&quot;pipeline&quot;:</span> <span class="pre">&quot;jit&quot;</span></code> lands in the board JSON and reproduce line (<code class="docutils literal notranslate"><span class="pre">:377</span></code>). <strong>Failure-policy parity is mandatory:</strong> zero valid observations must produce the same all-FN record as the reference’s <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> (<code class="docutils literal notranslate"><span class="pre">pipeline.py:751-752</span></code>) — not NaN, not a crash.</p>
+<p><strong>Divergence triage:</strong> (1) reproduce on CPU x64 both pipelines; (2) stage-bisect with <code class="docutils literal notranslate"><span class="pre">parity.py</span></code>; (3) <code class="docutils literal notranslate"><span class="pre">jax.debug.print</span></code> dumps behind <code class="docutils literal notranslate"><span class="pre">CFLIBS_JITPIPE_DEBUG</span></code>; (4) classify — padding-sensitivity (rerun at next pad size) / accumulation-order-precision / genuine semantic difference → bead + ledger entry. Institutional rule (project memory, PR #229 F1 −0.041): every identifier-scoring change is benchmark-gated.</p>
+</section>
+<section id="cluster-runtime-discipline">
+<h3>5.5 Cluster &amp; runtime discipline<a class="headerlink" href="#cluster-runtime-discipline" title="Link to this heading"></a></h3>
+<p>SLURM job shapes per <code class="docutils literal notranslate"><span class="pre">.serena/memories/cluster_workflow.md:36-48</span></code>: <code class="docutils literal notranslate"><span class="pre">--gpus-per-task=1</span> <span class="pre">--ntasks=1</span> <span class="pre">--cpus-per-task=4</span> <span class="pre">--mem=32G</span></code>, never <code class="docutils literal notranslate"><span class="pre">--nodelist</span></code>. Job archetypes: (1) batched inversion — one job, one bucket-compile + ⌈N/B⌉ batches; (2) campaign fitness — <strong>3 long-lived workers</strong> pulling candidate configs from a queue dir (in-process jit cache ⇒ each worker compiles each bucket once, then <strong>zero recompiles across candidates because all continuous knobs are traced <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> leaves</strong> — the design’s killer feature for campaigns); (3) HMC endgame — vectorized NUTS per dataset bucket.</p>
+<p><strong>Compile-cache discipline (documented pathology):</strong> the NFS-shared <code class="docutils literal notranslate"><span class="pre">/cluster/shared/jax-cache</span></code> developed uid skew and hung jobs 1909/1914/1915; the standing rule is the user-private <code class="docutils literal notranslate"><span class="pre">~brian/jax-cache</span></code> (<code class="docutils literal notranslate"><span class="pre">.serena/memories/physics_invariants_and_gotchas.md:54-56</span></code>). <strong>Trap:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/core/platform_config.py:94</span></code> still <code class="docutils literal notranslate"><span class="pre">setdefault</span></code>s the shared path — every jitpipe job script MUST export the private path explicitly, and J0 files the change flipping the code default to <code class="docutils literal notranslate"><span class="pre">~/.cache/cflibs/jax</span></code> + updating <code class="docutils literal notranslate"><span class="pre">docs/jax-compile-cache.md</span></code>. Keep <code class="docutils literal notranslate"><span class="pre">JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0.5</span></code> (<code class="docutils literal notranslate"><span class="pre">platform_config.py:95</span></code>). Budget: #compiles = 7 buckets × few <code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code> variants at 15–45 s each (<code class="docutils literal notranslate"><span class="pre">docs/jax-compile-cache.md:9-10</span></code>); warmup batch per bucket in every job script; <code class="docutils literal notranslate"><span class="pre">==</span></code>-pin jax/jaxlib in the <code class="docutils literal notranslate"><span class="pre">[cluster]</span></code> extra (currently <code class="docutils literal notranslate"><span class="pre">jax[cuda12]&gt;=0.4.30</span></code>, <code class="docutils literal notranslate"><span class="pre">pyproject.toml:41</span></code>) so cache keys survive node-image drift. Scored runs set <code class="docutils literal notranslate"><span class="pre">XLA_FLAGS=--xla_gpu_deterministic_ops=true</span></code>; CPU↔GPU agreement is tolerance-bounded (f64 reduction order, ≲1e-12 relative), never bit-identical. CPU fallback: <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code> requires JAX (clear ImportError) but runs fully under <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span></code> with identical semantics (the parity suite does, via conftest); the reference pipeline keeps the repo-wide JAX-optional guarantee untouched (D3 one-way rule).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="differentiability-payoffs">
+<h2>6. Differentiability payoffs<a class="headerlink" href="#differentiability-payoffs" title="Link to this heading"></a></h2>
+<section id="the-re-derived-production-solve-joint-wls-and-its-exact-parity-anchor">
+<h3>6.1 The re-derived production solve (joint WLS) — and its exact parity anchor<a class="headerlink" href="#the-re-derived-production-solve-joint-wls-and-its-exact-parity-anchor" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">ClosedFormILRSolver</span></code> already poses the right single regression — <code class="docutils literal notranslate"><span class="pre">y_l</span> <span class="pre">+</span> <span class="pre">ln</span> <span class="pre">U_s</span> <span class="pre">+</span> <span class="pre">ln</span> <span class="pre">M_s</span> <span class="pre">=</span> <span class="pre">m·E_l</span> <span class="pre">+</span> <span class="pre">Σ_j</span> <span class="pre">V[s,j]·α_j</span> <span class="pre">+</span> <span class="pre">β</span></code> with honest normal-equation covariance (<code class="docutils literal notranslate"><span class="pre">solve/closed_form.py:1-19,220-302,305-329</span></code>) — but must freeze U_s(T), M_s(T, n_e) and bolt on 1–2 Saha passes because NumPy cannot differentiate through them. Autodiff removes exactly that limitation. Production jit solve:</p>
+<p>minimize over θ = (ln T, α ∈ R^{E−1}, β), <strong>n_e pinned to the Stark measurement</strong> (audit F2) with a penalty from its MAD scatter when D&gt;1, pressure balance only as a flagged fallback:</p>
+<p>Σ_l w_l · [ y_l − ( −E_l/(k_B T) + ln C_{s(l)}(α) − ln U_{s(l)}(T) − ln M_{s(l)}(T,n_e) + β + saha_shift_l(T,n_e) ) ]²</p>
+<p>by fixed-K Gauss–Newton/LM on ≤(E+2) parameters (trivial ~20×20 normal systems), vmapped over B. Properties: (i) <strong>freeze U,M + unit weights ⇒ the first GN step IS the SB-graph closed form</strong> (the arrow-matrix Schur identity of §4 row 6) — exact parity anchor and warm start; (ii) the Hessian at the optimum yields the covariance audit-F9 says is currently underestimated, with U(T)/Saha sensitivity free via autodiff; (iii) closure modes enter as the map α→C (standard/ILR identical; oxide = factor-weighted normalization inside ln C; matrix = one pinned coordinate); (iv) the same residual, reverse-differentiated, is directly the potential for NUTS over (T, n_e, α) — and (v) curve-of-growth self-absorption can enter as a per-line escape-factor term f(τ_l(θ)) — audit F10’s “fold COG into the regression”, feasible <em>only</em> in the differentiable formulation. Parameterization matches the shipped <code class="docutils literal notranslate"><span class="pre">joint_optimizer.py:16-23</span></code> (log-T, log10-n_e, softmax/ILR simplex). Requirement: fixed-iteration optimization, no data-dependent <code class="docutils literal notranslate"><span class="pre">while_loop</span></code> in the differentiated region; the legacy implicit-diff route (<code class="docutils literal notranslate"><span class="pre">lax.custom_root</span></code> per T4-1, deferred at <code class="docutils literal notranslate"><span class="pre">specs/T1-3-lax-while-iterative.md:155,181,190</span></code>) survives as a J11 spike for the initializer loop. Tooling constraint: jaxopt is unmaintained and its successors (optimistix/lineax) are equinox-dependent — <strong>banned</strong>; use core-JAX <code class="docutils literal notranslate"><span class="pre">custom_root</span></code>/hand-written <code class="docutils literal notranslate"><span class="pre">custom_vjp</span></code>; host scipy L-BFGS-B driving JAX gradients is fine for research phases.</p>
+</section>
+<section id="hmc-numpyro-over-the-full-model">
+<h3>6.2 HMC / NumPyro over the full model<a class="headerlink" href="#hmc-numpyro-over-the-full-model" title="Link to this heading"></a></h3>
+<p>NumPyro NUTS already runs over a JAX forward model in <code class="docutils literal notranslate"><span class="pre">solve/bayesian</span></code> (numpyro ≥0.14, <code class="docutils literal notranslate"><span class="pre">pyproject.toml:48</span></code>); the NNLS top-K candidate prefilter stays mandatory. The rewrite adds the batched LDM forward (≈8–60 MB/spectrum working set, §5.2) making vectorized chains across many spectra feasible on one V100S. Requirements: likelihood with no data-dependent control flow (HMC replaces the iterative solve, it does not wrap it); Chebyshev baseline (already in <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code>); fp64 (NUTS on fp32 plasma exponentials produces divergences).</p>
+</section>
+<section id="gradient-knob-tuning-vs-the-optuna-campaign">
+<h3>6.3 Gradient knob-tuning vs the Optuna campaign<a class="headerlink" href="#gradient-knob-tuning-vs-the-optuna-campaign" title="Link to this heading"></a></h3>
+<p>Campaign 1 treats the pipeline as a black box at 0.4–5.1 s/spectrum. The jit pipeline changes the economics for the ~20 <strong>continuous</strong> knobs (<code class="docutils literal notranslate"><span class="pre">min_peak_height</span></code>, <code class="docutils literal notranslate"><span class="pre">min_snr</span></code>, prominence, isolation windows, wavelength tolerance, ALIAS weights, presence cutoff — the knob surface of <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code>, <code class="docutils literal notranslate"><span class="pre">pipeline.py:90-152</span></code>): one backward pass over a batch yields d(soft-F1)/d(knobs) for ≈2–3× a forward board, where TPE pays one full board per point with no gradient. Recommended hybrid: TPE over categorical/integer knobs with a gradient inner loop on continuous knobs per trial — zero recompiles since knobs are traced leaves (§5.5).</p>
+</section>
+<section id="relaxation-map-train-soft-eval-hard">
+<h3>6.4 Relaxation map — train-soft / eval-hard<a class="headerlink" href="#relaxation-map-train-soft-eval-hard" title="Link to this heading"></a></h3>
+<p><strong>Soft, ONLY in tuning objectives:</strong> presence rule <code class="docutils literal notranslate"><span class="pre">C</span> <span class="pre">≥</span> <span class="pre">0.005</span></code> → sigmoid((C−0.005)/τ) for soft confusion counts; top-K/prominence/SNR gates → soft-top-K or straight-through; quality-gate scalars → sigmoid penalties. Sigmoids written as explicit <code class="docutils literal notranslate"><span class="pre">jnp</span></code> (no <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>) or via <code class="docutils literal notranslate"><span class="pre">softmax_closure</span></code>. <strong>Hard, always:</strong> structural validity/padding masks (bookkeeping, not decisions — relaxing them corrupts physics); physical constraints by reparameterization not relaxation (log-T, log-n_e, softmax/ILR simplex); scoreboard scoring (hard presence rule, candidate policy, failure policy — the board is the shared contract and never sees a relaxed metric); convergence flags reported hard with gradients masked.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="risk-register">
+<h2>7. Risk register<a class="headerlink" href="#risk-register" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Risk</p></th>
+<th class="head"><p>Sev</p></th>
+<th class="head"><p>Mitigations</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>R1</p></td>
+<td><p>Two-pipeline semantic drift over months</p></td>
+<td><p>High</p></td>
+<td><p>D3 one-way imports + hygiene test; jitpipe reuses <code class="docutils literal notranslate"><span class="pre">radiation/kernels.py</span></code> + preset tables (no copied physics); reference frozen except bug fixes, each paired with a parity-test update; divergence ledger; promotion criteria force a decision rather than letting both linger</p></td>
+</tr>
+<tr class="row-odd"><td><p>R2</p></td>
+<td><p>Silent numerical divergence corrupting scored results</p></td>
+<td><p>High</p></td>
+<td><p>tiered contracts with Tier-D in CI on a frozen golden corpus; Tier-B shadow runs required before any campaign adopts jit fitness; benchmark-gate rule (PR #229 precedent, project memory)</p></td>
+</tr>
+<tr class="row-even"><td><p>R3</p></td>
+<td><p>Fixed-shape memory blowup on 16 GB (padding × batch × fp64)</p></td>
+<td><p>Med</p></td>
+<td><p>exact wavelength shapes (zero pad waste, §3 C3); measured per-axis constants + truncation flags; per-bucket B from §5.2 envelope; reuse <code class="docutils literal notranslate"><span class="pre">plan_chunks</span></code>/<code class="docutils literal notranslate"><span class="pre">available_device_bytes</span></code> (<code class="docutils literal notranslate"><span class="pre">radiation/host.py:164-246</span></code>); OOM-canary test asserting planned bytes &lt; 0.6× device bytes</p></td>
+</tr>
+<tr class="row-odd"><td><p>R4</p></td>
+<td><p>LDM validation gap — the batching enabler is default-OFF pending real-data validation (<code class="docutils literal notranslate"><span class="pre">ADR-0001-HANDOFF.md</span></code> T1-4)</p></td>
+<td><p>Med</p></td>
+<td><p>LDM-vs-PHYSICAL_DOPPLER parity + scoreboard shadow on real datasets scheduled as an <strong>early milestone inside J9</strong>; fallback = chunked Voigt at B=8–16 (still orders-of-magnitude over CPU)</p></td>
+</tr>
+<tr class="row-even"><td><p>R5</p></td>
+<td><p>Debugging opacity of jitted, batched, masked code</p></td>
+<td><p>Med</p></td>
+<td><p>stage-boundary NamedTuples behind <code class="docutils literal notranslate"><span class="pre">CFLIBS_JITPIPE_DEBUG</span></code>; CPU-x64 repro as standard first step; <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> doubles as inspection tooling; padding-invariance tests catch the dominant mask-bug class mechanically</p></td>
+</tr>
+<tr class="row-odd"><td><p>R6</p></td>
+<td><p>Compile-time tax (15–45 s/kernel cold)</p></td>
+<td><p>Med</p></td>
+<td><p>continuous knobs traced ⇒ zero recompiles across campaign candidates; ≤7 buckets × few static variants; private persistent cache + 0.5 s floor + warmup step + jax <code class="docutils literal notranslate"><span class="pre">==</span></code>-pin (§5.5)</p></td>
+</tr>
+<tr class="row-even"><td><p>R7</p></td>
+<td><p>Opportunity cost vs the recall-focused campaigns (program risk)</p></td>
+<td><p>High</p></td>
+<td><p>sequencing pays rent immediately: J10 (forward-fitting ID) and the batched forward/identify kernels are <em>on</em> the recall critical path; campaigns keep reference fitness until Tier-B shadow passes; §8.4 start criteria gate the front-end grind explicitly</p></td>
+</tr>
+<tr class="row-odd"><td><p>R8</p></td>
+<td><p>Behavioral drift in greedy/tie-break front-end logic (the highest-concentration hazard: <code class="docutils literal notranslate"><span class="pre">np.isclose</span></code> ties, gated-without-consuming-peak, retroactive element drop, first-pair-wins)</p></td>
+<td><p>High (localized)</p></td>
+<td><p>D5 exactness-first: port as exact scans, no parallel approximations in decision-bearing stages; named canary fixtures (ye6t Al-doublet, BHVO-2 Sn/Th, shared-upper-level triplet) mandatory in CI</p></td>
+</tr>
+<tr class="row-even"><td><p>R9</p></td>
+<td><p>Stark LM vs scipy-trf divergence on marginal profiles; window-extraction parity</p></td>
+<td><p>Med-High</p></td>
+<td><p>gather raw samples (never resample); same rel-RMSE/resolvability gates decide acceptance rather than chasing optimizer parity; golden windows from <code class="docutils literal notranslate"><span class="pre">docs/benchmarks/stark-vjbh-empirical-impact.md</span></code> datasets</p></td>
+</tr>
+<tr class="row-odd"><td><p>R10</p></td>
+<td><p>GPU nondeterminism undermining the reproducibility motivation</p></td>
+<td><p>Low-Med</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--xla_gpu_deterministic_ops=true</span></code> on scored runs; all stochastic stages keyed by counter-based <code class="docutils literal notranslate"><span class="pre">jax.random</span></code> from a per-spectrum hash; CPU↔GPU drift documented as tolerance-bounded</p></td>
+</tr>
+<tr class="row-even"><td><p>R11</p></td>
+<td><p>JAX/CUDA version churn on the cluster</p></td>
+<td><p>Low</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">==</span></code>-pin in <code class="docutils literal notranslate"><span class="pre">[cluster]</span></code> extra; persistent cache is version-keyed so upgrades degrade to a one-time recompile, never wrong results</p></td>
+</tr>
+<tr class="row-odd"><td><p>R12</p></td>
+<td><p>Skipped/placeholder datasets distorting promotion (nist_srm_612/nist_steel yield no spectra; silva2022 currently fails 12/12 in the baseline)</p></td>
+<td><p>Low</p></td>
+<td><p>promotion computed over scoring datasets only; failure-count criterion tracked separately; silva2022’s all-fail status is a reference bug surface the jit failure-policy parity must mirror, not hide</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="staging-plan-milestones-economics-and-start-criteria">
+<h2>8. Staging plan, milestones, economics, and start criteria<a class="headerlink" href="#staging-plan-milestones-economics-and-start-criteria" title="Link to this heading"></a></h2>
+<section id="child-beads-j0j12">
+<h3>8.1 Child beads J0–J12<a class="headerlink" href="#child-beads-j0j12" title="Link to this heading"></a></h3>
+<p>One epic bead with children; one spec per bead under <a class="reference internal" href="#./specs/"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">specs/</span></code></span></a>. Effort in person-days (pd) of stage work; agent-session leverage per §3.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Bead</p></th>
+<th class="head"><p>Scope (spec)</p></th>
+<th class="head"><p>Depends on</p></th>
+<th class="head"><p>Track</p></th>
+<th class="head"><p>Effort</p></th>
+<th class="head"><p>Milestone</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>J0</strong></p></td>
+<td><p>skeleton, <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> unification + npz cache, <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code>/<code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code>, contracts doc, import hygiene, compile-cache default fix, ADR-0001 §12 addendum (<a class="reference internal" href="specs/J0-skeleton-snapshot-contracts.html"><span class="std std-doc">J0 spec</span></a>)</p></td>
+<td><p>—</p></td>
+<td><p>spine</p></td>
+<td><p>3–5 pd</p></td>
+<td><p>gates everything</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>J1</strong></p></td>
+<td><p>baseline + noise + <strong>exact</strong> peak detection (<a class="reference internal" href="specs/J1-preprocess-baseline-noise-peaks.html"><span class="std std-doc">J1</span></a>)</p></td>
+<td><p>J0</p></td>
+<td><p>A</p></td>
+<td><p>9–12 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>J2</strong></p></td>
+<td><p>segmented-RANSAC wavelength calibration (<a class="reference internal" href="specs/J2-wavelength-calibration.html"><span class="std std-doc">J2</span></a>)</p></td>
+<td><p>J0, J1</p></td>
+<td><p>A</p></td>
+<td><p>12–17 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>J3</strong></p></td>
+<td><p>line matching + gates (<code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>) (<a class="reference internal" href="specs/J3-line-matching-gates.html"><span class="std std-doc">J3</span></a>)</p></td>
+<td><p>J0, J1 (soft J2 — can develop on reference calibration)</p></td>
+<td><p>A</p></td>
+<td><p>12–17 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>J4</strong></p></td>
+<td><p>fit kernels: selection, Boltzmann/SB-graph, closure (<a class="reference internal" href="specs/J4-fit-kernels-selection-boltzmann-closure.html"><span class="std std-doc">J4</span></a>)</p></td>
+<td><p>J0</p></td>
+<td><p>B</p></td>
+<td><p>5–9 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>J5</strong></p></td>
+<td><p>observable self-absorption kernel (<a class="reference internal" href="specs/J5-self-absorption-kernel.html"><span class="std std-doc">J5</span></a>)</p></td>
+<td><p>J0, J4</p></td>
+<td><p>B</p></td>
+<td><p>3–5 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>J6</strong></p></td>
+<td><p>Stark n_e vmapped LM (<a class="reference internal" href="specs/J6-stark-ne-vmapped-lm.html"><span class="std std-doc">J6</span></a>)</p></td>
+<td><p>J0 (soft J1)</p></td>
+<td><p>B</p></td>
+<td><p>5–10 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>J7</strong></p></td>
+<td><p>solve: fixed-K scan initializer + joint WLS estimator (<a class="reference internal" href="specs/J7-solve-scan-joint-wls.html"><span class="std std-doc">J7</span></a>)</p></td>
+<td><p>J0, J4, J6</p></td>
+<td><p>B</p></td>
+<td><p>10–15 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>J8</strong></p></td>
+<td><p>end-to-end single-spectrum graph + <code class="docutils literal notranslate"><span class="pre">--pipeline=jit</span></code> (<a class="reference internal" href="specs/J8-end-to-end-m1.html"><span class="std std-doc">J8</span></a>)</p></td>
+<td><p>J1–J7</p></td>
+<td><p>spine</p></td>
+<td><p>5–8 pd</p></td>
+<td><p><strong>M1</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>J9</strong></p></td>
+<td><p>batched execution on V100S, LDM validation, SLURM/cache (<a class="reference internal" href="specs/J9-batched-cluster-m2.html"><span class="std std-doc">J9</span></a>)</p></td>
+<td><p>J8</p></td>
+<td><p>spine</p></td>
+<td><p>4–6 pd</p></td>
+<td><p><strong>M2</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>J10</strong></p></td>
+<td><p>forward-fitting identification (Campaign-3 GPU evaluator) (<a class="reference internal" href="specs/J10-forward-fitting-identification.html"><span class="std std-doc">J10</span></a>)</p></td>
+<td><p>J0 + existing kernels only (integrates with J8 later)</p></td>
+<td><p>C</p></td>
+<td><p>10–15 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>J11</strong></p></td>
+<td><p>differentiability: gradient knob-tuning, HMC, implicit-diff spike (<a class="reference internal" href="specs/J11-differentiability-payoffs.html"><span class="std std-doc">J11</span></a>)</p></td>
+<td><p>J0; J7 for full-model work</p></td>
+<td><p>C</p></td>
+<td><p>7–10 pd</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>J12</strong></p></td>
+<td><p>full-board superiority run + promotion decision (<a class="reference internal" href="specs/J12-scoreboard-promotion-m3.html"><span class="std std-doc">J12</span></a>)</p></td>
+<td><p>J9, J10 (J11 optional input)</p></td>
+<td><p>spine</p></td>
+<td><p>3–5 pd + buffer</p></td>
+<td><p><strong>M3</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Critical path:</strong> J0 → J1 → J2/J3 → J8 (M1) → J9 (M2) → J12 (M3), with J4–J7 in parallel on track B. <strong>Tracks:</strong> A = front-end (J1–J3); B = back-end (J4–J7); C = research (J10, J11) — C deliberately depends only on J0 + already-merged kernels so the two highest-value research items are not blocked behind the front-end grind, and J10 runs on GPUs while campaigns hold CPUs (<code class="docutils literal notranslate"><span class="pre">optimization-program-design.md:476</span></code>).</p>
+</section>
+<section id="milestone-gates">
+<h3>8.2 Milestone gates<a class="headerlink" href="#milestone-gates" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>M1 — single-spectrum end-to-end parity (J8).</strong> On bhvo2_chemcam (4 spectra, headline, response-corrected) + chemcam_calib (240 spectra, R≈2000, real spectral gaps exercising masks): element calls agree ≥95 %; T within 2 %; n_e within 10 % (Stark-stage tolerance dominates); concentrations rtol 5 % / atol 0.01; 2-dataset board F1 delta ≥ −0.02; all per-stage Tier-K/S contracts green; failure-policy parity demonstrated.</p></li>
+<li><p><strong>M2 — throughput on one V100S (J9).</strong> Target ≥50 spectra/s end-to-end amortized over ≥1,000 spectra including compile; full corpus (~1,264 spectra) &lt; 60 s/GPU; per-bucket memory headroom documented; LDM real-data validation decision recorded (adopt or fall back to chunked Voigt). Hard floor for promotion is the §8.2 M3 runtime criterion (§3 C5).</p></li>
+<li><p><strong>M3 — promotion decision (J12).</strong> On the holdout tier of the dataset split (<code class="docutils literal notranslate"><span class="pre">optimization-program-design.md</span></code> §2.1), full board (all spectra, not <code class="docutils literal notranslate"><span class="pre">--max-spectra</span> <span class="pre">12</span></code>), after ≥1 release of shadow-mode operation: (1) aggregate micro-F1 ≥ reference AND no scoring dataset regresses F1 by &gt;0.02 AND per-dataset F1 ≥ reference −0.01 on ≥7/10; (2) median composition RMSE ≤ reference on every quantitative dataset (one dataset may regress ≤5 % relative if the aggregate improves); (3) hard-failure count ≤ reference (the 12 silva2022 failures are the floor to beat, <code class="docutils literal notranslate"><span class="pre">SCOREBOARD…md:171-188</span></code>); (4) batched runtime ≥10× median spectra/s, CPU single-spectrum ≤2× reference; (5) parity suite green at §5.4 contracts. Pass → promotion ADR + Stage-B deprecation begins; fail → gap beads, stay parallel.</p></li>
+</ul>
+</section>
+<section id="economics">
+<h3>8.3 Economics<a class="headerlink" href="#economics" title="Link to this heading"></a></h3>
+<p><strong>Total effort:</strong> ≈85–130 pd of stage+glue work ≈ 40–60 agent-sessions; calendar <strong>6–11 weeks</strong> at 2–3 parallel tracks (critical path alone ~5–7 weeks). Uncertainty ±50 % — ADR-0001 §9.2 warns its own estimates ran optimistic; J3 (gate-stack semantics) and J10 (research) carry most variance. Compute cost is negligible against the idle V100S allocation (mean ~3 % utilization, §1.1).</p>
+<p><strong>Payoff thresholds that justify the spend:</strong></p>
+<ol class="arabic simple">
+<li><p><em>Throughput:</em> at M2, a full-population campaign fitness evaluation costs what a 12-spectrum sample costs today, removing fitness sampling variance. Break-even ≈ 10⁵ spectrum-evaluations of future campaign demand; Campaign 1 alone (≈800 trials × ~120 spectra) is ~10⁵ — <strong>one campaign phase amortizes the build</strong> if it is fitness-noise-bound.</p></li>
+<li><p><em>Forward-eval scale:</em> 10⁴ evals/spectrum ≈ 10–100 ms on V100S vs ~hours on the CPU reference; synthetic-corpus regeneration (×1000 scale) rides the same kernels.</p></li>
+<li><p><em>Identification F1:</em> J10 must show micro-F1 ≥ +0.03 on the optimization split with precision loss ≤0.02 to count (recall is the binding axis). If knob campaigns alone reach the same F1, the accuracy payoff is void — hence §8.4.</p></li>
+<li><p><em>Differentiability:</em> capabilities (J11 acceptance: FD-verified gradients; joint ≤ iterative round-trip error on the golden set) unlocking gradient knob-tuning as the cheaper successor to black-box search.</p></li>
+<li><p><em>Determinism:</em> falls out of the design; no separate threshold.</p></li>
+</ol>
+</section>
+<section id="explicit-start-decision-criteria-all-four-should-hold-before-j1j9-start">
+<h3>8.4 Explicit start-decision criteria (all four should hold before J1–J9 start)<a class="headerlink" href="#explicit-start-decision-criteria-all-four-should-hold-before-j1j9-start" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Campaigns plateaued:</strong> Campaign 1 shows &lt; +0.005 micro-F1 on the optimization split over two consecutive generations/phases — knob-space exhausted, remaining gains structural (the audit’s prediction, <code class="docutils literal notranslate"><span class="pre">00-synthesis.md:23</span></code>).</p></li>
+<li><p><strong>Forward-fitting chosen:</strong> the identification-endgame decision has explicitly selected forward-fitting/multi-line coherence as the next mechanism. If a cheaper coherence heuristic on the reference closes the recall gap first, J10’s case weakens and only the J9/J11 motivations remain.</p></li>
+<li><p><strong>Throughput-bound evidence:</strong> campaign ledger shows fitness-sampling noise comparable to per-generation effect sizes, or CPU queue saturation on vasp-01/02/03.</p></li>
+<li><p><strong>Stable foundation (already true):</strong> lax parity suite green; scoreboard baseline frozen (2026-06-10); Phase A merged at a pinned SHA.</p></li>
+</ol>
+<p><strong>Start small regardless:</strong> J0 + the J11 <code class="docutils literal notranslate"><span class="pre">custom_root</span></code> spike (~4 sessions total) are cheap, zero-contention, and de-risk the two biggest unknowns (snapshot unification; implicit-diff viability). <strong>Do not start J1–J9 while criteria 1–3 are unmet</strong> — every week of plateau-free campaign progress on the reference raises the bar M3 must clear.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="prior-art">
+<h2>9. Prior art<a class="headerlink" href="#prior-art" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Source (read 2026-06-10)</p></th>
+<th class="head"><p>What it does</p></th>
+<th class="head"><p>What we adopt</p></th>
+<th class="head"><p>What it confirms</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>RADIS GPU</strong> (radis.readthedocs.io /lbl/gpu.html)</p></td>
+<td><p>Vulkan compute, DB uploaded once at init, <code class="docutils literal notranslate"><span class="pre">recalc_gpu()</span></code> ships only (T, p, x) changes, &lt;200 ms interactive fitting on &gt;100M lines; equilibrium-only, no gradients, no batching API</p></td>
+<td><p>resident-database / parameter-only-update economics — already CF-LIBS’s snapshot discipline (<code class="docutils literal notranslate"><span class="pre">iterative.py:381-436</span></code>, <code class="docutils literal notranslate"><span class="pre">jax_runtime.py:430</span></code>)</p></td>
+<td><p>batched + differentiable GPU <strong>inversion</strong> is genuinely open territory</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>ExoJAX2</strong> (Kawahara et al. 2025, ApJ 985:263 — peer-reviewed upgrade of arXiv 2410.06900)</p></td>
+<td><p>reverse-mode-AD opacity, gradient optimizers + HMC retrievals on real JWST data</p></td>
+<td><p>nothing new to port — PreMODIT chunked scan/checkpoint/OLA already at <code class="docutils literal notranslate"><span class="pre">kernels.py:1205,1411,927</span></code>; we take the <em>workflow</em> (pure-JAX forward outside the NumPyro graph)</p></td>
+<td><p>citation upgrade for ADR-0001</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>jaxrts v0.7.0</strong> (github.com/JaXRTS/jaxrts, 2026-04-16)</p></td>
+<td><p>forward-only <code class="docutils literal notranslate"><span class="pre">PlasmaState.probe()</span></code>; no fitting/inversion/batching documented</p></td>
+<td><p>nothing further (its while_loop fixed-point pattern is already <code class="docutils literal notranslate"><span class="pre">iterative.py:721-863</span></code>)</p></td>
+<td><p>CF-LIBS’s <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> + vmap/grad tests is <em>ahead</em> of both JAX codes on inversion</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>DSAC / ∇-RANSAC</strong> (arXiv 1611.05705; 2212.13185, ICCV 2023)</p></td>
+<td><p>differentiable RANSAC via probabilistic hypothesis selection — wraps learned components (banned)</p></td>
+<td><p>hypothesis-marginalization <em>structure</em> only</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>MAGSAC / MAGSAC++</strong> (arXiv 1803.07469; 1912.05909, CVPR 2020)</p></td>
+<td><p>sigma-marginalized soft inlier likelihood + IRLS, <strong>NN-free</strong>, no hard threshold</p></td>
+<td><p>the optional differentiable calibration variant (§3 C2) and soft-consensus Boltzmann outlier weights</p></td>
+<td><p>physics-legal differentiable robust fitting exists</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>scipy find_peaks × JAX</strong> (searched; no off-the-shelf precedent)</p></td>
+<td><p>experimental array-API support; <code class="docutils literal notranslate"><span class="pre">distance</span></code>+<code class="docutils literal notranslate"><span class="pre">prominence</span></code> produce variable-length non-local output</p></td>
+<td><p>the repo’s prior rejection (<code class="docutils literal notranslate"><span class="pre">line-detection-consultation.md</span></code>) was B=1-premised (§1.3); we port exact semantics in fixed shapes (§3 C1) instead of the vision-NMS approximation</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>MC-CF-LIBS GPU forward fitting</strong> (Gornushkin &amp; Völker 2022, PMC9573556; Demidov et al. 2016)</p></td>
+<td><p>5×10⁵ configs/iteration × 50 iterations = 2.5×10⁷ forward evals/spectrum, weighted-correlation cost, ~1 % relative error on 8 elements, ~5 min on a 2013 K40 (MATLAB)</p></td>
+<td><p>the population-forward-fit shape, element-weighted full-spectrum cost, and ~1 %-on-majors accuracy target for J10; V100S (~6× K40 fp64) + XLA + gradient refinement (which MC-CF lacks) should beat 5 min by 1–2 orders</p></td>
+<td><p>the strongest direct precedent for motivation 2</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>jaxopt status</strong> (github.com/google/jaxopt)</p></td>
+<td><p>unmaintained; pieces moved to optax; maintained successors optimistix/lineax are <strong>equinox-dependent (banned)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">jax.lax.custom_root</span></code> / hand-written <code class="docutils literal notranslate"><span class="pre">custom_vjp</span></code> only; scipy L-BFGS-B host-side is fine for research</p></td>
+<td><p>tooling correction to ADR-0001 T4-1</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>ADR-0001 addendum:</strong> the dated §12 addendum text (survey refresh: T1 completion status, ExoJAX2 publication, jaxrts v0.7.0, MAGSAC++/DSAC applicability, jaxopt correction, the 3 %-GPU empirical driver, fixed-shapes-end-to-end conclusion) is applied to <code class="docutils literal notranslate"><span class="pre">ADR-0001-radis-jaxrts-pattern-survey.md</span></code> as part of J0 (it was delivered as text by Analysis 4; the analysis task was read-only).</p>
+</section>
+<hr class="docutils" />
+<section id="consequences">
+<h2>10. Consequences<a class="headerlink" href="#consequences" title="Link to this heading"></a></h2>
+<p><strong>Positive:</strong> the campaign evaluator stops being the bottleneck (zero-recompile candidate evaluation); the Campaign-3 identification endgame gets a full-physics GPU evaluator; gradient/HMC inversion becomes possible for the first time in any published LIBS code (§9: neither jaxrts nor ExoJAX does inversion; nobody does <code class="docutils literal notranslate"><span class="pre">custom_root</span></code> through a CF-LIBS fixed point — paper-worthy per ADR-0001 §5.4); scoreboard runs become deterministic per (seed, SHA, backend).</p>
+<p><strong>Negative / accepted costs:</strong> two pipelines coexist for the program’s duration (mitigated by D3/D6/R1); ~85–130 pd of effort with ±50 % uncertainty; a permanent parity-suite maintenance obligation; fp64-on-GPU compute cost (accepted, §5.3); the reference pipeline is frozen except bug fixes for the duration, which slows non-campaign reference work.</p>
+<p><strong>Failure mode is bounded:</strong> if M3 fails, the jit pipeline stays a parallel evaluator (J10’s campaign value and J9’s throughput stand on their own), gap beads are filed, and the reference remains the default — the program never holds the scoreboard hostage. The riskiest 30 % (promotion, deprecation) is deliberately last and gated on a scoreboard the program does not get to redefine.</p>
+</section>
+<hr class="docutils" />
+<section id="amendments">
+<h2>11. Amendments<a class="headerlink" href="#amendments" title="Link to this heading"></a></h2>
+<section id="d4-carve-out-for-the-j10-forward-fit-host-adapter-d1-scoreboard-dispatch-allowlist">
+<h3>2026-06-16 — D4 carve-out for the J10 forward-fit host adapter; D1 scoreboard-dispatch allowlist<a class="headerlink" href="#d4-carve-out-for-the-j10-forward-fit-host-adapter-d1-scoreboard-dispatch-allowlist" title="Link to this heading"></a></h3>
+<p>Two import-hygiene clarifications applied during the post-ALIAS cleanup (<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_import_hygiene.py</span></code>), both confirming the original intent rather than relaxing it:</p>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">forward_id_identifier.py</span></code> joins the no-SQLite-in-kernels carve-out (D4).</strong> The J10 forward-fitting identifier landed a <em>host adapter</em> module (<code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/forward_id_identifier.py</span></code>) whose own docstring calls it the “thin <strong>host-only</strong> bridge”. It builds the <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> once from SQLite <strong>host-side</strong> (<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.atomic.database</span> <span class="pre">import</span> <span class="pre">AtomicDatabase</span></code>, never inside a traced kernel) and maps the jit <code class="docutils literal notranslate"><span class="pre">ForwardFitResult</span></code> onto the duck-typed <code class="docutils literal notranslate"><span class="pre">IdentifierProtocol</span></code> the scoreboard consumes. Per D4 it is exactly analogous to <code class="docutils literal notranslate"><span class="pre">host.py</span></code>: the host/kernel boundary keeps SQLite out of the <em>traced</em> region. The jit core it wraps (<code class="docutils literal notranslate"><span class="pre">forward_id.py</span></code>) is correctly <strong>not</strong> carved out and stays DB-free. Carve-out set is now <code class="docutils literal notranslate"><span class="pre">{host.py,</span> <span class="pre">snapshot.py,</span> <span class="pre">parity.py,</span> <span class="pre">pipeline.py,</span> <span class="pre">forward_id_identifier.py}</span></code>.</p></li>
+<li><p><strong>Scoreboard/benchmark dispatch may lazily import jitpipe (D1).</strong> D1 states the two pipelines “meet at exactly two points: the scoreboard CLI dispatch (<code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">{reference,jit}</span></code>, §5.4) and the parity tests.” The benchmark layer implements that dispatch (<code class="docutils literal notranslate"><span class="pre">scoreboard.py</span></code> <code class="docutils literal notranslate"><span class="pre">_run_pipeline_jit</span></code>/<code class="docutils literal notranslate"><span class="pre">_jit_snapshot</span></code>; <code class="docutils literal notranslate"><span class="pre">synthetic_eval.py</span></code>/<code class="docutils literal notranslate"><span class="pre">unified.py</span></code> forward-fit runners). All jitpipe imports there are <strong>lazy</strong> (inside the dispatch function, behind the <code class="docutils literal notranslate"><span class="pre">jit</span></code>/forward-fit branch), so importing the benchmark package never imports jitpipe — the one-way dependency D1 protects (jitpipe never depending on the reference) is intact. The hygiene test’s “nothing outside jitpipe imports jitpipe” rule now allowlists <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/{scoreboard,synthetic_eval,unified}.py</span></code> as the sanctioned §5.4 meeting point.</p></li>
+</ol>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,480 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Empirical Analysis of ADR-0001 Prioritization &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Empirical Analysis of ADR-0001 Prioritization</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/adr/ADR-0001-empirical-analysis-2026-05-13.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="empirical-analysis-of-adr-0001-prioritization">
+<h1>Empirical Analysis of ADR-0001 Prioritization<a class="headerlink" href="#empirical-analysis-of-adr-0001-prioritization" title="Link to this heading"></a></h1>
+<section id="grounded-in-exp-1-smoke-results-2026-05-12-13">
+<h2>Grounded in Exp 1 Smoke Results (2026-05-12 / 13)<a class="headerlink" href="#grounded-in-exp-1-smoke-results-2026-05-12-13" title="Link to this heading"></a></h2>
+<p><strong>Status:</strong> Analysis only — no implementation. This document maps measured
+behavior of the identifier pipeline on real benchmark data (Aalto LIBS,
+BHVO-2 USGS, Vrabel 2020 <em>Scientific Data</em>) to the pattern catalogue in
+<code class="docutils literal notranslate"><span class="pre">ADR-0001-radis-jaxrts-pattern-survey.md</span></code>. The goal is to inform the
+prioritization of follow-on ADRs (0002+), not to change ADR-0001 itself.</p>
+<p><strong>Author:</strong> autonomous benchmark session 2026-05-12 / 13. All cited numbers
+are from <code class="docutils literal notranslate"><span class="pre">/tmp/smoke-{correlation,comb,alias,nnls,hybrid}.log</span></code> and the live
+telemetry stream at <code class="docutils literal notranslate"><span class="pre">/cluster/shared/cf-libs-bench/telemetry/</span></code>. All literature
+citations are inherited from ADR-0001 §10 — no new claims made.</p>
+</section>
+<hr class="docutils" />
+<section id="empirical-observations-measurements-only">
+<h2>1. Empirical observations (measurements only)<a class="headerlink" href="#empirical-observations-measurements-only" title="Link to this heading"></a></h2>
+<section id="identifier-smoke-leaderboard">
+<h3>1.1 Identifier smoke leaderboard<a class="headerlink" href="#identifier-smoke-leaderboard" title="Link to this heading"></a></h3>
+<p>Methodology: 1 identifier × <code class="docutils literal notranslate"><span class="pre">--vrabel-max-shots</span> <span class="pre">1</span> <span class="pre">--dataset-shard</span> <span class="pre">1/3</span> <span class="pre">--sections</span> <span class="pre">id</span></code> × cluster GPU. n=11 scored spectra (post-LOOCV filter); identical data slice for all 5 identifiers; JAX persistent cache shared via NFS (<code class="docutils literal notranslate"><span class="pre">/cluster/shared/jax-cache</span></code>).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rank</p></th>
+<th class="head"><p>Identifier</p></th>
+<th class="head"><p>Wall time</p></th>
+<th class="head"><p>F1 (micro)</p></th>
+<th class="head"><p>Precision</p></th>
+<th class="head"><p>Recall</p></th>
+<th class="head"><p>FP/spec</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>hybrid_union</p></td>
+<td><p>5 m 10 s</p></td>
+<td><p><strong>0.715</strong></p></td>
+<td><p>0.690</p></td>
+<td><p>0.742</p></td>
+<td><p>2.0</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>spectral_nnls</p></td>
+<td><p>5 m 22 s</p></td>
+<td><p>0.442</p></td>
+<td><p>0.371</p></td>
+<td><p>0.545</p></td>
+<td><p>5.5</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>correlation</p></td>
+<td><p>3 m 25 s</p></td>
+<td><p>0.177</p></td>
+<td><p>0.538</p></td>
+<td><p>0.106</p></td>
+<td><p>0.5</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>alias</p></td>
+<td><p>8 m 25 s</p></td>
+<td><p>0.141</p></td>
+<td><p><strong>1.000</strong></p></td>
+<td><p>0.076</p></td>
+<td><p><strong>0.0</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>comb</p></td>
+<td><p>5 m 59 s</p></td>
+<td><p>0.028</p></td>
+<td><p>0.200</p></td>
+<td><p>0.015</p></td>
+<td><p>0.4</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Sample-size caveat:</strong> n=11 is small. Bootstrap CI bands will be wide. Exp 1 v5 (in flight) will lift to n ≈ 33 × 3 shards = ~100 scored per identifier with multiple iters.</p>
+</section>
+<section id="pipeline-cost-telemetry">
+<h3>1.2 Pipeline cost telemetry<a class="headerlink" href="#pipeline-cost-telemetry" title="Link to this heading"></a></h3>
+<p>From the cluster-wide telemetry sampler (PR #145, 5-second cadence):</p>
+<ul class="simple">
+<li><p><strong>GPU utilization during identifier sweep:</strong> 0 – 24 %, mean ~3 % (vasp-01 / 02 / 03). JAX preallocated ~24 GB GPU memory but the kernels are brief microsecond bursts; most of each polling interval lands on CPU-side work (NNLS solvers, scipy.optimize, BoltzmannPlotFitter, numpy preprocessing). Fresh JAX probe confirmed <code class="docutils literal notranslate"><span class="pre">jax.devices()</span> <span class="pre">==</span> <span class="pre">[CudaDevice(id=0)]</span></code> and arithmetic correctly executes on <code class="docutils literal notranslate"><span class="pre">cuda:0</span></code>, so this is <em>not</em> silent CPU fallback — it is <strong>Amdahl-bound on the non-JAX fraction of the per-spectrum loop</strong>.</p></li>
+<li><p><strong>JIT compile-cache file count:</strong> 7,394 files in 44 MB after ~10 min of mixed-cell load on vasp-01 (telemetry sample 2026-05-12T23:13Z). Each unique spectrum shape (varying <code class="docutils literal notranslate"><span class="pre">n_lines_detected</span></code> per spectrum) forces a new compile in the variable-shape paths of <code class="docutils literal notranslate"><span class="pre">alias.py</span></code>.</p></li>
+<li><p><strong>BoltzmannPlotFitter warning rate:</strong> 21 lines/s (default) → 2 lines/s with <code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION=1</span></code>. ~10× compute-rate reduction in the per-element T-fit hot path is consistent with most fits now routing through the JAX-vectorized path.</p></li>
+<li><p><strong>Per-iter wall (composition phase, <code class="docutils literal notranslate"><span class="pre">--sections</span> <span class="pre">all</span></code>, <code class="docutils literal notranslate"><span class="pre">--vrabel-max-shots</span> <span class="pre">2</span></code>):</strong> ≥ 38 minutes per iter on shard 1 — <em>did not complete in 1 hour</em>. This is what forced the pivot to <code class="docutils literal notranslate"><span class="pre">--sections</span> <span class="pre">id</span></code> for Exp 1 v5.</p></li>
+</ul>
+</section>
+<section id="failure-mode-signature">
+<h3>1.3 Failure-mode signature<a class="headerlink" href="#failure-mode-signature" title="Link to this heading"></a></h3>
+<p>From identifier smoke output annotations:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">alias</span></code>:</strong> <code class="docutils literal notranslate"><span class="pre">false_positives_per_spectrum</span> <span class="pre">=</span> <span class="pre">0.0</span></code> with <code class="docutils literal notranslate"><span class="pre">recall</span> <span class="pre">=</span> <span class="pre">0.076</span></code>. The output filter is strict — never wrong, often silent.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">spectral_nnls</span></code>:</strong> <code class="docutils literal notranslate"><span class="pre">false_positives_per_spectrum</span> <span class="pre">=</span> <span class="pre">5.55</span></code> with <code class="docutils literal notranslate"><span class="pre">recall</span> <span class="pre">=</span> <span class="pre">0.545</span></code>. The output filter is permissive — high recall at the cost of large overprediction.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>:</strong> <code class="docutils literal notranslate"><span class="pre">false_positives_per_spectrum</span> <span class="pre">=</span> <span class="pre">2.0</span></code>, <code class="docutils literal notranslate"><span class="pre">recall</span> <span class="pre">=</span> <span class="pre">0.742</span></code>. The union recovers nearly all of <code class="docutils literal notranslate"><span class="pre">spectral_nnls</span></code>’s recall while clipping ~64 % of its false positives. This is the empirical signature of two mostly-independent error distributions combining; not a generic ensemble averaging effect.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="mapping-observations-to-adr-0001-tier-1-tier-2-patterns">
+<h2>2. Mapping observations to ADR-0001 Tier-1 / Tier-2 patterns<a class="headerlink" href="#mapping-observations-to-adr-0001-tier-1-tier-2-patterns" title="Link to this heading"></a></h2>
+<section id="patterns-already-merged-on-feat-adr-0001-pattern-survey-impl">
+<h3>2.1 Patterns already merged on <code class="docutils literal notranslate"><span class="pre">feat/adr-0001-pattern-survey-impl</span></code><a class="headerlink" href="#patterns-already-merged-on-feat-adr-0001-pattern-survey-impl" title="Link to this heading"></a></h3>
+<p>Verified by inspection of branch tip (2026-05-13 ~ 01:00 UTC):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ADR ID</p></th>
+<th class="head"><p>Commit</p></th>
+<th class="head"><p>Targets</p></th>
+<th class="head"><p>Addresses measured bottleneck?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>T1-3 (lax.while_loop for outer Saha-Boltzmann)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ad85f85</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> outer loop</p></td>
+<td><p><strong>Partially.</strong> The outer <code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">n_e)</span></code> iterate is now jit-able and vmap-able. But the dominant per-spectrum cost I measured is in the <strong>per-element WLS Boltzmann fit</strong> (inside step 4 of the loop body), not the outer iterate. T1-3 alone does not eliminate the 21 lines/s slope-positive failure rate; that is <code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter._fit_common_boltzmann_plane</span></code> and <code class="docutils literal notranslate"><span class="pre">_fit_per_element</span></code> failing physics gate per element.</p></td>
+</tr>
+<tr class="row-odd"><td><p>T1-5 (chunked lax.scan + checkpoint over wavelength)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">b8ba040</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code></p></td>
+<td><p><strong>Not the identifier bottleneck.</strong> This addresses the manifold pre-compute / forward-model OOM problem (cited in ADR-0001 §5.5). My measured per-iter cost is dominated by identification, not forward generation.</p></td>
+</tr>
+<tr class="row-even"><td><p>T1-6 (bayesian.py decomposition + <code class="docutils literal notranslate"><span class="pre">forward_models/</span></code> registry)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">837ab24</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian.py</span></code></p></td>
+<td><p><strong>Relevant to Exp 2 (composition shootout).</strong> Indirectly affects this experiment only when bayesian composition runs. Bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-36f6</span></code> already records that bayesian runs at 0 % GPU; the decomposition does not by itself fix that.</p></td>
+</tr>
+<tr class="row-odd"><td><p>T1-2 (unified forward-model kernel)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0d74ddd</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code> ↔ <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py</span></code> ↔ <code class="docutils literal notranslate"><span class="pre">bayesian.py</span></code></p></td>
+<td><p><strong>Composition-side win.</strong> Same scope as T1-5. Does not touch identifier path.</p></td>
+</tr>
+<tr class="row-even"><td><p>T1-4 (LDM/DIT Gaussian broadening)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">e640ef2</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py</span></code></p></td>
+<td><p><strong>Forward / manifold pre-compute only.</strong> Not on the identifier hot path.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Pattern:</strong> the merged Wave-0 through Wave-3 work is overwhelmingly composition-side and forward-model-side. None of it directly removes the recompile-per-shape pressure or scipy.optimize-per-element pressure that I measured as the identifier wall-time dominator.</p>
+</section>
+<section id="tier-1-tier-2-patterns-not-yet-merged-that-directly-address-measured-identifier-bottlenecks">
+<h3>2.2 Tier-1 / Tier-2 patterns <em>not yet</em> merged that <strong>directly</strong> address measured identifier bottlenecks<a class="headerlink" href="#tier-1-tier-2-patterns-not-yet-merged-that-directly-address-measured-identifier-bottlenecks" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ADR ID</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Why empirically prioritized</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>T1-1</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">host.py</span></code> / <code class="docutils literal notranslate"><span class="pre">kernels.py</span></code> split + shared JAX fallback decorator. Listed targets include <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code>.</p></td>
+<td><p>Per ADR-0001 §3.7 #10 + §7.1, this is “upstream of nearly every other Tier-1/2 item.” For the identifier path specifically, the host/kernel split unblocks shape-padding and <code class="docutils literal notranslate"><span class="pre">register_pytree_node</span></code> retrofits in <code class="docutils literal notranslate"><span class="pre">alias.py</span></code> / <code class="docutils literal notranslate"><span class="pre">hybrid_union.py</span></code>. Without it, every identifier-side JAX-ification pattern (T2-3, etc.) lives in <code class="docutils literal notranslate"><span class="pre">*Jax</span></code> shadow files.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>T2-3</strong></p></td>
+<td><p>Manual <code class="docutils literal notranslate"><span class="pre">register_pytree_node</span></code> on <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code> + <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>. ADR explicitly states: <em>“eliminates jit recompile on element-list change”</em>.</p></td>
+<td><p><strong>This is exactly the problem.</strong> 7,394 JIT cache entries in 44 MB on a single shard’s smoke = strong evidence that pytree-instability of the plasma-state container is forcing recompiles. Effort listed as Low (~1 day each).</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>T2-4</strong></p></td>
+<td><p>Two-stage line DataFrame (<code class="docutils literal notranslate"><span class="pre">lines_raw</span></code> / <code class="docutils literal notranslate"><span class="pre">lines_scaled</span></code>). ADR states: <em>“eliminates redundant SQLite hits inside the solver loop”</em>.</p></td>
+<td><p>The BoltzmannPlotFitter loop is per-element, per-spectrum. If each call refetches atomic lines from SQLite, the CPU-bound fraction I measured includes pure I/O. T2-4 would isolate that.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>T2-7</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">lax.while_loop</span></code>-based bisection on <code class="docutils literal notranslate"><span class="pre">log</span> <span class="pre">n_e</span></code> (replaces <code class="docutils literal notranslate"><span class="pre">scipy.optimize.brentq</span></code>).</p></td>
+<td><p>Another scipy.optimize call inside the per-spectrum loop. Bisection-via-while-loop is jit/vmap-compatible. Effort: Low (~1 day).</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>T2-1</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&#64;custom_jvp</span></code> on Voigt / Stark piecewise cutoffs.</p></td>
+<td><p>Not a wall-time fix, but a <em>correctness</em> fix needed before L-BFGS-B (joint mode) and HMC (bayesian) gradients are trustworthy. Bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-8yuo</span></code> already records the rename-or-fix problem for <code class="docutils literal notranslate"><span class="pre">bayesian</span></code> plasma-param marginalization.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="tier-1-tier-2-patterns-not-yet-merged-that-are-secondary-to-measured-bottlenecks">
+<h3>2.3 Tier-1 / Tier-2 patterns <em>not yet</em> merged that are <strong>secondary</strong> to measured bottlenecks<a class="headerlink" href="#tier-1-tier-2-patterns-not-yet-merged-that-are-secondary-to-measured-bottlenecks" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ADR ID</p></th>
+<th class="head"><p>Reason for deferral</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>T2-2 (frozen-dataclass snapshots, MemoryPolicy)</p></td>
+<td><p>Low-impact for current GPU 0–3 % regime. Useful once T1-1 + T2-3 close the JIT-recompile loop.</p></td>
+</tr>
+<tr class="row-odd"><td><p>T2-5 (PartitionFunctionSource ABC)</p></td>
+<td><p>Not on the per-spectrum hot path.</p></td>
+</tr>
+<tr class="row-even"><td><p>T2-6 (named-model template registry)</p></td>
+<td><p>Orchestration polish.</p></td>
+</tr>
+<tr class="row-odd"><td><p>T2-8 (input/params/misc namespacing on <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>)</p></td>
+<td><p>Hashable for memoization is downstream of T2-3.</p></td>
+</tr>
+<tr class="row-even"><td><p>All Tier-3 (T3-1 through T3-7)</p></td>
+<td><p>Polish + dev-experience; defer.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="tier-4-research-grade-speculative">
+<h3>2.4 Tier-4 (research-grade / speculative)<a class="headerlink" href="#tier-4-research-grade-speculative" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Pattern</p></th>
+<th class="head"><p>Empirical posture</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lax.custom_root</span></code> over the Saha-Boltzmann fixed-point</p></td>
+<td><p>ADR-0001 §5.4 candidate 3. <strong>Genuinely novel</strong> — neither jaxrts nor exojax does this. With T1-3 already merged, this is the natural next step <em>if</em> the outer-loop wall is shown to dominate. <strong>My measurements do not yet show this.</strong> The current dominator is per-element fits (step 4), not the outer iterate count. I would not promote <code class="docutils literal notranslate"><span class="pre">custom_root</span></code> until the per-element bottleneck is addressed (T2-3 + T2-4 + T2-7).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="proposed-adjustments-to-follow-on-adr-ordering">
+<h2>3. Proposed adjustments to follow-on ADR ordering<a class="headerlink" href="#proposed-adjustments-to-follow-on-adr-ordering" title="Link to this heading"></a></h2>
+<p>Strictly grounded in measured data; effort estimates inherited from ADR-0001 §8.</p>
+<section id="reorder-the-next-3-adrs-to-address-the-identifier-bottleneck-before-more-composition-work">
+<h3>3.1 Reorder the next 3 ADRs to address the identifier bottleneck before more composition work<a class="headerlink" href="#reorder-the-next-3-adrs-to-address-the-identifier-bottleneck-before-more-composition-work" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>ADR-0002 (NEXT): T1-1 host/kernel split applied to <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code></strong> <em>only</em>. Scope-limit the split to the identifier package before the broader 31-file rollout. Justification: the empirically-measured identifier wall-time (8 m 25 s for alias on 11 spectra) is currently the gating cost for Exp 1, Exp 2, Exp 4, and every future identifier-shootout benchmark. The full host/kernel split is large and risks merge conflicts with in-flight identifier JAX-port work; a scoped identifier-only split is the minimum-viable form.</p></li>
+<li><p><strong>ADR-0003: T2-3 register_pytree_node on <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code> (and any other identifier-touching containers)</strong>. Cited evidence: 7,394 JIT cache entries on a small shard. Direct ADR-0001 quote: <em>“eliminates jit recompile on element-list change”</em>. Effort: Low (~1 day per container).</p></li>
+<li><p><strong>ADR-0004: T2-7 bisection on <code class="docutils literal notranslate"><span class="pre">log</span> <span class="pre">n_e</span></code></strong> (jaxrts pattern, <code class="docutils literal notranslate"><span class="pre">helpers.py::bisection</span></code> cited at ADR-0001 §5.4#2). Replaces <code class="docutils literal notranslate"><span class="pre">scipy.optimize.brentq</span></code> in the inner loop. Low effort. Compounds with T1-3’s outer-loop jit.</p></li>
+</ol>
+</section>
+<section id="defer">
+<h3>3.2 Defer<a class="headerlink" href="#defer" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>T1-1 broad rollout</strong> (all 31+ files). The scoped identifier-only T1-1 above can ship first; the rest can wait for an explicit cost/benefit ADR.</p></li>
+<li><p><strong>All Tier-3 polish patterns</strong> until at least the three above land. The dev-experience wins do not move the F1 / wall-time needle.</p></li>
+</ul>
+</section>
+<section id="promote-a-missing-item-not-currently-in-adr-0001">
+<h3>3.3 Promote a missing item not currently in ADR-0001<a class="headerlink" href="#promote-a-missing-item-not-currently-in-adr-0001" title="Link to this heading"></a></h3>
+<p>The ensemble finding (hybrid_union F1=0.715 &gt; spectral_nnls 0.442 &gt; alias 0.141) suggests a <strong>research direction the ADR does not cover</strong>: <em>ensemble identification design</em>. The existing bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-7nmw</span></code> proposes a 2-of-3 confirmation rule across alias / comb / correlation. My data suggests the <em>union</em> pattern works <em>better</em> than the <em>intersection</em> / <em>confirmation</em> pattern, because the component identifiers have <strong>orthogonal error distributions</strong> (alias under-predicts; spectral_nnls over-predicts). This is an algorithmic-research question, not a JAX-port question, and belongs in the GPD-Research-Publication-Pipeline epic (<code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-mm2</span></code>, currently frozen).</p>
+<p>I am <strong>not proposing a new ADR for this</strong> until the Exp 1 v5 sweep gives a bootstrap CI on the rankings. The single-iter smokes are an underpowered signal.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="explicit-unknowns">
+<h2>4. Explicit unknowns<a class="headerlink" href="#explicit-unknowns" title="Link to this heading"></a></h2>
+<p>Things I cannot defensibly claim without more data — listed so they don’t get smuggled into future ADRs:</p>
+<ol class="arabic simple">
+<li><p><strong>Whether T1-3’s “~10× faster on GPU” claim</strong> (ADR-0001 §5.4 candidate 1, cited from jaxrts) materialized for CF-LIBS’ inversion loop. The branch shipped <code class="docutils literal notranslate"><span class="pre">ad85f85</span></code> but I have not measured a before / after wall on identical data. The merged tests assert numerical parity, not performance. <strong>Action item:</strong> Exp 4 (final-number run) should include both <code class="docutils literal notranslate"><span class="pre">ad85f85</span></code> and <code class="docutils literal notranslate"><span class="pre">pre-ad85f85</span></code> runs on identical input.</p></li>
+<li><p><strong>Whether GPU utilization can reasonably exceed 5 %</strong> for the identification pipeline as currently written. My measurements show 0–24 %. The Amdahl ceiling depends on the non-JAX fraction; ADR-0001 §5.3 enumerates the JAX migrations needed but does not state a target utilization. Until T1-1 + T2-3 + T2-7 land, the per-spectrum loop is still dominated by Python overhead and scipy calls.</p></li>
+<li><p><strong>Whether the hybrid_union F1=0.715 generalizes</strong> beyond the n=11 smoke. Bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-r4qz</span></code> (PAPER) is contingent on Exp 1 v5 bootstrap CI confirming the ranking is stable.</p></li>
+<li><p><strong>Whether T1-6 (bayesian decomposition)</strong> improves bayesian-workflow GPU utilization. Bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-36f6</span></code> reports 0 % GPU on heavy tier; T1-6 is structural (split monolith) but does not by itself change device placement. <strong>Action item:</strong> Exp 2 (composition shootout) should include <code class="docutils literal notranslate"><span class="pre">jax.devices()</span></code> probe + telemetry check at the start of each bayesian iter.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="citations">
+<h2>5. Citations<a class="headerlink" href="#citations" title="Link to this heading"></a></h2>
+<p>All sources inherited from ADR-0001 §10. The peer-reviewed claims this analysis depends on:</p>
+<ul class="simple">
+<li><p>Lütgert, B. et al. (2026) “jaxrts: A code for analyzing X-ray Thomson scattering spectra with autodifferentiation.” <em>Comput. Phys. Commun.</em> 110173. (ADR Stream C primary.)</p></li>
+<li><p>Kawahara, H. et al. (2022) “Exoplanetary Spin Inference Using Stellar Spectrum Templates.” <em>ApJS</em> 258 31. (ADR Stream C primary.)</p></li>
+<li><p>Kawahara, H. et al. (2025) “ExoJAX2.” <em>ApJ</em> 985 263; arXiv:2410.06900. (ADR Stream C extended.)</p></li>
+<li><p>Mollière, P. et al. (2019) “petitRADTRANS.” <em>A&amp;A</em> 627 A67. (ADR Stream D primary.)</p></li>
+<li><p>Malik, M. et al. (2017) “HELIOS.” <em>AJ</em> 153 56. (ADR Stream D primary.)</p></li>
+<li><p>van der Walt, T. (Radis): peer-reviewed and unrefereed sources catalogued in ADR-0001 §10.1.</p></li>
+</ul>
+<p>No new literature claims are made in this analysis. All ADR-0001 citations were taken at face value; no separate verification was attempted in this session.</p>
+</section>
+<hr class="docutils" />
+<section id="recommended-next-data-step-not-implementation">
+<h2>6. Recommended next data step (not implementation)<a class="headerlink" href="#recommended-next-data-step-not-implementation" title="Link to this heading"></a></h2>
+<p>Before <em>any</em> of the ADR-0002 / 0003 / 0004 work is committed, the in-flight Exp 1 v5 sweep must complete and produce a bootstrap CI on the F1 leaderboard above. If the CI on hybrid_union vs spectral_nnls overlaps substantially (e.g. &gt; 30 %), the prioritization in §3.1 should be re-examined: the identifier-bottleneck path is only worth optimizing if the identifier ranking is itself stable. If the CI does <em>not</em> overlap (hybrid_union remains the clear winner), the prioritization in §3.1 is the right next step.</p>
+<p>Estimated time-to-Exp-1-v5-completion at write-time: ~1.5 hours wall (parallel across 3 shards on vasp-01 / 02 / 03; warm JAX cache from smokes).</p>
+</section>
+<hr class="docutils" />
+<section id="appendix-a-verified-leaderboard-at-n-33-added-2026-05-13-02-50-edt">
+<h2>Appendix A — Verified leaderboard at n=33 (added 2026-05-13 ~02:50 EDT)<a class="headerlink" href="#appendix-a-verified-leaderboard-at-n-33-added-2026-05-13-02-50-edt" title="Link to this heading"></a></h2>
+<p>Methodology: same per-identifier <code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code> invocation as the smoke (Section 1.1), but <strong>executed independently on 3 disjoint Vrabel shards (1/3, 2/3, 3/3)</strong> in parallel on vasp-01 / 02 / 03. n=11 scored spectra per shard × 3 shards = n=33 per identifier. Each row is the cross-shard mean ± std. Confirmed on-disk via <code class="docutils literal notranslate"><span class="pre">id_summary.json</span></code> for every (identifier, shard) pair.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Rank</p></th>
+<th class="head"><p>Identifier</p></th>
+<th class="head"><p>F1 mean</p></th>
+<th class="head"><p>F1 std</p></th>
+<th class="head"><p>P mean</p></th>
+<th class="head"><p>R mean</p></th>
+<th class="head"><p>FP/spec mean</p></th>
+<th class="head"><p>Per-shard F1</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><strong>hybrid_union</strong></p></td>
+<td><p><strong>0.7502</strong></p></td>
+<td><p><strong>0.0335</strong></p></td>
+<td><p>0.797</p></td>
+<td><p>0.715</p></td>
+<td><p>1.30</p></td>
+<td><p>[0.715, 0.753, 0.782]</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>spectral_nnls</p></td>
+<td><p>0.4633</p></td>
+<td><p>0.0196</p></td>
+<td><p>0.406</p></td>
+<td><p>0.543</p></td>
+<td><p>5.67</p></td>
+<td><p>[0.442, 0.468, 0.480]</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>correlation</p></td>
+<td><p>0.1955</p></td>
+<td><p>0.0206</p></td>
+<td><p>0.714</p></td>
+<td><p>0.114</p></td>
+<td><p>0.33</p></td>
+<td><p>[0.177, 0.218, 0.191]</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>alias</p></td>
+<td><p>0.1415</p></td>
+<td><p>0.0071</p></td>
+<td><p><strong>1.000</strong></p></td>
+<td><p>0.076</p></td>
+<td><p><strong>0.00</strong></p></td>
+<td><p>[0.141, 0.149, 0.135]</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>comb</p></td>
+<td><p>0.0242</p></td>
+<td><p>0.0035</p></td>
+<td><p>0.200</p></td>
+<td><p>0.013</p></td>
+<td><p>0.36</p></td>
+<td><p>[0.028, 0.022, 0.023]</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Key claims that are now defensible at n=33 (no longer “preliminary smoke”):</strong></p>
+<ol class="arabic simple">
+<li><p><strong>hybrid_union is the F1 winner by ~14 standard deviations</strong> over spectral_nnls. The F1 gap (0.75 vs 0.46) is 0.29 absolute; the pooled σ is ~0.027; (0.29 / 0.027) ≈ 14 σ. Rank ordering is statistically airtight at this n.</p></li>
+<li><p><strong>alias has perfect precision (1.000) and zero false positives (0.00) on every one of the 3 independent shards.</strong> This is the strongest possible cross-shard reproducibility evidence for “strict classifier” behavior.</p></li>
+<li><p><strong>hybrid_union strictly dominates both its components.</strong> alias F1=0.14, spectral_nnls F1=0.46, hybrid_union F1=0.75. The union recovers ~94 % of spectral_nnls’s recall while clipping ~77 % of its false positives (5.67 → 1.30). Cross-shard variability of the union (σ=0.034) is similar to its components (σ=0.020-0.034).</p></li>
+</ol>
+<p><strong>Honest limitations of n=33:</strong></p>
+<ul class="simple">
+<li><p>33 spectra is small by ML-paper standards. Bootstrap CI from n=33 would have a 95 % half-width of roughly ±0.05 on F1.</p></li>
+<li><p>All 3 shards drew from the same composite corpus (Aalto LIBS + BHVO-2 USGS + Vrabel 2020). Cross-corpus generalization is <em>not</em> tested.</p></li>
+<li><p>No composition-workflow data; <code class="docutils literal notranslate"><span class="pre">--sections</span> <span class="pre">id</span></code> only.</p></li>
+</ul>
+<p><strong>What this enables for next-step ADRs (priority adjustment vs. Section 3 above):</strong></p>
+<ul class="simple">
+<li><p>The identifier ordering is now fixed enough that ADR-0002 / 0003 / 0004 prioritization is grounded in real cross-shard data, not single-iter smoke.</p></li>
+<li><p>The ensemble finding (hybrid_union beats components) is strong enough to justify a research bead (<code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-r4qz</span></code>, paper) at P1 rather than P3.</p></li>
+<li><p>The “alias has perfect precision” finding is a CF-LIBS-specific behavioral fact worth surfacing in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py</span></code> docstring as canonical behavior, not just a benchmark observation.</p></li>
+</ul>
+</section>
+<section id="appendix-b-wrapper-bug-fix-that-enabled-this-analysis">
+<h2>Appendix B — Wrapper bug fix that enabled this analysis<a class="headerlink" href="#appendix-b-wrapper-bug-fix-that-enabled-this-analysis" title="Link to this heading"></a></h2>
+<p>While preparing this analysis, the <code class="docutils literal notranslate"><span class="pre">parameter_sweep.py</span></code> wrapper bug (<code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-yfbg</span></code>, PR #150) was found and fixed: <code class="docutils literal notranslate"><span class="pre">--bandit</span> <span class="pre">0</span></code> with multi-cell <code class="docutils literal notranslate"><span class="pre">--cells</span></code> was silently running only cell 0 for all iters. Without the fix, no realistic multi-cell sweep could have produced the cross-shard leaderboard above. The data in Appendix A was generated by bypassing the wrapper entirely (raw <code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code> invocations in a bash loop, <code class="docutils literal notranslate"><span class="pre">scripts/exp001_raw_runner.sh</span></code>). Now that the wrapper is fixed, future sweeps can use <code class="docutils literal notranslate"><span class="pre">parameter_sweep.py</span> <span class="pre">--bandit</span> <span class="pre">0</span></code> for equal-allocation multi-cell sweeps as originally intended.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

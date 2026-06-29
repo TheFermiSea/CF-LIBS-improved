@@ -1,0 +1,369 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: Benchmark Package &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: Benchmark Package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/benchmark.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-benchmark-package">
+<h1>Adversarial Verification: Benchmark Package<a class="headerlink" href="#adversarial-verification-benchmark-package" title="Link to this heading"></a></h1>
+<p><strong>Verifier:</strong> claude-sonnet-4-6 (adversarial pass)
+<strong>Date:</strong> 2026-06-25
+<strong>Method:</strong> ripgrep + Read; re-derived against literature in <code class="docutils literal notranslate"><span class="pre">scratchpad/overhaul/literature/</span></code></p>
+<hr class="docutils" />
+<section id="finding-1-mole-fraction-mass-fraction-mismatch">
+<h2>Finding 1 — Mole-fraction / mass-fraction mismatch<a class="headerlink" href="#finding-1-mole-fraction-mass-fraction-mismatch" title="Link to this heading"></a></h2>
+<p><strong>Census severity:</strong> critical
+<strong>REAL:</strong> TRUE
+<strong>Confirmed severity:</strong> critical</p>
+<p><strong>Reasoning:</strong> Independently verified all three cited locations.
+<code class="docutils literal notranslate"><span class="pre">dataset.py:342-378</span></code> docstring states <code class="docutils literal notranslate"><span class="pre">true_composition</span></code> is “mass fractions (sum to 1.0)” and all
+dataset adapters confirm this: <code class="docutils literal notranslate"><span class="pre">datasets/nist_steel.py</span></code> calls <code class="docutils literal notranslate"><span class="pre">as_mass_fractions()</span></code> (which divides
+wt% by 100); <code class="docutils literal notranslate"><span class="pre">synthetic_corpus.py:566</span></code> stores <code class="docutils literal notranslate"><span class="pre">recipe.mass_fractions</span></code> as <code class="docutils literal notranslate"><span class="pre">true_composition</span></code>.
+The iterative solver (<code class="docutils literal notranslate"><span class="pre">inversion/solve/iterative.py:109</span></code>) explicitly documents its output as
+“Element concentrations (number/mole fractions, sum to 1)” and says to “Convert to mass fractions
+via…”. <code class="docutils literal notranslate"><span class="pre">composition_eval.py:_coerce_composition_prediction</span></code> normalises the solver output but
+performs no molar-mass conversion; <code class="docutils literal notranslate"><span class="pre">_build_composition_success_record</span></code> passes the raw number
+fractions as <code class="docutils literal notranslate"><span class="pre">concentrations</span></code> directly into <code class="docutils literal notranslate"><span class="pre">aitchison_distance(true_comp,</span> <span class="pre">concentrations)</span></code> at
+line 266. There is no <code class="docutils literal notranslate"><span class="pre">to_mass_fractions</span></code> call anywhere in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code>. The Völker (2024)
+pitfall P5 in <code class="docutils literal notranslate"><span class="pre">literature/cflibs-method.md</span></code> explicitly quantifies errors up to 353% for this
+omission in steel. The census claim is fully confirmed — every dataset uses mass fractions as
+truth, every solver returns number fractions, and no conversion is ever applied.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-lod-estimation-uses-25th-percentile-as-blank-proxy">
+<h2>Finding 2 — LOD estimation uses 25th-percentile as blank proxy<a class="headerlink" href="#finding-2-lod-estimation-uses-25th-percentile-as-blank-proxy" title="Link to this heading"></a></h2>
+<p><strong>Census severity:</strong> high
+<strong>REAL:</strong> TRUE
+<strong>Confirmed severity:</strong> high</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">metrics.py:550-554</span></code> confirmed verbatim:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">low_mask</span> <span class="o">=</span> <span class="n">true_values</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">true_values</span><span class="p">,</span> <span class="mi">25</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">low_mask</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
+    <span class="n">lod</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals</span><span class="p">[</span><span class="n">low_mask</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>The IUPAC definition (ISO 11843) of LOD = 3σ_blank requires the standard deviation of blank
+(zero-concentration) measurements. When the minimum certified concentration in NIST steel or
+USGS standards is 0.01–2 wt%, the “bottom 25th percentile” contains samples with ~0.01–0.5 wt%
+analyte — not blanks. The resulting σ measures inversion residual scatter at low but nonzero
+concentrations, which systematically overestimates σ_blank (because it includes composition
+uncertainty, not just instrument noise). As a result, LOD is inflated and the <code class="docutils literal notranslate"><span class="pre">traces</span></code> stratum
+gate misfires. No blank spectra concept exists in <code class="docutils literal notranslate"><span class="pre">BenchmarkSpectrum</span></code>. The census claim is
+accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-3-simplified-fallback-model-omits-partition-function">
+<h2>Finding 3 — Simplified fallback model omits partition function<a class="headerlink" href="#finding-3-simplified-fallback-model-omits-partition-function" title="Link to this heading"></a></h2>
+<p><strong>Census severity:</strong> high
+<strong>REAL:</strong> TRUE
+<strong>Confirmed severity:</strong> high</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">synthetic.py:604-607</span></code> confirmed:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">boltz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">E_k</span> <span class="o">/</span> <span class="p">(</span><span class="n">KB_EV</span> <span class="o">*</span> <span class="n">temperature_K</span><span class="p">))</span>
+<span class="n">intensity</span> <span class="o">=</span> <span class="n">conc</span> <span class="o">*</span> <span class="n">rel_int</span> <span class="o">*</span> <span class="n">boltz</span> <span class="o">*</span> <span class="mf">1e4</span>
+</pre></div>
+</div>
+<p>The canonical intensity formula (<code class="docutils literal notranslate"><span class="pre">literature/cflibs-method.md</span></code> eq. 1.1, Ciucci 1999) is
+<code class="docutils literal notranslate"><span class="pre">I</span> <span class="pre">∝</span> <span class="pre">(A</span> <span class="pre">g_k</span> <span class="pre">/</span> <span class="pre">U_s(T))</span> <span class="pre">·</span> <span class="pre">exp(-E_k</span> <span class="pre">/</span> <span class="pre">k_B</span> <span class="pre">T)</span></code>. The partition function <code class="docutils literal notranslate"><span class="pre">U_s(T)</span></code> in the denominator
+is entirely absent. For Fe I, <code class="docutils literal notranslate"><span class="pre">U(T)</span></code> grows from ~30 at 8000 K to ~90+ at 15000 K (roughly
+3–10× over the LIBS temperature range), so the simplified model over-predicts high-temperature
+intensity by this factor for each element independently — distorting relative element intensities
+in a temperature-dependent way. The simplified path is triggered whenever <code class="docutils literal notranslate"><span class="pre">self.atomic_db</span> <span class="pre">is</span> <span class="pre">None</span></code>
+(the module-level factory functions at lines 650, 696 default <code class="docutils literal notranslate"><span class="pre">atomic_db=None</span></code>) or as a
+fallback when the full forward model raises (<code class="docutils literal notranslate"><span class="pre">_generate_with_forward_model</span></code> exception handler at
+line 486 silently falls through to <code class="docutils literal notranslate"><span class="pre">_generate_simplified</span></code>). Any benchmark run that uses the
+simplified model generates physically incorrect spectra where relative element intensities depend
+on the wrong temperature scaling, causing the inversion (which is calibrated against real U_s(T)
+behaviour) to systematically recover wrong compositions on these synthetic spectra. The census
+claim is accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-4-mcwhirter-delta-e-default-2-0-ev-is-not-species-specific">
+<h2>Finding 4 — McWhirter delta_E default 2.0 eV is not species-specific<a class="headerlink" href="#finding-4-mcwhirter-delta-e-default-2-0-ev-is-not-species-specific" title="Link to this heading"></a></h2>
+<p><strong>Census severity:</strong> medium
+<strong>REAL:</strong> TRUE (with nuance)
+<strong>Confirmed severity:</strong> medium (no severity change; the nuance actually supports the finding)</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">physical_consistency.py:463</span></code> confirms <code class="docutils literal notranslate"><span class="pre">default_delta_e_ev:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">2.0</span></code>.
+<code class="docutils literal notranslate"><span class="pre">_extract_inputs</span></code> at lines 348-350 does look for <code class="docutils literal notranslate"><span class="pre">annotations[&quot;delta_e_ev&quot;]</span></code> and <code class="docutils literal notranslate"><span class="pre">record.delta_e_ev</span></code>
+before falling back to the default — so a per-spectrum override path exists in principle. However,
+a search of all inversion solvers (<code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">&quot;delta_e_ev&quot;</span> <span class="pre">cflibs/inversion/</span></code>) returns zero matches other
+than a false hit in a comment. No solver currently populates <code class="docutils literal notranslate"><span class="pre">delta_e_ev</span></code> in its annotation dict.
+In practice, therefore, every McWhirter check in every benchmark run uses the constant 2.0 eV
+default. Per McWhirter (1962), ΔE should be the resonance-line energy of the dominant emitting
+species; the cubic (ΔE)³ scaling means a 2.0 eV default is ~2.6× too strict for Ca-dominated
+plasmas (Ca resonance ~1.69 eV gives (1.69/2.0)³ = 0.60) and ~2.9× too loose for Si-dominated
+plasmas (Si resonance ~4.15 eV gives (4.15/2.0)³ = 8.9). The override path’s existence is noted
+but does not mitigate the finding because it is never used. The census description is accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-three-way-duplication-of-composition-scoring-path">
+<h2>Finding 5 — Three-way duplication of composition scoring path<a class="headerlink" href="#finding-5-three-way-duplication-of-composition-scoring-path" title="Link to this heading"></a></h2>
+<p><strong>Census severity:</strong> medium
+<strong>REAL:</strong> TRUE
+<strong>Confirmed severity:</strong> medium</p>
+<p><strong>Reasoning:</strong> Confirmed all three independently active compute paths:
+(a) <code class="docutils literal notranslate"><span class="pre">metrics.py:BenchmarkMetrics._calculate_element_metrics</span></code> — operates on numpy arrays of
+multi-spectrum stacked predictions, computing RMSEP/MAE/R²/bias/LOD from scratch.
+(b) <code class="docutils literal notranslate"><span class="pre">composition_eval.py:_build_composition_success_record</span></code> — per-spectrum path calling
+<code class="docutils literal notranslate"><span class="pre">aitchison_distance</span></code>, <code class="docutils literal notranslate"><span class="pre">rmse_composition</span></code>, <code class="docutils literal notranslate"><span class="pre">per_element_error</span></code> from <code class="docutils literal notranslate"><span class="pre">composition_metrics.py</span></code>.
+(c) <code class="docutils literal notranslate"><span class="pre">harness.py:_evaluate_one</span></code> — its own per-spectrum scoring loop (lines 379-382) also calling
+<code class="docutils literal notranslate"><span class="pre">aitchison_distance</span></code>, <code class="docutils literal notranslate"><span class="pre">rmse_composition</span></code>, <code class="docutils literal notranslate"><span class="pre">per_element_error</span></code>. These are three genuinely parallel
+implementations, not a single implementation re-exported. <code class="docutils literal notranslate"><span class="pre">harness.py</span></code> uses <code class="docutils literal notranslate"><span class="pre">BenchmarkCorpus</span></code>
+(old corpus API) while <code class="docutils literal notranslate"><span class="pre">composition_eval.py</span></code> uses <code class="docutils literal notranslate"><span class="pre">BenchmarkSpectrum</span></code> (new API), and <code class="docutils literal notranslate"><span class="pre">metrics.py</span></code>
+uses raw numpy arrays. The census claim is accurate: if Finding 1 (basis mismatch) is fixed,
+the fix must be applied identically in all three paths. The duplication risk is real.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-6-8-inline-cflibs-ff-env-var-flags">
+<h2>Finding 6 — 8 inline CFLIBS_FF_* env-var flags<a class="headerlink" href="#finding-6-8-inline-cflibs-ff-env-var-flags" title="Link to this heading"></a></h2>
+<p><strong>Census severity:</strong> medium
+<strong>REAL:</strong> TRUE
+<strong>Confirmed severity:</strong> medium</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">synthetic_eval.py:536-543</span></code> confirmed verbatim — all 8 <code class="docutils literal notranslate"><span class="pre">os.environ.get(...)</span></code> calls
+inside a closure, with magic string defaults. The <code class="docutils literal notranslate"><span class="pre">CalibrationOptions</span></code> dataclass exists at line 595
+of the same file, demonstrating the team’s preferred pattern for structured config. The 8 flags
+control <code class="docutils literal notranslate"><span class="pre">ForwardFitIdentifier</span></code> construction parameters that have no structured container. This
+is a code-quality/test-maintainability issue: it cannot be overridden via test fixtures (only via
+environment mutation), preventing deterministic unit tests of the forward-fit evaluation path.
+Census claim is accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-7-no-integration-test-for-physical-consistency-gate-through-evaluate-composition-workflow">
+<h2>Finding 7 — No integration test for physical-consistency gate through evaluate_composition_workflow<a class="headerlink" href="#finding-7-no-integration-test-for-physical-consistency-gate-through-evaluate-composition-workflow" title="Link to this heading"></a></h2>
+<p><strong>Census severity:</strong> low
+<strong>REAL:</strong> TRUE
+<strong>Confirmed severity:</strong> low</p>
+<p><strong>Reasoning:</strong> Standard test-gap observation. The census correctly notes that
+<code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_physical_consistency.py</span></code> tests <code class="docutils literal notranslate"><span class="pre">aggregate_physical_consistency</span></code> in
+isolation. The integration path through <code class="docutils literal notranslate"><span class="pre">evaluate_composition_workflow</span></code> that would populate
+<code class="docutils literal notranslate"><span class="pre">annotations</span></code> with real solver outputs and then fire the gate is not tested. No evidence of
+such integration test was found in <code class="docutils literal notranslate"><span class="pre">tests/benchmark/</span></code>. Census claim is accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="additional-findings-not-in-census">
+<h2>Additional Findings Not in Census<a class="headerlink" href="#additional-findings-not-in-census" title="Link to this heading"></a></h2>
+<section id="a1-aitchison-distance-pads-missing-truth-elements-with-epsilon-not-zero">
+<h3>A1 — Aitchison distance pads missing truth elements with epsilon, not zero<a class="headerlink" href="#a1-aitchison-distance-pads-missing-truth-elements-with-epsilon-not-zero" title="Link to this heading"></a></h3>
+<p><strong>Severity:</strong> low
+<strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/composition_metrics.py:93-103</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">aitchison_distance</span></code> takes the UNION of <code class="docutils literal notranslate"><span class="pre">c_true.keys()</span></code> and <code class="docutils literal notranslate"><span class="pre">c_pred.keys()</span></code>, padding absent
+elements in either dict with <code class="docutils literal notranslate"><span class="pre">_EPSILON</span> <span class="pre">=</span> <span class="pre">1e-12</span></code> via <code class="docutils literal notranslate"><span class="pre">_to_positive_array</span></code>. This means if the
+inversion reports a false-positive element not present in <code class="docutils literal notranslate"><span class="pre">c_true</span></code> (e.g. returns “Zn” when the
+sample has no Zn), the truth for Zn is set to 1e-12 rather than 0. A large false-positive
+concentration (say 5% Zn) will yield a log-ratio of <code class="docutils literal notranslate"><span class="pre">ln(0.05</span> <span class="pre">/</span> <span class="pre">1e-12)</span> <span class="pre">≈</span> <span class="pre">24.8</span></code>, which massively
+inflates the Aitchison distance for that sample. This is arguably correct behaviour (a gross
+false-positive IS a large error), but it is not documented and differs from the RMSE function
+at line 252, which pads with 0.0 (not epsilon) — meaning RMSE is insensitive to false-positive
+elements at low weight while Aitchison distance is hypersensitive to them. The asymmetry between
+the two primary metrics is surprising and should be documented; a false-positive of any size
+dominates Aitchison distance via the 1e-12 floor.</p>
+</section>
+<section id="a2-silent-fallback-from-forward-model-to-simplified-model-loses-physics-correctness-without-warning">
+<h3>A2 — Silent fallback from forward-model to simplified model loses physics correctness without warning<a class="headerlink" href="#a2-silent-fallback-from-forward-model-to-simplified-model-loses-physics-correctness-without-warning" title="Link to this heading"></a></h3>
+<p><strong>Severity:</strong> medium (overlaps Finding 3, distinct root)
+<strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/synthetic.py:483-490</span></code></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+        <span class="s2">&quot;Forward model failed (</span><span class="si">%s</span><span class="s2">), using simplified model fallback&quot;</span><span class="p">,</span>
+        <span class="n">exc</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_simplified</span><span class="p">(</span><span class="n">composition</span><span class="p">,</span> <span class="n">temperature_K</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The fallback from the DB-backed forward model to the partition-function-free simplified model
+is triggered silently on ANY exception (including transient DB connection errors, missing species,
+or numerical failures). A benchmark run that encounters, say, 5% forward-model failures would
+silently mix physically correct spectra with physically incorrect ones, producing a corrupted
+batch where the broken spectra are indistinguishable from valid ones in downstream results.
+There is no <code class="docutils literal notranslate"><span class="pre">TruthType.SIMULATED_UNPHYSICAL</span></code> flag set on spectra generated via the fallback path,
+so consumers cannot filter them out. The census identified the partition-function omission as
+Finding 3 but did not flag the silent-corruption-under-failure aspect separately. The fix is to
+set <code class="docutils literal notranslate"><span class="pre">truth_type=TruthType.SIMULATED_UNPHYSICAL</span></code> (or raise) when the fallback fires, so the
+benchmark runner can exclude or warn on those spectra.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary-table">
+<h2>Summary Table<a class="headerlink" href="#summary-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Title</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Census sev</p></th>
+<th class="head"><p>Confirmed sev</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Mole/mass fraction mismatch</p></td>
+<td><p>TRUE</p></td>
+<td><p>critical</p></td>
+<td><p>critical</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>LOD 25th-percentile blank proxy</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Simplified model omits U_s(T)</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>McWhirter delta_E not species-specific</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Three-way composition scoring duplication</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>8 inline CFLIBS_FF_* env-var flags</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>No integration test for gate + eval loop</p></td>
+<td><p>TRUE</p></td>
+<td><p>low</p></td>
+<td><p>low</p></td>
+</tr>
+<tr class="row-odd"><td><p>A1</p></td>
+<td><p>Aitchison epsilon vs RMSE zero padding mismatch</p></td>
+<td><p>NEW</p></td>
+<td><p>—</p></td>
+<td><p>low</p></td>
+</tr>
+<tr class="row-even"><td><p>A2</p></td>
+<td><p>Silent simplified-model fallback lacks TruthType flag</p></td>
+<td><p>NEW</p></td>
+<td><p>—</p></td>
+<td><p>medium</p></td>
+</tr>
+</tbody>
+</table>
+<p>All 7 census findings confirmed. No false positives identified. Two additional findings discovered.
+Highest confirmed severity: <strong>critical</strong> (Finding 1).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

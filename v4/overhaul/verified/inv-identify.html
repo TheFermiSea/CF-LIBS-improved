@@ -1,0 +1,401 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/inversion/identify/ &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: cflibs/inversion/identify/</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/inv-identify.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-inversion-identify">
+<h1>Adversarial Verification: cflibs/inversion/identify/<a class="headerlink" href="#adversarial-verification-cflibs-inversion-identify" title="Link to this heading"></a></h1>
+<p>Verifier: Claude Sonnet 4.6 | Date: 2026-06-25
+Method: ripgrep + direct Read on actual source + LineObservation.y_value tracing</p>
+<hr class="docutils" />
+<section id="summary-of-verdict">
+<h2>Summary of Verdict<a class="headerlink" href="#summary-of-verdict" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Corrected Severity</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1 — Boltzmann y-axis inconsistency</p></td>
+<td><p><strong>FALSE</strong></p></td>
+<td><p>~~HIGH~~ → NONE</p></td>
+<td><p>Both paths use <code class="docutils literal notranslate"><span class="pre">obs.y_value</span> <span class="pre">=</span> <span class="pre">ln(I·λ/(g·A))</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>F2 — CL gate contradicts paper 2-line support</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>HIGH (confirmed)</p></td>
+<td><p>Flows into detection via <code class="docutils literal notranslate"><span class="pre">_gate_relative_cl</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>F3 — <code class="docutils literal notranslate"><span class="pre">_compute_ratio_consistency</span></code> returns 0.1 not 0.5</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>MEDIUM (confirmed)</p></td>
+<td><p>Docstring/code mismatch; penalizes H-alpha</p></td>
+</tr>
+<tr class="row-odd"><td><p>F4 — P_SNR recomputed in <code class="docutils literal notranslate"><span class="pre">_decide</span></code></p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>MEDIUM (confirmed)</p></td>
+<td><p>Redundant call confirmed at line 4659</p></td>
+</tr>
+<tr class="row-even"><td><p>F5 — Thread-safety mutable state</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>MEDIUM (confirmed)</p></td>
+<td><p>Sequential risk is latent; concurrent risk real</p></td>
+</tr>
+<tr class="row-odd"><td><p>F6 — JAX/CPU parity tests missing</p></td>
+<td><p><strong>FALSE</strong></p></td>
+<td><p>~~MEDIUM~~ → NONE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">TestBuildTemplatesJax</span></code> exists in test_alias_jax_nnls.py</p></td>
+</tr>
+<tr class="row-even"><td><p>F7 — CPU LOO-NNLS O(N²) loop</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>LOW (confirmed)</p></td>
+<td><p>12× np.delete + 12× NNLS confirmed</p></td>
+</tr>
+<tr class="row-odd"><td><p>F8 — “weighted” mode dead production path</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>LOW (confirmed)</p></td>
+<td><p>Code comment says so explicitly</p></td>
+</tr>
+<tr class="row-even"><td><p>F9 — No regression test for CL=0 on 2-line elements</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>MEDIUM (confirmed)</p></td>
+<td><p>test_paper_faithful_contract.py doesn’t cover it</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10 — Interference analysis lacks test</p></td>
+<td><p><strong>FALSE</strong></p></td>
+<td><p>~~MEDIUM~~ → NONE</p></td>
+<td><p>test_comb.py lines 145-179 and 398-410 cover it</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Confirmed highest severity: HIGH (F2)</strong></p>
+</section>
+<hr class="docutils" />
+<section id="detailed-findings">
+<h2>Detailed Findings<a class="headerlink" href="#detailed-findings" title="Link to this heading"></a></h2>
+<hr class="docutils" />
+<section id="f1-real-false">
+<h3>F1 — REAL: FALSE<a class="headerlink" href="#f1-real-false" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> Boltzmann y-axis inconsistency — temperature estimator includes λ but <code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter</span></code> consistency check might not.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:2511</span></code>: <code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">math.log(I_obs</span> <span class="pre">*</span> <span class="pre">t.wavelength_nm</span> <span class="pre">/</span> <span class="pre">(t.g_k</span> <span class="pre">*</span> <span class="pre">t.A_ki))</span></code> — the legacy T-estimator builds y points manually.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter.fit()</span></code> in <code class="docutils literal notranslate"><span class="pre">physics/boltzmann.py:256</span></code> uses <code class="docutils literal notranslate"><span class="pre">np.array([obs.y_value</span> <span class="pre">for</span> <span class="pre">obs</span> <span class="pre">in</span> <span class="pre">observations])</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LineObservation.y_value</span></code> is a <code class="docutils literal notranslate"><span class="pre">&#64;property</span></code> in <code class="docutils literal notranslate"><span class="pre">inversion/common/data_structures.py:78</span></code>: <code class="docutils literal notranslate"><span class="pre">return</span> <span class="pre">np.log(self.intensity</span> <span class="pre">*</span> <span class="pre">self.wavelength_nm</span> <span class="pre">/</span> <span class="pre">(self.g_k</span> <span class="pre">*</span> <span class="pre">self.A_ki))</span></code> — this INCLUDES <code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code>.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">_collect_boltzmann_observations</span></code> helper (alias.py:3135) builds <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> objects with <code class="docutils literal notranslate"><span class="pre">intensity=I_obs,</span> <span class="pre">wavelength_nm=trans.wavelength_nm,</span> <span class="pre">g_k=trans.g_k,</span> <span class="pre">A_ki=trans.A_ki</span></code>, so <code class="docutils literal notranslate"><span class="pre">obs.y_value</span></code> computes <code class="docutils literal notranslate"><span class="pre">ln(I·λ/(g·A))</span></code>.</p></li>
+</ul>
+<p><strong>Both code paths use the identical y-axis: <code class="docutils literal notranslate"><span class="pre">ln(I·λ/(g·A))</span></code></strong>. The census assumed <code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter</span></code> might use raw intensity — it does not; it delegates to <code class="docutils literal notranslate"><span class="pre">obs.y_value</span></code> which always includes λ.</p>
+</section>
+<hr class="docutils" />
+<section id="f2-real-true-high-confirmed">
+<h3>F2 — REAL: TRUE (HIGH confirmed)<a class="headerlink" href="#f2-real-true-high-confirmed" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">_decide</span></code> zeros CL for N_matched &lt; 3 (or N_matched &lt; N_expected for N_expected ≤ 4), contradicting the paper’s 1-line and sparse-line support.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:4682</span></code>: <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">N_matched</span> <span class="pre">&lt;</span> <span class="pre">3:</span> <span class="pre">CL</span> <span class="pre">=</span> <span class="pre">0.0</span></code> — confirmed present.</p></li>
+<li><p>The comment at <code class="docutils literal notranslate"><span class="pre">alias.py:1863</span></code> states: “the hard N_matched&gt;=3 gate … and the Boltzmann-R^2 gate are all homegrown and were removed.” This is SELF-CONTRADICTORY; the gate was not actually removed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">detected</span> <span class="pre">=</span> <span class="pre">k_det</span> <span class="pre">&gt;</span> <span class="pre">self.detection_threshold</span></code> at line 1866 is paper-faithful. However, <code class="docutils literal notranslate"><span class="pre">_gate_subset_relative_cl</span></code> at lines 1236–1241 later sets <code class="docutils literal notranslate"><span class="pre">e.detected</span> <span class="pre">=</span> <span class="pre">False</span></code> if <code class="docutils literal notranslate"><span class="pre">e.confidence</span> <span class="pre">&lt;</span> <span class="pre">max_pool_max_confidence</span> <span class="pre">*</span> <span class="pre">threshold</span></code>. When CL is zeroed in <code class="docutils literal notranslate"><span class="pre">_decide</span></code>, <code class="docutils literal notranslate"><span class="pre">confidence=0</span></code> flows through <code class="docutils literal notranslate"><span class="pre">_apply_post_cl_gates</span></code> (which multiplies into 0), and this zero confidence eventually triggers <code class="docutils literal notranslate"><span class="pre">detected</span> <span class="pre">=</span> <span class="pre">False</span></code> in <code class="docutils literal notranslate"><span class="pre">_gate_relative_cl</span></code>.</p></li>
+</ul>
+<p><strong>The full causal chain</strong>: <code class="docutils literal notranslate"><span class="pre">_decide</span></code> zeros CL → <code class="docutils literal notranslate"><span class="pre">_apply_post_cl_gates</span></code> multiplies zero (unchanged) → <code class="docutils literal notranslate"><span class="pre">ElementIdentification.confidence=0</span></code> → <code class="docutils literal notranslate"><span class="pre">_gate_subset_relative_cl</span></code> sets <code class="docutils literal notranslate"><span class="pre">e.detected=False</span></code> because <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;</span> <span class="pre">relative_threshold</span></code>. A 2-line element with a genuine k_det &gt; detection_threshold can be demoted to detected=False purely from the N_matched &lt; 3 gate, not from the paper’s decision criterion. The comment claiming the gate was removed is wrong.</p>
+</section>
+<hr class="docutils" />
+<section id="f3-real-true-medium-confirmed">
+<h3>F3 — REAL: TRUE (MEDIUM confirmed)<a class="headerlink" href="#f3-real-true-medium-confirmed" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">_compute_ratio_consistency</span></code> returns 0.1 for &lt;3 matched lines, but docstring says 0.5 (neutral).</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:4426</span></code>: docstring says “Returns 0.5 (neutral) with &lt; 3 matched lines.”</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:4430</span></code>: <code class="docutils literal notranslate"><span class="pre">return</span> <span class="pre">0.1</span>&#160; <span class="pre">#</span> <span class="pre">Penalize</span> <span class="pre">—</span> <span class="pre">too</span> <span class="pre">few</span> <span class="pre">lines</span> <span class="pre">for</span> <span class="pre">meaningful</span> <span class="pre">ratio</span> <span class="pre">check</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_apply_post_cl_gates</span></code> line 1983: <code class="docutils literal notranslate"><span class="pre">CL</span> <span class="pre">*=</span> <span class="pre">0.5</span> <span class="pre">+</span> <span class="pre">0.5</span> <span class="pre">*</span> <span class="pre">R_rat</span></code> → with R_rat=0.1, CL is multiplied by 0.55 (a 45% penalty). With the documented neutral 0.5, it would multiply by 0.75.</p></li>
+</ul>
+<p><strong>Confirmed docstring/code mismatch</strong>. Impact is attenuated: this only affects CL (confidence metadata), and CL=0 for N_matched&lt;3 elements (from F2) makes this penalty redundant for the most affected elements. However, elements with exactly 3 matched lines that still pass F2’s gate (N_expected&gt;4) get a systematically lower CL from R_rat=0.1 even when the ratio check is simply uninformative. The fix (return 0.5) better matches the neutral-test semantics.</p>
+</section>
+<hr class="docutils" />
+<section id="f4-real-true-medium-confirmed">
+<h3>F4 — REAL: TRUE (MEDIUM confirmed)<a class="headerlink" href="#f4-real-true-medium-confirmed" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">_dispatch_p_snr</span></code> is called twice — once at the outer loop and once inside <code class="docutils literal notranslate"><span class="pre">_decide</span></code> — with the second call ignoring the cached <code class="docutils literal notranslate"><span class="pre">global_p_snr</span></code>.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:1344</span></code>: <code class="docutils literal notranslate"><span class="pre">global_p_snr</span> <span class="pre">=</span> <span class="pre">self._dispatch_p_snr(corrected_intensity,</span> <span class="pre">peaks)</span></code> — computed once per <code class="docutils literal notranslate"><span class="pre">identify()</span></code> call.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:4659</span></code>: <code class="docutils literal notranslate"><span class="pre">P_SNR</span> <span class="pre">=</span> <span class="pre">self._dispatch_p_snr(intensity,</span> <span class="pre">peaks)</span></code> — recomputed inside <code class="docutils literal notranslate"><span class="pre">_decide</span></code>, which is called once per candidate per phase.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_decide</span></code> signature takes <code class="docutils literal notranslate"><span class="pre">intensity</span></code> and <code class="docutils literal notranslate"><span class="pre">peaks</span></code> but NOT a pre-computed P_SNR. There is no code path that passes <code class="docutils literal notranslate"><span class="pre">global_p_snr</span></code> into <code class="docutils literal notranslate"><span class="pre">_decide</span></code>.</p></li>
+<li><p>For N=12 candidates × 2 phases (Phase 1 scoring loop + Phase 3 rescore when competition ran) = up to 24 redundant evaluations per <code class="docutils literal notranslate"><span class="pre">identify()</span></code> call.</p></li>
+</ul>
+<p><strong>Confirmed redundant computation</strong>. The fix is to add an optional <code class="docutils literal notranslate"><span class="pre">p_snr</span></code> parameter to <code class="docutils literal notranslate"><span class="pre">_decide</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="f5-real-true-medium-confirmed">
+<h3>F5 — REAL: TRUE (MEDIUM confirmed)<a class="headerlink" href="#f5-real-true-medium-confirmed" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">ALIASIdentifier</span></code> has mutable per-call state (<code class="docutils literal notranslate"><span class="pre">_effective_R</span></code>, <code class="docutils literal notranslate"><span class="pre">_global_wl_shift</span></code>, <code class="docutils literal notranslate"><span class="pre">_estimated_T</span></code>) that bleeds across sequential calls or creates hazards under concurrent use.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:996–1003</span></code>: <code class="docutils literal notranslate"><span class="pre">self._effective_R</span></code>, <code class="docutils literal notranslate"><span class="pre">self._global_wl_shift</span></code>, <code class="docutils literal notranslate"><span class="pre">self._estimated_T</span></code> confirmed as instance-level mutable state.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:1310–1311</span></code>: <code class="docutils literal notranslate"><span class="pre">_sa_n_damped_lines</span></code> and <code class="docutils literal notranslate"><span class="pre">_sa_damped_elements</span></code> are reset at the top of <code class="docutils literal notranslate"><span class="pre">identify()</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_estimate_plasma_temperature</span></code> at line 1336 ALWAYS runs and sets <code class="docutils literal notranslate"><span class="pre">_estimated_T</span></code>, so sequential calls are correctly handled in the happy path.</p></li>
+<li><p>Class docstring (line 626) does document the thread-safety limitation.</p></li>
+<li><p>The latent risk: if a hypothetical future code path skips <code class="docutils literal notranslate"><span class="pre">_estimate_plasma_temperature</span></code>, the stale <code class="docutils literal notranslate"><span class="pre">_estimated_T</span></code> from the previous call would corrupt <code class="docutils literal notranslate"><span class="pre">_compute_element_emissivities</span></code> (line 1515 passes <code class="docutils literal notranslate"><span class="pre">T_estimated=self._estimated_T</span></code>).</p></li>
+</ul>
+<p><strong>Confirmed architecture debt</strong>. Severity MEDIUM is correct — currently safe for sequential use, but the per-call context threading approach (option a from census) is cleaner.</p>
+</section>
+<hr class="docutils" />
+<section id="f6-real-false">
+<h3>F6 — REAL: FALSE<a class="headerlink" href="#f6-real-false" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> No parity tests cover the JAX template-builder path or the JAX Pearson-comb path.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_alias_jax_nnls.py:278</span></code>: <code class="docutils literal notranslate"><span class="pre">class</span> <span class="pre">TestBuildTemplatesJax</span></code> with methods including <code class="docutils literal notranslate"><span class="pre">test_jax_matches_cpu_rtol_1e_10</span></code> at line ~321 — CPU vs JAX template builder parity is TESTED with rtol 1e-10 tolerance.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_comb_jax_correlate.py</span></code> exists, covering the JAX Pearson-comb path.</p></li>
+<li><p>The census assertion “lack dedicated parity regression tests” is FALSE.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="f7-real-true-low-confirmed">
+<h3>F7 — REAL: TRUE (LOW confirmed)<a class="headerlink" href="#f7-real-true-low-confirmed" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">_compute_nnls_attribution</span></code> runs N leave-one-out NNLS calls in a Python loop — O(N²) at N=12.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:4274–4282</span></code>: confirmed loop with <code class="docutils literal notranslate"><span class="pre">np.delete(A,</span> <span class="pre">j,</span> <span class="pre">axis=1)</span></code> per iteration and <code class="docutils literal notranslate"><span class="pre">nnls(A_reduced,</span> <span class="pre">peak_intensities)</span></code> per iteration.</p></li>
+<li><p>For N=12 candidates: 12 <code class="docutils literal notranslate"><span class="pre">np.delete</span></code> allocations (each creates a copy of the (N_peaks × 11) matrix) plus 12 NNLS solves.</p></li>
+<li><p>The JAX path (<code class="docutils literal notranslate"><span class="pre">compute_nnls_attribution_jax</span></code>) already vectorizes these via vmap and is the correct reference.</p></li>
+</ul>
+<p><strong>Confirmed.</strong> Severity LOW is appropriate — on typical LIBS spectra (N_peaks ~100, N_cands ~12) this is on the order of milliseconds total and not a dominant bottleneck.</p>
+</section>
+<hr class="docutils" />
+<section id="f8-real-true-low-confirmed">
+<h3>F8 — REAL: TRUE (LOW confirmed)<a class="headerlink" href="#f8-real-true-low-confirmed" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">temperature_estimator_mode=&quot;weighted&quot;</span></code> is a dead production path with no preset or benchmark coverage.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">alias.py:2474–2479</span></code>: code comment explicitly states it is “a Vrabel universal-miss investigation leftover that never graduated to a preset or sweep. It is exercised only by tests/test_alias_unit.py; production and benchmark presets use only ‘legacy’ (default) and ‘robust’.”</p></li>
+<li><p>The ALIAS_PRESETS dict at line 4704 has no preset that specifies <code class="docutils literal notranslate"><span class="pre">temperature_estimator_mode=&quot;weighted&quot;</span></code>.</p></li>
+</ul>
+<p><strong>Confirmed.</strong> The code itself documents that this is dead production weight. Severity LOW is correct.</p>
+</section>
+<hr class="docutils" />
+<section id="f9-real-true-medium-confirmed">
+<h3>F9 — REAL: TRUE (MEDIUM confirmed)<a class="headerlink" href="#f9-real-true-medium-confirmed" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> No regression test for <code class="docutils literal notranslate"><span class="pre">_decide</span></code>’s CL=0 gate on 2-line elements.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_paper_faithful_contract.py</span></code>: tests confirm <code class="docutils literal notranslate"><span class="pre">detected</span> <span class="pre">=</span> <span class="pre">k_det</span> <span class="pre">&gt;</span> <span class="pre">C_th</span></code> (not CL-based), and that CL floors are banned. But there is NO test asserting <code class="docutils literal notranslate"><span class="pre">confidence</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> for a 2-line element with <code class="docutils literal notranslate"><span class="pre">N_expected</span> <span class="pre">&gt;</span> <span class="pre">4</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/identify/test_alias_presets.py</span></code>: no test for sparse element CL integrity.</p></li>
+<li><p>Given the interaction found in F2 (CL=0 → detected=False via <code class="docutils literal notranslate"><span class="pre">_gate_relative_cl</span></code>), the absence of a pinning test is a real gap. A future refactor that modifies the relative CL gate could silently cause false negatives on 2-line elements with otherwise-valid k_det scores.</p></li>
+</ul>
+<p><strong>Confirmed test gap.</strong> The test should assert both <code class="docutils literal notranslate"><span class="pre">confidence</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> AND <code class="docutils literal notranslate"><span class="pre">detected</span> <span class="pre">=</span> <span class="pre">True</span></code> for a 2-line element with k_det &gt; threshold, since the relative CL gate can override detection.</p>
+</section>
+<hr class="docutils" />
+<section id="f10-real-false">
+<h3>F10 — REAL: FALSE<a class="headerlink" href="#f10-real-false" title="Link to this heading"></a></h3>
+<p><strong>Census claim:</strong> CombIdentifier interference analysis (<code class="docutils literal notranslate"><span class="pre">_analyze_interferences</span></code>) has no test covering <code class="docutils literal notranslate"><span class="pre">_mark_reciprocal_interference</span></code>.</p>
+<p><strong>Verification:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_comb.py:145–179</span></code> (<code class="docutils literal notranslate"><span class="pre">test_analyze_interferences</span></code>): creates two elements with overlapping lines at &lt; 0.1 nm, asserts <code class="docutils literal notranslate"><span class="pre">is_interfered=True</span></code> on both sides and that the non-overlapping tooth (<code class="docutils literal notranslate"><span class="pre">Fe</span> <span class="pre">at</span> <span class="pre">500.0</span></code>) has <code class="docutils literal notranslate"><span class="pre">is_interfered=False</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_comb.py:398–410</span></code> (<code class="docutils literal notranslate"><span class="pre">test_analyze_interferences_no_overlap</span></code>): separate test for well-separated lines → confirms no false interference marking.</p></li>
+</ul>
+<p><strong>Both the positive and negative cases are covered</strong>. The census finding is incorrect.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="additional-findings-not-in-census">
+<h2>Additional Findings Not in Census<a class="headerlink" href="#additional-findings-not-in-census" title="Link to this heading"></a></h2>
+<section id="new-1-logic-medium">
+<h3>NEW-1 — LOGIC — MEDIUM<a class="headerlink" href="#new-1-logic-medium" title="Link to this heading"></a></h3>
+<p><strong>Title:</strong> <code class="docutils literal notranslate"><span class="pre">_gate_subset_relative_cl</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if <code class="docutils literal notranslate"><span class="pre">max_pool</span></code> is empty</p>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">alias.py:1238</span></code></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">relative_threshold</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">confidence</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">max_pool</span><span class="p">)</span> <span class="o">*</span> <span class="n">threshold</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">max()</span></code> on an empty iterable raises <code class="docutils literal notranslate"><span class="pre">ValueError:</span> <span class="pre">max()</span> <span class="pre">arg</span> <span class="pre">is</span> <span class="pre">an</span> <span class="pre">empty</span> <span class="pre">sequence</span></code>. The callers at lines 1228–1233 guard with <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">neutrals:</span></code> / <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">ionized:</span></code> / <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">unclassified:</span></code>, but the <code class="docutils literal notranslate"><span class="pre">unclassified</span></code> case passes <code class="docutils literal notranslate"><span class="pre">all_element_ids</span></code> as the <code class="docutils literal notranslate"><span class="pre">max_pool</span></code>. If <code class="docutils literal notranslate"><span class="pre">all_element_ids</span></code> is empty (e.g., no elements pass Phase 1 screening at all), the <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">unclassified:</span></code> guard is True (unclassified list is non-empty) but <code class="docutils literal notranslate"><span class="pre">max_pool=all_element_ids</span></code> is empty → crash. In practice this is unlikely because elements screened from Phase 1 won’t have unclassified ElementIdentification objects, but the guard is fragile.</p>
+<p><strong>Fix:</strong> Add a check <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">not</span> <span class="pre">max_pool:</span> <span class="pre">return</span></code> at the start of <code class="docutils literal notranslate"><span class="pre">_gate_subset_relative_cl</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="new-2-documentation-low">
+<h3>NEW-2 — DOCUMENTATION — LOW<a class="headerlink" href="#new-2-documentation-low" title="Link to this heading"></a></h3>
+<p><strong>Title:</strong> Line 1863 comment claims N_matched≥3 gate was “removed” but it still exists at line 4682</p>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">alias.py:1863</span></code> vs <code class="docutils literal notranslate"><span class="pre">alias.py:4682</span></code></p>
+<p>The comment at line 1863 states: “The previous CL&gt;=adaptive_dt decision, the hard N_matched&gt;=3 gate (the paper explicitly supports One-Line and Sparse-Line elements), and the Boltzmann-R^2 gate are all homegrown and were removed.” This is factually wrong — the N_matched&lt;3 CL-zeroing gate at line 4682 was NOT removed. The comment creates a false expectation for future maintainers, obscuring the actual behavior described in F2.</p>
+<p><strong>Fix:</strong> Update the comment at line 1863 to accurately state that the CL-zeroing gate at line 4682 still exists and explain why it is intentionally retained (or remove the gate if it truly should be gone).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="verdict-table-final">
+<h2>Verdict Table (Final)<a class="headerlink" href="#verdict-table-final" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>Real</p></th>
+<th class="head"><p>Confirmed Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1</p></td>
+<td><p>FALSE</p></td>
+<td><p>N/A</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>HIGH</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>F3</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>F4</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-even"><td><p>F5</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>F6</p></td>
+<td><p>FALSE</p></td>
+<td><p>N/A</p></td>
+</tr>
+<tr class="row-even"><td><p>F7</p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+</tr>
+<tr class="row-odd"><td><p>F8</p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+</tr>
+<tr class="row-even"><td><p>F9</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10</p></td>
+<td><p>FALSE</p></td>
+<td><p>N/A</p></td>
+</tr>
+<tr class="row-even"><td><p>NEW-1</p></td>
+<td><p>NEW</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>NEW-2</p></td>
+<td><p>NEW</p></td>
+<td><p>LOW</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: HIGH (F2 — CL zeroing for N_matched &lt; 3 flows to detected=False via <code class="docutils literal notranslate"><span class="pre">_gate_relative_cl</span></code>)</strong></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

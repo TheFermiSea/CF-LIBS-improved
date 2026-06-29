@@ -1,0 +1,758 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Data Accuracy Verdict for the &lt;1 ms Structured-GN CF-LIBS Pipeline — Plan v4 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Real-Data Accuracy Verdict for the &lt;1 ms Structured-GN CF-LIBS Pipeline — Plan v4</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/research/realtime/2026-06-20-realtime-plan-v4-real-data-accuracy.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="real-data-accuracy-verdict-for-the-1-ms-structured-gn-cf-libs-pipeline-plan-v4">
+<h1>Real-Data Accuracy Verdict for the &lt;1 ms Structured-GN CF-LIBS Pipeline — Plan v4<a class="headerlink" href="#real-data-accuracy-verdict-for-the-1-ms-structured-gn-cf-libs-pipeline-plan-v4" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-20
+<strong>Supersedes:</strong> <a class="reference internal" href="2026-06-20-realtime-plan-v3-structured-jacobian.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">2026-06-20-realtime-plan-v3-structured-jacobian.md</span></code></span></a>
+(v3, structured-Jacobian latency-evaluated, synthetic-only).
+<strong>Sibling:</strong> <a class="reference internal" href="../../adr/ADR-0006-instrument-calibration-first-class.html"><span class="std std-doc">ADR-0006</span></a> — the real-data tests below
+were run <strong>uncalibrated</strong> (fixed-FWHM proxy, no <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>, no measured LSF — i.e. Mode C). Instrument
+calibration (ADR-0006) and atomic-data quality (§5.2 STEP A) are the <strong>two input-quality levers that both
+dominate solver speed</strong>; this plan establishes the second, ADR-0006 the first.
+<strong>Provenance:</strong> generated by the ExoJAX-reference validation workflow <code class="docutils literal notranslate"><span class="pre">wphrxvuyj</span></code> (2026-06-20, 10 agents,
+V100S GPU). All quantitative claims re-derived directly from the CSVs (<code class="docutils literal notranslate"><span class="pre">/tmp/rtval_*.csv</span></code>).
+<strong>What changed in v4:</strong> v3 settled the <em>latency/method</em> question on a synthetic varpro sweep (structured K=1
+clears &lt;1 ms, VarPro rejected for composition). v4 folds in the <strong>real-data and controlled-round-trip
+accuracy campaign</strong> that was missing from v3, and it forces an honest correction to the v3 headline.</p>
+<p><strong>New inputs folded in this revision:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/rtval_grounding.md</span></code> — Asta/S2-verified line-data provenance (NIST-ASD vs VALD3 vs Kurucz) +
+published CF-LIBS accuracy tiers + round-trip methodology.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/rtval_datavoyager.md</span></code> — DataVoyager per-(dataset, db_norm) comp_rmse over the full real+synthetic
+corpus (<code class="docutils literal notranslate"><span class="pre">/tmp/rtval_all.csv</span></code>, 2106 rows). NIST-vs-Kurucz delta by matrix.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/rtval_local/SYNTH_RTVAL_FINDINGS.md</span></code> + <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_synth.csv</span></code> — the <strong>controlled</strong> round-trip:
+algorithm-floor vs atomic-data-mismatch decomposition via a clean NNLS separator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/rtval_adversarial.md</span></code> + <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_adversarial.csv</span></code> + <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_legacy.csv</span></code> — adversarial
+robustness sweep (noise/SA/missing/edge) and the <strong>legacy-vs-fast cross-check on real spectra</strong>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/rtval_supercam_k{0,1}_summary.json</span></code> — SuperCam real-spectra per-element wt% RMSE + real-size latency.</p></li>
+<li><p>(carried) v3 latency/method conclusions on <code class="docutils literal notranslate"><span class="pre">varpro_bench.json</span></code> / <code class="docutils literal notranslate"><span class="pre">varpro_sweep.csv</span></code>.</p></li>
+</ul>
+<p>All quantitative claims below were re-derived directly from the CSVs in this session (not taken from agent
+prose); the DataVoyager hallucination guard from v3 still applies, and the figures here match the verified
+CSV-direct aggregation.</p>
+<hr class="docutils" />
+<section id="one-line-real-data-verdict">
+<h2>ONE-LINE REAL-DATA VERDICT<a class="headerlink" href="#one-line-real-data-verdict" title="Link to this heading"></a></h2>
+<p><strong>The 354 us structured-GN operating point is a genuine real-time win but it is NOT within usable CF-LIBS
+composition accuracy on real data — real-matrix RMSE is ~0.12-0.17 number-fraction on ChemCam and ~20-26 wt%
+on SuperCam (4x-10x worse than the 1-3 wt% CF-LIBS norm and ~2x worse than the 4-s legacy solver), and the
+controlled round-trip proves the binding error is ATOMIC-DATA mismatch (~0.17 RMSE from the NIST/Kurucz line
+list alone), not the inversion algorithm (floor ~0) — so better atomic data, not a faster solver, is the next
+build step.</strong></p>
+</section>
+<hr class="docutils" />
+<section id="executive-summary">
+<h2>0. Executive summary<a class="headerlink" href="#executive-summary" title="Link to this heading"></a></h2>
+<p>v3 answered “can we do CF-LIBS composition in &lt;1 ms?” and said <strong>yes</strong> (structured Jacobian, K=1, 354-408 us).
+v4 answers the harder, real question the user actually cares about — <strong>“is that fast number any GOOD on real
+spectra, and would better atomic data fix it?”</strong> — and the answer is sobering but clean:</p>
+<ol class="arabic simple">
+<li><p><strong>Real-data accuracy: NOT usable as a calibrated quant yet.</strong> Per dataset, the deployed structured-GN
+single-shot solver lands at:</p>
+<ul class="simple">
+<li><p><strong>Synthetic test suites (mass-frac):</strong> basalt 0.097, carbonate 0.118, light 0.082, steel 0.165.</p></li>
+<li><p><strong>Real ChemCam-family (mass-frac):</strong> bhvo2_chemcam 0.122, chemcam_calib 0.158-0.164, csa_planetary
+0.163-0.166.</p></li>
+<li><p><strong>SuperCam real (wt%):</strong> labcal 19.9-26.3 wt%, scct 21.2-26.0 wt% RMSE.
+The published CF-LIBS norm for major-element quant is <strong>1-3 wt% (~0.01-0.03 mass-frac)</strong> on calibration
+standards; “good for a real matrix” is a few wt% on majors, looser on geology
+(<code class="docutils literal notranslate"><span class="pre">rtval_grounding.md</span></code> §2). Our fast solver is <strong>4x-10x outside that</strong> on every real dataset. It is a
+real-time <em>approximation</em> that returns plausible-but-uncalibrated composition, not a quant replacement.</p></li>
+</ul>
+</li>
+<li><p><strong>NIST-ASD vs Kurucz verdict (the user’s core question): a faster solver does not move the needle; a
+better LINE LIST does — but only where the data is observable.</strong> Swapping the atomic-data backend:</p>
+<ul class="simple">
+<li><p><strong>Synthetic:</strong> negligible (&lt;1e-3 mass-frac either way) — forward and inverse share the same DB, so the
+line-list choice cancels.</p></li>
+<li><p><strong>Real ChemCam:</strong> Kurucz helps 2 of 3 matrices by <strong>~0.004-0.006 mass-frac (~3-4% relative)</strong>, with one
+small regression (csa_planetary +0.0033). Real but second-order at this overall error level.</p></li>
+<li><p><strong>Real SuperCam:</strong> Kurucz cuts RMSE by <strong>~5-6 wt%</strong> (labcal 26.3-&gt;19.9, scct 26.0-&gt;21.2) — a large,
+consistent, real improvement — yet <strong>still ~20-22 wt%</strong>, far outside usable.</p></li>
+<li><p><strong>VALD: NOT TESTED</strong> (gated, no autonomous access). This is an open blocker, not a negative result.
+The honest read: <strong>atomic-data quality is the dominant remediable systematic</strong> (confirmed independently
+by the controlled round-trip, item 3), and a more complete/accurate line list does reduce RMSE measurably
+on real data — most where the matrix is line-rich (SuperCam) — but no line-list swap alone gets us into
+CF-LIBS quant territory at this operating point.</p></li>
+</ul>
+</li>
+<li><p><strong>Algorithm-floor vs atomic-data decomposition (controlled round-trip, the cleanest evidence):</strong>
+using a pure-linear NNLS separator (<code class="docutils literal notranslate"><span class="pre">S</span> <span class="pre">=</span> <span class="pre">B(T,ne)·comp</span></code> exactly linear in composition, B <em>is</em> the atomic
+data) at exact T/ne with zero noise:</p>
+<ul class="simple">
+<li><p><strong>Algorithm floor (same line list, kurucz-&gt;kurucz): RMSE = 2.9e-6 (~0 wt%).</strong> The forward+inverse close
+exactly. The inversion math is essentially error-free.</p></li>
+<li><p><strong>Atomic-data mismatch (cross line list, kurucz-&gt;nist, still clean + exact T/ne): RMSE = 0.171
+number-frac (~17 wt%).</strong> Per matrix: basalt +0.234 (worst), steel +0.170, carbonate +0.162, light
++0.119. <strong>The line-list choice alone injects ~0.17 RMSE with the algorithm contributing essentially
+nothing.</strong>
+This is the decisive finding: <strong>the binding error source for CF-LIBS quant here is atomic-data quality,
+not the inversion algorithm.</strong> Optimizing the solver further (faster, more iterations, VarPro) cannot
+close a gap that is fundamentally in the line data.</p></li>
+</ul>
+</li>
+<li><p><strong>Legacy-vs-fast cross-check (real spectra):</strong> the seconds-slow legacy iterative CF-LIBS
+(<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.pipeline.run_pipeline</span></code>, detect-&gt;ID-&gt;Stark-ne-&gt;iterative closure) is <strong>more accurate on
+4 of 5 real cases</strong> (median RMSE 0.076 vs 0.151, ~2x better; 3-6x on well-behaved ChemCam shots) but
+<strong>~2000x slower</strong> (median 4.13 s vs ~2.0 ms at full 5860-ch window). The fast method <strong>wins only on the
+22-element CSA andesite</strong>, where the legacy detect/ID/closure pipeline collapsed (RMSE 0.366) and the GN
+degraded gracefully (0.151). So the fast solver trades ~2x worse accuracy for ~2000x speed, and is more
+robust to element-count stress.</p></li>
+<li><p><strong>Honest latency correction to v3.</strong> The v3 “354 us at ROI=2000” headline is from the <em>synthetic varpro
+sweep</em> (a leaner forward). On the <strong>real ExoJAX Voigt path</strong> the dense Voigt cost scales with grid size,
+so sub-ms is reached only at a <strong>~250-500 ch LIBS ROI</strong> (min 407 us at 250 ch); at <strong>1500 ch the
+structured-GN is ~1.21 ms median</strong>, and at the <strong>full 5860-ch ChemCam window it is ~2.0 ms</strong>, and at the
+<strong>7933-ch SuperCam window K=1 is ~7.6 ms</strong> (K=0 NNLS warm path ~0.62 ms). <strong>The “&lt;1 ms” claim is true only
+at small ROI; it is NOT true at full real-instrument resolution.</strong> This does not change the v3 method
+choice (structured K=1 still dominates), but it tightens what we may claim.</p></li>
+<li><p><strong>Robustness is excellent and is the one unambiguous strength.</strong> Across 80 adversarial synthetic runs (6
+decades of SNR, tau up to 10, missing/confounder elements, K=1..5, 25..1000 ch, extreme T/ne, bad
+warm-starts) the structured-GN <strong>never produced a NaN</strong>; comp_rmse is flat under heavy noise; it degrades
+gracefully on missing/confounder elements. The failure modes are bounded and understood (below).</p></li>
+</ol>
+<p><strong>Bottom line for the user:</strong> the fast pipeline is real, robust, and ~2000x faster than legacy, but it is a
+real-time <em>triage/approximation</em> tool at its current accuracy, not a calibrated quant. <strong>The single highest-
+leverage next investment is atomic-data quality (NIST A/B-grade gf curation + VALD evaluation), not more
+solver speed</strong> — the controlled round-trip proves the algorithm is already at its floor.</p>
+</section>
+<hr class="docutils" />
+<section id="real-data-composition-accuracy-of-the-354-us-operating-point-per-dataset-honest">
+<h2>1. REAL-DATA COMPOSITION ACCURACY OF THE 354 us OPERATING POINT (per dataset, honest)<a class="headerlink" href="#real-data-composition-accuracy-of-the-354-us-operating-point-per-dataset-honest" title="Link to this heading"></a></h2>
+<p>Source: <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_all.csv</span></code> (2106 rows), aggregated per (dataset, db_norm); synthetic rows restricted to
+<code class="docutils literal notranslate"><span class="pre">stage==rt_solver</span></code> (the deployed structured-GN). <strong>Scale caveat (do not pool):</strong> SuperCam reports comp_rmse
+in <strong>wt%</strong> (range ~5-42); all other rows report <strong>mass-fraction</strong> (range ~0-0.4).</p>
+<section id="per-dataset-comp-rmse-deployed-structured-gn-verified-from-csv">
+<h3>1.1 Per-dataset comp_rmse (deployed structured-GN, verified from CSV)<a class="headerlink" href="#per-dataset-comp-rmse-deployed-structured-gn-verified-from-csv" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Scale</p></th>
+<th class="head text-right"><p>Kurucz</p></th>
+<th class="head text-right"><p>NIST</p></th>
+<th class="head"><p>CF-LIBS “good” band</p></th>
+<th class="head text-center"><p>Usable?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>light</p></td>
+<td><p>synthetic</p></td>
+<td><p>mass-frac</p></td>
+<td class="text-right"><p>0.0823</p></td>
+<td class="text-right"><p>0.0816</p></td>
+<td><p>~0.01-0.03</p></td>
+<td class="text-center"><p>NO (3-5x over)</p></td>
+</tr>
+<tr class="row-odd"><td><p>basalt</p></td>
+<td><p>synthetic</p></td>
+<td><p>mass-frac</p></td>
+<td class="text-right"><p>0.0974</p></td>
+<td class="text-right"><p>0.0971</p></td>
+<td><p>~0.01-0.03</p></td>
+<td class="text-center"><p>NO</p></td>
+</tr>
+<tr class="row-even"><td><p>carbonate</p></td>
+<td><p>synthetic</p></td>
+<td><p>mass-frac</p></td>
+<td class="text-right"><p>0.1179</p></td>
+<td class="text-right"><p>0.1178</p></td>
+<td><p>~0.01-0.03</p></td>
+<td class="text-center"><p>NO</p></td>
+</tr>
+<tr class="row-odd"><td><p>steel</p></td>
+<td><p>synthetic</p></td>
+<td><p>mass-frac</p></td>
+<td class="text-right"><p>0.1648</p></td>
+<td class="text-right"><p>0.1655</p></td>
+<td><p>~0.01-0.03 (alloy)</p></td>
+<td class="text-center"><p>NO (~6-8x over)</p></td>
+</tr>
+<tr class="row-even"><td><p>bhvo2_chemcam</p></td>
+<td><p><strong>real</strong></p></td>
+<td><p>mass-frac</p></td>
+<td class="text-right"><p><strong>0.1198</strong></p></td>
+<td class="text-right"><p>0.1240</p></td>
+<td><p>~0.01-0.03</p></td>
+<td class="text-center"><p><strong>NO (~5x)</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>chemcam_calib</p></td>
+<td><p><strong>real</strong></p></td>
+<td><p>mass-frac</p></td>
+<td class="text-right"><p><strong>0.1577</strong></p></td>
+<td class="text-right"><p>0.1637</p></td>
+<td><p>~0.01-0.03 (geo looser)</p></td>
+<td class="text-center"><p><strong>NO (~5-8x)</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>csa_planetary</p></td>
+<td><p><strong>real</strong></p></td>
+<td><p>mass-frac</p></td>
+<td class="text-right"><p>0.1664</p></td>
+<td class="text-right"><p><strong>0.1631</strong></p></td>
+<td><p>geo looser</p></td>
+<td class="text-center"><p><strong>NO</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>supercam_labcal</p></td>
+<td><p><strong>real</strong></p></td>
+<td><p>wt%</p></td>
+<td class="text-right"><p><strong>19.89</strong></p></td>
+<td class="text-right"><p>26.30</p></td>
+<td><p>~1-3 wt%</p></td>
+<td class="text-center"><p><strong>NO (~7-10x)</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>supercam_scct</p></td>
+<td><p><strong>real</strong></p></td>
+<td><p>wt%</p></td>
+<td class="text-right"><p><strong>21.17</strong></p></td>
+<td class="text-right"><p>26.04</p></td>
+<td><p>~1-3 wt%</p></td>
+<td class="text-center"><p><strong>NO (~7-10x)</strong></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="honest-read">
+<h3>1.2 Honest read<a class="headerlink" href="#honest-read" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>No dataset, real or synthetic, lands inside the usable CF-LIBS band at the deployed operating point.</strong>
+Even the cleanest synthetic case (light, 0.082) is ~3-5x over the 0.01-0.03 expectation; real ChemCam is
+~5-8x; SuperCam wt% is ~7-10x over the 1-3 wt% norm.</p></li>
+<li><p><strong>The synthetic-vs-real gap is small</strong> (synthetic 0.08-0.17 vs real ChemCam 0.12-0.17): this is itself
+diagnostic — it tells us the dominant error is <strong>not</strong> preprocessing/noise/real-spectrum messiness (which
+would blow up real far more than synthetic). The error is structural, and §3 localizes it to atomic data +
+the simplex composition step. The adversarial sweep corroborates: comp_rmse is flat from 50000 down to 1
+peak-count (<code class="docutils literal notranslate"><span class="pre">rtval_adversarial.md</span></code> §noise) — noise is not the binding axis.</p></li>
+<li><p><strong>Geological caveat applies but does not rescue it.</strong> <code class="docutils literal notranslate"><span class="pre">rtval_grounding.md</span></code> §2 warns geology should carry
+looser thresholds than alloys; even with that latitude, 0.12-0.17 mass-frac and 20-26 wt% are above
+“semi-quantitative useful,” and SuperCam per-element wt% (below) shows the alkali/Si columns are the worst.</p></li>
+<li><p><strong>SuperCam per-element structure</strong> (<code class="docutils literal notranslate"><span class="pre">rtval_supercam_k0_summary.json</span></code>): the wt% RMSE is dominated by
+<strong>Si (28-49 wt%), Na (43-55 wt%), K (12-50 wt%)</strong> — i.e. the high-Z-abundance major (Si) and the
+weak/edge alkali lines (Na, K) — while <strong>Ti is excellent (~1 wt%)</strong> and Fe/Al/Mg/Mn are mid (8-24 wt%).
+This is exactly the “weak-emitter / large-dynamic-range” ill-posedness flagged in
+<code class="docutils literal notranslate"><span class="pre">SYNTH_RTVAL_FINDINGS.md</span></code> (Na/K alkali lines weak in 240-850 nm; basis-column-norm dynamic range ~1e6).</p></li>
+</ul>
+<p><strong>Verdict (1):</strong> <strong>The 354 us operating point is NOT within usable CF-LIBS composition accuracy on real
+data.</strong> It is a robust real-time approximation (plausible composition, no NaNs, ~2000x faster than legacy),
+appropriate for triage/screening/onboard-prioritization, but it must not be reported as calibrated quant.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="nist-asd-vs-kurucz-vs-vald-verdict-does-better-atomic-data-move-composition-rmse-user-core-q">
+<h2>2. NIST-ASD vs KURUCZ vs VALD VERDICT — does better atomic data move composition RMSE? (user core Q)<a class="headerlink" href="#nist-asd-vs-kurucz-vs-vald-verdict-does-better-atomic-data-move-composition-rmse-user-core-q" title="Link to this heading"></a></h2>
+<section id="the-measured-deltas-nist-vs-kurucz-per-regime">
+<h3>2.1 The measured deltas (NIST vs Kurucz), per regime<a class="headerlink" href="#the-measured-deltas-nist-vs-kurucz-per-regime" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Regime</p></th>
+<th class="head"><p>dataset(s)</p></th>
+<th class="head text-right"><p>Kurucz-&gt;NIST delta (RMSE)</p></th>
+<th class="head"><p>Interpretation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Synthetic (same-DB fwd/inv)</p></td>
+<td><p>basalt/carbonate/light/steel</p></td>
+<td class="text-right"><p>&lt;1e-3 mass-frac (both signs)</p></td>
+<td><p>line-list cancels; near-zero</p></td>
+</tr>
+<tr class="row-odd"><td><p>Real ChemCam</p></td>
+<td><p>bhvo2_chemcam</p></td>
+<td class="text-right"><p>Kurucz better by 0.0042 (~3.4% rel)</p></td>
+<td><p>small, real</p></td>
+</tr>
+<tr class="row-even"><td><p>Real ChemCam</p></td>
+<td><p>chemcam_calib</p></td>
+<td class="text-right"><p>Kurucz better by 0.0060 (~3.7% rel)</p></td>
+<td><p>small, real</p></td>
+</tr>
+<tr class="row-odd"><td><p>Real ChemCam</p></td>
+<td><p>csa_planetary</p></td>
+<td class="text-right"><p>Kurucz <strong>worse</strong> by 0.0033</p></td>
+<td><p>small regression</p></td>
+</tr>
+<tr class="row-even"><td><p>Real SuperCam</p></td>
+<td><p>supercam_labcal</p></td>
+<td class="text-right"><p>Kurucz better by <strong>6.42 wt%</strong></p></td>
+<td><p>large, real</p></td>
+</tr>
+<tr class="row-odd"><td><p>Real SuperCam</p></td>
+<td><p>supercam_scct</p></td>
+<td class="text-right"><p>Kurucz better by <strong>4.86 wt%</strong></p></td>
+<td><p>large, real</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="where-better-atomic-data-moves-rmse-and-by-how-much">
+<h3>2.2 Where better atomic data moves RMSE, and by how much<a class="headerlink" href="#where-better-atomic-data-moves-rmse-and-by-how-much" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>It moves RMSE most on line-rich real spectra (SuperCam): ~5-6 wt% reduction</strong> switching NIST-&gt;Kurucz.
+Mechanistically consistent with <code class="docutils literal notranslate"><span class="pre">rtval_grounding.md</span></code> §1: Kurucz is far more <em>complete</em> (LIN/POS ratio ~370;
+330M iron-group lines), so on a broad real spectrum it back-fills weak/high-excitation lines NIST simply
+lacks, improving the Boltzmann/Saha intensity fit. NIST is more <em>accurate per line</em> but <em>incomplete</em>, and
+on a dense real spectrum completeness wins the aggregate fit.</p></li>
+<li><p><strong>On ChemCam it moves RMSE only ~0.004-0.006 mass-frac (~3-4% rel)</strong>, sometimes the wrong way
+(csa_planetary) — at this regime the overall error (~0.16) swamps the line-list delta, so the choice is
+near-neutral.</p></li>
+<li><p><strong>On synthetic it does not move RMSE at all</strong> (&lt;1e-3): a same-DB round-trip is insensitive to <em>which</em> DB
+by construction — which is precisely why the <em>controlled</em> cross-DB round-trip (§3) is the right instrument
+to isolate the atomic-data effect.</p></li>
+</ul>
+</section>
+<section id="direction-of-effect-resolution-important-nuance">
+<h3>2.3 Direction-of-effect resolution (important nuance)<a class="headerlink" href="#direction-of-effect-resolution-important-nuance" title="Link to this heading"></a></h3>
+<p>There is an apparent tension: in the <em>operational</em> corpus (§2.1) Kurucz beats NIST on real data, but in the
+<em>controlled clean</em> round-trip (§3) switching truth=Kurucz -&gt; inv=NIST <em>adds</em> 0.171 RMSE. These are
+consistent and measure different things:</p>
+<ul class="simple">
+<li><p><strong>§3 (controlled):</strong> truth is <em>generated</em> with Kurucz, so kurucz-&gt;kurucz is tautologically exact and
+kurucz-&gt;nist measures pure <em>line-list disagreement</em> (a lower bound on atomic-data sensitivity, not a
+statement that Kurucz is “true”).</p></li>
+<li><p><strong>§2.1 (operational, real spectra):</strong> truth is the <em>certificate/ICP</em>, independent of both DBs, so the
+comparison is fair — and there Kurucz’s <strong>completeness</strong> helps the fit on dense real spectra.
+The reconciled conclusion: <strong>atomic-data choice is a first-order lever (0.005-6 wt% on real data, ~0.17 in
+the controlled cross-DB test), its sign/magnitude is matrix- and completeness-dependent, and on real
+line-rich spectra the more complete list (Kurucz) currently wins the aggregate fit</strong> — while per-line
+accuracy (NIST A/B grades) is what would let a <em>curated</em> list beat both (the §5 recommendation).</p></li>
+</ul>
+</section>
+<section id="vald-open-blocker">
+<h3>2.4 VALD — open blocker<a class="headerlink" href="#vald-open-blocker" title="Link to this heading"></a></h3>
+<p><strong>VALD was NOT tested in either arm</strong> (no VALD rows in any CSV; controlled round-trip explicitly skipped it:
+“VALD SKIPPED (gated, no autonomous access)”). <code class="docutils literal notranslate"><span class="pre">rtval_grounding.md</span></code> §1 positions VALD3 as the <strong>right
+default for this use case</strong>: more complete than NIST, more accurate than raw Kurucz (it merges
+critically-evaluated per-species lab/theory gf — Fe II Raassen &amp; Uylings, Ti II Pickering, etc. — and
+back-fills the rest from Kurucz). The literature expectation is that VALD3 would <strong>combine</strong> the SuperCam
+completeness win (Kurucz-like) with better per-line accuracy than Kurucz — i.e. plausibly the best of the
+three — <strong>but this is an untested hypothesis, flagged as the top atomic-data follow-up.</strong></p>
+<p><strong>Verdict (2):</strong> <strong>Better atomic data does measurably move real-data composition RMSE</strong> — most on line-rich
+SuperCam (~5-6 wt% NIST-&gt;Kurucz), modestly on ChemCam (~3-4% rel), not at all on same-DB synthetic — and the
+controlled test proves atomic-data mismatch is the <em>dominant</em> error term (~0.17 RMSE). But <strong>no single
+line-list swap tested gets us into usable CF-LIBS quant</strong>; the path forward is a <strong>curated A/B-grade +
+completeness list (NIST-graded gf + VALD/Kurucz back-fill with a gf-grade column), with VALD evaluated</strong>, not
+a binary NIST-vs-Kurucz pick.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="algorithm-floor-vs-atomic-data-mismatch-decomposition-controlled-round-trip">
+<h2>3. ALGORITHM-FLOOR vs ATOMIC-DATA-MISMATCH DECOMPOSITION (controlled round-trip)<a class="headerlink" href="#algorithm-floor-vs-atomic-data-mismatch-decomposition-controlled-round-trip" title="Link to this heading"></a></h2>
+<p>Source: <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_local/SYNTH_RTVAL_FINDINGS.md</span></code> + <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_synth.csv</span></code> (1216 rows), all numbers
+re-derived this session. Design: truth generated from the most-complete Kurucz bundle (184k-line source),
+known (T,ne,comp), realistic Poisson+Gaussian noise; inverted with a <strong>clean linear NNLS separator</strong>
+(<code class="docutils literal notranslate"><span class="pre">S</span> <span class="pre">=</span> <span class="pre">B(T,ne)·comp</span></code> exactly linear in composition; B <em>is</em> the atomic data) so composition error is not
+confounded by the simplex/GN nonlinearity. Element-level physics (U(T), IP, mass) identical across backends —
+only the line list differs.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stage</p></th>
+<th class="head text-right"><p>kurucz-&gt;kurucz (same DB)</p></th>
+<th class="head text-right"><p>kurucz-&gt;nist (cross DB)</p></th>
+<th class="head"><p>What it isolates</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>clean &#64; true T,ne</strong></p></td>
+<td class="text-right"><p><strong>2.9e-6 (~0)</strong></p></td>
+<td class="text-right"><p><strong>0.171 +/- 0.060</strong></p></td>
+<td><p>algo floor vs <strong>pure atomic-data mismatch</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>noisy &#64; true T,ne</p></td>
+<td class="text-right"><p>0.208</p></td>
+<td class="text-right"><p>0.214</p></td>
+<td><p>+ noise (weak-emitter floor)</p></td>
+</tr>
+<tr class="row-even"><td><p>noisy &#64; GN-recovered T,ne</p></td>
+<td class="text-right"><p>0.200</p></td>
+<td class="text-right"><p>0.209</p></td>
+<td><p>+ plasma-param error (operational)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Per-matrix atomic-data delta (clean, cross-DB): <strong>basalt +0.234 (worst), steel +0.170, carbonate +0.162,
+light +0.119.</strong></p>
+<section id="reading">
+<h3>Reading<a class="headerlink" href="#reading" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>The algorithm floor is essentially zero (2.9e-6).</strong> A same-line-list clean round-trip closes exactly:
+the inversion math (Saha-Boltzmann + closure/NNLS) is not the problem. <strong>There is no meaningful accuracy
+to be won by improving the solver.</strong></p></li>
+<li><p><strong>Atomic-data mismatch alone is ~0.171 RMSE (~17 wt%)</strong> at zero noise and exact plasma params. The line
+list is the binding error source by a wide margin over the algorithm.</p></li>
+<li><p><strong>The noisy operational floor (~0.20 at both backends) is dominated by near-unobservable candidate
+elements</strong> (Na/K alkali lines weak/edge in 240-850 nm; basis-column-norm dynamic range ~1e6). At realistic
+SNR this <em>shared</em> noise floor MASKS the atomic-data delta (NIST and Kurucz both ~0.20-0.21 noisy) — which
+is exactly why the operational corpus (§2.1) shows only small NIST-vs-Kurucz deltas on ChemCam: the
+weak-emitter ill-posedness, not the line list, sets the noisy ceiling there. This is <strong>real CF-LIBS
+physics, not a bug.</strong></p></li>
+</ul>
+<p><strong>Verdict (3):</strong> <strong>algorithm error ~0; atomic-data mismatch ~0.17; weak-emitter/noise floor ~0.20.</strong> The
+error budget is, in order: (1) weak-emitter ill-posedness on a wide window (Na/K/Si dynamic range), (2)
+atomic-data line-list quality, (3) plasma-param (ne) error — with the <strong>inversion algorithm contributing
+essentially nothing.</strong> Spend effort on line data + line selection (downweight weak emitters / restrict ROI
+to observable diagnostics), not on the solver.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="legacy-vs-fast-cross-check-real-spectra">
+<h2>4. LEGACY-vs-FAST CROSS-CHECK (real spectra)<a class="headerlink" href="#legacy-vs-fast-cross-check-real-spectra" title="Link to this heading"></a></h2>
+<p>Source: <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_legacy.csv</span></code> + <code class="docutils literal notranslate"><span class="pre">/tmp/rtval_adversarial.md</span></code> §(b). Legacy =
+<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.pipeline.run_pipeline</span></code> (detect-&gt;ID-&gt;Stark-ne-&gt;iterative Saha-Boltzmann closure,
+<code class="docutils literal notranslate"><span class="pre">preset=geological</span></code>, <code class="docutils literal notranslate"><span class="pre">stark_ne=True</span></code>). comp_rmse = number-fraction vs ground-truth wt% over shared elements,
+renormalized identically both sides.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Case</p></th>
+<th class="head text-right"><p>GN RMSE</p></th>
+<th class="head text-right"><p>LEGACY RMSE</p></th>
+<th class="head text-center"><p>Winner</p></th>
+<th class="head text-right"><p>GN us</p></th>
+<th class="head text-right"><p>LEGACY us</p></th>
+<th class="head text-right"><p>Speedup</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>chemcam_calib i0 (AGV2)</p></td>
+<td class="text-right"><p>0.1454</p></td>
+<td class="text-right"><p>0.1209</p></td>
+<td class="text-center"><p>LEGACY</p></td>
+<td class="text-right"><p>1958</p></td>
+<td class="text-right"><p>4,130,892</p></td>
+<td class="text-right"><p>2110x</p></td>
+</tr>
+<tr class="row-odd"><td><p>chemcam_calib i50</p></td>
+<td class="text-right"><p>0.2142</p></td>
+<td class="text-right"><p>0.0414</p></td>
+<td class="text-center"><p>LEGACY</p></td>
+<td class="text-right"><p>2028</p></td>
+<td class="text-right"><p>3,862,615</p></td>
+<td class="text-right"><p>1905x</p></td>
+</tr>
+<tr class="row-even"><td><p>chemcam_calib i120</p></td>
+<td class="text-right"><p>0.1898</p></td>
+<td class="text-right"><p>0.0347</p></td>
+<td class="text-center"><p>LEGACY</p></td>
+<td class="text-right"><p>1993</p></td>
+<td class="text-right"><p>3,918,529</p></td>
+<td class="text-right"><p>1967x</p></td>
+</tr>
+<tr class="row-odd"><td><p>bhvo2_chemcam i0</p></td>
+<td class="text-right"><p>0.1252</p></td>
+<td class="text-right"><p>0.0762</p></td>
+<td class="text-center"><p>LEGACY</p></td>
+<td class="text-right"><p>2874</p></td>
+<td class="text-right"><p>4,196,248</p></td>
+<td class="text-right"><p>1460x</p></td>
+</tr>
+<tr class="row-even"><td><p>csa_planetary i0 (22-elem)</p></td>
+<td class="text-right"><p>0.1510</p></td>
+<td class="text-right"><p><strong>0.3657</strong></p></td>
+<td class="text-center"><p><strong>GN</strong></p></td>
+<td class="text-right"><p>5991</p></td>
+<td class="text-right"><p>6,621,692</p></td>
+<td class="text-right"><p>1105x</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p><strong>Accuracy:</strong> LEGACY wins 4/5; median RMSE LEGACY 0.076 vs GN 0.151 (~2x better), mean 0.128 vs 0.165.
+GN wins only on the 22-element CSA andesite where the legacy detect/ID/closure pipeline collapsed
+(RMSE 0.366, iters=20 non-converged) and GN degraded gracefully.</p></li>
+<li><p><strong>Latency:</strong> median ~2.0 ms (GN, full 5860-ch window) vs <strong>4.13 s (legacy)</strong> -&gt; <strong>~2000x speedup.</strong></p></li>
+<li><p><strong>Interpretation:</strong> the structured-GN does <strong>not</strong> beat legacy on real-data accuracy — it is a
+real-time-budget approximation that gives plausible composition ~2000x faster, ~2x looser, and is <strong>more
+robust</strong> under high element count.</p></li>
+</ul>
+<p><strong>Verdict (4):</strong> the fast method is a <strong>speed/robustness play, not an accuracy play</strong>, vs legacy. Both sit
+above usable CF-LIBS quant on these real spectra (legacy 0.03-0.12 on well-behaved ChemCam is closer but
+still calibration-free, not certified-grade), reinforcing §3: the ceiling is atomic data + physics, shared
+by both solvers.</p>
+</section>
+<hr class="docutils" />
+<section id="honest-blockers-harness-caveats-and-next-build-step">
+<h2>5. HONEST BLOCKERS, HARNESS CAVEATS, AND NEXT BUILD STEP<a class="headerlink" href="#honest-blockers-harness-caveats-and-next-build-step" title="Link to this heading"></a></h2>
+<section id="blockers-honest">
+<h3>5.1 Blockers (honest)<a class="headerlink" href="#blockers-honest" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>VALD untested (gated, no autonomous access).</strong> The literature-favored default (VALD3) is the one
+atomic-data option never evaluated. This is the <strong>#1 open question</strong> behind the user’s core ask — we have
+NIST-vs-Kurucz only. Needs a VALD3 extract (gated download) into the bundle builder.</p></li>
+<li><p><strong>“&lt;1 ms” is ROI-conditional, not full-resolution.</strong> On the real ExoJAX Voigt path: sub-ms only at
+~250-500 ch (min 407 us); <strong>1500 ch = ~1.21 ms, 5860 ch (full ChemCam) = ~2.0 ms, 7933 ch (SuperCam) K=1
+= ~7.6 ms.</strong> The v3 “354 us at ROI=2000” is a synthetic-sweep figure on a leaner forward; do not claim
+&lt;1 ms at full real-instrument resolution. (The K=0 NNLS warm path is ~0.62 ms at 7933 ch — sub-ms but
+that is the warm-start, not the GN step.)</p></li>
+<li><p><strong>Real-data composition is diagnostic, not calibrated.</strong> Real comparisons are number-fraction(recovered)
+vs wt%(certificate) over <em>shared elements, renormalized</em> — a self-consistency diagnostic, not a true
+calibrated CF-LIBS quant with full element set + self-absorption correction + curated gf. Absolute real
+RMSE will differ from a production-calibrated run; the <em>relative</em> (NIST vs Kurucz, GN vs legacy, fast vs
+floor) comparisons are the trustworthy outputs.</p></li>
+<li><p><strong>Harness/forward differences across arms.</strong> Three forward engines appear: the synthetic varpro sweep
+(v3 latency, leaner forward), the ExoJAX-grade reference forward (real + adversarial + controlled), and
+the SuperCam harness. Latency numbers are <strong>not</strong> cross-comparable between the varpro sweep and the
+ExoJAX path; accuracy numbers (RMSE) are comparable within an arm. No silent fallback was hit (GPU
+verified <code class="docutils literal notranslate"><span class="pre">CudaDevice(id=0)</span></code> in all ExoJAX runs), but <strong>the controlled round-trip uses an NNLS separator,
+not the deployed GN</strong>, deliberately — the GN’s simplex composition step is its known weak spot, so the
+algo/atomic split is cleaner with NNLS. The deployed-GN real numbers (§1) carry the GN simplex penalty on
+top of the §3 atomic-data floor.</p></li>
+<li><p><strong>Self-absorption must stay upstream.</strong> <code class="docutils literal notranslate"><span class="pre">use_self_absorption=True</span></code> inside the GN basis <strong>breaks</strong>
+(ne rails to floor, comp_rmse 0.25-0.29, T diverges at K=3). Keep the GN strictly optically-thin; handle
+SA via line selection / CDSB upstream (adversarial §3). This is a hard constraint on the solver design.</p></li>
+<li><p><strong>ne is unidentifiable from a flat prior</strong> (ne_rel ~0.3-0.5 nominal, ~1.0 at ne&lt;=1e16). Must seed ne from
+a Stark-width diagnostic (legacy does <code class="docutils literal notranslate"><span class="pre">measure_stark_ne</span></code>); the real-time path needs this seed or it
+carries ne error into composition.</p></li>
+</ol>
+</section>
+<section id="next-build-step-re-pointed-from-v3-the-lever-moved-from-speed-to-data">
+<h3>5.2 Next build step (re-pointed from v3 — the lever moved from SPEED to DATA)<a class="headerlink" href="#next-build-step-re-pointed-from-v3-the-lever-moved-from-speed-to-data" title="Link to this heading"></a></h3>
+<p>v3’s next step was “implement + oracle-test the structured Jacobian.” That latency work stands and is largely
+validated. <strong>But the controlled round-trip (§3) proves the algorithm is already at its floor, so the next
+<em>accuracy</em> build step is atomic-data, not solver:</strong></p>
+<p><strong>STEP A (do first) — Curated, gf-graded atomic-line bundle + VALD evaluation.</strong></p>
+<ol class="arabic simple">
+<li><p>Extend the bundle builder (<code class="docutils literal notranslate"><span class="pre">/tmp/rtval_local/build_atomic_bundle.py</span></code> / <code class="docutils literal notranslate"><span class="pre">cflibs/atomic</span></code>) to carry a
+<strong>per-line gf-grade column</strong> (NIST AAA/AA/A/B/C/D/E) as a first-class field
+(<code class="docutils literal notranslate"><span class="pre">rtval_grounding.md</span></code> §1 recommendation: “a gf-grade column should be a first-class input to line
+selection”).</p></li>
+<li><p>Build three comparable bundles over the SAME line set: <strong>NIST-A/B-only</strong>, <strong>Kurucz-complete</strong>, and
+<strong>VALD3</strong> (gated download — unblock #1). Re-run the controlled cross-DB round-trip (<code class="docutils literal notranslate"><span class="pre">synth_rtval.py</span></code>) and
+the real corpus (<code class="docutils literal notranslate"><span class="pre">rtval_all</span></code> aggregation) across all three. <strong>Acceptance:</strong> does VALD3 beat both on real
+SuperCam/ChemCam RMSE, and does NIST-A/B-only (accuracy-capped) beat raw Kurucz on the <em>controlled</em> test?</p></li>
+<li><p><strong>Line-selection gate:</strong> downweight/exclude Kurucz-back-filled (no NIST grade) and weak-emitter lines
+(basis-column-norm threshold) from the composition fit — directly attacks the §3 weak-emitter ~0.20
+noisy floor (Na/K/Si). Re-measure real RMSE.</p></li>
+</ol>
+<p><strong>STEP B (parallel) — keep the v3 solver work, but re-scope its claim.</strong></p>
+<ul class="simple">
+<li><p>Ship the structured K=1 GN as the <strong>real-time triage/warm-start</strong> path with the honest claim: <strong>sub-ms at
+~250-500 ch ROI, ~2 ms at full window, plausible (not calibrated) composition, ~2000x faster than legacy,
+NaN-free.</strong> Keep the oracle test (&lt;=1e-5 vs jacfwd) and the lax.scan K=1 loop from v3 §5.</p></li>
+<li><p>Wire the <strong>Stark-ne seed</strong> (blocker #6) and <strong>upstream SA handling</strong> (blocker #5) into the real-time path
+before any composition is reported.</p></li>
+</ul>
+<p><strong>Why STEP A first:</strong> §3 is unambiguous — algorithm error is ~0 and atomic-data mismatch is ~0.17. Every
+microsecond shaved off the solver leaves the real-data accuracy exactly where it is. The only path to usable
+real-data CF-LIBS quant runs through the line list (completeness + per-line gf accuracy + grade-aware line
+selection) and the weak-emitter ill-posedness — not the inversion math.</p>
+</section>
+<section id="carried-forward-decisions-unchanged-from-v3">
+<h3>5.3 Carried-forward decisions (unchanged from v3)<a class="headerlink" href="#carried-forward-decisions-unchanged-from-v3" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Method:</strong> structured (analytic-block) Jacobian K=1 + damped GN dominates autodiff (same accuracy,
+faster) and VarPro (VarPro nails T/ne but mis-apportions composition ~0.23, NaN at small ROI). Unchanged.</p></li>
+<li><p><strong>ExoJAX = OFFLINE</strong> for atomic-line ingestion / partition functions / Voigt reference accuracy /
+PreMODIT manifold-gen, never a hot-path shipped dependency. (Note: the <em>reference</em> forward used in this
+campaign IS ExoJAX, but as a validation oracle, consistent with the offline role.)</p></li>
+<li><p><strong>Physics-only constraint holds</strong> with no tension across the entire path.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-numbers-one-table">
+<h2>6. KEY NUMBERS (one table)<a class="headerlink" href="#key-numbers-one-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Quantity</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Real-data verdict</strong></p></td>
+<td><p>NOT usable CF-LIBS quant at 354 us operating point</p></td>
+<td><p>§1</p></td>
+</tr>
+<tr class="row-odd"><td><p>Real ChemCam comp_rmse (mass-frac)</p></td>
+<td><p>0.12 (bhvo2), 0.16 (chemcam_calib), 0.16 (csa)</p></td>
+<td><p>rtval_all.csv</p></td>
+</tr>
+<tr class="row-even"><td><p>Real SuperCam comp_rmse (wt%)</p></td>
+<td><p>19.9-26.3 (labcal), 21.2-26.0 (scct)</p></td>
+<td><p>rtval_all.csv</p></td>
+</tr>
+<tr class="row-odd"><td><p>CF-LIBS usable band (majors)</p></td>
+<td><p>~1-3 wt% (~0.01-0.03 mass-frac)</p></td>
+<td><p>rtval_grounding.md §2</p></td>
+</tr>
+<tr class="row-even"><td><p>Gap to usable</p></td>
+<td><p>~4x-10x on every real dataset</p></td>
+<td><p>§1</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Algorithm floor (same-DB clean)</strong></p></td>
+<td><p><strong>RMSE 2.9e-6 (~0)</strong></p></td>
+<td><p>rtval_synth.csv</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Atomic-data mismatch (cross-DB clean)</strong></p></td>
+<td><p><strong>RMSE 0.171 (~17 wt%)</strong></p></td>
+<td><p>rtval_synth.csv</p></td>
+</tr>
+<tr class="row-odd"><td><p>Noisy operational floor (both DBs)</p></td>
+<td><p>~0.20 RMSE (weak-emitter dominated)</p></td>
+<td><p>rtval_synth.csv</p></td>
+</tr>
+<tr class="row-even"><td><p>NIST-&gt;Kurucz delta, SuperCam</p></td>
+<td><p>-6.4 wt% (labcal), -4.9 wt% (scct)</p></td>
+<td><p>rtval_all.csv</p></td>
+</tr>
+<tr class="row-odd"><td><p>NIST-&gt;Kurucz delta, ChemCam</p></td>
+<td><p>-0.004 to -0.006 mass-frac (1 regression)</p></td>
+<td><p>rtval_all.csv</p></td>
+</tr>
+<tr class="row-even"><td><p>NIST-&gt;Kurucz delta, synthetic</p></td>
+<td><p>&lt;1e-3 (negligible, same-DB)</p></td>
+<td><p>rtval_all.csv</p></td>
+</tr>
+<tr class="row-odd"><td><p>VALD tested?</p></td>
+<td><p><strong>NO (gated, no access) — open blocker</strong></p></td>
+<td><p>rtval_synth.md</p></td>
+</tr>
+<tr class="row-even"><td><p>Legacy vs GN (real, accuracy)</p></td>
+<td><p>LEGACY wins 4/5; median 0.076 vs 0.151 (~2x)</p></td>
+<td><p>rtval_legacy.csv</p></td>
+</tr>
+<tr class="row-odd"><td><p>Legacy vs GN (latency)</p></td>
+<td><p>4.13 s vs ~2.0 ms -&gt; ~2000x speedup</p></td>
+<td><p>rtval_legacy.csv</p></td>
+</tr>
+<tr class="row-even"><td><p>GN sub-ms range (real Voigt path)</p></td>
+<td><p>only ~250-500 ch (min 407 us); 1500 ch=1.21 ms; full=2.0 ms</p></td>
+<td><p>adversarial / synth</p></td>
+</tr>
+<tr class="row-odd"><td><p>NaNs across 80 adversarial runs</p></td>
+<td><p><strong>0 (never)</strong></p></td>
+<td><p>rtval_adversarial.md</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Next build step</strong></p></td>
+<td><p>curated gf-graded bundle + VALD eval + weak-emitter line selection (NOT more solver speed)</p></td>
+<td><p>§5.2</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="one-line-v4-verdict-real-data">
+<h2>One-line v4 verdict (real-data)<a class="headerlink" href="#one-line-v4-verdict-real-data" title="Link to this heading"></a></h2>
+<p><strong>The 354 us structured-GN is real, robust (zero NaNs), and ~2000x faster than the legacy solver, but its
+real-data composition accuracy is NOT usable CF-LIBS quant (0.12-0.17 mass-frac on ChemCam, 20-26 wt% on
+SuperCam, 4x-10x over the 1-3 wt% norm and ~2x worse than legacy) — and the controlled round-trip proves the
+binding error is ATOMIC-DATA mismatch (~0.17 RMSE from the line list alone, algorithm floor ~0), so the next
+build step is curated gf-graded atomic data + VALD evaluation + weak-emitter line selection, not a faster
+solver.</strong></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

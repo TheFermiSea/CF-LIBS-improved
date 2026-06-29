@@ -1,0 +1,194 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J2 Implementation Spec — Jittable Segmented-RANSAC Wavelength Calibration &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J2 Implementation Spec — Jittable Segmented-RANSAC Wavelength Calibration</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J2-wavelength-calibration.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j2-implementation-spec-jittable-segmented-ransac-wavelength-calibration">
+<h1>J2 Implementation Spec — Jittable Segmented-RANSAC Wavelength Calibration<a class="headerlink" href="#j2-implementation-spec-jittable-segmented-ransac-wavelength-calibration" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J2 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §4 row 3, §3 C2/C3 · <strong>Track:</strong> A · <strong>Depends:</strong> J0, J1 · <strong>Estimated effort:</strong> 12–17 pd (global calibrator kernel 6–8, segmented orchestration 4–6, reference self-variance study + parity corpus 2–3)</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Port <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/wavelength_calibration.py</span></code> (1,601 lines; pipeline entry <code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis_segmented</span></code> called per spectrum at <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:488</span></code>) into <code class="docutils literal notranslate"><span class="pre">jitpipe/calibrate.py</span></code> as a fixed-shape, vmappable kernel. This is the <strong>biggest runtime stage</strong> (calibration median 1.55 s of 2.64 s total on bhvo2_chemcam, <code class="docutils literal notranslate"><span class="pre">SCOREBOARD-2026-06-10-baseline.md</span></code>).</p></li>
+<li><p>Per ADR-0004 §3 C2: parity-anchored parallel hypothesis evaluation with the <strong>exact greedy one-to-one dedupe reserved for the winning hypothesis and refine rounds</strong>. The MAGSAC++ sigma-marginalized IRLS variant is an <em>optional</em> differentiable mode behind the same kernel interface (consumed by J11), never the parity build.</p></li>
+</ul>
+</section>
+<section id="current-algorithm-and-jit-breakers-file-line-all-preprocess-wavelength-calibration-py">
+<h2>2. Current algorithm and jit-breakers (file:line; all <code class="docutils literal notranslate"><span class="pre">preprocess/wavelength_calibration.py</span></code>)<a class="headerlink" href="#current-algorithm-and-jit-breakers-file-line-all-preprocess-wavelength-calibration-py" title="Link to this heading"></a></h2>
+<p>Segmented driver (<code class="docutils literal notranslate"><span class="pre">:1351</span></code>): <code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code> (<code class="docutils literal notranslate"><span class="pre">:829</span></code>, Python rolling-median-of-diffs loop <code class="docutils literal notranslate"><span class="pre">:881-884</span></code>) → always-computed global <code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis</span></code> (<code class="docutils literal notranslate"><span class="pre">:1459</span></code>) → ye6t coverage gate on the global fit (<code class="docutils literal notranslate"><span class="pre">:1478-1511</span></code>; on failure <strong>re-calls the whole calibrator</strong> restricted to <code class="docutils literal notranslate"><span class="pre">(&quot;shift&quot;,)</span></code> at <code class="docutils literal notranslate"><span class="pre">:1495</span></code>) → per-segment Python loop <code class="docutils literal notranslate"><span class="pre">_run_segments</span></code> (<code class="docutils literal notranslate"><span class="pre">:1181,1210</span></code>) → <code class="docutils literal notranslate"><span class="pre">_fit_one_segment</span></code> (<code class="docutils literal notranslate"><span class="pre">:1080</span></code>; sparse-segment model restriction <code class="docutils literal notranslate"><span class="pre">:1119</span></code>; re-entrant calibrator call <code class="docutils literal notranslate"><span class="pre">:1120</span></code>; trust gate <code class="docutils literal notranslate"><span class="pre">:976</span></code>; coverage gate <code class="docutils literal notranslate"><span class="pre">:1015</span></code> with another re-entrant shift-only refit <code class="docutils literal notranslate"><span class="pre">:1053</span></code>) → fallback 1 global offset (<code class="docutils literal notranslate"><span class="pre">:1160-1162</span></code>); fallback 2 nearest-fit-neighbour median offset (<code class="docutils literal notranslate"><span class="pre">:1246,1260</span></code>) → sequential seam-monotonicity cascade (<code class="docutils literal notranslate"><span class="pre">:1269,1276-1286</span></code>) → revert-to-global gates (cumulative shift &gt;0.5 nm <code class="docutils literal notranslate"><span class="pre">:1572</span></code>; residual non-monotonicity <code class="docutils literal notranslate"><span class="pre">:1581</span></code>).</p>
+<p>Inner calibrator (<code class="docutils literal notranslate"><span class="pre">:602</span></code>): <code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code> (<code class="docutils literal notranslate"><span class="pre">:700</span></code>) → <code class="docutils literal notranslate"><span class="pre">_build_reference_line_pool</span></code> (<code class="docutils literal notranslate"><span class="pre">:403</span></code>; <strong>SQL <code class="docutils literal notranslate"><span class="pre">get_transitions</span></code> per element</strong> <code class="docutils literal notranslate"><span class="pre">:417</span></code>; Python <code class="docutils literal notranslate"><span class="pre">sorted()</span></code> ranking <code class="docutils literal notranslate"><span class="pre">:424-428</span></code>) → <code class="docutils literal notranslate"><span class="pre">_build_candidate_pairs</span></code> nested Python loops (<code class="docutils literal notranslate"><span class="pre">:441,458-468</span></code>) → per-model <code class="docutils literal notranslate"><span class="pre">_ransac_fit</span></code> (<code class="docutils literal notranslate"><span class="pre">:359</span></code>): <code class="docutils literal notranslate"><span class="pre">_ransac_search</span></code> (<code class="docutils literal notranslate"><span class="pre">:256</span></code>) runs <strong>600 iterations</strong> (<code class="docutils literal notranslate"><span class="pre">:274</span></code>), each with rejection sampling ≤25 retries for distinct-x (<code class="docutils literal notranslate"><span class="pre">:240-253</span></code>), an lstsq fit (<code class="docutils literal notranslate"><span class="pre">:168-196</span></code>), and a full <strong>greedy one-to-one dedupe per hypothesis</strong> (<code class="docutils literal notranslate"><span class="pre">_dedupe_one_to_one</span></code> <code class="docutils literal notranslate"><span class="pre">:209-230</span></code>, mutable <code class="docutils literal notranslate"><span class="pre">used_peaks</span></code>/<code class="docutils literal notranslate"><span class="pre">used_lines</span></code> sets, called at <code class="docutils literal notranslate"><span class="pre">:285</span></code>) — the single most jit-hostile construct in the stage; lexicographic score (<code class="docutils literal notranslate"><span class="pre">:291</span></code>) → refine (<code class="docutils literal notranslate"><span class="pre">:299</span></code>) → final fit + BIC (<code class="docutils literal notranslate"><span class="pre">:325,:233</span></code>) → monotonicity rejection (<code class="docutils literal notranslate"><span class="pre">:509,:199-206</span></code>) → BIC sort &amp; best (<code class="docutils literal notranslate"><span class="pre">:809-810</span></code>) → 5 sequential quality gates (<code class="docutils literal notranslate"><span class="pre">:96-133</span></code>) → diagnostics dict (<code class="docutils literal notranslate"><span class="pre">:554-578</span></code>). Host RNG <code class="docutils literal notranslate"><span class="pre">np.random.default_rng</span></code> (<code class="docutils literal notranslate"><span class="pre">:375</span></code>, <code class="docutils literal notranslate"><span class="pre">random_seed=42</span></code> default at <code class="docutils literal notranslate"><span class="pre">:615</span></code>). Other breakers: early <code class="docutils literal notranslate"><span class="pre">return</span> <span class="pre">None</span></code> chains (<code class="docutils literal notranslate"><span class="pre">:174,391,397,683-771</span></code>); model dispatch by string (<code class="docutils literal notranslate"><span class="pre">:156-165</span></code>); <code class="docutils literal notranslate"><span class="pre">_segment_anchor_coverage</span></code> reads anchors out of the details <strong>dict</strong> (<code class="docutils literal notranslate"><span class="pre">:1001</span></code>); data-dependent dense-hull slice (<code class="docutils literal notranslate"><span class="pre">:933</span></code>).</p>
+</section>
+<section id="redesign">
+<h2>3. Redesign<a class="headerlink" href="#redesign" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Line pool:</strong> host snapshot per (dataset band, element set): <code class="docutils literal notranslate"><span class="pre">(L_max=1024,)</span></code> wl + strength + mask (observed ≤925). SQL + ranking stay host-side (ADR-0001 split).</p></li>
+<li><p><strong>Pairs:</strong> <code class="docutils literal notranslate"><span class="pre">searchsorted</span></code> window per peak → banded <code class="docutils literal notranslate"><span class="pre">(P_max=2048,</span> <span class="pre">K_pair=48)</span></code> line-index/Δλ/weight slots + mask (measured fan-out ≤32 at the ±2.0 nm window) — never a flat variable-length pair list.</p></li>
+<li><p><strong>Hypothesis evaluation (replaces sequential RANSAC; strictly stronger search):</strong></p>
+<ul>
+<li><p><em>shift model:</em> <strong>exhaustive</strong> — every live pair slot IS a 1-point hypothesis (≤98k masked hypotheses, trivially vmapped; supersedes 600 random draws);</p></li>
+<li><p><em>affine/quadratic:</em> H=4,096 deterministic stratified samples (counter-based threefry, fixed key; distinct-x enforced <strong>by construction</strong> by sampling from distinct peak strata — eliminates the 25-retry rejection loop);</p></li>
+<li><p>per hypothesis: closed-form weighted 1/2/3-point fit, residuals vs all C slots, inlier mask; chunk the (H×C) residual matrix via <code class="docutils literal notranslate"><span class="pre">lax.map</span></code> over H-blocks of 256 (≤100 MB live);</p></li>
+<li><p><strong>scoring:</strong> parallel upper bound <code class="docutils literal notranslate"><span class="pre">min(#unique</span> <span class="pre">inlier</span> <span class="pre">peaks,</span> <span class="pre">#unique</span> <span class="pre">inlier</span> <span class="pre">lines)</span></code> + (−masked-median residual) — NOT per-hypothesis greedy dedupe;</p></li>
+<li><p><strong>exact dedupe for the winner + refine rounds only:</strong> <code class="docutils literal notranslate"><span class="pre">argsort</span></code>-by-residual + <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> (length C=10,240) carrying <code class="docutils literal notranslate"><span class="pre">(P_max,)</span></code>/<code class="docutils literal notranslate"><span class="pre">(L_max,)</span></code> used-boolean masks; ~3 models × ~3 scans per spectrum, B-wide under vmap.</p></li>
+</ul>
+</li>
+<li><p><strong>Refine + final fit:</strong> fixed 2 rounds of masked weighted normal equations (3×3 <code class="docutils literal notranslate"><span class="pre">jnp.linalg.solve</span></code>). <strong>Required numerical deviation:</strong> center-and-scale x to segment midpoint/half-span before forming Gram matrices — the reference lstsq on raw nm (<code class="docutils literal notranslate"><span class="pre">:188-193</span></code>) is SVD-backed; raw-x normal equations with x²≈2.5e5 lose ~10 digits. Coefficients mapped back host-side; the contract is on the corrected axis, not coefficients.</p></li>
+<li><p><strong>BIC + gates:</strong> compute all 3 models unconditionally; validity mask = (enough points) &amp; (monotonic on grid) &amp; finite; best = masked argmin BIC; the 5 thresholds (<code class="docutils literal notranslate"><span class="pre">:123-133</span></code>) become a branchless gate vector → on failure the kernel returns the identity correction + an int reason code (host maps codes to today’s <code class="docutils literal notranslate"><span class="pre">quality_reason</span></code> strings).</p></li>
+<li><p><strong>Seams:</strong> rolling median of <code class="docutils literal notranslate"><span class="pre">diff(wl)</span></code> via sliding-window <code class="docutils literal notranslate"><span class="pre">jnp.sort</span></code> (window 2×51+1, row-chunked); <code class="docutils literal notranslate"><span class="pre">segment_id</span> <span class="pre">=</span> <span class="pre">cumsum(seam_mask)</span></code>, clip to SEG_max=16 (observed ≤11; csa_planetary 10 seams / 11 segments).</p></li>
+<li><p><strong>Segments:</strong> vmap the single-segment calibrator over SEG_max slots; pairs/peaks carry segment ids; sparse-segment model restriction (<code class="docutils literal notranslate"><span class="pre">:1119</span></code>) = per-segment model-validity mask. <strong>Replace the re-entrant degrade-to-shift recursion (<code class="docutils literal notranslate"><span class="pre">:1053,1495</span></code>) with a model lattice:</strong> all model fits (incl. shift) are computed in the same pass, so coverage-gate failure <em>selects</em> the precomputed shift result — same answer, no recursion. The dense-hull data-dependent k (<code class="docutils literal notranslate"><span class="pre">:933</span></code>) is a traced int used only in gather indices, never shapes — jittable as-is.</p></li>
+<li><p><strong>Fallbacks + cascade:</strong> neighbour fallback = masked argmin over |i−j| of fit-segment indices + segment-masked median offsets; monotonic restore = <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> over ≤16 segments carrying cumulative shift (exact port); revert gates = branchless select of segmented vs global axis.</p></li>
+<li><p>Shift-grid scan downstream context: after calibration the residual <code class="docutils literal notranslate"><span class="pre">shift_scan_nm</span></code> shrinks (<code class="docutils literal notranslate"><span class="pre">pipeline.py:485-497</span></code>); S_shift=32 covers the observed ≤21.</p></li>
+</ul>
+</section>
+<section id="tolerance-contract-vs-the-seed-42-reference">
+<h2>4. Tolerance contract (vs the seed-42 reference)<a class="headerlink" href="#tolerance-contract-vs-the-seed-42-reference" title="Link to this heading"></a></h2>
+<p><strong>Precondition:</strong> measure reference <strong>self-variance</strong> across ~10 seeds on the 32-spectrum corpus; no band may be tighter than that floor. Then:</p>
+<ul class="simple">
+<li><p>MUST agree: (a) quality/coverage <strong>gate outcomes</strong> (<code class="docutils literal notranslate"><span class="pre">quality_passed</span></code>, applied-vs-identity) on every corpus spectrum, excluding documented near-threshold cases (metric within ±5 % of its threshold); (b) <strong>corrected axis</strong> <code class="docutils literal notranslate"><span class="pre">max|λ_jit</span> <span class="pre">−</span> <span class="pre">λ_ref|</span> <span class="pre">≤</span> <span class="pre">inlier_tolerance_nm/2</span> <span class="pre">=</span> <span class="pre">0.04</span> <span class="pre">nm</span></code> (sub-pixel on every measured instrument) wherever both pass gates; (c) selected model class on ≥90 % of (spectrum, segment) cells; (d) per-segment fit/fallback status labels.</p></li>
+<li><p>MAY differ: coefficients (different x-parameterization), inlier sets/counts, winning hypothesis, RMSE within max(±30 %, 0.02 nm), diagnostics detail values.</p></li>
+<li><p>Downstream guard: |ΔF1| ≤ 0.01 micro-averaged on the 10-dataset board.</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria">
+<h2>5. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Self-variance study artifact committed (<code class="docutils literal notranslate"><span class="pre">docs/jitpipe/calibration-self-variance.md</span></code>) before bands are frozen.</p></li>
+<li><p>Contract (a)–(d) green on the 32-spectrum corpus; <strong>ye6t regression fixtures (ChemCam VNIR / BHVO-2 877 nm Al doublet flip) in the parity corpus and green</strong> — the coverage gate exists specifically for them.</p></li>
+<li><p>jit + vmap (B=16) + padding-invariance + no-SQLite-in-kernel; deterministic per (seed, shapes).</p></li>
+<li><p>Host wrapper reconstitutes <code class="docutils literal notranslate"><span class="pre">WavelengthCalibrationResult</span></code> so downstream consumers/parity tests see identical types.</p></li>
+<li><p>Memory: H-chunked residual matrix ≤100 MB live (asserted via planned-bytes check).</p></li>
+<li><p>Optional MAGSAC++ IRLS mode compiles and is grad-finite (smoke only; full validation in J11).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>6. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_calibrate.py</span></code> — corpus-driven, <code class="docutils literal notranslate"><span class="pre">assert_allclose</span></code> on corrected axis + exact equality on gate booleans (style of <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_iterative_lax.py:180</span></code>); seam/segment unit tests on synthetic multi-CCD spectra; adversarial monotonicity-cascade fixture; model-lattice equivalence test (coverage-gate failure path ≡ reference shift-only refit).</p>
+</section>
+<section id="risks">
+<h2>7. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><em>Numerical (medium):</em> quadratic Gram conditioning — mitigated by centering; flagged as deliberate deviation.</p></li>
+<li><p><em>Behavioral (medium-high):</em> upper-bound hypothesis ranking can pick a different (usually better) hypothesis than greedy-per-hypothesis dedupe; bounded by the corrected-axis + gate-outcome contract; every corpus divergence ledgered.</p></li>
+<li><p><em>Memory (low):</em> H-chunking bounds live residuals.</p></li>
+</ul>
+</section>
+<section id="dependencies-files">
+<h2>8. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0, J1 (calibration-parameterized peak kernel). Enables J8; J3 may develop against reference calibration meanwhile. Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/calibrate.py</span></code>, tests, self-variance doc. Reference untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

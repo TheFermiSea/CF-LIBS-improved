@@ -1,0 +1,194 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS solver head-to-head (classic vs ILR vs C-sigma) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS solver head-to-head (classic vs ILR vs C-sigma)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/M-spec-solver-head-to-head.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-solver-head-to-head-classic-vs-ilr-vs-c-sigma">
+<h1>CF-LIBS solver head-to-head (classic vs ILR vs C-sigma)<a class="headerlink" href="#cf-libs-solver-head-to-head-classic-vs-ilr-vs-c-sigma" title="Link to this heading"></a></h1>
+<p>Three drop-in solvers on the SAME detected lines (shared <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> front-end + a
+<code class="docutils literal notranslate"><span class="pre">LineSelector.select</span></code> spy), <code class="docutils literal notranslate"><span class="pre">supercam_labcal</span></code> n=15, scored in <strong>both</strong> bases the user asked for.
+Driver: <code class="docutils literal notranslate"><span class="pre">scripts/benchmark_solvers.py</span></code>.</p>
+<section id="result-median-rmse-wt-vs-truth-lower-better">
+<h2>Result — median RMSE_wt vs truth (lower = better)<a class="headerlink" href="#result-median-rmse-wt-vs-truth-lower-better" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>solver</p></th>
+<th class="head"><p>PRODUCTION (mass)</p></th>
+<th class="head"><p>ELEMENT-NUMBER</p></th>
+<th class="head"><p>n</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>iterative (classic)</strong></p></td>
+<td><p><strong>2.27</strong></p></td>
+<td><p><strong>4.06</strong></p></td>
+<td><p>15</p></td>
+</tr>
+<tr class="row-odd"><td><p>ILR closed-form</p></td>
+<td><p>11.51</p></td>
+<td><p>5.96</p></td>
+<td><p>15</p></td>
+</tr>
+<tr class="row-even"><td><p>C-sigma (U-corrected)</p></td>
+<td><p>17.71</p></td>
+<td><p>15.63</p></td>
+<td><p>15</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The classic iterative solver wins decisively in both bases.</strong> Neither alternative beats it on
+this data.</p>
+</section>
+<section id="honest-reading-caveats">
+<h2>Honest reading + caveats<a class="headerlink" href="#honest-reading-caveats" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>ILR</strong> is much closer in the <em>element-number</em> basis (5.96 vs 4.06) than in production (11.51).
+Its production gap is partly a <strong>fairness caveat</strong>: I ran ILR with <code class="docutils literal notranslate"><span class="pre">closure_mode=&quot;standard&quot;</span></code>
+while iterative uses the geological <strong>oxide</strong> closure (the oxide step is worth a lot on these
+samples). Element-number — which neutralizes the closure — is the fairer ILR comparison, and
+there ILR is competitive though still behind.</p></li>
+<li><p><strong>C-sigma is worst in both bases — but NOT because of the partition-function bug</strong> (that is
+fixed and validated; see below). The Cσ-graph method is intrinsically sensitive on real LIBS:
+it needs accurate absorption cross-sections, the optically-thin/COG regime, and a
+well-conditioned common-line fit; on real spectra these degrade and the global fit drifts.</p></li>
+<li><p><strong>Scope:</strong> n=15, one dataset (<code class="docutils literal notranslate"><span class="pre">supercam_labcal</span></code> is the only multi-element set with local data),
+single seed. A directional result, not a final verdict.</p></li>
+</ul>
+</section>
+<section id="the-c-sigma-partition-function-bug-found-fixed">
+<h2>The C-sigma partition-function bug (found + fixed)<a class="headerlink" href="#the-c-sigma-partition-function-bug-found-fixed" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fit_csigma.relative_concentrations</span></code> are <strong><code class="docutils literal notranslate"><span class="pre">C_s/U_s</span></code>, not a composition</strong> — the partition
+function is omitted from the cross-section and the bare fit has no DB to restore it. Confirmed on
+the verified oracle fixture (<code class="docutils literal notranslate"><span class="pre">U</span></code>=3.88/3.09/4.71, all different): raw fit returns
+<code class="docutils literal notranslate"><span class="pre">[0.468,</span> <span class="pre">0.387,</span> <span class="pre">0.145]</span></code> ≈ <code class="docutils literal notranslate"><span class="pre">C/U</span></code> <code class="docutils literal notranslate"><span class="pre">[0.480,</span> <span class="pre">0.361,</span> <span class="pre">0.158]</span></code>, <strong>not</strong> true <code class="docutils literal notranslate"><span class="pre">[0.5,</span> <span class="pre">0.3,</span> <span class="pre">0.2]</span></code>.
+Applying <code class="docutils literal notranslate"><span class="pre">×U_s(T)</span></code>: <code class="docutils literal notranslate"><span class="pre">[0.491,</span> <span class="pre">0.324,</span> <span class="pre">0.185]</span></code> ≈ truth. So the dominant error is the U-omission
+(fixable, ~25× worst case across elements), with a small residual from the fixture’s photon-rate
+forward not being Cσ’s COG master curve. <code class="docutils literal notranslate"><span class="pre">solve_csigma_composition(obs,</span> <span class="pre">db)</span></code> applies the
+correction. Tests: <code class="docutils literal notranslate"><span class="pre">tests/inversion/physics/test_csigma_composition.py</span></code> (the bug + the fix +
+DB-backed smoke), <code class="docutils literal notranslate"><span class="pre">tests/oracle/test_solver_validation.py</span></code> (self-consistency + ordering +
+<code class="docutils literal notranslate"><span class="pre">cog_function</span></code> pure-math). <strong>This is the payoff of “validate solvers with cflibs-formal”:</strong> the
+oracle’s per-element-<code class="docutils literal notranslate"><span class="pre">U_s</span></code> test is built to catch exactly this silent ~10–25× error.</p>
+</section>
+<section id="takeaway">
+<h2>Takeaway<a class="headerlink" href="#takeaway" title="Link to this heading"></a></h2>
+<p>On this data the <strong>classic iterative solver is the best inversion</strong> of the three — alternatives
+don’t beat it. The reachable accuracy levers remain (per the lever study) <strong>physics corrections</strong>
+(self-absorption: a measured −0.21 wt% win) and <strong>atomic-data quality</strong> (<code class="docutils literal notranslate"><span class="pre">composition_error_bound</span></code>
+says per-line density error dominates on high-SNR data), not the solver choice or line selection.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

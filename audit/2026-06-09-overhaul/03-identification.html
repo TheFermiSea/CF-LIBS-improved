@@ -1,0 +1,840 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit 03 — Element Identification + Preprocessing Stack &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Audit 03 — Element Identification + Preprocessing Stack</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/03-identification.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="audit-03-element-identification-preprocessing-stack">
+<h1>Audit 03 — Element Identification + Preprocessing Stack<a class="headerlink" href="#audit-03-element-identification-preprocessing-stack" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-09 · <strong>Scope:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/candidate_prefilter.py</span></code>, <code class="docutils literal notranslate"><span class="pre">native/cflibs-core</span></code> comb, identification→solver hand-off.
+<strong>Method:</strong> read-only code audit + measured benchmark artifacts (<code class="docutils literal notranslate"><span class="pre">output/post-alias-fix-d553-phase7/</span></code>,
+<code class="docutils literal notranslate"><span class="pre">output/wave2_alias_bench/</span></code>) + literature grounding. No code modified.</p>
+<hr class="docutils" />
+<section id="executive-verdict">
+<h2>0. Executive verdict<a class="headerlink" href="#executive-verdict" title="Link to this heading"></a></h2>
+<p>The repo contains <strong>seven identifier algorithms</strong> and <strong>two parallel element-decision stacks</strong> (the
+benchmarked identifiers in <code class="docutils literal notranslate"><span class="pre">identify/</span></code>, and a <em>separate</em> comb-gate cascade inside
+<code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> that the production <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">invert</span></code> CLI actually uses). The
+benchmark-best path (<strong>hybrid_union</strong>, micro-F1 = 0.673, 0.46 s/spectrum) is <em>not</em> the path that
+feeds the CF-LIBS solver. The known failures (comb F1≈0.01–0.03 FN-bound; BHVO-2 major-element
+deletion; Ag/Sn/W/Bi single-line FPs) all trace to a small set of structural causes: serial
+independently-tuned gates, non-physical or mutually inconsistent line-strength metrics, and the
+absence of any multi-line intensity-coherence test on the path that reaches the Boltzmann fit.</p>
+</section>
+<hr class="docutils" />
+<section id="findings-ranked-by-expected-end-to-end-accuracy-impact">
+<h2>1. Findings, ranked by expected end-to-end accuracy impact<a class="headerlink" href="#findings-ranked-by-expected-end-to-end-accuracy-impact" title="Link to this heading"></a></h2>
+<section id="f1-highest-impact-the-solver-consumes-the-worst-scoring-identification-path-the-best-scoring-identifier-is-unused-in-production">
+<h3>F1 (highest impact) — The solver consumes the <em>worst-scoring</em> identification path; the best-scoring identifier is unused in production<a class="headerlink" href="#f1-highest-impact-the-solver-consumes-the-worst-scoring-identification-path-the-best-scoring-identifier-is-unused-in-production" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior.</strong> <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">invert</span></code> route through
+<code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:161-343</span></code>) → <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>
+(<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:875</span></code>) → <code class="docutils literal notranslate"><span class="pre">LineSelector</span></code>
+(<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py:136</span></code>). Element presence is decided by the
+comb-gate cascade inside <code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> (precision/recall/missing-fraction gates,
+§3 table), <strong>not</strong> by ALIAS, NNLS, hybrid, or BIC model selection. None of the benchmarked
+identifiers (<code class="docutils literal notranslate"><span class="pre">alias.py</span></code>, <code class="docutils literal notranslate"><span class="pre">comb.py</span></code>, <code class="docutils literal notranslate"><span class="pre">correlation.py</span></code>, <code class="docutils literal notranslate"><span class="pre">spectral_nnls.py</span></code>, <code class="docutils literal notranslate"><span class="pre">hybrid.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">model_selection.py</span></code>) sit on this path; <code class="docutils literal notranslate"><span class="pre">candidate_prefilter.py</span></code> (NNLS top-K) is used only by the
+Bayesian workflow.</p>
+<p><strong>(b) Grounding (measured, <code class="docutils literal notranslate"><span class="pre">output/post-alias-fix-d553-phase7/id_summary.json</span></code>, n=24 spectra,
+real+synthetic mixed corpus):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>workflow</p></th>
+<th class="head"><p>micro-F1</p></th>
+<th class="head"><p>micro-P</p></th>
+<th class="head"><p>micro-R</p></th>
+<th class="head"><p>FP/spectrum</p></th>
+<th class="head"><p>latency (s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>hybrid_union</strong> (NNLS ∪ ALIAS)</p></td>
+<td><p><strong>0.673</strong></p></td>
+<td><p>0.703</p></td>
+<td><p>0.646</p></td>
+<td><p>1.83</p></td>
+<td><p><strong>0.46</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>alias_high_recall</p></td>
+<td><p>0.584</p></td>
+<td><p>0.736</p></td>
+<td><p>0.484</p></td>
+<td><p>1.17</p></td>
+<td><p>3.97</p></td>
+</tr>
+<tr class="row-even"><td><p>hybrid_consensus_weighted</p></td>
+<td><p>0.528</p></td>
+<td><p>0.720</p></td>
+<td><p>0.416</p></td>
+<td><p>1.08</p></td>
+<td><p>3.27</p></td>
+</tr>
+<tr class="row-odd"><td><p>alias_v2</p></td>
+<td><p>0.429</p></td>
+<td><p>0.694</p></td>
+<td><p>0.311</p></td>
+<td><p>0.92</p></td>
+<td><p>1.98</p></td>
+</tr>
+<tr class="row-even"><td><p>spectral_nnls (standalone)</p></td>
+<td><p>0.417</p></td>
+<td><p>0.362</p></td>
+<td><p>0.491</p></td>
+<td><p>5.79</p></td>
+<td><p>0.27</p></td>
+</tr>
+<tr class="row-odd"><td><p>alias (strict)</p></td>
+<td><p>0.201</p></td>
+<td><p>0.679</p></td>
+<td><p>0.118</p></td>
+<td><p>0.38</p></td>
+<td><p>2.88</p></td>
+</tr>
+<tr class="row-even"><td><p>comb</p></td>
+<td><p><strong>0.012</strong></p></td>
+<td><p>0.200</p></td>
+<td><p>0.006</p></td>
+<td><p>0.17</p></td>
+<td><p>0.93</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>(c) Fix.</strong> Wire the element-presence decision in <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> to <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code>
+(NNLS screening + ALIAS confirmation, union semantics; <code class="docutils literal notranslate"><span class="pre">hybrid.py:180-183</span></code>), keeping
+<code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> only as the <em>line-extraction</em> stage for the elements hybrid_union
+accepts. This is also the literature-shaped architecture: full-spectrum decomposition to narrow
+candidates + line-level confirmation mirrors the ChemCam two-stage pipeline (Wiens et al. 2013,
+Spectrochim. Acta B 82, pre-flight calibration &amp; data processing,
+sciencedirect.com/science/article/pii/S0584854713000505). Benchmark-gate the change (memory:
+paper-faithful ALIAS regressed F1 −0.041 — every identifier change must be benchmark-gated).</p>
+</section>
+<hr class="docutils" />
+<section id="f2-comb-identifier-is-fn-bound-by-a-stack-of-four-serially-tuned-gates-two-are-not-in-the-published-method">
+<h3>F2 — Comb identifier is FN-bound by a stack of four serially-tuned gates; two are not in the published method<a class="headerlink" href="#f2-comb-identifier-is-fn-bound-by-a-stack-of-four-serially-tuned-gates-two-are-not-in-the-published-method" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior</strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/comb.py</span></code>):</p>
+<ol class="arabic simple">
+<li><p><strong>Per-tooth activation</strong> (<code class="docutils literal notranslate"><span class="pre">_correlate_tooth</span></code>, comb.py:890-973): tooth active iff Pearson r ≥
+<code class="docutils literal notranslate"><span class="pre">tooth_activation_threshold=0.5</span></code> <strong>and</strong> peak amplitude &gt; threshold, where threshold = <strong>85th
+percentile of positive baseline residuals</strong> (<code class="docutils literal notranslate"><span class="pre">_estimate_baseline_threshold</span></code>, comb.py:851-856).
+The percentile gate scales with <em>spectral richness, not noise</em>: in a line-rich Fe/Ti matrix most
+positive residuals ARE lines, so the 85th percentile sits at real-line amplitude and only the
+top ~15 % of an element’s lines can ever activate. Gajarska et al. gate on an SNR threshold;
+the percentile amplitude gate is a local substitution.</p></li>
+<li><p><strong>Fingerprint floor</strong> (<code class="docutils literal notranslate"><span class="pre">_compute_fingerprint</span></code>, comb.py:1341-1373 + <code class="docutils literal notranslate"><span class="pre">is_element_detected</span></code>,
+<code class="docutils literal notranslate"><span class="pre">common/element_id.py:253-293</span></code>): fingerprint = Σ(top-10 active correlations)/min(n_teeth,10)
+≥ <code class="docutils literal notranslate"><span class="pre">min_correlation=0.12</span></code>, plus ≥ <code class="docutils literal notranslate"><span class="pre">min_active_teeth=2</span></code>. With a 50-tooth catalog and the fixed
+denominator 10, ≥2–3 <em>high</em>-correlation active teeth are needed just to reach 0.12.</p></li>
+<li><p><strong>Tier-2 widen-only floors</strong> (comb.py:40, 342-357): Mn/Na/K need r ≥ 0.7 and score ≥ 0.15
+— PR #166 tightened the FP-prone alkalis in the <em>opposite</em> direction of what the measured
+failure mode (FN-bound) required.</p></li>
+<li><p><strong>Relative threshold</strong> (<code class="docutils literal notranslate"><span class="pre">_apply_relative_threshold</span></code>, comb.py:725-754): detected elements with
+score &lt; min(1, <code class="docutils literal notranslate"><span class="pre">2.0×median(non-zero</span> <span class="pre">scores)</span></code>) are downgraded, <strong>with no exemption for the
+maximum</strong>. On a balanced multi-element sample (scores e.g. 0.5/0.4/0.3/0.2/0.1 → threshold
+0.6) <em>every element including the top scorer is rejected</em>. This gate is not in Gajarska et al.</p></li>
+</ol>
+<p><strong>(b) Grounding.</strong> Autodiscovery experiment #24 (confirmed, surprise +0.32,
+<code class="docutils literal notranslate"><span class="pre">docs/research/findings/2026-05-14-asta-24-…md</span></code>): comb mean FN = 7.06 vs FP = 0.36 per spectrum,
+Wilcoxon p = 1.45e-06 — FN-bound with the threshold stack as the structural cause. Measured F1:
+0.012 (phase7 unified corpus, table above) / 0.443 on the easy 11-candidate synthetic wave2 corpus
+(<code class="docutils literal notranslate"><span class="pre">output/wave2_alias_bench/bench_baseline/summary.json</span></code>) — the collapse from 0.44→0.01 tracks
+candidate-set size and matrix richness, exactly what gates (1) and (4) predict. Published method:
+Gajarska, Brunnbauer, Lohninger, Limbeck, <em>J. Anal. At. Spectrom.</em> 39 (2024), “Automated detection
+of element-specific features in LIBS spectra”, DOI 10.1039/D4JA00247D (triangular teeth, per-tooth
+r ≥ 0.5 + SNR gate).</p>
+<p><strong>(c) Fix.</strong> (i) Replace the 85th-percentile amplitude gate with the noise-calibrated gate already
+in <code class="docutils literal notranslate"><span class="pre">preprocess/preprocessing.py</span></code> (<code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code> σ × factor); (ii) delete or max-exempt the
+2×median relative threshold and let consensus/hybrid filtering absorb the FP increase (the
+autodiscovery recommendation); (iii) revert Tier-2 widen-only floors pending re-measurement.
+Benchmark-gate each step independently.</p>
+</section>
+<hr class="docutils" />
+<section id="f3-no-multi-line-boltzmann-coherence-test-on-the-solver-path-single-line-ag-sn-w-bi-coincidences-reach-the-boltzmann-fit">
+<h3>F3 — No multi-line Boltzmann-coherence test on the solver path: single-line Ag/Sn/W/Bi coincidences reach the Boltzmann fit<a class="headerlink" href="#f3-no-multi-line-boltzmann-coherence-test-on-the-solver-path-single-line-ag-sn-w-bi-coincidences-reach-the-boltzmann-fit" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior.</strong> Three doors let ≤2-line elements through to the solver:</p>
+<ul class="simple">
+<li><p><strong>Comb fallback</strong> (<code class="docutils literal notranslate"><span class="pre">_select_accepted_elements</span></code>, line_detection.py:550-572): when no element
+passes the comb gates, elements with matched ≥ max(1,3) are accepted; if <em>none</em>, the <strong>top-5
+elements with ≥1 matched line</strong> are accepted (<code class="docutils literal notranslate"><span class="pre">comb_fallback_max_elements=5</span></code>).</p></li>
+<li><p><strong>Shift-coherence veto</strong> (line_detection.py:1946-2026): an element with n=1 matched line has
+<code class="docutils literal notranslate"><span class="pre">enough_evidence=False</span></code> → <code class="docutils literal notranslate"><span class="pre">passes_count=True</span></code>; it survives iff its single residual lies within
+tol/3 of the consensus median — a ~33 % pass probability for a <em>random</em> coincidence inside the
+tolerance window. The veto is catalog-density-invariant (good) but cannot, by construction,
+separate a single coincident resonance line of Ag/Sn/W/Bi from a real line: same E_k band, same
+shift.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">LineSelector</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">physics/line_selection.py:302-313</span></code>): <code class="docutils literal notranslate"><span class="pre">min_lines_per_element=3</span></code> only
+<strong>warns</strong> (<code class="docutils literal notranslate"><span class="pre">_warn_insufficient_lines</span></code>); single-line elements proceed into the Boltzmann plot.</p></li>
+</ul>
+<p>Meanwhile the coherence machinery <em>already exists elsewhere and is not wired in</em>: ALIAS has a
+per-ionization-stage Boltzmann consistency check with slope-sign, physical-T, and R² gates
+(<code class="docutils literal notranslate"><span class="pre">alias.py:3263-3417</span></code>, <code class="docutils literal notranslate"><span class="pre">_r2_gate_rejects</span></code> alias.py:3070-3120) plus a hard <code class="docutils literal notranslate"><span class="pre">N_matched</span> <span class="pre">≥</span> <span class="pre">3</span></code>
+(alias.py:2010-2012); <code class="docutils literal notranslate"><span class="pre">model_selection.py:401</span></code> has <code class="docutils literal notranslate"><span class="pre">boltzmann_consistency_filter</span></code> (BIC + Boltzmann
+linearity).</p>
+<p><strong>(b) Grounding.</strong> Multi-line intensity-consistency is the standard physics discriminator: the
+model-spectrum correlation method encodes relative line intensities at trial (T, n_e) so that one
+coincident line cannot score (Zaytsev, Popov, Labutin et al., <em>Anal. Chem.</em> 85 (2013),
+“Automatic Identification of Emission Lines in Laser-Induced Plasma by Correlation of Model and
+Experimental Spectra”, DOI 10.1021/ac303270q); vector-of-weighted-peaks ranking similarly relies on
+multi-peak evidence (Amato et al., <em>Spectrochim. Acta B</em> 65 (2010) 664-670); the published ALIAS
+includes a probabilistic multi-coefficient assessment (Noel et al., <em>Spectrochim. Acta B</em> 2025,
+“Automated line identification for atomic spectroscopy (ALIAS)”,
+sciencedirect.com/science/article/abs/pii/S0584854725001405). CF-LIBS practice treats agreement of
+per-species Boltzmann temperatures as the internal consistency check (Tognoni et al., CF-LIBS
+state-of-the-art review, <em>Spectrochim. Acta B</em> 65 (2010) 1-14).</p>
+<p><strong>(c) Design assessment + fix (the proposed test is feasible and cheap).</strong> For each accepted
+element with N ≥ 3 matched lines in one ionization stage: fit ln(Iλ/gA) vs E_k; require slope &lt; 0,
+T within [3 000, 50 000] K, and R² ≥ floor → else reject. For N = 2: require the two-line ratio
+temperature to agree with the global T estimate within a factor ~2. For N = 1: reject unless the
+line is in a user-declared single-line whitelist (Hα, Li 670.8). <strong>ps-LIBS caveat (T = 0.5–1.3 eV):</strong>
+detectable lines cluster in a narrow E_k span, so a naïve R² gate misfires — reuse the
+<code class="docutils literal notranslate"><span class="pre">low_leverage</span></code> seam already engineered in <code class="docutils literal notranslate"><span class="pre">_fit_single_stage_boltzmann</span></code> (alias.py:3387-3408:
+ptp(E_k) &lt; 0.5 eV ⇒ trust R², distrust T) and the per-stage grouping (Saha offsets stage
+intercepts; pooling collapses R² to ~0.01 — alias.py:3313-3331). Implementation point: between
+<code class="docutils literal notranslate"><span class="pre">_select_accepted_elements</span></code> and <code class="docutils literal notranslate"><span class="pre">_collect_observations</span></code> in <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>, reusing
+<code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter</span></code>. This single gate addresses the Ag/Sn/W/Bi FP-poison class wholesale instead
+of per-element tuning.</p>
+</section>
+<hr class="docutils" />
+<section id="f4-the-production-comb-gates-are-internally-contradictory-and-use-the-wrong-denominators">
+<h3>F4 — The production comb gates are internally contradictory and use the wrong denominators<a class="headerlink" href="#f4-the-production-comb-gates-are-internally-contradictory-and-use-the-wrong-denominators" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior</strong> (<code class="docutils literal notranslate"><span class="pre">_score_comb_for_element</span></code>, line_detection.py:1335-1389; identical in Rust,
+<code class="docutils literal notranslate"><span class="pre">comb_matching.rs:81-92</span></code>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">precision</span> <span class="pre">=</span> <span class="pre">matched/total_peaks</span></code> — this is not element precision; it divides by <strong>all detected
+peaks of the whole spectrum</strong>. On a rich spectrum (200+ peaks) an element with 3 true lines
+scores 0.015 &lt; <code class="docutils literal notranslate"><span class="pre">comb_min_precision=0.02</span></code> → fails <em>because other elements emit</em>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">recall</span> <span class="pre">=</span> <span class="pre">matched/expected</span></code> where expected = <strong>all top-30 catalog comb lines</strong>, with no
+detectability weighting at the plasma T or the spectrum’s noise floor. <code class="docutils literal notranslate"><span class="pre">comb_max_missing_fraction</span> <span class="pre">=</span> <span class="pre">0.85</span></code> ⇒ recall ≥ 0.15 ⇒ ≥5 of the top-30 must match. Elements with 2–4 detectable lines
+(alkalis at ps-LIBS temperatures) are structural FNs.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">comb_min_recall</span> <span class="pre">=</span> <span class="pre">0.1</span></code> is <strong>dead code</strong>: missing_fraction ≤ 0.85 already implies recall ≥ 0.15.</p></li>
+</ul>
+<p><strong>(b) Grounding.</strong> Same FN signature as F2 measured by autodiscovery #24; the BHVO-2 dropped-major
+incident (Al/K/P never reached the solver) flowed through these gates after the rel_int floor.</p>
+<p><strong>(c) Fix.</strong> Compute precision against <em>the element’s own claimed peaks</em>; compute expected-line
+count from gA-Boltzmann-detectable lines above the measured noise floor at the estimated T (the
+emissivity-threshold idea ALIAS already implements at alias.py:3872-3945); delete the dead
+<code class="docutils literal notranslate"><span class="pre">comb_min_recall</span></code>. Then re-derive the pass thresholds on the benchmark.</p>
+</section>
+<hr class="docutils" />
+<section id="f5-one-peak-detection-knob-on-the-production-path-is-a-dynamic-range-gate-not-a-noise-gate">
+<h3>F5 — One peak-detection knob on the production path is a dynamic-range gate, not a noise gate<a class="headerlink" href="#f5-one-peak-detection-knob-on-the-production-path-is-a-dynamic-range-gate-not-a-noise-gate" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior.</strong> <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> finds peaks with <code class="docutils literal notranslate"><span class="pre">min_peak_height=0.01</span></code>
+<strong>relative to the spectrum maximum</strong> (<code class="docutils literal notranslate"><span class="pre">_find_peaks</span></code>, line_detection.py:2068-2105: height ≥
+0.01×max, prominence = 0.005×max). A spectrum whose brightest line is 10⁴× the noise hides every
+real line below 1 % of that maximum regardless of SNR; conversely a flat noisy spectrum admits
+noise. The canonical noise-calibrated detector exists (<code class="docutils literal notranslate"><span class="pre">preprocess/preprocessing.py:524-616</span></code>:
+height ≥ 4.0σ, prominence ≥ 1.5σ, σ from 3-pass sigma-clipped MAD) and is used by comb/correlation
+(<code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code>) — but <em>not</em> by the production line-detection path. Additionally
+<code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> (cli/main.py:170-172) passes <code class="docutils literal notranslate"><span class="pre">wavelength_tolerance_nm=0.1</span></code> and
+<code class="docutils literal notranslate"><span class="pre">peak_width_nm=0.2</span></code> <strong>explicitly</strong>, so the R-adaptive defaults engineered in
+<code class="docutils literal notranslate"><span class="pre">_resolve_adaptive_tolerances</span></code> (line_detection.py:503-527, bead s1qr.2) can never engage from the
+CLI.</p>
+<p><strong>(b) Grounding.</strong> For SNR 3–7 lines (the user’s stated regime): a 4σ height + 1.5σ prominence
+detector retains SNR ≥ ~4 lines; the 1 %-of-max gate retains them only if the spectrum’s dynamic
+range is &lt; 100:1 — false negatives correlated with matrix brightness, the worst failure mode for
+trace detection. Downstream, <code class="docutils literal notranslate"><span class="pre">LineSelector(min_snr=10.0)</span></code> (line_selection.py:138,246-247) then
+<strong>hard-rejects every detected line with SNR &lt; 10 from the Boltzmann fit</strong> — so weak-but-real lines
+at SNR 3–7 currently cannot reach the solver at all, even when detected.</p>
+<p><strong>(c) Fix.</strong> Route <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> peak finding through <code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code>
+(noise-calibrated); drop the explicit 0.1/0.2 nm constants in <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> so
+R-adaptive tolerances activate; lower <code class="docutils literal notranslate"><span class="pre">min_snr</span></code> to ~3 with inverse-variance weighting in the
+Boltzmann fit carrying the de-weighting (the fit already consumes <code class="docutils literal notranslate"><span class="pre">intensity_uncertainty</span></code>).</p>
+</section>
+<hr class="docutils" />
+<section id="f6-five-inconsistent-line-strength-metrics-nist-rel-int-still-load-bearing-in-three-places">
+<h3>F6 — Five inconsistent line-strength metrics; NIST rel_int still load-bearing in three places<a class="headerlink" href="#f6-five-inconsistent-line-strength-metrics-nist-rel-int-still-load-bearing-in-three-places" title="Link to this heading"></a></h3>
+<p><strong>(a) Inventory (Q3).</strong> There is no single strength function; the metrics in use:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Metric</p></th>
+<th class="head"><p>Where</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>g_k·A_ki·exp(−E_k/kT), kT=1.0 eV, no U(T)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1244-1302</span></code> (<code class="docutils literal notranslate"><span class="pre">_ga_boltzmann_weight</span></code>, comb ranking/top-K)</p></td>
+<td><p>the post-BHVO-2 fix; docstring of <code class="docutils literal notranslate"><span class="pre">_transition_strength</span></code> (line_detection.py:1263-1270) still claims it blends rel_int — stale</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>floor A_ki·g_k ≥ 5e3 (no Boltzmann), rank A·g·exp(−E_k/kT) at T=10 000 K, no U(T)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">comb.py:806-814</span></code></p></td>
+<td><p>floor and rank use different formulas</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>A·g·exp(−E_k/kT_ref), T_ref=10 000 K (screening); full Saha-Boltzmann ε with U(T) (scoring)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:3050-3066</span></code> vs <code class="docutils literal notranslate"><span class="pre">_compute_element_emissivities</span></code> alias.py:3419</p></td>
+<td><p>only ALIAS scoring is fully physical</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>floor A·g ≥ 1e4 (<code class="docutils literal notranslate"><span class="pre">min_line_strength</span></code>) + full ε in model spectrum</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">correlation.py:253</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>floor A·g ≥ 3e3 + gA-Boltzmann at 10 000 K</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:403-433</span></code></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<p>Residual <strong>NIST rel_int</strong> dependence (non-quantitative metric): the legacy forward model filters
+lines at <code class="docutils literal notranslate"><span class="pre">min_ri</span> <span class="pre">=</span> <span class="pre">10.0</span></code> in non-NIST_PARITY modes (<code class="docutils literal notranslate"><span class="pre">radiation/spectrum_model.py:378-382</span></code>) — this
+shapes <em>synthetic benchmark spectra</em>, silently deleting NULL/low-rel_int lines from truth;
+<code class="docutils literal notranslate"><span class="pre">validation/round_trip.py:337</span></code> (<code class="docutils literal notranslate"><span class="pre">min_relative_intensity=10.0</span></code>); DB-build default floor
+<code class="docutils literal notranslate"><span class="pre">rel_int</span> <span class="pre">≥</span> <span class="pre">50</span></code> (<code class="docutils literal notranslate"><span class="pre">datagen_v2.py:20,365</span></code>; <code class="docutils literal notranslate"><span class="pre">atomic/database_generator.py:21</span></code> — the shipped
+<code class="docutils literal notranslate"><span class="pre">libs_production.db</span></code> was evidently built with a lower floor: 9 758 of 28 727 lines have
+rel_int &lt; 50, and Al I 394.40/396.15 (rel_int 24/26) and K I 766.49/769.90 (rel_int 25/24) are
+present). The DB’s <code class="docutils literal notranslate"><span class="pre">rel_int</span></code> spans <strong>0 → 6.4e8</strong> (mean 1.3e5) — across-species scale chaos in one
+column; <code class="docutils literal notranslate"><span class="pre">datagen_v2.py:354</span></code> maps NULL→0, so <em>any</em> floor ≥ 1 silently deletes unmeasured lines.</p>
+<p><strong>(b) Grounding.</strong> NIST itself: relative intensities “should be considered as qualitative”, are
+source/excitation-dependent, “are not basic data and must be used with caution” (NIST ASD Lines
+Help, physics.nist.gov/PhysRefData/ASD/Html/lineshelp.html). The BHVO-2 Al deletion was the
+measured consequence.</p>
+<p><strong>(c) Fix.</strong> One module-level function <code class="docutils literal notranslate"><span class="pre">line_strength(transition,</span> <span class="pre">T,</span> <span class="pre">ne)</span> <span class="pre">=</span> <span class="pre">g_k·A_ki·exp(−E_k/kT)/U_species(T)</span> <span class="pre">×</span> <span class="pre">saha_weight(T,</span> <span class="pre">ne)</span></code> (all inputs already in the DB/solver),
+parameterized at the instrument’s T window (0.5–1.3 eV); use it for every floor, top-K, ranking,
+and screening. Remove rel_int from the forward model (replace <code class="docutils literal notranslate"><span class="pre">min_ri</span></code> with a strength floor) and
+from <code class="docutils literal notranslate"><span class="pre">round_trip.py</span></code>; keep rel_int only as the aki_uncertainty heuristic (<code class="docutils literal notranslate"><span class="pre">database.py:316-332</span></code>),
+which is a defensible qualitative use.</p>
+</section>
+<hr class="docutils" />
+<section id="f7-alias-is-a-heavily-drifted-fork-the-drift-is-now-load-bearing-but-fragile-q6">
+<h3>F7 — ALIAS is a heavily drifted fork; the drift is now load-bearing but fragile (Q6)<a class="headerlink" href="#f7-alias-is-a-heavily-drifted-fork-the-drift-is-now-load-bearing-but-fragile-q6" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior.</strong> <code class="docutils literal notranslate"><span class="pre">alias.py</span></code> (4 926 lines) implements the published skeleton — peak detection,
+synthetic line list over a (T, n_e) grid, detection-rate emissivity threshold
+(alias.py:3872-3945), k_sim/k_rate/k_shift, CL = k_det×P_SNR×P_maj (alias.py:4723-4819) — per Noel
+et al. 2025, then adds ≥12 non-paper stages: crustal-abundance prior <strong>P_ab</strong>
+(alias.py:796-834, 4167-4193 — multiplies CL by 0.5–0.75 for Ag/Sn/W/Mo/Au), NNLS attribution +
+sparse-NNLS gate + iron-group pre-subtraction (alias.py:1489-1493), peak competition, per-stage
+Boltzmann consistency + adaptive-T R² gate, relative-CL gate, SA damping (×0.3 for E_i &lt; 0.1 eV,
+alias.py:4093-4109), adaptive detection threshold, and a hard <code class="docutils literal notranslate"><span class="pre">N_matched</span> <span class="pre">≥</span> <span class="pre">3</span></code>
+(alias.py:2010-2012). <strong>Internal contradiction:</strong> <code class="docutils literal notranslate"><span class="pre">_decide</span></code> deliberately allows single-line
+(N_expected ≤ 1) and all-matched doublet elements (alias.py:4806-4813), but <code class="docutils literal notranslate"><span class="pre">_build_element_id</span></code>
+then unconditionally kills anything with N_matched &lt; 3 — the single-line H/Li and doublet Na/K
+allowances are dead code, a structural alkali FN source (matches asta-12/asta-30 findings).
+Biggest fragilities: (i) 30+ constructor kwargs and 4 presets whose interactions are only
+constrained by the benchmark grid; (ii) <strong>P_ab is a geological prior</strong> — for the user’s ps-LIBS on
+non-geological samples (alloys, solders, coatings) it systematically suppresses Ag/Sn/W — true
+positives, not just the FP confounders; (iii) the legacy T estimator reads ~2.3× cold on pure Fe
+(alias.py:982-987 docstring), which the adaptive R² gate now compensates by <em>relying on</em> the cold
+bias (the 15 000 K threshold) — a coupled pair of errors.</p>
+<p><strong>(b) Grounding.</strong> Wave2 A/B (<code class="docutils literal notranslate"><span class="pre">output/wave2_alias_bench/</span></code>): baseline (drifted) ALIAS F1 = 0.257 vs
+paper-faithful “fix” 0.216 (−0.041, the memorialized regression) — the drift is empirically better
+than paper-faithful <em>on this corpus</em>, so it cannot simply be reverted; but strict-preset ALIAS
+still scores only 0.201 on phase7 vs 0.584 for its own high-recall preset. Published reference:
+Noel et al. 2025, <em>Spectrochim. Acta B</em> (ALIAS), URL above.</p>
+<p><strong>(c) Fix.</strong> Treat ALIAS as the <em>confirmation</em> stage inside hybrid_union only (F1), not as a
+standalone product. Specific surgical fixes, each benchmark-gated: remove P_ab (or gate it behind
+an explicit <code class="docutils literal notranslate"><span class="pre">sample_matrix=&quot;geological&quot;</span></code> flag); reconcile the N_matched contradiction by honoring
+the <code class="docutils literal notranslate"><span class="pre">_decide</span></code> doublet path with the F3 two-line ratio test; adopt <code class="docutils literal notranslate"><span class="pre">temperature_estimator_mode=</span> <span class="pre">&quot;robust&quot;</span></code> after measuring it.</p>
+</section>
+<hr class="docutils" />
+<section id="f8-rust-comb-is-almost-consistent-with-python-greedy-direction-differs-and-rust-kdet-is-dead-code-in-the-default-config-q2">
+<h3>F8 — Rust comb is <em>almost</em> consistent with Python; greedy direction differs, and Rust kdet is dead code in the default config (Q2)<a class="headerlink" href="#f8-rust-comb-is-almost-consistent-with-python-greedy-direction-differs-and-rust-kdet-is-dead-code-in-the-default-config-q2" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior.</strong> Gate formulas are identical (verified: <code class="docutils literal notranslate"><span class="pre">comb_matching.rs:81-92</span></code> ≡
+<code class="docutils literal notranslate"><span class="pre">line_detection.py:1366-1379</span></code>). But the one-to-one matching is greedy in <strong>opposite directions</strong>:
+Rust <code class="docutils literal notranslate"><span class="pre">count_matches</span></code> iterates <em>peaks</em>, consuming transitions (comb_matching.rs:14-52); Python
+<code class="docutils literal notranslate"><span class="pre">_match_transitions_to_peaks</span></code> iterates <em>transitions</em>, consuming peaks
+(line_detection.py:1642-1678). On dense overlaps the two greedy bipartite matchings can yield
+different match counts → pass/fail flips at the <code class="docutils literal notranslate"><span class="pre">matched</span> <span class="pre">≥</span> <span class="pre">3</span></code> boundary depending on whether the
+Rust extension is importable. Separately, the Rust kdet filter computes only the legacy density
+score; because <code class="docutils literal notranslate"><span class="pre">shift_coherence_veto=True</span></code> is the default, <code class="docutils literal notranslate"><span class="pre">_kdet_filter_elements</span></code> always routes to
+the pure-Python path (line_detection.py:1876: <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">HAS_RUST_CORE</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">shift_coherence</span></code>) — the
+Rust kdet is unreachable in default configs.</p>
+<p><strong>(b) Grounding.</strong> HEAD commit <code class="docutils literal notranslate"><span class="pre">6dd4045</span> <span class="pre">&quot;Test</span> <span class="pre">comb</span> <span class="pre">line</span> <span class="pre">ranking&quot;</span></code> indicates active work here; no
+cross-backend equivalence test covers the dense-overlap case.</p>
+<p><strong>(c) Fix.</strong> Make Rust iterate transitions-first (matching Python), add a property test comparing
+backends on synthetic dense-overlap fixtures, and either port coherence to Rust or delete the
+unreachable Rust kdet entry point.</p>
+</section>
+<hr class="docutils" />
+<section id="f9-wavelength-calibration-the-right-machinery-two-residual-gaps-q5-k-offset">
+<h3>F9 — Wavelength calibration: the right machinery, two residual gaps (Q5/K-offset)<a class="headerlink" href="#f9-wavelength-calibration-the-right-machinery-two-residual-gaps-q5-k-offset" title="Link to this heading"></a></h3>
+<p><strong>(a) Code behavior.</strong> <code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis_segmented</span></code> (RANSAC shift/affine/quadratic with
+BIC model selection, seam detection; <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:590-680,</span> <span class="pre">817+</span></code>) now runs by default
+before detection (cli/main.py:271-300). Reference pool is ranked by gA-Boltzmann (good;
+wavelength_calibration.py:403-438). Quality gate: ≥12 inliers, RMSE ≤ 0.10 nm, inlier span ≥ 25 %,
+|correction| ≤ 2.5 nm, match-fraction check disabled by default. Gaps: (i) on quality-gate failure
+it falls back silently to the ±0.5 nm <em>constant</em> shift scan — exactly the model that cannot fix a
+dispersion (slope) error like K’s +0.17–0.27 nm red-end offset; the failure is logged at INFO only;
+(ii) <code class="docutils literal notranslate"><span class="pre">inlier_tolerance_nm=0.08</span></code> is fixed, not λ/R-aware, so at the red end (766–770 nm, where K
+sits) the inlier window is ~R=9600-equivalent — tight enough to reject true pairs that carry the
+very dispersion error being fitted (pre-fit pairing uses a 2.0 nm window, so candidate pairs exist;
+the risk is inlier classification during RANSAC refinement).</p>
+<p><strong>(b) Grounding.</strong> Field practice keeps per-channel wavelength recalibration as a first-class
+pipeline stage with dedicated reference lines and temperature-dependent pixel shifts (ChemCam Ti
+calibration target; up to 1 px shift per 10 °C — Wiens et al. 2013, <em>Spectrochim. Acta B</em> 82).</p>
+<p><strong>(c) Fix.</strong> Scale <code class="docutils literal notranslate"><span class="pre">inlier_tolerance_nm</span></code> with λ/R; surface quality-gate failure as a result
+warning consumed by <code class="docutils literal notranslate"><span class="pre">analyze</span></code> (it changes element decisions); add a K/Na doublet-anchored
+diagnostic to <code class="docutils literal notranslate"><span class="pre">validate_real_data.py</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="f10-preprocessing-is-mostly-literature-sound-defaults-are-the-issue-q5">
+<h3>F10 — Preprocessing is mostly literature-sound; defaults are the issue (Q5)<a class="headerlink" href="#f10-preprocessing-is-mostly-literature-sound-defaults-are-the-issue-q5" title="Link to this heading"></a></h3>
+<p>Baseline: median filter (default 10 nm) + SNIP (Ryan et al. 1988, <em>NIM B</em> 34:396, correctly
+implemented with LLS transform, <code class="docutils literal notranslate"><span class="pre">preprocessing.py:95-187</span></code>) + ALS (Eilers &amp; Boelens 2005,
+<code class="docutils literal notranslate"><span class="pre">preprocessing.py:190-278</span></code>) + rolling percentile + opt-in AUTO (SNR ≤ 8 → ALS). This menu matches
+LIBS practice; airPLS (Zhang, Chen, Liang 2010, <em>Analyst</em> 135:1138, DOI 10.1039/b922045c) is absent
+but ALS is its direct ancestor and SNIP covers the sharp-peaks-on-slow-continuum case — no gap worth
+new code. Noise: 3-iteration sigma-clipped MAD (<code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code>, preprocessing.py:320-360) —
+correct for peak-rich spectra. The problems are <em>wiring</em>, already covered in F5 (identifiers default
+to MEDIAN, never AUTO; production line detection bypasses the noise model entirely). Air/vacuum:
+the DB ingests NIST <code class="docutils literal notranslate"><span class="pre">obs_wl_air(nm)</span></code> (datagen_v2.py:327,348) and every consumer (forward model,
+all identifiers) reads the same single <code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code> column — internally consistent; note NIST
+returns vacuum wavelengths below 200 nm in that column (convention handled by NIST, fine for a
+≥200 nm instrument), and Ritz-only lines (no observed λ) are dropped at ingest (<code class="docutils literal notranslate"><span class="pre">notna()</span></code> filter)
+— a catalog completeness limitation, not an inconsistency.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="q4-verdict-multi-line-boltzmann-coherence-test">
+<h2>2. Q4 verdict — multi-line Boltzmann-coherence test<a class="headerlink" href="#q4-verdict-multi-line-boltzmann-coherence-test" title="Link to this heading"></a></h2>
+<p><strong>Feasible, recommended, and 70 % already written.</strong> See F3(c) for the design. Reuse
+<code class="docutils literal notranslate"><span class="pre">BoltzmannPlotFitter</span></code> + the per-stage grouping and low-leverage seam from
+<code class="docutils literal notranslate"><span class="pre">alias.py:3313-3417</span></code>, inserted after comb element acceptance in <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>.
+Two-line elements use ratio-T agreement; one-line elements rejected unless whitelisted. Literature
+precedent: model-spectrum correlation (Labutin/Zaytsev 2013, DOI 10.1021/ac303270q) and the ALIAS
+probabilistic stage (Noel 2025) both encode multi-line intensity consistency; CF-LIBS reviews treat
+per-species Boltzmann-T agreement as the standard internal consistency check (Tognoni et al. 2010).
+Expected effect: eliminates the Ag/Sn/W/Bi class FP (single resonance-line coincidence ⇒ no
+N≥2 intensity consistency at any single (T, C)), at near-zero cost to real majors that pass with
+3+ lines.</p>
+</section>
+<section id="q1-full-gate-cascade-tables">
+<h2>3. Q1 — Full gate-cascade tables<a class="headerlink" href="#q1-full-gate-cascade-tables" title="Link to this heading"></a></h2>
+<section id="a-production-solver-path-cflibs-analyze-invert">
+<h3>3a. Production solver path (<code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">invert</span></code>)<a class="headerlink" href="#a-production-solver-path-cflibs-analyze-invert" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Stage</p></th>
+<th class="head"><p>Gate / decision</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Location</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Wavelength calibration</p></td>
+<td><p>quality gate: inliers / RMSE / span / max-correction</p></td>
+<td><p>≥12 / ≤0.10 nm / ≥0.25 / ≤2.5 nm</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:605-610</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>— fallback on failure</p></td>
+<td><p>constant global shift scan</p></td>
+<td><p>±0.5 nm</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cli/main.py:270</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>DB line load</p></td>
+<td><p>rel_int floor (legacy, <strong>non-physical</strong>)</p></td>
+<td><p>default <strong>None</strong> (was 100; round_trip still 10)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1199-1236</span></code>; <code class="docutils literal notranslate"><span class="pre">round_trip.py:337</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>DB line load</p></td>
+<td><p>top-K per element by gA-Boltzmann</p></td>
+<td><p>K = 60</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cli/main.py:168</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Peak detection</p></td>
+<td><p>height ≥ frac of <strong>max intensity</strong> (not noise)</p></td>
+<td><p>0.01</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:2089-2105</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Peak detection</p></td>
+<td><p>prominence</p></td>
+<td><p>0.005×max</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:2103</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Peak detection</p></td>
+<td><p>min distance</p></td>
+<td><p>peak_width 0.2 nm / wl_step px</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:2098</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>kdet pre-filter (coherence mode, default)</p></td>
+<td><p>candidate peaks across ±0.5 nm scan</p></td>
+<td><p>≥ max(2, 2)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1753-1775</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>kdet (legacy density mode, off by default)</p></td>
+<td><p>density-weighted score</p></td>
+<td><p>≥ 0.05 (drops sparse majors, documented)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1766-1775,1866-1875</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Comb element gate</p></td>
+<td><p>matched lines</p></td>
+<td><p>≥ 3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:889</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>Comb element gate</p></td>
+<td><p>“precision” = matched/<strong>total spectrum peaks</strong></p></td>
+<td><p>≥ 0.02 (wrong denominator)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1367,890</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>Comb element gate</p></td>
+<td><p>recall = matched/top-30 catalog lines</p></td>
+<td><p>≥ 0.1 (<strong>dead</strong> — see 13)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1368,891</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>13</p></td>
+<td><p>Comb element gate</p></td>
+<td><p>missing fraction</p></td>
+<td><p>≤ 0.85 (⇒ recall ≥ 0.15, supersedes 12)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1373,892</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>14</p></td>
+<td><p>Comb fallback (no passers)</p></td>
+<td><p>matched ≥ 3, else top-5 with ≥1 match</p></td>
+<td><p>5 elements (<strong>single-line FP door</strong>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:553-572</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>15</p></td>
+<td><p>Shift-coherence veto</p></td>
+<td><p>≥50 % of matches within tol/3 of consensus; ≥2 coherent if n ≥ 2; n=1 passes if coherent</p></td>
+<td><p>0.5 / 2 / tol·⅓</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:1994-2026</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>16</p></td>
+<td><p>Match tolerance</p></td>
+<td><p>fixed (CLI overrides adaptive)</p></td>
+<td><p>0.1 nm</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cli/main.py:170</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>17</p></td>
+<td><p>LineSelector</p></td>
+<td><p>SNR</p></td>
+<td><p>≥ 10 (reject)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_selection.py:138,246</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>18</p></td>
+<td><p>LineSelector</p></td>
+<td><p>isolation factor</p></td>
+<td><p>≥ 0.5 (reject)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_selection.py:252</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>19</p></td>
+<td><p>LineSelector</p></td>
+<td><p>resonance exclusion</p></td>
+<td><p>False (CLI default since fix)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cli/main.py:327-328</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>20</p></td>
+<td><p>LineSelector</p></td>
+<td><p>min lines/element, energy spread</p></td>
+<td><p>3 / 2 eV (<strong>warn only</strong> — no element gate)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_selection.py:297-313</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>21</p></td>
+<td><p>LineSelector</p></td>
+<td><p>max lines/element</p></td>
+<td><p>20</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cli/main.py:179</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Redundant/contradictory: 12 vs 13 (dead gate); 10 vs 14 (hard floor then bypassed by its own
+fallback); 5 vs the unused noise model (two peak-detection philosophies); 16 vs the adaptive
+tolerance code it permanently overrides. Non-physical metrics: 3 (rel_int; now defused on this path
+but alive in forward model/round-trip — F6).</p>
+</section>
+<section id="b-alias-when-used-hybrid-stage-2-benchmark-consensus">
+<h3>3b. ALIAS (when used: hybrid stage-2, benchmark, consensus)<a class="headerlink" href="#b-alias-when-used-hybrid-stage-2-benchmark-consensus" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Gate</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Location</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Peak threshold = noise × factor</p></td>
+<td><p>3.0 strict / 2.0 high_recall</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:1164-1173</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Fast screening (skipped if ≤10 elements given)</p></td>
+<td><p>≥2 of top-10 lines matched within 2λ/R; score ≥ 0.3; top-12 candidates</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:3003-3048,1601</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Emissivity threshold</p></td>
+<td><p>lowest log-decade with &gt;50 % detection; capped at top-20 lines</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:3872-3945</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Match tolerance</p></td>
+<td><p>λ/eff_R per line (pass 1); ×2 for strong lines (pass 2); 1:1 by emissivity</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:3694-3753</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>k_det blend + N_penalty</p></td>
+<td><p>√(N_expected/5) cap 1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:4779-4791</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>CL = k_det·P_SNR·P_maj·<strong>P_ab(crustal prior)</strong></p></td>
+<td><p>P_ab ∈ {0.5, 0.75, 1.0}</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:4796-4800,4167-4193</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Hard gate in <code class="docutils literal notranslate"><span class="pre">_decide</span></code></p></td>
+<td><p>N_exp ≤ 4 ⇒ all matched; &gt; 4 ⇒ ≥3 matched; ≤1 ⇒ 1 OK (<strong>dead</strong>, see 12)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:4806-4817</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>P_local NNLS ownership</p></td>
+<td><p>&lt; 0.01/0.05 ⇒ CL=0 (unless ≥70 % matched &amp; k_sim &gt; 0.3)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2119-2122</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>P_mix, R_rat soft gates</p></td>
+<td><p>×[0.2,1], ×[0.5,1]</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2126-2129</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Boltzmann factor (per-stage)</p></td>
+<td><p>×[0.5,1.0]</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2143-2152,3263-3417</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>Sparse-NNLS zero ⇒ CL=0 at RP &lt; 2000</p></td>
+<td><p>—</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2158-2160</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>Hard N_matched ≥ 3</p></td>
+<td><p>unconditional (kills H, Na/K doublets)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2010-2012</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>13</p></td>
+<td><p>R² gate</p></td>
+<td><p>adaptive_t: est_T &lt; 15 000 K ⇒ 0.3 else 0.85</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:3070-3120</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>14</p></td>
+<td><p>Detection threshold</p></td>
+<td><p>CL ≥ 0.02×min(3, √(10/N_exp)) (0.01 high_recall)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:1997-2003</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>15</p></td>
+<td><p>Relative-CL gate</p></td>
+<td><p>CL ≥ 0.1×max_CL (global or per-ion-stage)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:1321-1409</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="c-other-identifiers-decision-gates-only">
+<h3>3c. Other identifiers (decision gates only)<a class="headerlink" href="#c-other-identifiers-decision-gates-only" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Identifier</p></th>
+<th class="head"><p>Detection rule</p></th>
+<th class="head"><p>Location</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>comb</p></td>
+<td><p>tooth: r ≥ 0.5 (Mn/Na/K 0.7) ∧ amp &gt; P85(residual⁺); element: fingerprint ≥ 0.12 (0.15) ∧ active ≥ 2; then ≥ 2×median</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">comb.py:287,965,1341-1373,738</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>correlation (Labutin-style)</p></td>
+<td><p>confidence ≥ 0.03 ∧ ≥ 1.5×median(non-zero)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">correlation.py:246,255,437</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>spectral_nnls</p></td>
+<td><p>coeff &gt; 1e-10 ∧ SNR ≥ detection_snr ∧ coeff ≥ 0.05×max (0.0 in hybrid)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">spectral_nnls.py:70-82</span></code>; <code class="docutils literal notranslate"><span class="pre">hybrid.py:70-82</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>hybrid</p></td>
+<td><p>NNLS(SNR ≥ 1.5) ∧/∨ ALIAS</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">hybrid.py:180-183</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>BIC model selection</p></td>
+<td><p>remove element if BIC drops; Boltzmann linearity filter</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">model_selection.py:206,401</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>candidate_prefilter (Bayesian)</p></td>
+<td><p>NNLS SNR ≥ 3, coeff ≥ 1e-4×max, K ∈ [3,15], multi-T offsets ±1500 K</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">candidate_prefilter.py:191-200</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="q7-consolidation-recommendation">
+<h2>4. Q7 — Consolidation recommendation<a class="headerlink" href="#q7-consolidation-recommendation" title="Link to this heading"></a></h2>
+<p>Keep <strong>two</strong> paths, retire the rest from production (keep as benchmark baselines):</p>
+<ol class="arabic simple">
+<li><p><strong>hybrid_union</strong> (NNLS screen → ALIAS confirm, union): best measured F1 (0.673), fastest
+(0.46 s), and the literature-shaped architecture. Wire it into <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> as the
+element decision (F1), with the new Boltzmann-coherence gate (F3) replacing the comb fallback
+doors.</p></li>
+<li><p><strong>spectral_nnls + candidate_prefilter</strong> for the Bayesian workflow (already mandatory there).</p></li>
+</ol>
+<p>Retire from production: standalone comb (F1 0.012 — fix per F2 only if it earns a consensus-voter
+seat back), standalone correlation (F1 0.271 wave2, high FPR 0.24), the 8-cell ALIAS preset grid
+(keep <code class="docutils literal notranslate"><span class="pre">high_recall_v2</span></code> + <code class="docutils literal notranslate"><span class="pre">strict</span></code> only), and <code class="docutils literal notranslate"><span class="pre">hybrid_consensus_weighted</span></code> (more cost, less F1 than
+hybrid_union). Every change benchmark-gated against
+<code class="docutils literal notranslate"><span class="pre">scripts/benchmark_synthetic_identifiers.py</span></code> + the unified harness, per the standing rule.</p>
+</section>
+<section id="references">
+<h2>5. References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Noel, C. et al. (2025). <em>Automated line identification for atomic spectroscopy (ALIAS):
+Application to LIBS imaging data processing.</em> Spectrochim. Acta B.
+https://www.sciencedirect.com/science/article/abs/pii/S0584854725001405</p></li>
+<li><p>Gajarska, Z., Brunnbauer, L., Lohninger, H., Limbeck, A. (2024). <em>Automated detection of
+element-specific features in LIBS spectra.</em> J. Anal. At. Spectrom. DOI 10.1039/D4JA00247D.</p></li>
+<li><p>Zaytsev, S.M., Popov, A.M., Labutin, T.A. et al. (2013). <em>Automatic Identification of Emission
+Lines in Laser-Induced Plasma by Correlation of Model and Experimental Spectra.</em> Anal. Chem.
+DOI 10.1021/ac303270q.</p></li>
+<li><p>Amato, G., Cristoforetti, G., Legnaioli, S., Lorenzetti, G., Palleschi, V., Sorrentino, F.,
+Tognoni, E. (2010). <em>Progress towards an unassisted element identification from LIBS spectra with
+automatic ranking techniques inspired by text retrieval.</em> Spectrochim. Acta B 65, 664-670.</p></li>
+<li><p>NIST ASD Lines Help — relative intensities are qualitative, source-dependent, “not basic data”.
+https://physics.nist.gov/PhysRefData/ASD/Html/lineshelp.html</p></li>
+<li><p>Wiens, R.C. et al. (2013). <em>Pre-flight calibration and initial data processing for the ChemCam
+LIBS instrument on MSL.</em> Spectrochim. Acta B 82.
+https://www.sciencedirect.com/science/article/pii/S0584854713000505</p></li>
+<li><p>Ryan, C.G. et al. (1988). <em>SNIP, a statistics-sensitive background treatment…</em> NIM B 34, 396-402.</p></li>
+<li><p>Eilers, P.H.C., Boelens, H.F.M. (2005). <em>Baseline Correction with Asymmetric Least Squares
+Smoothing.</em> Leiden University Medical Centre report.</p></li>
+<li><p>Zhang, Z.-M., Chen, S., Liang, Y.-Z. (2010). <em>Baseline correction using adaptive iteratively
+reweighted penalized least squares.</em> Analyst 135, 1138. DOI 10.1039/b922045c.</p></li>
+<li><p>Tognoni, E. et al. (2010). <em>Calibration-Free LIBS: state of the art.</em> Spectrochim. Acta B 65, 1-14.</p></li>
+</ul>
+<p><strong>In-repo evidence:</strong> <code class="docutils literal notranslate"><span class="pre">output/post-alias-fix-d553-phase7/id_summary.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">output/wave2_alias_bench/bench_{baseline,fix}/summary.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">docs/research/findings/2026-05-14-asta-24…md</span></code> (comb FN-bound, Wilcoxon p=1.45e-06),
+<code class="docutils literal notranslate"><span class="pre">docs/research/findings/2026-05-14-asta-{12,30}…md</span></code> (alkali misses).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

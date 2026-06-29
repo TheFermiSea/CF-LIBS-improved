@@ -1,0 +1,950 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Overhaul — Dependency-Ordered Execution Blueprint &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Overhaul — Dependency-Ordered Execution Blueprint</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/v4/overhaul/BLUEPRINT.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-overhaul-dependency-ordered-execution-blueprint">
+<h1>CF-LIBS Overhaul — Dependency-Ordered Execution Blueprint<a class="headerlink" href="#cf-libs-overhaul-dependency-ordered-execution-blueprint" title="Link to this heading"></a></h1>
+<p><strong>Author:</strong> Lead Planner (synthesis pass)
+<strong>Date:</strong> 2026-06-25
+<strong>Source of truth:</strong> <code class="docutils literal notranslate"><span class="pre">scratchpad/overhaul/verified/*.md</span></code> (adversarially-verified findings; these
+supersede the raw census). Findings marked FALSE in the verified reports are <strong>excluded</strong> from this
+plan (notably: inv-solve F1 “missing ln(U_II/U_I)” — would INTRODUCE a bug; inv-identify F1/F6/F10;
+io F5/F10; inv-top F1; validation F2/F3-original; inv-physics F2).</p>
+<p>No <code class="docutils literal notranslate"><span class="pre">blueprint/ARCHITECTURE.md</span></code> was present; the target architecture is inferred from the verified
+findings + CLAUDE.md module map and is stated inline per milestone.</p>
+<hr class="docutils" />
+<section id="classification-legend">
+<h2>Classification legend<a class="headerlink" href="#classification-legend" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>SAFE-NOW</strong> — correctness bug verifiable by parity test, physics re-derivation, dead-code
+removal, type/doc fix, or a refactor that is exactly behavior-preserving. No benchmark needed.
+Acceptance = a green targeted test / re-derivation / import-parity check.</p></li>
+<li><p><strong>BENCHMARK-GATED</strong> — changes scoring, composition output, identifier decisions, or any
+accuracy-affecting physics in a <em>default-ON</em> path. Ships <strong>default-OFF behind a flag</strong> and must
+pass a node held-out benchmark (composition F1 / Aitchison / RMSEP non-regression) before the
+flag is promoted. Flag-promotion is a <em>separate</em> later work item.</p></li>
+<li><p>**DESIGN-DECISION — needs a measured comparison (A/B on benchmark or profiling) before one of
+several legitimate options is chosen; the choice itself is the deliverable.</p></li>
+</ul>
+<p><strong>Mission priority (governs ordering):</strong> ACCURACY &gt; PRECISION &gt; RELIABILITY &gt; latency. Every
+performance-only item is therefore deferred behind correctness/accuracy items in the same area.</p>
+</section>
+<hr class="docutils" />
+<section id="cross-cutting-themes-drive-milestone-grouping">
+<h2>Cross-cutting themes (drive milestone grouping)<a class="headerlink" href="#cross-cutting-themes-drive-milestone-grouping" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Mole↔mass-fraction basis mismatch (the single highest-impact accuracy theme).</strong> Solvers emit
+number/mole fractions; every truth corpus + validation + export stores mass fractions; <strong>no
+conversion is applied anywhere on the scoring path.</strong> Verified CRITICAL in <code class="docutils literal notranslate"><span class="pre">benchmark</span></code> F1,
+<code class="docutils literal notranslate"><span class="pre">validation</span></code> F1 (via missing hc/λ it compounds), HIGH in <code class="docutils literal notranslate"><span class="pre">pds</span></code> F1-1, present in <code class="docutils literal notranslate"><span class="pre">runtime</span></code> F1.
+Völker (2024) quantifies up to 353% error. This is <strong>benchmark-gated</strong> because it changes every
+composition number — but it is the top accuracy lever. → <strong>Milestone M3</strong>.</p></li>
+<li><p><strong>McWhirter ΔE = max(E_k) instead of resonance energy (physics-wrong default).</strong> Verified
+CRITICAL/HIGH in <code class="docutils literal notranslate"><span class="pre">inv-physics</span></code> F1/F9, <code class="docutils literal notranslate"><span class="pre">plasma</span></code> F4, <code class="docutils literal notranslate"><span class="pre">cli</span></code> F1. Correct resonance path EXISTS and is
+DB-validated but gated OFF (<code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code>). Over-rejects valid LTE plasmas
+(~8–27× too-high n_e floor). Promotion is benchmark-gated. → <strong>Milestone M2</strong>.</p></li>
+<li><p><strong>Architecture / layering debt that blocks safe refactor.</strong> <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> defined in
+<code class="docutils literal notranslate"><span class="pre">solve/iterative.py</span></code> but imported by io/jitpipe/closed_form (inv-solve F5); <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code>
+imported through the <code class="docutils literal notranslate"><span class="pre">physics/boltzmann</span></code> shim by ~11 modules incl. <code class="docutils literal notranslate"><span class="pre">common/element_id.py</span></code>
+(inv-common F5/F11); <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> domain carrier living in <code class="docutils literal notranslate"><span class="pre">core/jax_runtime.py</span></code> (core F1);
+<code class="docutils literal notranslate"><span class="pre">physics/matrix_effects.py</span></code> module-level circular import to <code class="docutils literal notranslate"><span class="pre">solve/iterative</span></code> (inv-physics F5/FX1).
+All SAFE-NOW (behavior-preserving moves + import-parity). → <strong>Milestone M1</strong>.</p></li>
+<li><p><strong>Olivero-1977 Voigt constants wrong in 3 files</strong> (radiation F1+A, jitpipe/stark, instrument
+uses 2.355 vs exact). SAFE-NOW (single source of truth + parity). → <strong>Milestone M1</strong>.</p></li>
+<li><p><strong>Cache <code class="docutils literal notranslate"><span class="pre">None</span></code>-sentinel bug</strong> (core F3, atomic F5, plasma F2/FV1) — DB re-queried for every
+missing species; SAFE-NOW. → <strong>Milestone M1</strong>.</p></li>
+<li><p><strong>Reliability-gate leaks</strong> (cli F5/MF1 refuse-to-report still prints composition; hpc R-hat/ESS
+never gated; runtime FastAnalyzer <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> placeholder). SAFE-NOW. → <strong>Milestone M4</strong>.</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="milestone-m0-test-benchmark-scaffolding-enables-everything">
+<h1>MILESTONE M0 — Test &amp; benchmark scaffolding (enables everything)<a class="headerlink" href="#milestone-m0-test-benchmark-scaffolding-enables-everything" title="Link to this heading"></a></h1>
+<p>Goal: make every later item verifiable. Pure additive test infrastructure; no production behavior
+change. Must land first so SAFE-NOW fixes can be pinned and BENCHMARK-GATED items have a gate.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M0-1</p></td>
+<td><p>Pin canonical Saha/IPD/DH constants</p></td>
+<td><p>plasma F1/F8, core F8, atomic F10</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>New <code class="docutils literal notranslate"><span class="pre">pytest</span></code> asserts: DH IPD ≈0.066 eV &#64; n_e=1e17,T=1e4K (replaces wrong <code class="docutils literal notranslate"><span class="pre">&lt;=0.06</span></code> doctest); <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> derived from CODATA within 0.1% incl. ×2 spin factor; <code class="docutils literal notranslate"><span class="pre">KB_EV</span></code>/<code class="docutils literal notranslate"><span class="pre">CM_TO_EV</span></code> cross-checks. All green.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M0-2</p></td>
+<td><p>Held-out composition benchmark harness wrapper</p></td>
+<td><p>benchmark F5 (3-way dup), CLAUDE mission</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>A single documented command runs the node held-out composition benchmark and emits F1/Aitchison/RMSEP JSON; baseline snapshot committed. Used as the gate for all BENCHMARK-GATED items.</p></td>
+<td><p>—</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M0-3</p></td>
+<td><p>Parity-test fixtures for dual physics paths</p></td>
+<td><p>radiation F3, manifold F10, inv-solve F6/F10, native-rust F3/F6/A</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Reusable fixtures comparing: SpectrumModel-precomputed vs kernel internal populations; LDM vs Voigt; SB-graph vs common-slope; Rust vs Python comb on <em>ambiguous</em> input. Tests added (xfail-marking known-divergent until fixed).</p></td>
+<td><p>—</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="milestone-m1-safe-now-correctness-layering-dead-code-no-benchmark-needed">
+<h1>MILESTONE M1 — SAFE-NOW correctness, layering &amp; dead-code (no benchmark needed)<a class="headerlink" href="#milestone-m1-safe-now-correctness-layering-dead-code-no-benchmark-needed" title="Link to this heading"></a></h1>
+<p>Target architecture: result/observation/atomic-snapshot domain types live in domain packages, not
+in solver/runtime modules; single source of truth for physical constants; no module-level circular
+imports; documented dead code removed. All items behavior-preserving and verifiable by parity/types.</p>
+<section id="layering-domain-type-relocation-do-these-first-they-unblock-later-refactors">
+<h2>Layering &amp; domain-type relocation (do these first — they unblock later refactors)<a class="headerlink" href="#layering-domain-type-relocation-do-these-first-they-unblock-later-refactors" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M1-1</p></td>
+<td><p>Move <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> to <code class="docutils literal notranslate"><span class="pre">inversion/common/</span></code></p></td>
+<td><p>inv-solve F5 (<code class="docutils literal notranslate"><span class="pre">iterative.py:94</span></code>; importers io/exporters:41, jitpipe/pipeline:213, closed_form:34)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> defined in <code class="docutils literal notranslate"><span class="pre">common/</span></code>; old path re-exports for back-compat; all 3+ importers redirected; <code class="docutils literal notranslate"><span class="pre">pytest</span></code> import + a result-roundtrip test green; no behavior change.</p></td>
+<td><p>M0</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-2</p></td>
+<td><p>Redirect all <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> imports to <code class="docutils literal notranslate"><span class="pre">common.data_structures</span></code></p></td>
+<td><p>inv-common F5/F11 (~11 modules via <code class="docutils literal notranslate"><span class="pre">physics/boltzmann</span></code> shim)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Every production module imports <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> from <code class="docutils literal notranslate"><span class="pre">common.data_structures</span></code>; shim kept but unused by cflibs/; <code class="docutils literal notranslate"><span class="pre">find_referencing</span></code>/grep shows 0 internal shim imports; tests green.</p></td>
+<td><p>M0</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-3</p></td>
+<td><p>Break <code class="docutils literal notranslate"><span class="pre">physics/matrix_effects</span></code> ↔ <code class="docutils literal notranslate"><span class="pre">solve/iterative</span></code> cycle</p></td>
+<td><p>inv-physics F5/FX1 (<code class="docutils literal notranslate"><span class="pre">matrix_effects.py:50</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Move import of <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> to function body or <code class="docutils literal notranslate"><span class="pre">TYPE_CHECKING</span></code> (trivial after M1-1); add a fresh-process <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">cflibs.inversion.physics.matrix_effects</span></code> test that previously could deadlock.</p></td>
+<td><p>M1-1</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-4</p></td>
+<td><p>Extract <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> out of <code class="docutils literal notranslate"><span class="pre">core/jax_runtime.py</span></code> into <code class="docutils literal notranslate"><span class="pre">atomic/</span></code></p></td>
+<td><p>core F1 (<code class="docutils literal notranslate"><span class="pre">jax_runtime.py:429-551</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Dataclass + pytree registration moved to an atomic-domain module; <code class="docutils literal notranslate"><span class="pre">jax_runtime</span></code> keeps only backend/capability code; consumers (database/kernels/spectrum_model/bayesian.atomic) updated; pytree flatten/unflatten round-trip test green.</p></td>
+<td><p>M0</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-5</p></td>
+<td><p>Fix <code class="docutils literal notranslate"><span class="pre">abc.py</span> <span class="pre">→</span> <span class="pre">atomic.structures</span></code> layer inversion</p></td>
+<td><p>core F2 (<code class="docutils literal notranslate"><span class="pre">abc.py:12</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Resolve via <code class="docutils literal notranslate"><span class="pre">TYPE_CHECKING</span></code> or relocating the type; no runtime import from core→atomic; import-order test green.</p></td>
+<td><p>M1-4</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="single-source-of-truth-constants">
+<h2>Single-source-of-truth constants<a class="headerlink" href="#single-source-of-truth-constants" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M1-6</p></td>
+<td><p>Correct Olivero-1977 Voigt constants (0.5343/0.2169) + one definition</p></td>
+<td><p>radiation F1+A (<code class="docutils literal notranslate"><span class="pre">profiles.py:257</span></code>, <code class="docutils literal notranslate"><span class="pre">radiation/stark.py:200</span></code>, <code class="docutils literal notranslate"><span class="pre">jitpipe/stark.py:79</span></code>), instrument F1 (2.355 → exact, also benchmark/synthetic_corpus:387)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Single module-level constant pair; all 3 Olivero sites + all <code class="docutils literal notranslate"><span class="pre">2.355</span></code> sites import it; pseudo-Voigt + Stark-FWHM parity test vs Olivero closed form within 1e-6; manifold-vs-instrument sigma parity test green.</p></td>
+<td><p>M0-3</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-7</p></td>
+<td><p>De-duplicate McWhirter <code class="docutils literal notranslate"><span class="pre">1.6e12</span></code> prefactor</p></td>
+<td><p>core F6 (3 sites: physical_consistency:49, line_selection:114, temporal:455)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>All 3 import <code class="docutils literal notranslate"><span class="pre">MCWHIRTER_CONST</span></code> from <code class="docutils literal notranslate"><span class="pre">core.constants</span></code>; test asserts identity; no numeric change.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="cache-db-correctness-accuracy-neutral-but-fixes-silent-stale-missing-behavior">
+<h2>Cache / DB correctness (accuracy-neutral but fixes silent stale/missing behavior)<a class="headerlink" href="#cache-db-correctness-accuracy-neutral-but-fixes-silent-stale-missing-behavior" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M1-8</p></td>
+<td><p>Fix <code class="docutils literal notranslate"><span class="pre">None</span></code>-sentinel cache miss</p></td>
+<td><p>core F3/MF2 (<code class="docutils literal notranslate"><span class="pre">cache.py:149</span></code>), atomic F5</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Use a distinct MISS sentinel so <code class="docutils literal notranslate"><span class="pre">None</span></code> results cache; regression test: 2nd query for a missing species hits cache (0 extra DB calls); no <code class="docutils literal notranslate"><span class="pre">None</span></code>-flooding eviction.</p></td>
+<td><p>M0</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-9</p></td>
+<td><p>Clear partition caches on new DB / shorten TTL fragility</p></td>
+<td><p>plasma F2/FV1 (<code class="docutils literal notranslate"><span class="pre">saha_boltzmann</span></code> cache key), atomic F7, core MF1</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">AtomicDatabase.__init__</span></code> invalidates partition caches (or key by <code class="docutils literal notranslate"><span class="pre">id(self)</span></code>/db sha); test: replacing DB file at same path returns fresh values; pickle-<code class="docutils literal notranslate"><span class="pre">self</span></code> no longer on hot key path.</p></td>
+<td><p>M1-8</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-10</p></td>
+<td><p>Version-stamp schema; skip migration when current</p></td>
+<td><p>atomic F6/NEW-2 (<code class="docutils literal notranslate"><span class="pre">database.py:68</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs_meta</span></code> version row; <code class="docutils literal notranslate"><span class="pre">__init__</span></code> does ≤1 cheap check when up-to-date; test asserts no PRAGMA storm on warm DB.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="documented-dead-code-doc-contract-fixes-type-guards">
+<h2>Documented dead code, doc/contract fixes, type guards<a class="headerlink" href="#documented-dead-code-doc-contract-fixes-type-guards" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M1-11</p></td>
+<td><p>Fix <code class="docutils literal notranslate"><span class="pre">TwoRegionPlasma</span></code> tracer guard</p></td>
+<td><p>plasma F5 (<code class="docutils literal notranslate"><span class="pre">state.py:436</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Use <code class="docutils literal notranslate"><span class="pre">_is_jax_tracer_or_array</span></code>; add a concrete-jnp-array construction test (previously <code class="docutils literal notranslate"><span class="pre">ConcretizationTypeError</span></code>).</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-12</p></td>
+<td><p>Stark-width docstring/convention fixes</p></td>
+<td><p>atomic F1 (<code class="docutils literal notranslate"><span class="pre">structures.py:61</span></code> 10^16→1e17), F2 (ln basis), F9, inv-common F4, atomic NEW-1 (0.005 fallback)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Docstrings state 1e17 + <code class="docutils literal notranslate"><span class="pre">ln</span> <span class="pre">U=Σaₙ(ln</span> <span class="pre">T)ⁿ</span></code>; estimate-fallback literal corrected to 1e17 convention; test pins <code class="docutils literal notranslate"><span class="pre">structures.stark_w</span></code> convention == <code class="docutils literal notranslate"><span class="pre">radiation.stark.REF_NE</span></code>.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-13</p></td>
+<td><p>Remove/realign stale “NOT used”/”removed” comments</p></td>
+<td><p>inv-physics F6 (<code class="docutils literal notranslate"><span class="pre">quality.py:75</span></code>), inv-identify NEW-2 (<code class="docutils literal notranslate"><span class="pre">alias.py:1863</span></code>), io F3 (eager “lazy”)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Comments match reality (QualityAssessor IS wired post-M7; N_matched gate still present); io imports either truly lazy via TYPE_CHECKING or comment removed.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-14</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">identify_resonance_lines</span></code> no longer silently returns <code class="docutils literal notranslate"><span class="pre">{}</span></code></p></td>
+<td><p>inv-physics F7 (<code class="docutils literal notranslate"><span class="pre">line_selection.py:782</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Either implement using available data or raise <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>/deprecate + redirect callers to the working <code class="docutils literal notranslate"><span class="pre">SUSPECT_E_I_MAX_EV</span></code> screen; test asserts no silent-empty.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-15</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">config.validate_instrument_config</span></code> accepts resolving-power</p></td>
+<td><p>core F7 (<code class="docutils literal notranslate"><span class="pre">config.py:234</span></code>), instrument F2 (<code class="docutils literal notranslate"><span class="pre">model.py:108</span></code> <code class="docutils literal notranslate"><span class="pre">from_file</span></code> drops <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Validator + <code class="docutils literal notranslate"><span class="pre">from_file</span></code> honor <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code>; <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">forward</span></code> with an R-mode YAML no longer hard-errors / silently zeroes sigma; round-trip test green.</p></td>
+<td><p>M0</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-16</p></td>
+<td><p>Dead <code class="docutils literal notranslate"><span class="pre">wavelength_calibration</span></code> field on <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code></p></td>
+<td><p>instrument F4 (<code class="docutils literal notranslate"><span class="pre">model.py:33</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Remove field (no callers in cflibs/) OR document + keep out of pytree aux; pytree complexity test green.</p></td>
+<td><p>M1-4</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-17</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ionization_potential_lowering</span></code> dead <code class="docutils literal notranslate"><span class="pre">model</span></code> param</p></td>
+<td><p>plasma F7 (<code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py:603</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Remove param (callers pass none) or route to <code class="docutils literal notranslate"><span class="pre">make_ipd_model</span></code>; test green.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-18</p></td>
+<td><p>CLI <code class="docutils literal notranslate"><span class="pre">--elements</span></code> parsing unified</p></td>
+<td><p>cli F3/MF2 (<code class="docutils literal notranslate"><span class="pre">main.py</span></code> nargs=”+” vs split(“,”))</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>All subcommands accept the same syntax; <code class="docutils literal notranslate"><span class="pre">_resolve_invert_elements</span></code> splits comma-joined; tests for <code class="docutils literal notranslate"><span class="pre">Fe,Cu</span></code> and <code class="docutils literal notranslate"><span class="pre">Fe</span> <span class="pre">Cu</span></code> on every subcommand.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-19</p></td>
+<td><p>CLI/manifold small crashers &amp; smells</p></td>
+<td><p>cli F7 (<code class="docutils literal notranslate"><span class="pre">[::10]</span></code> silent decimation + shadowing), F9 (<code class="docutils literal notranslate"><span class="pre">manifold_cmd</span></code> ZeroDivision for total&lt;10 + dead branch)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>stdout decimation warns or is removed; small-grid progress no longer raises; tests for total&lt;10 and stdout parity.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-20</p></td>
+<td><p>Evolution blocklist: catch <code class="docutils literal notranslate"><span class="pre">exec</span></code>/<code class="docutils literal notranslate"><span class="pre">eval</span></code>/<code class="docutils literal notranslate"><span class="pre">compile</span></code></p></td>
+<td><p>evolution 1.1/5.1 (<code class="docutils literal notranslate"><span class="pre">evaluator.py:148</span></code>) + binary-diff false-reject 2.3 (<code class="docutils literal notranslate"><span class="pre">:253</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scan_source</span></code> flags <code class="docutils literal notranslate"><span class="pre">exec(&quot;import</span> <span class="pre">torch&quot;)</span></code>/<code class="docutils literal notranslate"><span class="pre">eval</span></code>/<code class="docutils literal notranslate"><span class="pre">compile</span></code>; binary/mode-change diffs no longer false-reject; new tests (live-exec style) green. Physics-only constraint hardening — no benchmark.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="milestone-m2-mcwhirter-e-physics-correction-benchmark-gated-promotion">
+<h1>MILESTONE M2 — McWhirter ΔE physics correction (BENCHMARK-GATED promotion)<a class="headerlink" href="#milestone-m2-mcwhirter-e-physics-correction-benchmark-gated-promotion" title="Link to this heading"></a></h1>
+<p>Target: the physics-correct resonance-ΔE McWhirter path becomes the default after it is shown not
+to regress composition and to reduce false non-LTE rejections on the held-out node benchmark.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M2-1</p></td>
+<td><p>Resonance-ΔE regression test (legacy vs resonance)</p></td>
+<td><p>inv-physics F10, plasma F8</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Test computes both <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> and resonance ΔE for the same observation set (Fe I etc.) and pins the ratio + the n_e-floor direction; documents the known DB-validated PASS case.</p></td>
+<td><p>M0-1</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M2-2</p></td>
+<td><p>Wire resonance lookup so <code class="docutils literal notranslate"><span class="pre">_delta_e_from_observations</span></code> can use it</p></td>
+<td><p>inv-physics F1, plasma F4 (<code class="docutils literal notranslate"><span class="pre">lte_validator.py:387</span></code>), cli F1</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Resonance ΔE available to the validator (lower-level/resonance energy threaded from DB); behind existing <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code>, still default-OFF; unit parity test green.</p></td>
+<td><p>M2-1</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M2-3</p></td>
+<td><p>Promote resonance ΔE to default-ON</p></td>
+<td><p>inv-physics F9, cli F1/F8</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>M0-2 benchmark shows composition non-regression AND fewer false non-LTE rejections; flip default; old behavior reachable via explicit opt-out flag; benchmark JSON committed.</p></td>
+<td><p>M2-2, M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M2-4</p></td>
+<td><p>Benchmark McWhirter default ΔE (2.0 eV → species/spectrum)</p></td>
+<td><p>benchmark F4 (<code class="docutils literal notranslate"><span class="pre">physical_consistency.py:463</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Either populate per-spectrum <code class="docutils literal notranslate"><span class="pre">delta_e_ev</span></code> from solver or switch default to resonance-derived; benchmark-gated; documents Ca/Si over/under-strictness fix.</p></td>
+<td><p>M2-2</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="milestone-m3-molemass-fraction-basis-benchmark-gated-top-accuracy-lever">
+<h1>MILESTONE M3 — Mole↔mass-fraction basis (BENCHMARK-GATED, top accuracy lever)<a class="headerlink" href="#milestone-m3-molemass-fraction-basis-benchmark-gated-top-accuracy-lever" title="Link to this heading"></a></h1>
+<p>Target: a single canonical molar-mass conversion utility, applied consistently at every
+truth-vs-prediction comparison and every export, with explicit unit labels. Highest-impact accuracy
+change; every number moves, so strictly benchmark-gated and flag-guarded during rollout.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M3-1</p></td>
+<td><p>Canonical <code class="docutils literal notranslate"><span class="pre">number↔mass</span></code> fraction utility (single impl)</p></td>
+<td><p>benchmark F1, validation F1, pds F1-1, inv-runtime F1, manifold F1 (consistency)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>One tested converter (round-trip exact; sums→1) in a shared location; reuses existing <code class="docutils literal notranslate"><span class="pre">_number_to_mass_fractions</span></code> logic; no caller wired yet.</p></td>
+<td><p>M0</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M3-2</p></td>
+<td><p>Apply conversion on benchmark scoring path</p></td>
+<td><p>benchmark F1/F5 (<code class="docutils literal notranslate"><span class="pre">composition_eval.py:266</span></code>, harness, metrics) — three dup paths</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>All 3 scoring paths convert solver number-fractions→mass before comparing to mass-fraction truth; behind a flag; M0-2 benchmark re-run shows the corrected (and necessarily different) composition errors; results committed as the new baseline.</p></td>
+<td><p>M3-1, M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M3-3</p></td>
+<td><p>Apply conversion in validation round-trip + pds bridge</p></td>
+<td><p>validation F1 path, pds F1-1 (<code class="docutils literal notranslate"><span class="pre">validation.py:80</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Round-trip + PDS comparisons convert consistently; round-trip accuracy test tolerances tightened (see M4-7); pds dataset comparison documented.</p></td>
+<td><p>M3-1, M3-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M3-4</p></td>
+<td><p>Export unit labels + derived linear n_e</p></td>
+<td><p>io F1 (<code class="docutils literal notranslate"><span class="pre">log_ne</span></code> base), F2 (conc unit), io M1 (<code class="docutils literal notranslate"><span class="pre">&#64;property</span></code> dropped)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>CSV/HDF5 carry <code class="docutils literal notranslate"><span class="pre">log10_ne_cm3</span></code>+<code class="docutils literal notranslate"><span class="pre">ne_cm3</span></code> and a `basis=mole</p></td>
+<td><p>mass<code class="docutils literal notranslate"><span class="pre">label;</span></code>_dataclass_to_dict` includes property-derived fields; exporter test against REAL result types (not mocks, io F9).</p></td>
+<td><p>M3-1</p></td>
+</tr>
+</tbody>
+</table>
+<p>DESIGN-DECISION embedded: <strong>where</strong> the conversion canonically happens (at solver output boundary
+vs at each scorer). Recommend: keep solver output as number-fractions (physics-native) and convert
+at every comparison/export boundary via M3-1. Validate by confirming a single converter call site
+audit passes (no raw number-fraction reaches a mass-fraction comparison).</p>
+</section>
+<hr class="docutils" />
+<section id="milestone-m4-reliability-gates-forward-model-physics-correctness">
+<h1>MILESTONE M4 — Reliability gates &amp; forward-model physics correctness<a class="headerlink" href="#milestone-m4-reliability-gates-forward-model-physics-correctness" title="Link to this heading"></a></h1>
+<p>Target: “refuse to report” actually withholds, convergence flags reflect physics, and the synthetic
+forward models used to <em>generate</em> and <em>validate</em> are physically correct (or clearly flagged).</p>
+<section id="safe-now-reliability-gate-plumbing">
+<h2>SAFE-NOW reliability-gate plumbing<a class="headerlink" href="#safe-now-reliability-gate-plumbing" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M4-1</p></td>
+<td><p>Refuse-to-report actually withholds composition</p></td>
+<td><p>cli F5/MF1 (<code class="docutils literal notranslate"><span class="pre">_batch_row</span></code>, <code class="docutils literal notranslate"><span class="pre">_output_analyze_result</span></code>, invert stdout)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>When <code class="docutils literal notranslate"><span class="pre">CFLIBS_REFUSE_TO_REPORT=1</span></code> and <code class="docutils literal notranslate"><span class="pre">overall_reliable=False</span></code>, all output paths (batch CSV, analyze CSV/table/JSON, invert stdout) omit/blank composition; tests for each path.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M4-2</p></td>
+<td><p>Gate R-hat/ESS convergence in distributed MCMC</p></td>
+<td><p>hpc 3/11 (<code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:247</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DistributedMCMCResult</span></code> carries a machine-readable <code class="docutils literal notranslate"><span class="pre">converged</span></code> flag (R̂&gt;1.05 or ESS&lt;50 → False) + warning; test injects non-converged chains.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M4-3</p></td>
+<td><p>FastAnalyzer stops claiming <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> on placeholder</p></td>
+<td><p>inv-runtime F2 (<code class="docutils literal notranslate"><span class="pre">streaming.py:710/785</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Placeholder / n_e-not-determined paths set <code class="docutils literal notranslate"><span class="pre">converged=False</span></code> (or raise); test asserts no misleading convergence; downstream quality assessment sees it.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M4-4</p></td>
+<td><p>HPC GPU pinning + docstring/CLI honesty</p></td>
+<td><p>hpc 2/10 (<code class="docutils literal notranslate"><span class="pre">run()</span></code> uses global rank), A (<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span></code> no <code class="docutils literal notranslate"><span class="pre">__main__</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">run()</span></code> calls <code class="docutils literal notranslate"><span class="pre">pin_to_device(local_rank)</span></code>; add real <code class="docutils literal notranslate"><span class="pre">__main__</span></code>/argparse or fix docstring; multi-node modulo-wrap test.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="benchmark-gated-forward-physics-fixes-change-generated-spectra-recovered-values">
+<h2>BENCHMARK-GATED forward-physics fixes (change generated spectra / recovered values)<a class="headerlink" href="#benchmark-gated-forward-physics-fixes-change-generated-spectra-recovered-values" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M4-5</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code> to round-trip + simplified forward intensity</p></td>
+<td><p>validation F1 (<code class="docutils literal notranslate"><span class="pre">round_trip.py:309</span></code>), benchmark F3 (<code class="docutils literal notranslate"><span class="pre">synthetic.py:604</span></code> omits U_s(T))</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Forward intensity uses <code class="docutils literal notranslate"><span class="pre">hc/λ</span> <span class="pre">·</span> <span class="pre">gA·exp(-E/kT)/U</span></code>; simplified model includes partition function; M0-3 self-consistency + round-trip accuracy improve; intensity-scale clamp floor (validation New-B) updated in same pass; benchmark-gated since recovered comps shift.</p></td>
+<td><p>M0-3</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M4-6</p></td>
+<td><p>Fix temporal optical-depth formula</p></td>
+<td><p>inv-runtime F1/C1 (<code class="docutils literal notranslate"><span class="pre">temporal.py:1014/1025</span></code>: g_lower, λ³→λ², 1e-25 magic, mass/number)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>τ formula matches self-absorption-cog.md §1.4 (λ², lower-level g/E, derived prefactor); <code class="docutils literal notranslate"><span class="pre">f_tau→1</span></code> for thin lines test (T1); behind flag; benchmark on SA-affected datasets.</p></td>
+<td><p>M0-3</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M4-7</p></td>
+<td><p>FastAnalyzer concentration proxy uses closure, not <code class="docutils literal notranslate"><span class="pre">exp(avg_y)</span></code></p></td>
+<td><p>inv-runtime A1 (<code class="docutils literal notranslate"><span class="pre">streaming.py:767</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Concentration via <code class="docutils literal notranslate"><span class="pre">physics.closure</span></code>, not raw <code class="docutils literal notranslate"><span class="pre">exp(avg_y)</span></code>; benchmark on streaming path; flag-guarded.</p></td>
+<td><p>M3-1</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M4-8</p></td>
+<td><p>Tighten validation/NIST-parity test tolerances</p></td>
+<td><p>validation 10 (50%→config), 11 (65–70% U, 150% f)</p></td>
+<td><p>BENCHMARK-GATED-adjacent</p></td>
+<td><p>Round-trip tests assert <code class="docutils literal notranslate"><span class="pre">result.passed</span></code> at configured tol; NIST parity tolerances tightened with documented per-line exceptions; runs after M3/M4-5 land (they make tight tolerances achievable).</p></td>
+<td><p>M3-3, M4-5</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="milestone-m5-identifier-solver-accuracy-benchmark-gated-design-decisions">
+<h1>MILESTONE M5 — Identifier &amp; solver accuracy (BENCHMARK-GATED) + DESIGN-DECISIONS<a class="headerlink" href="#milestone-m5-identifier-solver-accuracy-benchmark-gated-design-decisions" title="Link to this heading"></a></h1>
+<p>Target: identifier decision gates match the source papers without regressing F1; solver flag
+incompatibilities are resolved or warned. <strong>Memory warns identifier-scoring changes have regressed
+F1 before — every item here is benchmark-gated and flag-guarded.</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M5-1</p></td>
+<td><p>Regression test pinning 2-line element detection</p></td>
+<td><p>inv-identify F9, F2 chain</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Test asserts a 2-line element with <code class="docutils literal notranslate"><span class="pre">k_det&gt;threshold</span></code> keeps <code class="docutils literal notranslate"><span class="pre">confidence&gt;0</span></code> AND <code class="docutils literal notranslate"><span class="pre">detected=True</span></code>; currently documents the bug.</p></td>
+<td><p>M0-2</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M5-2</p></td>
+<td><p>Decide N_matched&lt;3 CL-zeroing gate</p></td>
+<td><p>inv-identify F2 (<code class="docutils literal notranslate"><span class="pre">alias.py:4682</span></code>→<code class="docutils literal notranslate"><span class="pre">_gate_relative_cl</span></code> demotes detected)</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>A/B on M0-2 ID benchmark: keep gate vs paper-faithful remove. Decision + benchmark numbers committed; if removed, behind flag default per benchmark winner. (Paper supports 1-line/sparse; but prior paper-faithful ALIAS change regressed F1 −0.041 — must measure.)</p></td>
+<td><p>M5-1, M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M5-3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_compute_ratio_consistency</span></code> neutral return 0.1→0.5</p></td>
+<td><p>inv-identify F3 (<code class="docutils literal notranslate"><span class="pre">alias.py:4430</span></code> vs docstring)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Align code to documented neutral 0.5; ID benchmark non-regression; flag-guarded.</p></td>
+<td><p>M5-1</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M5-4</p></td>
+<td><p>WLS sigma-clip uses weighted std</p></td>
+<td><p>inv-physics F8 (<code class="docutils literal notranslate"><span class="pre">boltzmann.py:428</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Outlier threshold uses inverse-variance-weighted residual std (CPU + JAX paths); composition/T benchmark non-regression; ~1–5% T-bias cases improve.</p></td>
+<td><p>M0-2</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M5-5</p></td>
+<td><p>SA doublet <code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code> enforce g_k precondition</p></td>
+<td><p>inv-physics F3 (<code class="docutils literal notranslate"><span class="pre">self_absorption.py:480</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Match requires same-upper-level (g_k equality or shared upper) within dE window; SA benchmark non-regression; unit test on near-degenerate-J case.</p></td>
+<td><p>M0-3</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M5-6</p></td>
+<td><p>H-alpha Stark n_e Gigosos n_e^0.7 path</p></td>
+<td><p>inv-physics F4 (<code class="docutils literal notranslate"><span class="pre">stark_ne.py:46</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Optional Gigosos power-law correction for H-alpha (flag); n_e diagnostic benchmark vs linear on H-containing data; default decided by benchmark.</p></td>
+<td><p>M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M5-7</p></td>
+<td><p>Lax-path n_e / Stark + SB-graph incompatibility</p></td>
+<td><p>inv-solve F2/F6/F10 (<code class="docutils literal notranslate"><span class="pre">iterative.py:1617</span></code>)</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>Decide: (a) wire Stark/SB-graph into lax kernel, or (b) emit explicit warning + document the silent Python-fallback. Parity test SB-graph True vs False (M0-3). Decision + measurements committed.</p></td>
+<td><p>M0-3</p></td>
+<td><p>L</p></td>
+</tr>
+<tr class="row-odd"><td><p>M5-8</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">two_region</span></code> 0.8/0.3-0.7 magic numbers</p></td>
+<td><p>inv-solve F3 (<code class="docutils literal notranslate"><span class="pre">iterative.py:1888</span></code>)</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>Either ground in literature + benchmark, or keep strictly opt-in with a documented “unvalidated” warning. Decision recorded; default stays OFF.</p></td>
+<td><p>M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M5-9</p></td>
+<td><p>Bayesian Poisson likelihood default</p></td>
+<td><p>inv-solve F4 (<code class="docutils literal notranslate"><span class="pre">bayesian/likelihood.py</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Evaluate Cash/Poisson vs Gaussian default on shot-noise-dominated benchmark; promote if non-regressing; flag-guarded.</p></td>
+<td><p>M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="milestone-m6-manifold-generated-data-consistency-benchmark-gated-safe-now">
+<h1>MILESTONE M6 — Manifold &amp; generated-data consistency (BENCHMARK-GATED + SAFE-NOW)<a class="headerlink" href="#milestone-m6-manifold-generated-data-consistency-benchmark-gated-safe-now" title="Link to this heading"></a></h1>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M6-1</p></td>
+<td><p>Manifold attrs completeness</p></td>
+<td><p>manifold F7/F9/MF1/MF2 (gate_delay/width, cooling params, <code class="docutils literal notranslate"><span class="pre">broadening_mode</span></code> not stored; vestigial use_voigt/use_stark)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Attrs block writes all time-integration + the <em>active</em> <code class="docutils literal notranslate"><span class="pre">broadening_mode</span></code>; vestigial flags removed or documented; loader round-trip test.</p></td>
+<td><p>M0</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M6-2</p></td>
+<td><p>Apply <code class="docutils literal notranslate"><span class="pre">gate_delay_s</span></code> in time integration</p></td>
+<td><p>manifold F2 (<code class="docutils literal notranslate"><span class="pre">generator.py:986/1055</span></code> start at t=0)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Time grid starts at <code class="docutils literal notranslate"><span class="pre">gate_delay_s</span></code>; flag-guarded; manifold-lookup accuracy benchmark; LDM/Voigt parity (M0-3, manifold F10).</p></td>
+<td><p>M0-3, M6-1</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M6-3</p></td>
+<td><p>Stark T-scaling in <code class="docutils literal notranslate"><span class="pre">batch_forward</span></code></p></td>
+<td><p>manifold F3 (<code class="docutils literal notranslate"><span class="pre">batch_forward.py:447</span></code> no T^-α)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">T^(-α)</span></code> factor to match <code class="docutils literal notranslate"><span class="pre">generator.py:659</span></code>; parity test across the 3 forward impls (manifold F5); benchmark-gated.</p></td>
+<td><p>M0-3</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M6-4</p></td>
+<td><p>Consolidate / parity-bind the 3 forward physics impls</p></td>
+<td><p>manifold F5, radiation F3</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>Decide whether to unify generator/batch_forward/basis_library or keep separate-with-parity-tests. Measured: parity tests (M0-3) + maintenance cost. Decision recorded; if unify, behind benchmark.</p></td>
+<td><p>M6-2, M6-3</p></td>
+<td><p>L</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="milestone-m7-performance-latency-last-per-mission-priority">
+<h1>MILESTONE M7 — Performance (latency LAST, per mission priority)<a class="headerlink" href="#milestone-m7-performance-latency-last-per-mission-priority" title="Link to this heading"></a></h1>
+<p>All deferred behind correctness; each must hold a parity test (no accuracy change) and ideally show
+a measured win. Profiling memory says RANSAC wl-calibration dominates (73%) and GPU jit was slower —
+so these are scoped, not speculative.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M7-1</p></td>
+<td><p>Vectorize numpy per-line Gaussian / Voigt loops</p></td>
+<td><p>radiation F5 (<code class="docutils literal notranslate"><span class="pre">profiles.py:154/336</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>numpy broadcasting; bit-parity test vs loop; measured speedup on CPU path.</p></td>
+<td><p>M0-3</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M7-2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code> → <code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code></p></td>
+<td><p>inv-preprocess F4 (<code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:1302</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Drop-in C median filter; output-parity test; measured speedup.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M7-3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_apply_saha_correction</span></code> precompute arrays</p></td>
+<td><p>inv-solve F8/FA2 (<code class="docutils literal notranslate"><span class="pre">iterative.py:1338</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>No per-iteration <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> allocation; result-parity test; measured GC reduction.</p></td>
+<td><p>M1-1</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M7-4</p></td>
+<td><p>Cache-key avoid pickling <code class="docutils literal notranslate"><span class="pre">self</span></code> on hot path</p></td>
+<td><p>atomic F7, core MF1</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Key by <code class="docutils literal notranslate"><span class="pre">id(self)</span></code>/db-sha prefix; parity test on cached results; pickle calls removed from hot path.</p></td>
+<td><p>M1-9</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M7-5</p></td>
+<td><p>Misc loop vectorizations</p></td>
+<td><p>atomic F4 (iterrows), instrument F7/F6, io F6, inv-preprocess F9, manifold F8</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Each: output-parity test + measured win; only land where benchmark/profiler shows it matters.</p></td>
+<td><p>—</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M7-6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code> avoid redundant PF/Saha recompute</p></td>
+<td><p>inv-solve F7 (<code class="docutils literal notranslate"><span class="pre">iterative.py:2760</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Reuse converged state; result-parity test; measured win in batch mode.</p></td>
+<td><p>M1-1</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+<section id="safe-now-housekeeping-any-time-low-risk">
+<h2>SAFE-NOW housekeeping (any time, low risk)<a class="headerlink" href="#safe-now-housekeeping-any-time-low-risk" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M7-7</p></td>
+<td><p>Unify env-var flag resolvers / truthy parsing</p></td>
+<td><p>inv-solve F9/FA1, inv-preprocess F7, core (flag debt)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>One <code class="docutils literal notranslate"><span class="pre">_feature_flag(name)</span></code> helper, consistent <code class="docutils literal notranslate"><span class="pre">{1,true,yes,on}</span></code>; test matrix; <code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_LAX_WHILE_LOOP=true</span></code> now works.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M7-8</p></td>
+<td><p>Sub-pixel centroiding + normalized RANSAC fit coords</p></td>
+<td><p>inv-preprocess F1/F2 (<code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:192</span></code>, <code class="docutils literal notranslate"><span class="pre">preprocessing.py:617</span></code>)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Parabolic 3-pt centroid + [-1,1]-normalized polynomial fit; behind flag; wl-calibration RMS + composition benchmark (RANSAC is RNG-coupled — must benchmark-gate).</p></td>
+<td><p>M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M7-9</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">min_intensity_floor</span></code> semantics + exporter dtype/JSON</p></td>
+<td><p>inv-preprocess F3, io F7 (S10 truncation), io M2 (allow_nan Inf)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Floor cannot lower below noise criterion (or renamed); HDF5 element names use <code class="docutils literal notranslate"><span class="pre">h5py.string_dtype()</span></code>; <code class="docutils literal notranslate"><span class="pre">allow_nan=False</span></code> applies to Inf; tests.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="excluded-verified-false-do-not-act-on-these">
+<h1>Excluded (verified FALSE — do NOT act on these)<a class="headerlink" href="#excluded-verified-false-do-not-act-on-these" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p>inv-solve <strong>F1</strong>: adding <code class="docutils literal notranslate"><span class="pre">ln(U_II/U_I)</span></code> to ionic y-shift — would INTRODUCE a bug (term cancels).</p></li>
+<li><p>inv-identify <strong>F1/F6/F10</strong>: y-axis consistency, JAX parity tests, interference test — already correct.</p></li>
+<li><p>inv-top <strong>F1</strong>: full-spectrum mole→mass already done in <code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code> (mass returned).</p></li>
+<li><p>io <strong>F5/F10</strong>: <code class="docutils literal notranslate"><span class="pre">intensity_W_m2_nm_sr</span></code> IS in the alias list; round-trip works.</p></li>
+<li><p>validation <strong>F2</strong> (<code class="docutils literal notranslate"><span class="pre">1+avg_Z</span></code> denominator correct) and <strong>F3-original</strong> (spin factor already in const).</p></li>
+<li><p>inv-physics <strong>F2</strong>: pLTE E_lower cut is the correct Cristoforetti implementation.</p></li>
+<li><p>plasma <strong>F3</strong> downgraded LOW (production path bypasses the Python for-loop) — fold into M7-5 only if profiled.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="first-10-items-to-execute-ordered">
+<h1>FIRST 10 ITEMS TO EXECUTE (ordered)<a class="headerlink" href="#first-10-items-to-execute-ordered" title="Link to this heading"></a></h1>
+<ol class="arabic simple">
+<li><p><strong>M0-1</strong> — Pin canonical Saha/IPD/DH constants (unblocks plasma/core/atomic fixes; tiny, green now).</p></li>
+<li><p><strong>M0-2</strong> — Stand up held-out composition benchmark wrapper + baseline (the gate for ALL accuracy items).</p></li>
+<li><p><strong>M0-3</strong> — Add dual-path parity fixtures (forward/LDM/SB-graph/Rust-comb), xfail-marking known divergences.</p></li>
+<li><p><strong>M1-8</strong> — Fix <code class="docutils literal notranslate"><span class="pre">None</span></code>-sentinel cache miss (SAFE-NOW, high-value, isolated; removes silent DB re-query).</p></li>
+<li><p><strong>M1-6</strong> — Correct Olivero Voigt constants to one source of truth (SAFE-NOW, parity-verified).</p></li>
+<li><p><strong>M1-1</strong> — Move <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> to <code class="docutils literal notranslate"><span class="pre">inversion/common/</span></code> (unblocks M1-3, M7-3, M7-6 refactors).</p></li>
+<li><p><strong>M1-2</strong> — Redirect all <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> imports to <code class="docutils literal notranslate"><span class="pre">common.data_structures</span></code> (kills the shim cycle).</p></li>
+<li><p><strong>M1-20</strong> — Evolution blocklist: catch <code class="docutils literal notranslate"><span class="pre">exec</span></code>/<code class="docutils literal notranslate"><span class="pre">eval</span></code>/<code class="docutils literal notranslate"><span class="pre">compile</span></code> + binary-diff (physics-only-constraint hardening; SAFE-NOW).</p></li>
+<li><p><strong>M3-1</strong> — Build the canonical number↔mass converter (SAFE-NOW; prerequisite for the top accuracy lever M3).</p></li>
+<li><p><strong>M2-1</strong> — Resonance-ΔE regression test (SAFE-NOW; sets up the McWhirter physics correction M2).</p></li>
+</ol>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,327 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/inversion/runtime/ &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/inv-runtime.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-inversion-runtime">
+<h1>Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/</span></code><a class="headerlink" href="#adversarial-verification-cflibs-inversion-runtime" title="Link to this heading"></a></h1>
+<p>Verified against source at <code class="docutils literal notranslate"><span class="pre">.worktrees/v4-m5/cflibs/inversion/runtime/</span></code> (ripgrep + targeted Read)
+and literature at <code class="docutils literal notranslate"><span class="pre">scratchpad/overhaul/literature/</span></code>.</p>
+<hr class="docutils" />
+<section id="verified-findings-critical-high-only-per-task-scope">
+<h2>Verified Findings (critical/high only per task scope)<a class="headerlink" href="#verified-findings-critical-high-only-per-task-scope" title="Link to this heading"></a></h2>
+<section id="f1-critical-optical-depth-formula-wrong-degeneracy-wrong-3-scaling-magic-1e-25">
+<h3>F1 · CRITICAL · Optical depth formula: wrong degeneracy, wrong λ³ scaling, magic <code class="docutils literal notranslate"><span class="pre">1e-25</span></code><a class="headerlink" href="#f1-critical-optical-depth-formula-wrong-degeneracy-wrong-3-scaling-magic-1e-25" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong> — all three sub-errors confirmed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">temporal.py:1014</span></code> sets <code class="docutils literal notranslate"><span class="pre">g_lower</span> <span class="pre">=</span> <span class="pre">g_k</span></code> with the comment “Approximate as similar to upper level”,
+where <code class="docutils literal notranslate"><span class="pre">g_k</span></code> is the upper level weight from <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code>. The absorption cross-section scales
+with the <em>lower</em>-level population <code class="docutils literal notranslate"><span class="pre">N_l</span> <span class="pre">g_u</span> <span class="pre">/</span> <span class="pre">g_l</span> <span class="pre">·</span> <span class="pre">exp(-E_l/kT)</span></code> (Eq. 8 in self-absorption-cog.md §1.4),
+so substituting <code class="docutils literal notranslate"><span class="pre">g_k</span></code> (upper) for <code class="docutils literal notranslate"><span class="pre">g_l</span></code> (lower) introduces an off-by-<code class="docutils literal notranslate"><span class="pre">g_u/g_l</span></code> error in <code class="docutils literal notranslate"><span class="pre">n_lower</span></code>.
+Line 1025 computes <code class="docutils literal notranslate"><span class="pre">tau</span> <span class="pre">=</span> <span class="pre">1e-25</span> <span class="pre">*</span> <span class="pre">A_ki</span> <span class="pre">*</span> <span class="pre">lambda_cm**3</span> <span class="pre">*</span> <span class="pre">n_lower</span> <span class="pre">*</span> <span class="pre">L</span></code> — confirmed λ³ (should be λ²,
+per the literature formula <code class="docutils literal notranslate"><span class="pre">q</span> <span class="pre">≈</span> <span class="pre">λ₀²</span> <span class="pre">*</span> <span class="pre">g_u</span> <span class="pre">*</span> <span class="pre">A_ul</span> <span class="pre">*</span> <span class="pre">N_s</span> <span class="pre">/</span> <span class="pre">(8π</span> <span class="pre">*</span> <span class="pre">Δλ_D</span> <span class="pre">*</span> <span class="pre">U_s(T))</span> <span class="pre">*</span> <span class="pre">exp(-E_l/kT)</span></code>).
+The docstring at line 993 says “concentration (mass fraction)” but line 1011 uses it as
+<code class="docutils literal notranslate"><span class="pre">n_s</span> <span class="pre">=</span> <span class="pre">concentration</span> <span class="pre">*</span> <span class="pre">total_number_density_cm3</span></code> without molar-mass conversion — a dimensional
+inconsistency confirmed by inspection. <code class="docutils literal notranslate"><span class="pre">SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1e-25</span></code> has no physical derivation in the
+source or comments. Corrected severity: <strong>CRITICAL</strong> (unchanged).</p>
+</section>
+<hr class="docutils" />
+<section id="f2-high-fastanalyzer-placeholder-returns-converged-true-with-meaningless-result">
+<h3>F2 · HIGH · <code class="docutils literal notranslate"><span class="pre">FastAnalyzer</span></code> placeholder returns <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> with meaningless result<a class="headerlink" href="#f2-high-fastanalyzer-placeholder-returns-converged-true-with-meaningless-result" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong> — both paths confirmed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">streaming.py:710–722</span></code>: when <code class="docutils literal notranslate"><span class="pre">line_observations</span> <span class="pre">is</span> <span class="pre">None</span></code>, returns <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> with hardcoded
+T=10000 K, n_e=1e17, uniform concentrations, <code class="docutils literal notranslate"><span class="pre">converged=True</span></code>, <code class="docutils literal notranslate"><span class="pre">n_lines=0</span></code>. Comment says
+“In production, would use line detection here / For now, return placeholder result” — this is
+explicitly unimplemented. <code class="docutils literal notranslate"><span class="pre">streaming.py:785</span></code>: the real-physics path also hardcodes
+<code class="docutils literal notranslate"><span class="pre">electron_density_cm3=1e17</span></code> with comment “Not determined in fast mode”, but still returns
+<code class="docutils literal notranslate"><span class="pre">converged=True</span></code>. Both paths actively mislead callers that check <code class="docutils literal notranslate"><span class="pre">result.converged</span></code>. The
+<code class="docutils literal notranslate"><span class="pre">_process_single</span></code> method at line 1011 passes the result directly to <code class="docutils literal notranslate"><span class="pre">_assess_quality</span></code> and
+<code class="docutils literal notranslate"><span class="pre">_collect_warnings</span></code> without distinguishing the placeholder path. Corrected severity: <strong>HIGH</strong> (unchanged).</p>
+</section>
+<hr class="docutils" />
+<section id="f3-high-sa-score-uses-n-e-as-proxy-for-neutral-absorber-density-wrong-direction-in-recombination">
+<h3>F3 · HIGH · SA score uses n_e as proxy for neutral absorber density — wrong direction in recombination<a class="headerlink" href="#f3-high-sa-score-uses-n-e-as-proxy-for-neutral-absorber-density-wrong-direction-in-recombination" title="Link to this heading"></a></h3>
+<p><strong>REAL: PARTIALLY TRUE</strong> — confirmed as a real imprecision, but the “wrong direction” claim
+is overstated for the model used here.</p>
+<p><code class="docutils literal notranslate"><span class="pre">temporal.py:699–704</span></code> is confirmed to use <code class="docutils literal notranslate"><span class="pre">ne_ref</span> <span class="pre">/</span> <span class="pre">n_e</span></code> as the SA score, with no reference to
+neutral density. The census argument is physically valid in a plasma with conserved total atoms:
+during recombination, n_e decreases while neutral density increases — giving a spuriously optimistic
+SA score. However, the <code class="docutils literal notranslate"><span class="pre">PlasmaEvolutionModel</span></code> (temporal.py:340–428) uses a purely exponential
+decay for n_e with no ion/neutral partitioning. In this simplified expansion-dominated model, both
+n_e and total density decrease monotonically, so the proxy is at least directionally consistent
+for the dominant plasma dilution effect. The bug is real (n_e is a poor proxy for optical depth
+and does not reflect the actual neutral column density that drives self-absorption), but the claim
+that it is “monotone in the wrong direction” specifically during the recombination phase is model-
+dependent. The fundamental error — using ionized electron density as a proxy for neutral absorber
+density — is confirmed. Corrected severity: <strong>MEDIUM</strong> (downgraded from HIGH; the direction error
+only manifests if recombination-phase physics is explicitly modeled, which this model does not do).</p>
+</section>
+<hr class="docutils" />
+<section id="a1-high-fastanalyzer-exp-avg-y-concentration-proxy-omits-closure-physically-wrong">
+<h3>A1 · HIGH · FastAnalyzer <code class="docutils literal notranslate"><span class="pre">exp(avg_y)</span></code> concentration proxy omits closure → physically wrong<a class="headerlink" href="#a1-high-fastanalyzer-exp-avg-y-concentration-proxy-omits-closure-physically-wrong" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong> — confirmed by reading both the proxy code and the y_value definition.</p>
+<p><code class="docutils literal notranslate"><span class="pre">streaming.py:767–768</span></code>: <code class="docutils literal notranslate"><span class="pre">avg_y</span> <span class="pre">=</span> <span class="pre">mean(y_value</span> <span class="pre">for</span> <span class="pre">lines</span> <span class="pre">of</span> <span class="pre">element)</span></code>, then
+<code class="docutils literal notranslate"><span class="pre">concentrations[el]</span> <span class="pre">=</span> <span class="pre">exp(avg_y)</span></code>. From <code class="docutils literal notranslate"><span class="pre">data_structures.py:78</span></code>,
+<code class="docutils literal notranslate"><span class="pre">y_value</span> <span class="pre">=</span> <span class="pre">ln(I</span> <span class="pre">*</span> <span class="pre">λ_nm</span> <span class="pre">/</span> <span class="pre">(g</span> <span class="pre">*</span> <span class="pre">A))</span></code>. After Boltzmann fitting, this quantity equals
+<code class="docutils literal notranslate"><span class="pre">ln(F</span> <span class="pre">*</span> <span class="pre">C_s</span> <span class="pre">*</span> <span class="pre">hc/(4π)</span> <span class="pre">/</span> <span class="pre">U_s(T))</span> <span class="pre">+</span> <span class="pre">slope</span> <span class="pre">*</span> <span class="pre">E_k</span></code> where <code class="docutils literal notranslate"><span class="pre">F</span></code> is the unknown experimental factor.
+<code class="docutils literal notranslate"><span class="pre">exp(avg_y)</span></code> thus gives <code class="docutils literal notranslate"><span class="pre">F</span> <span class="pre">*</span> <span class="pre">(hc/4π)</span> <span class="pre">/</span> <span class="pre">U_s(T)</span> <span class="pre">*</span> <span class="pre">C_s</span> <span class="pre">*</span> <span class="pre">exp(slope</span> <span class="pre">*</span> <span class="pre">avg_E_k)</span></code> — not just <code class="docutils literal notranslate"><span class="pre">C_s</span></code>.
+The normalization by <code class="docutils literal notranslate"><span class="pre">total</span></code> cancels <code class="docutils literal notranslate"><span class="pre">F</span></code> and <code class="docutils literal notranslate"><span class="pre">(hc/4π)</span></code> only if all elements have the same <code class="docutils literal notranslate"><span class="pre">U_s(T)</span></code>
+and the same <code class="docutils literal notranslate"><span class="pre">avg_E_k</span></code>, which is generally false. This is a confirmed broken proxy for concentration;
+the closure equation from <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.closure</span></code> is not called. Corrected severity:
+<strong>HIGH</strong> (unchanged).</p>
+</section>
+<hr class="docutils" />
+<section id="c1-high-scale-factor-1e-25-vestigial-magic-constant-with-no-physical-derivation">
+<h3>C1 · HIGH · <code class="docutils literal notranslate"><span class="pre">SCALE_FACTOR</span> <span class="pre">=</span> <span class="pre">1e-25</span></code>: vestigial magic constant with no physical derivation<a class="headerlink" href="#c1-high-scale-factor-1e-25-vestigial-magic-constant-with-no-physical-derivation" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong> — this is the same defect as F1 sub-error 2, confirmed at <code class="docutils literal notranslate"><span class="pre">temporal.py:1024</span></code>.</p>
+<p>The constant <code class="docutils literal notranslate"><span class="pre">1e-25</span></code> appears as a local variable inside <code class="docutils literal notranslate"><span class="pre">optical_depth_at_time</span></code>, with comment
+“f ~ A_ki * lambda^2 (rough scaling)” that does not justify the value. No units analysis is
+provided. Given the correct formula (self-absorption-cog.md §1.4, Eq. 8) has a physically derived
+prefactor <code class="docutils literal notranslate"><span class="pre">1/(8π</span> <span class="pre">*</span> <span class="pre">Δλ_D)</span></code>, the constant is unvalidated. Since this is the same code location as
+F1, C1 is a duplicate framing of the F1 sub-error rather than a separate finding. Both are
+<strong>confirmed</strong>. Corrected severity: <strong>HIGH</strong> (as standalone; but noting it overlaps with F1 CRITICAL
+if considered together). The census correctly separates them — C1 is re-confirmed as a distinct
+“flag debt” finding about the vestigial constant.</p>
+</section>
+<hr class="docutils" />
+<section id="t1-high-no-physics-parity-test-for-temporalselfabsorptioncorrector">
+<h3>T1 · HIGH · No physics parity test for <code class="docutils literal notranslate"><span class="pre">TemporalSelfAbsorptionCorrector</span></code><a class="headerlink" href="#t1-high-no-physics-parity-test-for-temporalselfabsorptioncorrector" title="Link to this heading"></a></h3>
+<p><strong>REAL: TRUE</strong> — <code class="docutils literal notranslate"><span class="pre">TemporalSelfAbsorptionCorrector</span></code> has no callers in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> other than
+<code class="docutils literal notranslate"><span class="pre">temporal.py</span></code> itself and is referenced only in <code class="docutils literal notranslate"><span class="pre">tests/test_temporal.py</span></code>. A search confirms no
+test checks that <code class="docutils literal notranslate"><span class="pre">f_tau</span> <span class="pre">≈</span> <span class="pre">1.0</span></code> for optically thin lines or verifies the escape factor magnitude
+against an analytically known tau. Given F1 breaks the tau formula, such a test would immediately
+expose the magnitude error. Corrected severity: <strong>HIGH</strong> (unchanged).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="downgraded-or-modified-findings">
+<h2>Downgraded or Modified Findings<a class="headerlink" href="#downgraded-or-modified-findings" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Census ID</p></th>
+<th class="head"><p>Census Severity</p></th>
+<th class="head"><p>Corrected Severity</p></th>
+<th class="head"><p>Reason</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F3</p></td>
+<td><p>HIGH</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>“Wrong direction” only manifests with explicit recombination phase; simplified exponential model makes n_e a consistent (not reversed) proxy for plasma dilution</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="additional-findings-spotted-during-verification">
+<h2>Additional Findings Spotted During Verification<a class="headerlink" href="#additional-findings-spotted-during-verification" title="Link to this heading"></a></h2>
+<section id="x1-medium-plasmaevolutionmodel-docstring-vs-implementation-mismatch-power-law-vs-exponential-n-e">
+<h3>X1 · MEDIUM · <code class="docutils literal notranslate"><span class="pre">PlasmaEvolutionModel</span></code> docstring vs implementation mismatch: power-law vs exponential n_e<a class="headerlink" href="#x1-medium-plasmaevolutionmodel-docstring-vs-implementation-mismatch-power-law-vs-exponential-n-e" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">temporal.py:354–358</span></code> (docstring), <code class="docutils literal notranslate"><span class="pre">temporal.py:428</span></code> (implementation)</p>
+<p>The class docstring states two models for electron density: a power-law decay
+<code class="docutils literal notranslate"><span class="pre">n_e(t)</span> <span class="pre">=</span> <span class="pre">n_e0</span> <span class="pre">*</span> <span class="pre">(1</span> <span class="pre">+</span> <span class="pre">t/t_0)^(-alpha)</span></code> and a “simplified exponential”. The implementation
+unconditionally uses the exponential form <code class="docutils literal notranslate"><span class="pre">n_e0</span> <span class="pre">*</span> <span class="pre">exp(-t/tau_ne)</span></code>. No <code class="docutils literal notranslate"><span class="pre">alpha</span></code> or <code class="docutils literal notranslate"><span class="pre">t_0</span></code> parameter
+exists in the constructor. This is a documentation-only inconsistency (no physics bug per se),
+but a caller reading the docstring and expecting power-law behavior will be surprised. Severity:
+<strong>LOW</strong> if documentation only, <strong>MEDIUM</strong> if power-law behavior is actually needed for physically
+realistic late-time recombination modeling (the power-law better approximates recombination + expansion).</p>
+</section>
+<section id="x2-low-correct-one-observation-docstring-at-line-1199-says-exactly-as-the-inlined-loop-body-did-but-this-is-a-post-refactor-correctness-assertion-not-validated-by-any-test">
+<h3>X2 · LOW · <code class="docutils literal notranslate"><span class="pre">_correct_one_observation</span></code> docstring at line 1199 says “exactly as the inlined loop body did” — but this is a post-refactor correctness assertion not validated by any test<a class="headerlink" href="#x2-low-correct-one-observation-docstring-at-line-1199-says-exactly-as-the-inlined-loop-body-did-but-this-is-a-post-refactor-correctness-assertion-not-validated-by-any-test" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">temporal.py:1197–1199</span></code></p>
+<p>The refactor extracting <code class="docutils literal notranslate"><span class="pre">_correct_one_observation</span></code> from an inlined loop body is claimed equivalent,
+but no before/after snapshot test or round-trip test exists. Given the method has 13 parameters
+including 5 mutable accumulators, a refactoring error would be silent. This is consistent with T1
+(no parity tests) and reinforces the need for a correctness anchor. This is an addendum to A4 and T1,
+not a separate root-cause.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary-table">
+<h2>Summary Table<a class="headerlink" href="#summary-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Dim</p></th>
+<th class="head"><p>Census Sev</p></th>
+<th class="head"><p>Verified</p></th>
+<th class="head"><p>Corrected Sev</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1</p></td>
+<td><p>Physics</p></td>
+<td><p>CRITICAL</p></td>
+<td><p>TRUE</p></td>
+<td><p>CRITICAL</p></td>
+<td><p>All 3 sub-errors confirmed (wrong g, λ³, mass/number mismatch)</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2</p></td>
+<td><p>Physics</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p>Both placeholder and real-physics paths; <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> is misleading</p></td>
+</tr>
+<tr class="row-even"><td><p>F3</p></td>
+<td><p>Physics</p></td>
+<td><p>HIGH</p></td>
+<td><p>PARTIAL</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>Proxy is imprecise, but “wrong direction” claim is model-dependent</p></td>
+</tr>
+<tr class="row-odd"><td><p>A1</p></td>
+<td><p>Arch</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p>exp(avg_y) confirmed wrong; missing closure equation</p></td>
+</tr>
+<tr class="row-even"><td><p>C1</p></td>
+<td><p>Complexity</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p>Same locus as F1; vestigial constant confirmed; noted as overlapping</p></td>
+</tr>
+<tr class="row-odd"><td><p>T1</p></td>
+<td><p>Tests</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+<td><p>No parity test; escape factor untested against known tau</p></td>
+</tr>
+<tr class="row-even"><td><p>X1</p></td>
+<td><p>Docs</p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+<td><p>LOW/MEDIUM</p></td>
+<td><p>Power-law docstring vs exponential implementation</p></td>
+</tr>
+<tr class="row-odd"><td><p>X2</p></td>
+<td><p>Tests</p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+<td><p>LOW</p></td>
+<td><p>Refactor equivalence unvalidated</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

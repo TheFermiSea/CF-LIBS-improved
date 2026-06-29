@@ -1,0 +1,559 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>04 — Pipeline Defaults Audit: Validated Improvements Not Wired Into Default Paths &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">04 — Pipeline Defaults Audit: Validated Improvements Not Wired Into Default Paths</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/04-pipeline-defaults.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pipeline-defaults-audit-validated-improvements-not-wired-into-default-paths">
+<h1>04 — Pipeline Defaults Audit: Validated Improvements Not Wired Into Default Paths<a class="headerlink" href="#pipeline-defaults-audit-validated-improvements-not-wired-into-default-paths" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-09 · <strong>Scope:</strong> end-to-end wiring of <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">analyze</span></code> / <code class="docutils literal notranslate"><span class="pre">invert</span></code> / <code class="docutils literal notranslate"><span class="pre">bayesian</span></code> / <code class="docutils literal notranslate"><span class="pre">batch</span></code>, config surface, trust reporting, scripts-vs-CLI drift, reproducibility, dead entry points.
+<strong>Method:</strong> read-only code trace + two live measurements on real ChemCam BHVO-2 (<code class="docutils literal notranslate"><span class="pre">data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv</span></code>), run today on <code class="docutils literal notranslate"><span class="pre">main</span></code> (6dd4045).</p>
+<section id="headline-measurement-reproduced-today">
+<h2>0. Headline measurement (reproduced today)<a class="headerlink" href="#headline-measurement-reproduced-today" title="Link to this heading"></a></h2>
+<p>Same spectrum, same code, same element list — only opt-in flags differ:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Configuration</p></th>
+<th class="head"><p>RMSE (wt%)</p></th>
+<th class="head"><p>Fe (cert 8.61)</p></th>
+<th class="head"><p>Converged reported</p></th>
+<th class="head"><p>User warning shown</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Default</strong> (<code class="docutils literal notranslate"><span class="pre">analyze</span></code> with no flags): standard closure, no SB-graph</p></td>
+<td><p><strong>10.288</strong></p></td>
+<td><p><strong>39.04</strong> (4.5× over)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p>none</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Best validated</strong> (<code class="docutils literal notranslate"><span class="pre">--saha-boltzmann-graph</span> <span class="pre">--closure-mode</span> <span class="pre">oxide</span></code>)</p></td>
+<td><p><strong>4.029</strong></p></td>
+<td><p>4.33</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p>none</p></td>
+</tr>
+</tbody>
+</table>
+<p>Artifacts: <code class="docutils literal notranslate"><span class="pre">output/bhvo2_measure/audit_default_baseline.json</span></code>, <code class="docutils literal notranslate"><span class="pre">output/bhvo2_measure/audit_sbgraph_oxide.json</span></code>.</p>
+<p>The 2.55× accuracy improvement is fully implemented, tested, merged, and <strong>off by default</strong>. Both runs also silently used the 1-atm pressure-balance n_e fallback (logged as “physically non-standard for LIBS”, never surfaced to the user) and both dropped Na/K/P entirely while reporting <code class="docutils literal notranslate"><span class="pre">converged=True</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="default-vs-best-validated-stage-by-stage">
+<h2>1. Default vs best-validated, stage by stage<a class="headerlink" href="#default-vs-best-validated-stage-by-stage" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stage</p></th>
+<th class="head"><p>Default choice</p></th>
+<th class="head"><p>Best-validated choice</p></th>
+<th class="head"><p>Where the knob lives</p></th>
+<th class="head"><p>CLI?</p></th>
+<th class="head"><p>YAML?</p></th>
+<th class="head"><p>Documented?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Wavelength calibration</p></td>
+<td><p><strong>ON</strong> (segmented robust cal + 0.05 nm residual shift-scan) — good</p></td>
+<td><p>same</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines(wavelength_calibration=True)</span></code> <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:180</span></code></p></td>
+<td><p>not exposed (always on)</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>Detection floor</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">min_relative_intensity=None</span></code> + <code class="docutils literal notranslate"><span class="pre">top_k_per_element=60</span></code> + shift-coherence veto — good (the Na=98% fix)</p></td>
+<td><p>same</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:167-168</span></code>; library default in <code class="docutils literal notranslate"><span class="pre">identify/line_detection.py:883-884</span></code> is <code class="docutils literal notranslate"><span class="pre">None/None</span></code> (≠ CLI)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--min-relative-intensity</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analysis.min_relative_intensity</span></code></p></td>
+<td><p>partially (help text only)</p></td>
+</tr>
+<tr class="row-even"><td><p>Resonance lines</p></td>
+<td><p>kept (<code class="docutils literal notranslate"><span class="pre">exclude_resonance=None→False</span></code>) — good</p></td>
+<td><p>same (SA corrects them when SA on)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:327-328</span></code>; <strong><code class="docutils literal notranslate"><span class="pre">LineSelector</span></code> class default is still <code class="docutils literal notranslate"><span class="pre">True</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">physics/line_selection.py:141</span></code>)</p></td>
+<td><p>no flag</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analysis.exclude_resonance</span></code></p></td>
+<td><p>example YAML says <code class="docutils literal notranslate"><span class="pre">true</span></code> (wrong)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Identifier</p></td>
+<td><p>direct transition matching (<code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code>); ALIAS/comb/NNLS/hybrid <strong>never reachable from CLI</strong></p></td>
+<td><p>hybrid/ALIAS for unknown samples</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code></p></td>
+<td><p><strong>no</strong></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>Intercept extraction</p></td>
+<td><p>per-element common-slope plane</p></td>
+<td><p><strong>pooled Saha-Boltzmann graph</strong> (<code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code>) — BHVO-2 Fe 39%→4%</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:874</span></code> (default <code class="docutils literal notranslate"><span class="pre">False</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analyze</span> <span class="pre">--saha-boltzmann-graph</span></code> only; <code class="docutils literal notranslate"><span class="pre">invert</span></code> config-key only; <strong>batch/bayesian: no</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analysis.saha_boltzmann_graph</span></code> (invert only)</p></td>
+<td><p><strong>not in User_Guide/Quick_Start/API_Reference</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Closure</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">standard</span></code></p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">oxide</span></code></strong> for geological samples (auto stoichiometry)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:1593</span></code>; CLI default <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:1090-1092</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analyze</span> <span class="pre">--closure-mode</span></code>; <code class="docutils literal notranslate"><span class="pre">invert</span></code> config-key only; <strong>batch: no</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analysis.closure_mode</span></code></p></td>
+<td><p>docs list only standard/matrix/oxide (CLI has 6 modes)</p></td>
+</tr>
+<tr class="row-even"><td><p>Boltzmann weight cap</p></td>
+<td><p><strong>ON by default</strong> (<code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap=5.0</span></code>) — good, landed #223</p></td>
+<td><p>same</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:873</span></code></p></td>
+<td><p>not exposed</p></td>
+<td><p><strong>not wired</strong> in <code class="docutils literal notranslate"><span class="pre">invert_cmd</span></code> (cli/main.py:523-535 omits it)</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>Self-absorption</p></td>
+<td><p>OFF (<code class="docutils literal notranslate"><span class="pre">apply_self_absorption=False</span></code>)</p></td>
+<td><p>ON for known optically-thick samples; correctly opt-in until thin/thick gating exists</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:867</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analyze</span> <span class="pre">--apply-self-absorption</span></code>; <code class="docutils literal notranslate"><span class="pre">invert</span></code> config-key; batch: no</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">analysis.apply_self_absorption</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>n_e diagnostic</p></td>
+<td><p><strong>1-atm pressure balance</strong> (docstring: “physically invalid for LIBS”)</p></td>
+<td><p>Stark-width diagnostic (<code class="docutils literal notranslate"><span class="pre">stark_diagnostic=</span></code> param of <code class="docutils literal notranslate"><span class="pre">solve()</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:1594</span></code></p></td>
+<td><p><strong>not wired into any CLI path</strong></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>Boltzmann R² gate</p></td>
+<td><p>ON (<code class="docutils literal notranslate"><span class="pre">min_boltzmann_r2=0.3</span></code>) — good</p></td>
+<td><p>same</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:872</span></code></p></td>
+<td><p>not exposed</p></td>
+<td><p>not wired</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>Bayesian prefilter</p></td>
+<td><p><strong>not used</strong> by <code class="docutils literal notranslate"><span class="pre">bayesian_cmd</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">select_candidate_elements</span></code> (“mandatory” per CLAUDE.md; used by <code class="docutils literal notranslate"><span class="pre">benchmark/bayesian_sparse_id.py:205-217</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inversion/candidate_prefilter.py</span></code></p></td>
+<td><p><strong>no</strong></p></td>
+<td><p>no</p></td>
+<td><p>CLAUDE.md only</p></td>
+</tr>
+<tr class="row-odd"><td><p>Bayesian instrument model</p></td>
+<td><p>fixed-FWHM default; no resolving-power, no prior config</p></td>
+<td><p>resolving-power mode for the ps instrument</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/bayesian/forward.py:144</span></code></p></td>
+<td><p><strong>no <code class="docutils literal notranslate"><span class="pre">--resolving-power</span></code> on <code class="docutils literal notranslate"><span class="pre">bayesian</span></code></strong></p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+</tr>
+</tbody>
+</table>
+<section id="per-command-summary">
+<h3>Per-command summary<a class="headerlink" href="#per-command-summary" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">analyze</span></code></strong> — the only command exposing the best path, but all three accuracy flags default off. No config-file support (<code class="docutils literal notranslate"><span class="pre">--config</span></code> absent), so per-instrument settings can’t be persisted.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">invert</span></code></strong> — gets the same good detection helper; SB-graph/closure/SA reachable <strong>only</strong> via YAML <code class="docutils literal notranslate"><span class="pre">analysis.*</span></code> keys; no CLI flags. Asymmetric with <code class="docutils literal notranslate"><span class="pre">analyze</span></code> (flags vs YAML, never both).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">batch</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:748-831</span></code>) — <strong>bypasses <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> entirely</strong>. It calls raw <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> (no top-K bound, no wavelength calibration, no shift-coherence defaults from the CLI helper) + bare <code class="docutils literal notranslate"><span class="pre">LineSelector()</span></code> (<strong><code class="docutils literal notranslate"><span class="pre">exclude_resonance=True</span></code></strong>, dropping Al/Na/Mg/Ca/K majors) + bare <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver()</span></code> (standard closure, no SB-graph). <strong>The batch path still contains the exact pre-fix wiring whose drift caused the Na=98% blowup that <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code>’s docstring warns about.</strong></p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">bayesian</span></code></strong> — no candidate prefilter (intractability guard), no resolving-power, no baseline/prior knobs, no quality gating of the trace beyond ArviZ summary.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="config-surface-inventory">
+<h2>2. Config-surface inventory<a class="headerlink" href="#config-surface-inventory" title="Link to this heading"></a></h2>
+<section id="yaml-schema-cflibs-core-config-py">
+<h3>2.1 YAML schema (<code class="docutils literal notranslate"><span class="pre">cflibs/core/config.py</span></code>)<a class="headerlink" href="#yaml-schema-cflibs-core-config-py" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">validate_plasma_config</span></code> / <code class="docutils literal notranslate"><span class="pre">validate_instrument_config</span></code> only. <strong>There is no schema or validation for the <code class="docutils literal notranslate"><span class="pre">analysis:</span></code> section</strong> — typo’d keys (<code class="docutils literal notranslate"><span class="pre">saha_boltzman_graph</span></code>) are silently ignored and you get the default. <code class="docutils literal notranslate"><span class="pre">analysis.*</span></code> keys actually read by <code class="docutils literal notranslate"><span class="pre">invert_cmd</span></code> (cli/main.py:446-538): <code class="docutils literal notranslate"><span class="pre">elements,</span> <span class="pre">wavelength_tolerance_nm,</span> <span class="pre">min_peak_height,</span> <span class="pre">peak_width_nm,</span> <span class="pre">min_relative_intensity,</span> <span class="pre">resolving_power,</span> <span class="pre">apply_self_absorption,</span> <span class="pre">exclude_resonance,</span> <span class="pre">min_snr,</span> <span class="pre">min_energy_spread_ev,</span> <span class="pre">min_lines_per_element,</span> <span class="pre">isolation_wavelength_nm,</span> <span class="pre">max_lines_per_element,</span> <span class="pre">max_iterations,</span> <span class="pre">t_tolerance_k,</span> <span class="pre">ne_tolerance_frac,</span> <span class="pre">pressure_pa|pressure,</span> <span class="pre">self_absorption_column_density_cm3,</span> <span class="pre">self_absorption_plasma_length_cm,</span> <span class="pre">saha_boltzmann_graph,</span> <span class="pre">closure_mode,</span> <span class="pre">closure_kwargs,</span> <span class="pre">matrix_element,</span> <span class="pre">oxide_elements</span></code>.</p>
+<p><strong>Not configurable anywhere (constructor-only):</strong> <code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap</span></code>, <code class="docutils literal notranslate"><span class="pre">min_boltzmann_r2</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_ipd</span></code>, <code class="docutils literal notranslate"><span class="pre">aki_uncertainty_weighting</span></code>, <code class="docutils literal notranslate"><span class="pre">two_region</span></code>, <code class="docutils literal notranslate"><span class="pre">self_absorption_tau_cap</span></code>, <code class="docutils literal notranslate"><span class="pre">self_absorption_mask_threshold</span></code>, <code class="docutils literal notranslate"><span class="pre">use_jax_boltzmann</span></code>, <code class="docutils literal notranslate"><span class="pre">use_lax_while_loop</span></code>, <code class="docutils literal notranslate"><span class="pre">stark_diagnostic</span></code>.</p>
+</section>
+<section id="conflicting-defaults-cli-vs-yaml-examples-vs-class-defaults">
+<h3>2.2 Conflicting defaults (CLI vs YAML examples vs class defaults)<a class="headerlink" href="#conflicting-defaults-cli-vs-yaml-examples-vs-class-defaults" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Knob</p></th>
+<th class="head"><p>CLI helper default</p></th>
+<th class="head"><p>Library/class default</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">examples/inversion_config_example.yaml</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">docs/User_Guide.md</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exclude_resonance</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">False</span></code> (cli/main.py:327-328)</p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">True</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">LineSelector</span></code>, physics/line_selection.py:141)</p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">true</span></code> (line 9) — re-enables the major-deleting legacy gate</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">true</span></code> (line ~358)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">100.0</span></code> (line 20) — re-enables the floor that deletes Mg/K/Al</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">null</span></code> (inconsistent with example file)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">top_k_per_element</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">60</span></code> (cli/main.py:168)</p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">None</span></code></strong> (identify/line_detection.py:884) — <code class="docutils literal notranslate"><span class="pre">batch</span></code> gets unbounded catalog</p></td>
+<td><p>absent</p></td>
+<td><p>absent</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">closure_mode</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">standard</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">standard</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">standard</span></code></p></td>
+<td><p>docs list 3 modes; CLI offers 6 (<code class="docutils literal notranslate"><span class="pre">ilr</span></code>,<code class="docutils literal notranslate"><span class="pre">pwlr</span></code>,<code class="docutils literal notranslate"><span class="pre">dirichlet_residual</span></code> undocumented)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">resolving_power</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">5000.0</span></code></p></td>
+<td><p>absent</p></td>
+</tr>
+</tbody>
+</table>
+<p>A user who copies <code class="docutils literal notranslate"><span class="pre">examples/inversion_config_example.yaml</span></code> — the only shipped inversion config — gets the <strong>legacy catastrophic detection settings</strong> back.</p>
+</section>
+<section id="environment-variables-still-gating-physics-numerics">
+<h3>2.3 Environment variables still gating physics/numerics<a class="headerlink" href="#environment-variables-still-gating-physics-numerics" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Var</p></th>
+<th class="head"><p>Site</p></th>
+<th class="head"><p>Status</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:41</span></code> (seeds <code class="docutils literal notranslate"><span class="pre">use_jax_boltzmann</span></code> ctor flag, #275/866642a) and <strong><code class="docutils literal notranslate"><span class="pre">runtime/streaming.py:108</span></code> (still env-only — missed by the c5 lift)</strong></p></td>
+<td><p>partially lifted</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_LAX_WHILE_LOOP</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve/iterative.py:56</span></code> (seeds <code class="docutils literal notranslate"><span class="pre">use_lax_while_loop</span></code> ctor flag)</p></td>
+<td><p>lifted</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_DISABLE_STARK_T_FACTOR</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">radiation/kernels.py:444</span></code> — <strong>physics ablation toggle, env-only</strong>, changes Stark widths</p></td>
+<td><p>should be ctor/config flag</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_JAX_IDENTIFIER</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">benchmark/unified.py:51,4054</span></code>; mutated by <code class="docutils literal notranslate"><span class="pre">parameter_sweep_server/server.py:292-302</span></code></p></td>
+<td><p>benchmark-only, env-only</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CFLIBS_BENCH_CHECKPOINT_PATH/_EVERY</span></code>, <code class="docutils literal notranslate"><span class="pre">CFLIBS_OUTPUT_FORMAT</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">benchmark/composition_eval.py:367-369</span></code>, <code class="docutils literal notranslate"><span class="pre">unified.py:4251</span></code></p></td>
+<td><p>benchmark plumbing</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SWEEP_*</span></code> (7 vars)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parameter_sweep_server/server.py</span></code></p></td>
+<td><p>server plumbing</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="hardcoded-constants-that-should-be-config">
+<h3>2.4 Hardcoded constants that should be config<a class="headerlink" href="#hardcoded-constants-that-should-be-config" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">_solve_python</span></code> initial state <code class="docutils literal notranslate"><span class="pre">T_K=10000.0</span></code>, <code class="docutils literal notranslate"><span class="pre">n_e=1e17</span></code> (solve/iterative.py:2078-2080); <code class="docutils literal notranslate"><span class="pre">pressure_pa=101325</span></code> (STP — wrong physics for LIBS, see §3); <code class="docutils literal notranslate"><span class="pre">self_absorption_column_density_cm3=1e16</span></code>, <code class="docutils literal notranslate"><span class="pre">plasma_length_cm=0.1</span></code>, <code class="docutils literal notranslate"><span class="pre">tau_cap=10</span></code>, <code class="docutils literal notranslate"><span class="pre">mask_threshold=1e6</span></code>; degeneracy threshold <code class="docutils literal notranslate"><span class="pre">0.8</span></code> (<code class="docutils literal notranslate"><span class="pre">physics/closure.py:498</span></code>); detection comb/kdet gates (<code class="docutils literal notranslate"><span class="pre">identify/line_detection.py:888-906</span></code>); residual shift scan <code class="docutils literal notranslate"><span class="pre">0.05</span> <span class="pre">nm</span></code> / legacy <code class="docutils literal notranslate"><span class="pre">0.5</span> <span class="pre">nm</span></code> (cli/main.py:181,270). For the user’s instrument (T 0.5–1.3 eV, n_e 1e16–1e18) the T/ne seeds are fine; the 1-atm pressure default is the actionable one.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="trust-quality-reporting-gaps">
+<h2>3. Trust / quality reporting gaps<a class="headerlink" href="#trust-quality-reporting-gaps" title="Link to this heading"></a></h2>
+<p>The solver now has real gates (post-#220/#223): <code class="docutils literal notranslate"><span class="pre">boltzmann_degenerate</span></code> (slope≥0 or R²&lt;0.3 holds T and forces <code class="docutils literal notranslate"><span class="pre">converged=False</span></code>), <code class="docutils literal notranslate"><span class="pre">closure_degenerate</span></code> (any element &gt;0.8 → <code class="docutils literal notranslate"><span class="pre">converged=False</span></code>), <code class="docutils literal notranslate"><span class="pre">ne_from_stark</span></code> provenance, all in <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code> (solve/iterative.py:2041-2062, 1988-1999, 2157-2161). <strong>Almost none of it reaches the user:</strong></p>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">invert</span></code> prints nothing about quality</strong> — <code class="docutils literal notranslate"><span class="pre">_output_invert_result</span></code> (cli/main.py:418-424) prints T, n_e, concentrations. Not even <code class="docutils literal notranslate"><span class="pre">converged</span></code>. A degenerate solve is indistinguishable from a clean one on stdout.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">analyze</span></code> table mode</strong> (cli/main.py:673-687) prints <code class="docutils literal notranslate"><span class="pre">Converged</span></code> and the McWhirter warning only. It never prints R², <code class="docutils literal notranslate"><span class="pre">boltzmann_degenerate</span></code>, <code class="docutils literal notranslate"><span class="pre">closure_degenerate</span></code>, or <code class="docutils literal notranslate"><span class="pre">ne_from_stark</span></code>; there is no “this result is unreliable” banner. JSON mode dumps the raw <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code> dict with no interpretation.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">converged=True</span></code> coexists with garbage</strong>: today’s default run reported <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> while Fe was 4.5× over-attributed and Na/K/P were dropped to exactly 0. Nothing flags wholesale element loss — <code class="docutils literal notranslate"><span class="pre">measure_bhvo2_presence.py</span></code> reports “Dropped majors”; the CLI does not.</p></li>
+<li><p><strong>n_e fallback warning is log-only</strong>: “physically non-standard for LIBS… coarse last-resort estimate” goes to the logger (invisible at default INFO formatting in a pipe); <code class="docutils literal notranslate"><span class="pre">ne_from_stark=0.0</span></code> lands in quality_metrics but no CLI path renders it.</p></li>
+<li><p><strong>lax path diverges</strong>: <code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> quality_metrics = <code class="docutils literal notranslate"><span class="pre">{r_squared_last}</span> <span class="pre">+</span> <span class="pre">LTE</span></code> only (solve/iterative.py:2298) — <strong>no <code class="docutils literal notranslate"><span class="pre">closure_degenerate</span></code>/<code class="docutils literal notranslate"><span class="pre">boltzmann_degenerate</span></code>/<code class="docutils literal notranslate"><span class="pre">ne_from_stark</span></code> keys</strong>, and its convergence check (line 818) gates only on Boltzmann degeneracy, not closure degeneracy → opt-in JAX path can report <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> on a keystone-collapsed composition.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">batch</span></code></strong> records <code class="docutils literal notranslate"><span class="pre">converged</span></code> per row but no quality metrics; failed files are logged and silently skipped from the aggregate.</p></li>
+<li><p>Exporters (<code class="docutils literal notranslate"><span class="pre">io/exporters.py:372,398,779,802</span></code>) do serialize <code class="docutils literal notranslate"><span class="pre">converged</span></code>+<code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code>, so file outputs are better than stdout — but <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">data[&quot;quality_metrics&quot;]</span></code> silently omits the section when the dict is empty (lax/MC paths), which is the residual form of the “quality_metrics None” bug.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="scripts-vs-library-drift">
+<h2>4. Scripts vs library drift<a class="headerlink" href="#scripts-vs-library-drift" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Script</p></th>
+<th class="head"><p>What it wires</p></th>
+<th class="head"><p>vs CLI</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/measure_bhvo2_presence.py</span></code></p></td>
+<td><p><strong>imports the private CLI helper</strong> <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.cli.main</span> <span class="pre">import</span> <span class="pre">_detect_and_select_lines</span></code> + <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver(saha_boltzmann_graph=…)</span></code>, oxide stoichiometry — i.e., the production path with the good flags</p></td>
+<td><p>Aligned by construction (good), but depends on a private function; also reports RMSE/dropped-majors/FP diagnostics the CLI never shows</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/validate_real_data.py</span></code></p></td>
+<td><p>full wavelength-calibration knob surface (<code class="docutils literal notranslate"><span class="pre">--wavelength-calibration-mode</span></code>, 6 quality-gate flags, lines 1234-1247), <strong>auto resolving-power estimation</strong> (<code class="docutils literal notranslate"><span class="pre">estimate_resolving_power</span></code>, line 503), 3 identifiers (ALIAS/Comb/Correlation)</p></td>
+<td><p>CLI hardcodes segmented calibration with fixed gates, has <strong>no resolving-power auto-detect</strong> (user must pass <code class="docutils literal notranslate"><span class="pre">--resolving-power</span></code>), and exposes <strong>no identifier at all</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/bayesian_sparse_id.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">select_candidate_elements</span></code> NNLS prefilter before MCMC (lines 205-217)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bayesian_cmd</span></code> runs full-element MCMC — the documented-intractable configuration</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/probe_saha_boltzmann_graph.py</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/diagnose_closure.py</span></code></p></td>
+<td><p>validated probes for the SB-graph and closure intercepts</p></td>
+<td><p>diagnostics only, fine as scripts</p></td>
+</tr>
+</tbody>
+</table>
+<p>Net: the benchmark scripts both (a) exercise better configurations than the defaults and (b) carry capabilities (auto-R, calibration gates, dropped-major reporting, RMSE scoring) that belong in the library/CLI.</p>
+</section>
+<hr class="docutils" />
+<section id="reproducibility-of-the-4-03-wt-result">
+<h2>5. Reproducibility of the 4.03 wt% result<a class="headerlink" href="#reproducibility-of-the-4-03-wt-result" title="Link to this heading"></a></h2>
+<p><strong>Reproduced today</strong> (RMSE 4.029 wt%):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>scripts/measure_bhvo2_presence.py<span class="w"> </span>--closure-mode<span class="w"> </span>oxide<span class="w"> </span>--saha-boltzmann-graph<span class="w"> </span>--label<span class="w"> </span>sbgraph_oxide
+</pre></div>
+</div>
+<p>CLI-equivalent (same production path):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>analyze<span class="w"> </span>data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--elements<span class="w"> </span>Si,Ti,Al,Fe,Mn,Mg,Ca,Na,K,P<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--db-path<span class="w"> </span>ASD_da/libs_production.db<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--closure-mode<span class="w"> </span>oxide<span class="w"> </span>--saha-boltzmann-graph
+</pre></div>
+</div>
+<p>What’s missing for a <em>user</em> to find this: <strong>neither command appears anywhere in the documentation.</strong> <code class="docutils literal notranslate"><span class="pre">docs/User_Guide.md</span></code> and <code class="docutils literal notranslate"><span class="pre">docs/Quick_Start_For_Scientists.md</span></code> never mention <code class="docutils literal notranslate"><span class="pre">--saha-boltzmann-graph</span></code> or <code class="docutils literal notranslate"><span class="pre">analyze</span> <span class="pre">--closure-mode</span></code>; <code class="docutils literal notranslate"><span class="pre">User_Guide</span></code>/<code class="docutils literal notranslate"><span class="pre">API_Reference</span></code> list only 3 of 6 closure modes; the only worked <code class="docutils literal notranslate"><span class="pre">analyze</span></code> examples are bare-default Fe-only runs. The numbers (10.33→5.60→4.29→4.03) live only in commit messages (#223/#224) and bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-btcl</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="dead-legacy-entry-points-zero-external-users-delete">
+<h2>6. Dead/legacy entry points (zero external users → delete)<a class="headerlink" href="#dead-legacy-entry-points-zero-external-users-delete" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Why dead</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">manifold-generator.py</span></code></p></td>
+<td><p>legacy, not MPI-aware (CLAUDE.md warns against it); superseded by <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">generate-manifold</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cf-libs-analyzer.py</span></code></p></td>
+<td><p>standalone legacy analyzer with its own physics constants (<code class="docutils literal notranslate"><span class="pre">KB</span> <span class="pre">=</span> <span class="pre">8.617e-5</span></code>) and own airPLS; fully superseded by <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">line-identifier.py</span></code></p></td>
+<td><p>legacy NNLS identifier; superseded by <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/spectral_nnls.py</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">saha-eggert.py</span></code>, <code class="docutils literal notranslate"><span class="pre">fix_boltzmann.py</span></code></p></td>
+<td><p>one-off legacy scripts</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">datagen.py</span></code></p></td>
+<td><p>superseded by <code class="docutils literal notranslate"><span class="pre">datagen_v2.py</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_submit.py</span></code></p></td>
+<td><p>literally <code class="docutils literal notranslate"><span class="pre">print(&quot;Pretending</span> <span class="pre">to</span> <span class="pre">submit&quot;)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>18 flat shims in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/</span></code> root (<code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code>, <code class="docutils literal notranslate"><span class="pre">line_selection.py</span></code>, <code class="docutils literal notranslate"><span class="pre">quality.py</span></code>, <code class="docutils literal notranslate"><span class="pre">self_absorption.py</span></code>, <code class="docutils literal notranslate"><span class="pre">softmax_closure.py</span></code>, <code class="docutils literal notranslate"><span class="pre">boltzmann_jax.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pca.py</span></code>, <code class="docutils literal notranslate"><span class="pre">hybrid.py</span></code>, <code class="docutils literal notranslate"><span class="pre">deconvolution.py</span></code>, <code class="docutils literal notranslate"><span class="pre">outliers.py</span></code>, <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py</span></code>, <code class="docutils literal notranslate"><span class="pre">matrix_effects.py</span></code>, <code class="docutils literal notranslate"><span class="pre">model_selection.py</span></code>, <code class="docutils literal notranslate"><span class="pre">result_base.py</span></code>, <code class="docutils literal notranslate"><span class="pre">spectral_refiner.py</span></code>, <code class="docutils literal notranslate"><span class="pre">streaming.py</span></code>, <code class="docutils literal notranslate"><span class="pre">temporal.py</span></code>, <code class="docutils literal notranslate"><span class="pre">daq_interface.py</span></code>)</p></td>
+<td><p>each is a 3-line <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">*</span></code> shim; internal importers measured at 1–6 each (e.g. <code class="docutils literal notranslate"><span class="pre">validate_real_data.py:43</span></code> uses the <code class="docutils literal notranslate"><span class="pre">wavelength_calibration</span></code> shim) — repoint and delete</p></td>
+</tr>
+<tr class="row-odd"><td><p>CLAUDE.md claim “shims exist at all old flat paths (<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solver</span> <span class="pre">import</span> <span class="pre">X</span></code> still works)”</p></td>
+<td><p><strong>stale/false</strong> — <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solver</span></code>, <code class="docutils literal notranslate"><span class="pre">.bayesian</span></code>, <code class="docutils literal notranslate"><span class="pre">.uncertainty</span></code>, <code class="docutils literal notranslate"><span class="pre">.closure</span></code>, <code class="docutils literal notranslate"><span class="pre">.boltzmann</span></code> all raise <code class="docutils literal notranslate"><span class="pre">ModuleNotFoundError</span></code> (verified). Fix the doc when deleting the rest</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="timeline-of-validated-improvements-all-confirmed-opt-in-at-landing">
+<h2>7. Timeline of validated improvements (all confirmed opt-in at landing)<a class="headerlink" href="#timeline-of-validated-improvements-all-confirmed-opt-in-at-landing" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Date</p></th>
+<th class="head"><p>Commit/PR</p></th>
+<th class="head"><p>Improvement</p></th>
+<th class="head"><p>Default?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>2026-03-15</p></td>
+<td><p>d281b13 / #59</p></td>
+<td><p>ILR + Dirichlet-residual closures</p></td>
+<td><p>opt-in</p></td>
+</tr>
+<tr class="row-odd"><td><p>2026-06-04</p></td>
+<td><p>1efdc45</p></td>
+<td><p>robust wavelength calibration in CLI detection</p></td>
+<td><p><strong>default-on</strong> ✓</p></td>
+</tr>
+<tr class="row-even"><td><p>2026-06-04</p></td>
+<td><p>1eec1c0</p></td>
+<td><p>detection cascade: gA-Boltzmann comb strength, per-element top-K, shift-coherence veto</p></td>
+<td><p><strong>default-on in <code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">invert</span></code></strong> ✓ (not <code class="docutils literal notranslate"><span class="pre">batch</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>2026-06-05</p></td>
+<td><p>dfdb8a1 / #223</p></td>
+<td><p>Boltzmann weight cap (RMSE 14.2→10.3; oxide 5.6)</p></td>
+<td><p><strong>default-on</strong> (<code class="docutils literal notranslate"><span class="pre">cap=5.0</span></code>) ✓</p></td>
+</tr>
+<tr class="row-even"><td><p>2026-06-05</p></td>
+<td><p>40a4c5b / #224</p></td>
+<td><p>pooled SB-graph intercepts (oxide+SB-graph 4.29; CSA 12.26)</p></td>
+<td><p><strong>opt-in</strong> ✗</p></td>
+</tr>
+<tr class="row-odd"><td><p>2026-06-07</p></td>
+<td><p>1d19cfb / #233</p></td>
+<td><p>Σ C=1 closure enforcement, true Hron PLR (point estimates changed → today’s 4.03)</p></td>
+<td><p>mixed</p></td>
+</tr>
+<tr class="row-even"><td><p>2026-06-09</p></td>
+<td><p>866642a / #275</p></td>
+<td><p>env vars → <code class="docutils literal notranslate"><span class="pre">use_jax_boltzmann</span></code>/<code class="docutils literal notranslate"><span class="pre">use_lax_while_loop</span></code> ctor flags</p></td>
+<td><p>default seeds from env ✓</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="change-list-make-the-best-path-the-default">
+<h2>8. Change list: make the best path the default<a class="headerlink" href="#change-list-make-the-best-path-the-default" title="Link to this heading"></a></h2>
+<p>Ordered; each line is one concrete edit. Items 1–4 close the headline gap; 5–10 close the trust gap; 11+ are hygiene.</p>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:1090-1092</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">analyze</span> <span class="pre">--closure-mode</span></code> default <code class="docutils literal notranslate"><span class="pre">&quot;standard&quot;</span></code> → <code class="docutils literal notranslate"><span class="pre">&quot;oxide&quot;</span></code> <em>for geological workflows</em>; better: add <code class="docutils literal notranslate"><span class="pre">--preset</span> <span class="pre">{geological,metallurgical,default}</span></code> that maps to (closure, SB-graph, SA) bundles, with <code class="docutils literal notranslate"><span class="pre">geological</span> <span class="pre">=</span> <span class="pre">oxide</span> <span class="pre">+</span> <span class="pre">SB-graph</span></code>. Minimum viable: flip nothing else but document the preset.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:1100-1109</span></code> + <code class="docutils literal notranslate"><span class="pre">589</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">--saha-boltzmann-graph</span></code> → default <strong>True</strong> with a <code class="docutils literal notranslate"><span class="pre">--no-saha-boltzmann-graph</span></code> escape hatch (<code class="docutils literal notranslate"><span class="pre">argparse.BooleanOptionalAction</span></code>). It won on both ChemCam (10.33→9.06 standalone, 5.60→4.29 stacked) and CSA; #224 found no regression case.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:534,</span> <span class="pre">537</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">invert</span></code> mirrors the same defaults (<code class="docutils literal notranslate"><span class="pre">analysis_cfg.get(&quot;saha_boltzmann_graph&quot;,</span> <span class="pre">True)</span></code>, <code class="docutils literal notranslate"><span class="pre">closure_mode</span></code> per preset) so YAML and flag paths agree.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:771-795</span></code></strong> — rewrite <code class="docutils literal notranslate"><span class="pre">batch_cmd</span></code> to call <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> and accept <code class="docutils literal notranslate"><span class="pre">--closure-mode/--saha-boltzmann-graph/--apply-self-absorption</span></code>, deleting the bare <code class="docutils literal notranslate"><span class="pre">LineSelector()</span></code>/<code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> wiring (the surviving Na-blowup path).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:418-424</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">_output_invert_result</span></code>: print <code class="docutils literal notranslate"><span class="pre">converged</span></code>, R², and a <code class="docutils literal notranslate"><span class="pre">RESULT</span> <span class="pre">UNRELIABLE</span></code> banner when <code class="docutils literal notranslate"><span class="pre">boltzmann_degenerate</span></code>/<code class="docutils literal notranslate"><span class="pre">closure_degenerate</span></code>/<code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">converged</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:673-687</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">_output_analyze_result</span></code>: same banner; render <code class="docutils literal notranslate"><span class="pre">ne_from_stark=0</span></code> as “n_e from 1-atm fallback (coarse)”; print dropped requested elements (<code class="docutils literal notranslate"><span class="pre">requested</span> <span class="pre">−</span> <span class="pre">concentrations&gt;ε</span></code>, the script’s “Dropped majors” check).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:2298</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">818</span></code></strong> — lax path: add <code class="docutils literal notranslate"><span class="pre">closure_degenerate</span></code> gate to converged + emit the same degenerate/provenance keys as <code class="docutils literal notranslate"><span class="pre">_build_python_quality_metrics</span></code> (cross-path parity).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:718-723</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">bayesian_cmd</span></code>: insert <code class="docutils literal notranslate"><span class="pre">select_candidate_elements</span></code> prefilter (as in <code class="docutils literal notranslate"><span class="pre">benchmark/bayesian_sparse_id.py:205-217</span></code>) + add <code class="docutils literal notranslate"><span class="pre">--resolving-power</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">examples/inversion_config_example.yaml:9,20</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">exclude_resonance:</span> <span class="pre">true</span></code> → <code class="docutils literal notranslate"><span class="pre">false</span></code>(or delete the key); <code class="docutils literal notranslate"><span class="pre">min_relative_intensity:</span> <span class="pre">100.0</span></code> → <code class="docutils literal notranslate"><span class="pre">null</span></code>. Add <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph:</span> <span class="pre">true</span></code>, <code class="docutils literal notranslate"><span class="pre">closure_mode:</span> <span class="pre">oxide</span></code> (commented with “geological”).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">docs/User_Guide.md</span></code> (§Inversion, ~line 340-380) + <code class="docutils literal notranslate"><span class="pre">Quick_Start_For_Scientists.md</span></code></strong> — document the reproducible BHVO-2 command from §5 and all 6 closure modes; fix <code class="docutils literal notranslate"><span class="pre">exclude_resonance</span></code> doc default.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py:141</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">LineSelector(exclude_resonance=True)</span></code> → <code class="docutils literal notranslate"><span class="pre">False</span></code> so the class default matches the validated CLI default (kills the batch/library trap class-wide).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:884</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">top_k_per_element=None</span></code> → <code class="docutils literal notranslate"><span class="pre">60</span></code> (match CLI helper).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:523-535</span></code></strong> — wire <code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap</span></code>, <code class="docutils literal notranslate"><span class="pre">min_boltzmann_r2</span></code> from <code class="docutils literal notranslate"><span class="pre">analysis_cfg</span></code> (currently constructor-only).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/streaming.py:108</span></code></strong> — finish the c5 env-var lift (constructor flag like iterative.py).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py:444</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">CFLIBS_DISABLE_STARK_T_FACTOR</span></code> env toggle → explicit kwarg/config.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/core/config.py</span></code></strong> — add <code class="docutils literal notranslate"><span class="pre">validate_analysis_config</span></code> rejecting unknown <code class="docutils literal notranslate"><span class="pre">analysis.*</span></code> keys (typos currently silently revert to defaults).</p></li>
+<li><p>Add <code class="docutils literal notranslate"><span class="pre">analyze</span> <span class="pre">--config</span></code> so per-instrument settings (resolving power for the 1040 nm ps system, pressure, preset) persist in YAML instead of flags.</p></li>
+<li><p>Delete legacy entry points per §6; update CLAUDE.md’s stale flat-shim claim.</p></li>
+<li><p>(Physics, larger) wire a Stark <code class="docutils literal notranslate"><span class="pre">stark_diagnostic</span></code> auto-pick (Hα / Si II / Fe I from <code class="docutils literal notranslate"><span class="pre">lines.stark_w</span></code>) into the CLI so the default n_e is not the documented-invalid 1-atm balance.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="appendix-evidence-pointers">
+<h2>Appendix: evidence pointers<a class="headerlink" href="#appendix-evidence-pointers" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Default-vs-best measurements: <code class="docutils literal notranslate"><span class="pre">output/bhvo2_measure/audit_default_baseline.json</span></code>, <code class="docutils literal notranslate"><span class="pre">audit_sbgraph_oxide.json</span></code> (this audit).</p></li>
+<li><p>SB-graph rationale + measured matrix: commit 40a4c5b body (<code class="docutils literal notranslate"><span class="pre">standard</span> <span class="pre">10.33</span> <span class="pre">/</span> <span class="pre">oxide</span> <span class="pre">5.60</span> <span class="pre">/</span> <span class="pre">SB-graph</span> <span class="pre">9.06</span> <span class="pre">/</span> <span class="pre">SB-graph+oxide</span> <span class="pre">4.29</span></code> ChemCam; CSA column).</p></li>
+<li><p>Weight-cap rationale: <code class="docutils literal notranslate"><span class="pre">solve/iterative.py:931-959</span></code> comment block (Fe I 382.0 nm 133× weight pathology).</p></li>
+<li><p>Root-cause of why defaults stay bad: bead <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-btcl</span></code> (per-element Boltzmann R²≈0 on real data; common-slope fit masks it at pooled R²=0.92).</p></li>
+<li><p>Na=98% historical blowup + drift mechanism: <code class="docutils literal notranslate"><span class="pre">_detect_and_select_lines</span></code> docstring, <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:183-204</span></code>.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

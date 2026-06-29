@@ -1,0 +1,245 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JAX port: comb.py + correlation.py — consultation synthesis &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">JAX port: comb.py + correlation.py — consultation synthesis</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jax-port/comb-correlation-consultation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="jax-port-comb-py-correlation-py-consultation-synthesis">
+<h1>JAX port: comb.py + correlation.py — consultation synthesis<a class="headerlink" href="#jax-port-comb-py-correlation-py-consultation-synthesis" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p><strong>SUPERSEDED (historical):</strong> This 2026-05-12 consultation is kept as design
+provenance only. The JAX/jittable inversion effort was subsequently
+re-scoped by <a class="reference internal" href="../adr/ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> and
+implemented in the shipped <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> package; some conclusions below
+were revised by that decision. Do not treat this as current guidance.</p>
+</div></blockquote>
+<p>Date: 2026-05-12
+Consultants: <code class="docutils literal notranslate"><span class="pre">gpt-5.3-codex</span></code>, <code class="docutils literal notranslate"><span class="pre">gemini-3-flash-preview</span></code> (Gemini 3.1 Pro
+rate-limited at <code class="docutils literal notranslate"><span class="pre">RESOURCE_EXHAUSTED</span></code>).
+Authoring branch: <code class="docutils literal notranslate"><span class="pre">feat/jax-comb-correlation</span></code>.</p>
+<section id="scope">
+<h2>Scope<a class="headerlink" href="#scope" title="Link to this heading"></a></h2>
+<p>Two CPU SciPy hot loops are the wall-time bottleneck for 50k-spectrum
+benchmarks of the identifier phase. PR #118 already ported the Boltzmann
+fit in <code class="docutils literal notranslate"><span class="pre">alias.py</span></code>; this port targets:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/comb.py::CombIdentifier._correlate_tooth</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/correlation.py::CorrelationIdentifier._identify_classic</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/correlation.py::CorrelationIdentifier._generate_model_spectrum</span></code></p></li>
+</ul>
+<p>Both files use <code class="docutils literal notranslate"><span class="pre">scipy.stats.pearsonr</span></code> in inner loops, and <code class="docutils literal notranslate"><span class="pre">comb.py</span></code> also
+calls <code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code> for baseline estimation (once per
+spectrum, not per element).</p>
+</section>
+<section id="decisions">
+<h2>Decisions<a class="headerlink" href="#decisions" title="Link to this heading"></a></h2>
+<section id="correlate-tooth-masked-pearson-batched-over-shift-width">
+<h3>1. <code class="docutils literal notranslate"><span class="pre">_correlate_tooth</span></code> — masked-Pearson batched over (shift, width)<a class="headerlink" href="#correlate-tooth-masked-pearson-batched-over-shift-width" title="Link to this heading"></a></h3>
+<p><strong>Plan:</strong> Pre-extract all <code class="docutils literal notranslate"><span class="pre">(shift,</span> <span class="pre">width)</span></code> candidate windows for a single
+transition into a <code class="docutils literal notranslate"><span class="pre">[C,</span> <span class="pre">max_width]</span></code> array (<code class="docutils literal notranslate"><span class="pre">C</span> <span class="pre">=</span> <span class="pre">n_widths</span> <span class="pre">*</span> <span class="pre">n_shifts</span></code>,
+typically <code class="docutils literal notranslate"><span class="pre">3</span> <span class="pre">*</span> <span class="pre">11</span> <span class="pre">=</span> <span class="pre">33</span></code>). Pad triangle templates to <code class="docutils literal notranslate"><span class="pre">max_width</span></code> with a
+<code class="docutils literal notranslate"><span class="pre">valid_mask</span></code>. Compute Pearson via the masked closed form</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">n</span>  <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>            <span class="n">mx</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">m</span><span class="o">*</span><span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="n">n</span>     <span class="n">my</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">m</span><span class="o">*</span><span class="n">y</span><span class="p">)</span><span class="o">/</span><span class="n">n</span>
+<span class="n">xc</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="n">mx</span>            <span class="n">yc</span> <span class="o">=</span> <span class="n">y</span> <span class="o">-</span> <span class="n">my</span>
+<span class="n">cov</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">m</span><span class="o">*</span><span class="n">xc</span><span class="o">*</span><span class="n">yc</span><span class="p">)</span>     <span class="n">vx</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">m</span><span class="o">*</span><span class="n">xc</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>   <span class="n">vy</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">m</span><span class="o">*</span><span class="n">yc</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">corr</span> <span class="o">=</span> <span class="n">cov</span> <span class="o">/</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">vx</span><span class="o">*</span><span class="n">vy</span> <span class="o">+</span> <span class="n">eps</span><span class="p">)</span>
+<span class="n">corr</span> <span class="o">=</span> <span class="n">where</span><span class="p">((</span><span class="n">vx</span> <span class="o">&lt;</span> <span class="n">tiny</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">vy</span> <span class="o">&lt;</span> <span class="n">tiny</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">n</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">corr</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Both consultants agreed:</p>
+<ul class="simple">
+<li><p>Zeros + mask are preferred over NaNs in core math (better numerics
+under jit, easier reductions).</p></li>
+<li><p>Index clipping at <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">n-1]</span></code> plus <code class="docutils literal notranslate"><span class="pre">in_bounds</span></code> mask correctly handles
+edge-of-spectrum without dynamic shapes.</p></li>
+</ul>
+<p><strong>vmap over transitions?</strong> Yes per both. Codex recommends <em>chunking</em>
+(16–32 transitions/call) if memory becomes a problem; for <code class="docutils literal notranslate"><span class="pre">~50</span></code> per
+element it is fine in one shot.</p>
+</section>
+<section id="identify-classic-generate-model-spectrum-vectorize-the-t-n-e-grid">
+<h3>2. <code class="docutils literal notranslate"><span class="pre">_identify_classic</span></code> + <code class="docutils literal notranslate"><span class="pre">_generate_model_spectrum</span></code> — vectorize the (T, n_e) grid<a class="headerlink" href="#identify-classic-generate-model-spectrum-vectorize-the-t-n-e-grid" title="Link to this heading"></a></h3>
+<p><strong>Plan:</strong> Flatten the 5×3 grid to <code class="docutils literal notranslate"><span class="pre">G</span> <span class="pre">=</span> <span class="pre">15</span></code>. Build a <code class="docutils literal notranslate"><span class="pre">[G,</span> <span class="pre">W]</span></code> model
+spectrum tensor by broadcasting <code class="docutils literal notranslate"><span class="pre">[L,</span> <span class="pre">1,</span> <span class="pre">1]</span> <span class="pre">-</span> <span class="pre">wl[1,</span> <span class="pre">1,</span> <span class="pre">W]</span></code> for the
+Gaussian argument and summing along the line axis (or <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> if
+memory becomes tight).</p>
+<p>Memory estimate: 30 lines × 15 grid × 30 000 wavelengths ≈ 108 MB.
+Trivial on GPU. Both consultants endorsed the broadcasted path; Codex
+flagged that real peak can be 2–5× due to intermediates and suggested
+<code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> over lines as a memory-safer fallback. We start with the
+fully broadcast path because typical line counts are smaller post-
+filter (<code class="docutils literal notranslate"><span class="pre">max_lines_per_element=100</span></code> cap, often &lt;30 active).</p>
+<p>Pearson uses the same masked closed form, where the mask is the peak
+region (AND-mask with OR-mask fallback, replicating CPU behavior).</p>
+</section>
+<section id="median-filter-leave-on-cpu">
+<h3>3. <code class="docutils literal notranslate"><span class="pre">median_filter</span></code> — leave on CPU<a class="headerlink" href="#median-filter-leave-on-cpu" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code> (C-implemented) for window ~500 over
+~30 000 points runs in ~ms. JAX has no native median filter, and a
+<code class="docutils literal notranslate"><span class="pre">reduce_window</span></code> + sort approach is memory-heavy and slower in practice.
+Both consultants recommended <strong>keeping baseline estimation on CPU</strong>.
+This also avoids a JAX↔CPU round-trip per spectrum.</p>
+</section>
+<section id="numerical-precision">
+<h3>4. Numerical precision<a class="headerlink" href="#numerical-precision" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">alias.py</span></code> boltzmann uses float64 throughout (<code class="docutils literal notranslate"><span class="pre">jax_enable_x64</span></code>). We
+mirror that here — both files target rtol 1e-5 vs CPU baseline, which
+requires float64 for the (T, n_e) grid correlations where the peak
+region can collapse to a few points.</p>
+</section>
+</section>
+<section id="validation-strategy">
+<h2>Validation strategy<a class="headerlink" href="#validation-strategy" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Per-tooth: identical <code class="docutils literal notranslate"><span class="pre">(best_correlation,</span> <span class="pre">best_shift,</span> <span class="pre">best_width)</span></code> for
+the same <code class="docutils literal notranslate"><span class="pre">center_nm</span></code> across CPU and JAX paths, plus the same
+<code class="docutils literal notranslate"><span class="pre">active</span></code> flag.</p></li>
+<li><p>Per-element: identical fingerprint score.</p></li>
+<li><p>End-to-end identifier output: identical detected/rejected element
+sets on the synthetic LIBS fixture.</p></li>
+</ul>
+<p>Pearson std==0 edge case: replicate exactly via the <code class="docutils literal notranslate"><span class="pre">jnp.where</span></code> guard
+above. CPU returns <code class="docutils literal notranslate"><span class="pre">0.0</span></code> (after the original <code class="docutils literal notranslate"><span class="pre">np.std</span> <span class="pre">&lt;</span> <span class="pre">1e-10</span></code> check)
+or <code class="docutils literal notranslate"><span class="pre">pearsonr</span> <span class="pre">→</span> <span class="pre">NaN</span> <span class="pre">→</span> <span class="pre">0.0</span></code>; JAX returns <code class="docutils literal notranslate"><span class="pre">0.0</span></code> directly without the NaN
+intermediate.</p>
+</section>
+<section id="what-we-are-not-porting">
+<h2>What we are NOT porting<a class="headerlink" href="#what-we-are-not-porting" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_estimate_baseline_threshold</span></code> — keep <code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_build_triangular_template</span></code> — tiny; called per width per transition
+but trivially cached.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_analyze_interferences</span></code> — Python-side two-pointer, O(N²) worst case
+but N is small after filtering and shape is data-dependent.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_match_lines_to_peaks</span></code> — greedy one-to-one assignment, not a hot
+loop in benchmarks.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_identify_vector</span></code> per-neighbor <code class="docutils literal notranslate"><span class="pre">pearsonr</span></code> — <code class="docutils literal notranslate"><span class="pre">top_k</span></code> is small (10),
+not a wall-time bottleneck; cross-module refactor needed to vectorize
+cleanly with the embedder, so this becomes a follow-up bd issue if
+benchmarks show it matters.</p></li>
+</ul>
+</section>
+<section id="follow-ups-out-of-scope">
+<h2>Follow-ups (out of scope)<a class="headerlink" href="#follow-ups-out-of-scope" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Multi-spectrum batching: current port keeps the per-spectrum API.
+Batching across spectra is a larger refactor (transition lists vary
+per element per spectrum’s wavelength range).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_identify_vector</span></code> Pearson refinement vectorization.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

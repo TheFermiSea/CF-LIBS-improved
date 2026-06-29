@@ -1,0 +1,160 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asta Experiment #20: Refuted &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Asta Experiment #20: Refuted</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/research/findings/2026-05-14-asta-20-the-performance-of-pure-line-matching-algorithms-comb-and.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="asta-experiment-20-refuted">
+<h1>Asta Experiment #20: Refuted<a class="headerlink" href="#asta-experiment-20-refuted" title="Link to this heading"></a></h1>
+<section id="hypothesis">
+<h2>Hypothesis<a class="headerlink" href="#hypothesis" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>The performance of pure line-matching algorithms (<code class="docutils literal notranslate"><span class="pre">comb</span></code> and <code class="docutils literal notranslate"><span class="pre">correlation</span></code>) is heavily dependent on the spectrometer’s resolving power, showing a strong positive correlation with <code class="docutils literal notranslate"><span class="pre">rp_estimate</span></code>, whereas the inversion-based <code class="docutils literal notranslate"><span class="pre">spectral_nnls</span></code> is statistically robust to variations in resolving power.</p>
+</div></blockquote>
+</section>
+<section id="asta-result">
+<h2>Asta result<a class="headerlink" href="#asta-result" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Prior:</strong> 0.7083</p></li>
+<li><p><strong>Posterior:</strong> 0.4219</p></li>
+<li><p><strong>Surprise:</strong> -0.4464</p></li>
+<li><p><strong>Asta flag <code class="docutils literal notranslate"><span class="pre">is_surprising</span></code>:</strong> False</p></li>
+<li><p><strong>Status (this doc):</strong> <code class="docutils literal notranslate"><span class="pre">refuted</span></code> (refuted ≤ -0.4 &lt; weakly_refuted ≤ -0.2 &lt; neutral &lt; +0.1 ≤ weakly_confirmed &lt; +0.25 ≤ confirmed)</p></li>
+<li><p><strong>Runtime:</strong> 139.5s</p></li>
+</ul>
+</section>
+<section id="asta-analysis">
+<h2>Asta analysis<a class="headerlink" href="#asta-analysis" title="Link to this heading"></a></h2>
+<p>The code successfully executed and generated the required Spearman rank correlation coefficients and p-values to evaluate the hypothesis. The results reveal that for the ‘comb’ algorithm, there is a statistically significant correlation (p = 0.0003), but it is strongly negative (Corr = -0.5863), contradicting the expectation of a positive correlation. For the ‘correlation’ algorithm, the correlation is positive (Corr = 0.3322) but falls just short of statistical significance (p = 0.0589). Finally, as hypothesized, the ‘spectral_nnls’ algorithm showed no significant correlation with resolving power (Corr = -0.0071, p = 0.9686), confirming its robustness to variations in resolving power. Overall, the hypothesis is partially rejected: while <code class="docutils literal notranslate"><span class="pre">spectral_nnls</span></code> is indeed robust to resolving power, the line-matching algorithms do not exhibit the hypothesized strong positive correlation (with <code class="docutils literal notranslate"><span class="pre">comb</span></code> showing a significant negative correlation instead).</p>
+</section>
+<section id="what-this-means-for-us">
+<h2>What this means for us<a class="headerlink" href="#what-this-means-for-us" title="Link to this heading"></a></h2>
+<p>Weak refute: comb correlation with rp_estimate is significant but NEGATIVE (Spearman ρ=-0.59, p=0.0003) — higher rp <em>hurts</em> comb, likely because finer rp produces more candidate peaks that overload the matching algorithm. Correlation is weakly positive (ρ=0.33, p=0.06). Spectral_nnls is rp-invariant as predicted. The comb result is genuinely surprising and worth a focused follow-up.</p>
+</section>
+<section id="cross-references">
+<h2>Cross-references<a class="headerlink" href="#cross-references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><em>No closed PRs from this session directly map to this finding.</em></p></li>
+</ul>
+</section>
+<section id="pull-full-code-output-from-asta">
+<h2>Pull full code/output from Asta<a class="headerlink" href="#pull-full-code-output-from-asta" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>asta<span class="w"> </span>autodiscovery<span class="w"> </span>experiment<span class="w"> </span>1f79815f-78b6-4f74-9c06-27127067c326<span class="w"> </span>node_20_0
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

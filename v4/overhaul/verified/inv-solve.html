@@ -1,0 +1,303 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/inversion/solve &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/inv-solve.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-inversion-solve">
+<h1>Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve</span></code><a class="headerlink" href="#adversarial-verification-cflibs-inversion-solve" title="Link to this heading"></a></h1>
+<p>Verifier model: claude-sonnet-4-6<br />
+Date: 2026-06-25<br />
+Source census: <code class="docutils literal notranslate"><span class="pre">scratchpad/overhaul/census/inv-solve.md</span></code><br />
+Method: rg + Read on actual code at <code class="docutils literal notranslate"><span class="pre">.worktrees/v4-m5</span></code>; re-derived physics against <code class="docutils literal notranslate"><span class="pre">literature/saha-boltzmann-lte.md</span></code></p>
+<hr class="docutils" />
+<section id="f1-saha-correction-missing-per-element-ln-u-ii-u-i-in-ionic-line-y-shift">
+<h2>F1 — Saha-correction missing per-element <code class="docutils literal notranslate"><span class="pre">ln(U_II/U_I)</span></code> in ionic-line y-shift<a class="headerlink" href="#f1-saha-correction-missing-per-element-ln-u-ii-u-i-in-ionic-line-y-shift" title="Link to this heading"></a></h2>
+<p><strong>REAL: FALSE</strong><br />
+<strong>Corrected severity: none (no bug)</strong></p>
+<p>The census derives that the y-shift for an ionic line onto the neutral plane must include <code class="docutils literal notranslate"><span class="pre">-ln(U_II/U_I)</span></code>. This is incorrect. Re-deriving from first principles:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">y_ion</span> <span class="pre">=</span> <span class="pre">const</span> <span class="pre">+</span> <span class="pre">ln(n_II)</span> <span class="pre">-</span> <span class="pre">ln(U_II)</span> <span class="pre">-</span> <span class="pre">E_k_ion/(kT)</span></code></p></li>
+<li><p>Saha: <code class="docutils literal notranslate"><span class="pre">ln(n_II)</span> <span class="pre">=</span> <span class="pre">ln(n_I)</span> <span class="pre">+</span> <span class="pre">ln(SAHA_CONST/n_e</span> <span class="pre">×</span> <span class="pre">T_eV^1.5)</span> <span class="pre">+</span> <span class="pre">ln(U_II/U_I)</span> <span class="pre">-</span> <span class="pre">chi/(kT)</span></code></p></li>
+<li><p>Substituting: <code class="docutils literal notranslate"><span class="pre">y_ion</span> <span class="pre">=</span> <span class="pre">const</span> <span class="pre">+</span> <span class="pre">ln(n_I)</span> <span class="pre">+</span> <span class="pre">ln(SAHA_CONST/n_e</span> <span class="pre">×</span> <span class="pre">T_eV^1.5)</span> <span class="pre">+</span> <span class="pre">ln(U_II/U_I)</span> <span class="pre">-</span> <span class="pre">ln(U_II)</span> <span class="pre">-</span> <span class="pre">chi/(kT)</span> <span class="pre">-</span> <span class="pre">E_k_ion/(kT)</span></code></p></li>
+<li><p>Simplify <code class="docutils literal notranslate"><span class="pre">ln(U_II/U_I)</span> <span class="pre">-</span> <span class="pre">ln(U_II)</span> <span class="pre">=</span> <span class="pre">-ln(U_I)</span></code>:
+<code class="docutils literal notranslate"><span class="pre">y_ion</span> <span class="pre">=</span> <span class="pre">[const</span> <span class="pre">+</span> <span class="pre">ln(n_I)</span> <span class="pre">-</span> <span class="pre">ln(U_I)]</span> <span class="pre">+</span> <span class="pre">ln(SAHA_CONST/n_e</span> <span class="pre">×</span> <span class="pre">T_eV^1.5)</span> <span class="pre">-</span> <span class="pre">(chi</span> <span class="pre">+</span> <span class="pre">E_k_ion)/(kT)</span></code></p></li>
+</ul>
+<p>So <code class="docutils literal notranslate"><span class="pre">y*_ion</span> <span class="pre">=</span> <span class="pre">y_ion</span> <span class="pre">-</span> <span class="pre">ln(SAHA_CONST/n_e</span> <span class="pre">×</span> <span class="pre">T_eV^1.5)</span></code> maps the ionic line to the same form as a neutral line with <code class="docutils literal notranslate"><span class="pre">x*</span> <span class="pre">=</span> <span class="pre">E_k_ion</span> <span class="pre">+</span> <span class="pre">chi</span></code>. The <code class="docutils literal notranslate"><span class="pre">U_II/U_I</span></code> term cancels exactly — it appears from both the Saha numerator and the Boltzmann denominator. The code at <code class="docutils literal notranslate"><span class="pre">iterative.py:1330-1331</span></code> is mathematically correct. The SB-graph docstring at line 1486 also correctly states “partition functions are absorbed into the fitted neutral intercept.” The census confused itself by not substituting Saha into the level-population expression before cancellation.</p>
+</section>
+<hr class="docutils" />
+<section id="f2-lax-path-n-e-update-uses-only-1-atm-pressure-balance-stark-diagnostic-silently-dropped">
+<h2>F2 — Lax path <code class="docutils literal notranslate"><span class="pre">n_e</span></code> update uses only 1-atm pressure balance; Stark diagnostic silently dropped<a class="headerlink" href="#f2-lax-path-n-e-update-uses-only-1-atm-pressure-balance-stark-diagnostic-silently-dropped" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: high</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">iterative.py:1617</span></code>: the condition <code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">diags</span></code> means that supplying Stark diagnostics while <code class="docutils literal notranslate"><span class="pre">use_lax_while_loop=True</span></code> forces the Python path, silently defeating the performance benefit of the lax path. The lax body at lines 850-858 contains only pressure-balance logic — there is no Stark pathway wired into the JAX kernel. The docstring comment at line 1609-1611 acknowledges this behaviour but there is no user-facing warning when the combination is used. The pressure-balance n_e update is physically non-standard for LIBS plasmas (Tognoni 2010 / Ciucci 1999 recommend Stark diagnostics as the canonical n_e probe). The severity is real but the fallback is graceful (it uses the Python path which IS correct) — so this is a performance and usability issue, not a correctness regression.</p>
+</section>
+<hr class="docutils" />
+<section id="f3-two-region-t-corona-0-8-t-core-magic-number-no-literature-basis-wrong-element-scope">
+<h2>F3 — <code class="docutils literal notranslate"><span class="pre">two_region</span></code> T_corona = 0.8 × T_core magic number: no literature basis, wrong element scope<a class="headerlink" href="#f3-two-region-t-corona-0-8-t-core-magic-number-no-literature-basis-wrong-element-scope" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: high</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">iterative.py:1888-1893</span></code>. The code itself says “it has NO specific literature attribution (it is not a Hermann 2017 value)” in the inline comment. The 0.8 factor and the 0.3/0.7 weighting at line 1166 are undocumented empirical choices. The element set <code class="docutils literal notranslate"><span class="pre">{&quot;Si&quot;,</span> <span class="pre">&quot;Fe&quot;,</span> <span class="pre">&quot;Ca&quot;,</span> <span class="pre">&quot;Al&quot;,</span> <span class="pre">&quot;Mg&quot;}</span></code> at line 1158 has no physics rationale in the code or docs — hydrogen, sodium, and other species are treated differently without explanation. The lax path explicitly defers corona weighting (line 841: “spec §11: corona-element weighting deferred”). This is a real physics concern: the <code class="docutils literal notranslate"><span class="pre">two_region</span></code> flag introduces a per-element systematic Saha multiplier bias that is neither literature-grounded nor benchmark-gated. However, the severity should be qualified: <code class="docutils literal notranslate"><span class="pre">two_region=False</span></code> is the default, so this path is not exercised unless explicitly opted into.</p>
+</section>
+<hr class="docutils" />
+<section id="f4-gaussian-likelihood-default-in-bayesian-sampler-is-pearson-biased-poisson-mode-is-off-by-default">
+<h2>F4 — Gaussian likelihood default in Bayesian sampler is Pearson-biased; <code class="docutils literal notranslate"><span class="pre">poisson</span></code> mode is off-by-default<a class="headerlink" href="#f4-gaussian-likelihood-default-in-bayesian-sampler-is-pearson-biased-poisson-mode-is-off-by-default" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: medium</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">bayesian/likelihood.py:34-82</span></code>. The code itself documents the Pearson bias on lines 51-54: “Putting the model prediction in the denominator biases the fitter toward under-estimating peaks (the classic ‘Pearson’ chi-square bias).” The Gaussian path (line 76-82) places <code class="docutils literal notranslate"><span class="pre">pred_safe</span></code> in the variance denominator; the Poisson (Cash 1979) path correctly separates the signal and denominator. The Gaussian default is retained “to avoid silently changing existing posteriors” (docstring line 66-68). For shot-noise-dominated LIBS spectra (ICCD detector), this is a genuine accuracy concern — peak amplitudes will be systematically underestimated. The severity is medium rather than high because the Bayesian path is an opt-in advanced feature (the main iterative solver is not affected) and the Poisson path is available and documented.</p>
+</section>
+<hr class="docutils" />
+<section id="f5-cflibsresult-defined-inside-iterative-py-but-consumed-as-shared-result-type">
+<h2>F5 — <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> defined inside <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> but consumed as shared result type<a class="headerlink" href="#f5-cflibsresult-defined-inside-iterative-py-but-consumed-as-shared-result-type" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: high</strong></p>
+<p>Confirmed. <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> is defined at <code class="docutils literal notranslate"><span class="pre">iterative.py:94</span></code>. Downstream consumers importing it:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/closed_form.py:34</span></code>: <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.iterative</span> <span class="pre">import</span> <span class="pre">CFLIBSResult</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/io/exporters.py:41</span></code>: <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.iterative</span> <span class="pre">import</span> <span class="pre">CFLIBSResult</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/pipeline.py:213</span></code>: <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.iterative</span> <span class="pre">import</span> <span class="pre">CFLIBSResult</span></code></p></li>
+</ul>
+<p>The census claim is confirmed and understated — it’s not just <code class="docutils literal notranslate"><span class="pre">closed_form.py</span></code> and <code class="docutils literal notranslate"><span class="pre">physics/matrix_effects.py</span></code> but also <code class="docutils literal notranslate"><span class="pre">jitpipe/pipeline.py</span></code>. This creates a hard coupling: any refactoring of <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> requires coordinated changes in <code class="docutils literal notranslate"><span class="pre">io/</span></code>, <code class="docutils literal notranslate"><span class="pre">jitpipe/</span></code>, and <code class="docutils literal notranslate"><span class="pre">solve/</span></code>. Since <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> is the result contract for ALL solvers, it belongs in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="f6-saha-boltzmann-graph-true-silently-disables-jax-lax-path-without-a-parity-test">
+<h2>F6 — <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code> silently disables JAX lax path without a parity test<a class="headerlink" href="#f6-saha-boltzmann-graph-true-silently-disables-jax-lax-path-without-a-parity-test" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: high</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">iterative.py:1617</span></code>: <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">HAS_JAX</span> <span class="pre">and</span> <span class="pre">self.use_lax_while_loop</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">self.saha_boltzmann_graph</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">diags</span></code>. Setting <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code> with <code class="docutils literal notranslate"><span class="pre">use_lax_while_loop=True</span></code> silently runs the Python path. No warning is emitted (confirmed via <code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">-n</span> <span class="pre">&quot;saha_boltzmann_graph.*warn&quot;</span></code> returning empty). The test file <code class="docutils literal notranslate"><span class="pre">tests/inversion/solve/test_saha_boltzmann_graph.py</span></code> (252 lines) tests only the SB-graph path in isolation — it has no comparison of <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code> vs <code class="docutils literal notranslate"><span class="pre">False</span></code> on the same observations. The docstring at <code class="docutils literal notranslate"><span class="pre">iterative.py:1006-1028</span></code> describes the SB-graph mode in detail but does not mention the lax path incompatibility. This is a genuine usability and correctness-assurance gap.</p>
+</section>
+<hr class="docutils" />
+<section id="f7-solve-with-uncertainty-re-runs-saha-correction-fit-after-solve-double-partition-function-queries">
+<h2>F7 — <code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code> re-runs Saha correction + fit after <code class="docutils literal notranslate"><span class="pre">solve()</span></code> — double partition-function queries<a class="headerlink" href="#f7-solve-with-uncertainty-re-runs-saha-correction-fit-after-solve-double-partition-function-queries" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: medium</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">iterative.py:2760-2782</span></code>. After <code class="docutils literal notranslate"><span class="pre">self.solve()</span></code> completes (line 2731), <code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code> explicitly calls <code class="docutils literal notranslate"><span class="pre">_apply_saha_correction</span></code> (line 2763), <code class="docutils literal notranslate"><span class="pre">_evaluate_partition_functions</span></code> (line 2766), and re-fits via <code class="docutils literal notranslate"><span class="pre">_fit_saha_boltzmann_graph</span></code> or <code class="docutils literal notranslate"><span class="pre">_fit_common_boltzmann_plane</span></code> (lines 2779-2782). These involve redundant SQLite queries and O(n_lines) Python object allocation. The converged state from <code class="docutils literal notranslate"><span class="pre">solve()</span></code> is available but the intermediate structures (corrected observations, partition functions) are not stored. The re-fit itself is conceptually necessary (the uncertainty quantification needs the fit covariance at the converged T/ne), but the re-evaluation of partition functions and Saha correction is purely redundant. This is a real performance issue in batch pipeline mode where <code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code> is called per-spectrum.</p>
+</section>
+<hr class="docutils" />
+<section id="f8-apply-saha-correction-allocates-new-lineobservation-objects-per-ionic-line-per-iteration">
+<h2>F8 — <code class="docutils literal notranslate"><span class="pre">_apply_saha_correction</span></code> allocates new <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> objects per ionic line per iteration<a class="headerlink" href="#f8-apply-saha-correction-allocates-new-lineobservation-objects-per-ionic-line-per-iteration" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: medium</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">iterative.py:1338-1359</span></code>. Every call to <code class="docutils literal notranslate"><span class="pre">_apply_saha_correction</span></code> creates new <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> dataclass instances for ALL lines (ionic and neutral), not just ionic ones — neutral lines at lines 1349-1358 also allocate new objects unnecessarily. The census understated this: neutral lines create copies even though no value changes. At ~10 iterations for a 100-line fit, this is O(1000) Python object allocations per solve call, each triggering a <code class="docutils literal notranslate"><span class="pre">defaultdict(list)</span></code> append and subsequent GC pressure. The fix (precomputed numpy arrays) is straightforward and would eliminate all per-iteration allocation. However, profiling data from <code class="docutils literal notranslate"><span class="pre">reference_inversion_hotspot_profile.md</span></code> shows the dominant cost is the RANSAC wavelength calibration (73%) — this allocation fix is real but low-ROI on the total pipeline time.</p>
+</section>
+<hr class="docutils" />
+<section id="f9-module-level-env-var-sentinel-functions-wrap-constructor-argument-reads-redundantly">
+<h2>F9 — Module-level env-var sentinel functions wrap constructor argument reads redundantly<a class="headerlink" href="#f9-module-level-env-var-sentinel-functions-wrap-constructor-argument-reads-redundantly" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: medium</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">iterative.py:35-90</span></code> and lines 939-945. Three module-level functions (<code class="docutils literal notranslate"><span class="pre">_jax_boltzmann_composition_enabled</span></code>, <code class="docutils literal notranslate"><span class="pre">_lax_while_loop_enabled</span></code>, <code class="docutils literal notranslate"><span class="pre">_reliability_from_uncertainty_enabled</span></code>) each wrap a single <code class="docutils literal notranslate"><span class="pre">os.environ.get()</span></code> call. They are called only from the constructor. The constructor itself has the caller-override logic (<code class="docutils literal notranslate"><span class="pre">use_jax_boltzmann</span> <span class="pre">is</span> <span class="pre">None</span></code>). This is genuine flag-debt: three separate functions each providing one layer of indirection for a single env-var read. One helper or inline reads would suffice. However note the inconsistency: <code class="docutils literal notranslate"><span class="pre">_reliability_from_uncertainty_enabled</span></code> (line 79-90) accepts “1”, “true”, “yes”, “on” while <code class="docutils literal notranslate"><span class="pre">_lax_while_loop_enabled</span></code> (line 59) only accepts “1” — a subtle behavioral inconsistency across the three related env vars.</p>
+</section>
+<hr class="docutils" />
+<section id="f10-missing-parity-tests-for-sb-graph-vs-common-slope-hybridinverter-manifold-stale-lax-ne-from-stark-path-untested">
+<h2>F10 — Missing parity tests for SB-graph vs common-slope; HybridInverter manifold stale; lax <code class="docutils literal notranslate"><span class="pre">ne_from_stark</span></code> path untested<a class="headerlink" href="#f10-missing-parity-tests-for-sb-graph-vs-common-slope-hybridinverter-manifold-stale-lax-ne-from-stark-path-untested" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong><br />
+<strong>Corrected severity: high</strong></p>
+<p>Confirmed:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/inversion/solve/test_saha_boltzmann_graph.py</span></code> (252 lines) contains no test comparing <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code> vs <code class="docutils literal notranslate"><span class="pre">False</span></code> on the same observations — confirmed by <code class="docutils literal notranslate"><span class="pre">grep</span> <span class="pre">-n</span> <span class="pre">&quot;saha_boltzmann_graph=False&quot;</span></code> returning empty.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_hybrid_inversion.py</span></code> exists but its backend fixture depends on a stale manifold (per project memory).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">iterative.py:2529</span></code> hardcodes <code class="docutils literal notranslate"><span class="pre">ne_from_stark=False</span></code> in the lax path quality metrics (not read, but the lax path can never produce <code class="docutils literal notranslate"><span class="pre">ne_from_stark=True</span></code> by construction — see F2). No integration test asserts the lax→Python fallback behaviour when Stark diagnostics are supplied.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="additional-findings-not-in-census">
+<h2>Additional Findings Not in Census<a class="headerlink" href="#additional-findings-not-in-census" title="Link to this heading"></a></h2>
+<section id="fa1-env-var-inconsistency-lax-while-loop-enabled-only-accepts-1-while-reliability-from-uncertainty-enabled-accepts-1-true-yes-on">
+<h3>FA1 — Env-var inconsistency: <code class="docutils literal notranslate"><span class="pre">_lax_while_loop_enabled</span></code> only accepts “1”, while <code class="docutils literal notranslate"><span class="pre">_reliability_from_uncertainty_enabled</span></code> accepts “1/true/yes/on”<a class="headerlink" href="#fa1-env-var-inconsistency-lax-while-loop-enabled-only-accepts-1-while-reliability-from-uncertainty-enabled-accepts-1-true-yes-on" title="Link to this heading"></a></h3>
+<p><strong>Severity: low</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">_lax_while_loop_enabled</span></code> (line 59) tests <code class="docutils literal notranslate"><span class="pre">==</span> <span class="pre">&quot;1&quot;</span></code> only. <code class="docutils literal notranslate"><span class="pre">_reliability_from_uncertainty_enabled</span></code> (lines 85-90) accepts <code class="docutils literal notranslate"><span class="pre">{&quot;1&quot;,</span> <span class="pre">&quot;true&quot;,</span> <span class="pre">&quot;yes&quot;,</span> <span class="pre">&quot;on&quot;}</span></code>. <code class="docutils literal notranslate"><span class="pre">_jax_boltzmann_composition_enabled</span></code> (line 44) tests <code class="docutils literal notranslate"><span class="pre">==</span> <span class="pre">&quot;1&quot;</span></code> only. This means <code class="docutils literal notranslate"><span class="pre">CFLIBS_USE_LAX_WHILE_LOOP=true</span></code> silently does nothing while <code class="docutils literal notranslate"><span class="pre">CFLIBS_RELIABILITY_FROM_UNCERTAINTY=true</span></code> works. Users who follow the standard <code class="docutils literal notranslate"><span class="pre">true/false</span></code> shell convention for the lax env-var will silently get the Python path. This is a usability bug, not a physics bug.</p>
+</section>
+<section id="fa2-apply-saha-correction-also-copies-neutral-lines-no-value-change-doubling-allocation-vs-what-f8-describes">
+<h3>FA2 — <code class="docutils literal notranslate"><span class="pre">_apply_saha_correction</span></code> also copies neutral lines (no value change), doubling allocation vs what F8 describes<a class="headerlink" href="#fa2-apply-saha-correction-also-copies-neutral-lines-no-value-change-doubling-allocation-vs-what-f8-describes" title="Link to this heading"></a></h3>
+<p><strong>Severity: low</strong> (reinforces F8)</p>
+<p>Lines 1349-1358 create new <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> objects for neutral (stage != 2) lines with unchanged field values. The census F8 description noted “O(n_ionic_lines) allocations” but the actual code allocates for ALL lines (ionic + neutral). For a typical Fe spectrum with 80% neutral lines, F8 underestimates the allocation by ~5×.</p>
+</section>
+<section id="fa3-lax-path-corona-weighting-explicitly-deferred-line-841-creating-a-documented-divergence-from-the-python-path-when-two-region-true">
+<h3>FA3 — Lax path corona weighting explicitly deferred (line 841), creating a documented divergence from the Python path when <code class="docutils literal notranslate"><span class="pre">two_region=True</span></code><a class="headerlink" href="#fa3-lax-path-corona-weighting-explicitly-deferred-line-841-creating-a-documented-divergence-from-the-python-path-when-two-region-true" title="Link to this heading"></a></h3>
+<p><strong>Severity: low</strong> (subissue of F3, but independently confirmed)</p>
+<p>The lax body comment at line 841 says “spec §11: corona-element weighting deferred” and uses <code class="docutils literal notranslate"><span class="pre">T_K</span></code> uniformly for all elements. The Python path applies <code class="docutils literal notranslate"><span class="pre">T_saha</span> <span class="pre">=</span> <span class="pre">0.3*T_K</span> <span class="pre">+</span> <span class="pre">0.7*T_corona</span></code> only to <code class="docutils literal notranslate"><span class="pre">corona_sensitive</span></code> elements. When <code class="docutils literal notranslate"><span class="pre">two_region=True</span></code> and <code class="docutils literal notranslate"><span class="pre">use_lax_while_loop=True</span></code>, the lax path would actually give different Saha multipliers than the Python path. However, since <code class="docutils literal notranslate"><span class="pre">two_region=True</span></code> + <code class="docutils literal notranslate"><span class="pre">use_lax_while_loop=True</span></code> is an unusual combination (both are opt-in), this is low impact in practice.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="verification-summary">
+<h2>Verification Summary<a class="headerlink" href="#verification-summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Confirmed Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1</p></td>
+<td><p><strong>FALSE</strong></p></td>
+<td><p>none — math is correct, U_II/U_I cancels</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-even"><td><p>F3</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-odd"><td><p>F4</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>F5</p></td>
+<td><p>TRUE</p></td>
+<td><p>high (broader than census: 3 importers confirmed)</p></td>
+</tr>
+<tr class="row-odd"><td><p>F6</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-even"><td><p>F7</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-odd"><td><p>F8</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-even"><td><p>F9</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+</tr>
+<tr class="row-even"><td><p>FA1 (new)</p></td>
+<td><p>TRUE</p></td>
+<td><p>low</p></td>
+</tr>
+<tr class="row-odd"><td><p>FA2 (new)</p></td>
+<td><p>TRUE</p></td>
+<td><p>low (amplifies F8)</p></td>
+</tr>
+<tr class="row-even"><td><p>FA3 (new)</p></td>
+<td><p>TRUE</p></td>
+<td><p>low</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: high</strong> (F2, F3, F5, F6, F10)</p>
+<p>The single False finding (F1) is the most consequential correction: the census’s proposed “fix” of adding <code class="docutils literal notranslate"><span class="pre">ln(U_II/U_I)</span></code> to the y-shift would actually INTRODUCE a physics bug, since the partition function ratio cancels algebraically in the Saha-Boltzmann plane derivation. No change should be made to <code class="docutils literal notranslate"><span class="pre">_apply_saha_correction</span></code>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

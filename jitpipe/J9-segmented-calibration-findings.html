@@ -1,0 +1,272 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J9 — On-Device Segmented Wavelength Calibration (R8 model-flip): diagnosis + fix &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J9 — On-Device Segmented Wavelength Calibration (R8 model-flip): diagnosis + fix</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jitpipe/J9-segmented-calibration-findings.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j9-on-device-segmented-wavelength-calibration-r8-model-flip-diagnosis-fix">
+<h1>J9 — On-Device Segmented Wavelength Calibration (R8 model-flip): diagnosis + fix<a class="headerlink" href="#j9-on-device-segmented-wavelength-calibration-r8-model-flip-diagnosis-fix" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-14 · <strong>Bead:</strong> CF-LIBS-improved-myk7 · <strong>ADR:</strong> ADR-0004 §5.1, risk R8</p>
+<section id="tl-dr">
+<h2>TL;DR<a class="headerlink" href="#tl-dr" title="Link to this heading"></a></h2>
+<p>The on-device segmented wavelength calibrator (<code class="docutils literal notranslate"><span class="pre">calibrate_segmented_kernel</span></code> →
+the new per-segment kernel-backed driver) initially flipped one segment’s model
+class <code class="docutils literal notranslate"><span class="pre">shift</span> <span class="pre">→</span> <span class="pre">affine</span></code> vs the reference on the real ChemCam BHVO-2 confounder,
+shifting the corrected axis ~0.08 nm and dropping the ye6t Al doublet
+(obs Jaccard 0.79–0.83 &lt;&lt; 0.98). <strong>This is now RESOLVED</strong> — the front-end runs
+segmented calibration on-device, obs Jaccard 1.0000 (raw + geological),
+corrected-axis <code class="docutils literal notranslate"><span class="pre">max|Δλ|</span> <span class="pre">=</span> <span class="pre">0.00025</span> <span class="pre">nm</span></code> vs the reference, all M1 + J2 parity tests
+pass. Calibration is <strong>~95% of the front-end on-device</strong>; only the Stark n_e
+diagnostic remains reference-delegated (follow-up bead).</p>
+<blockquote>
+<div><p><strong>Correction note (process):</strong> an interim diagnosis in this file concluded the
+flip was an “ill-conditioned near-tie, not robustly fixable, keep host-side.”
+That was <strong>premature</strong> — it was measured against the <em>old</em> <code class="docutils literal notranslate"><span class="pre">_ondevice_calibrate_segmented</span></code>
+(which fed the kernel global peaks masked to a segment window) and missed that
+the dense-hull coverage tiebreak distinguishes the spurious affine. The fix
+below (per-segment re-detection + unconditional coverage tiebreak) closes it.
+Kept here because the diagnosis of <em>why</em> it flipped is still the right map.</p>
+</div></blockquote>
+</section>
+<section id="the-flip-measured-raw-preset-affine-coverage-gate-false">
+<h2>The flip (measured, raw preset, <code class="docutils literal notranslate"><span class="pre">affine_coverage_gate=False</span></code>)<a class="headerlink" href="#the-flip-measured-raw-preset-affine-coverage-gate-false" title="Link to this heading"></a></h2>
+<p>Reference detects 3 segments and chooses <code class="docutils literal notranslate"><span class="pre">shift</span></code> for all three. The pre-fix
+kernel agreed on seg[0]/seg[1] but flipped seg[2] (473–905 nm) <code class="docutils literal notranslate"><span class="pre">shift</span> <span class="pre">→</span> <span class="pre">affine</span></code>.
+Per-model fit on seg[2] (<code class="docutils literal notranslate"><span class="pre">scripts/diag_seg2_bic_margin.py</span></code>):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>calibrator</p></th>
+<th class="head"><p>model</p></th>
+<th class="head"><p>BIC</p></th>
+<th class="head"><p>inliers</p></th>
+<th class="head"><p>rmse (nm)</p></th>
+<th class="head"><p>slope</p></th>
+<th class="head"><p>winner</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>reference</p></td>
+<td><p>shift</p></td>
+<td><p><strong>−210.84</strong></p></td>
+<td><p>33</p></td>
+<td><p>0.0389</p></td>
+<td><p>—</p></td>
+<td><p><strong>shift</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>reference</p></td>
+<td><p>affine</p></td>
+<td><p>−206.16</p></td>
+<td><p>33</p></td>
+<td><p>0.0396</p></td>
+<td><p>0.203</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p>kernel</p></td>
+<td><p>shift</p></td>
+<td><p>−210.76</p></td>
+<td><p>33</p></td>
+<td><p>0.0389</p></td>
+<td><p>—</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>kernel</p></td>
+<td><p>affine</p></td>
+<td><p><strong>−222.45</strong></p></td>
+<td><p><strong>36</strong></p></td>
+<td><p>0.0412</p></td>
+<td><p>0.126</p></td>
+<td><p><strong>affine</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>The kernel’s <code class="docutils literal notranslate"><span class="pre">shift</span></code> matches the reference exactly. The divergence is entirely
+in <code class="docutils literal notranslate"><span class="pre">affine</span></code>: the kernel’s deterministic stratified sampler finds a <em>stronger</em>
+affine optimum — 36 inliers, BIC −222 — that the reference’s <em>random</em> RANSAC
+(600 draws) missed (it landed on a poor 33-inlier affine at −206 and so picked
+shift). The kernel’s search is genuinely better; it just locks onto an
+<strong>under-anchored</strong> affine (anchor span_fraction = 0.53 of the segment, i.e. the
+slope is extrapolated across the unanchored half — the ye6t signature).</p>
+</section>
+<section id="root-cause-two-layers">
+<h2>Root cause (two layers)<a class="headerlink" href="#root-cause-two-layers" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Architectural (candidate set).</strong> The old <code class="docutils literal notranslate"><span class="pre">_ondevice_calibrate_segmented</span></code>
+fed the monolithic kernel the <em>global</em> peaks masked to a segment window. The
+reference <code class="docutils literal notranslate"><span class="pre">_fit_one_segment</span></code> <strong>re-detects</strong> peaks (<code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code> on
+<code class="docutils literal notranslate"><span class="pre">intensity[a:b]</span></code>) and <strong>re-builds</strong> the line pool per segment slice. Different
+candidates → different fits.</p></li>
+<li><p><strong>Scoring (under-anchored affine).</strong> Even with matched candidates, the
+kernel’s stronger affine search finds the 36-inlier extrapolated fit. The
+reference’s affine_coverage gate would reject it (span 0.53 &lt; 0.6) — but the
+raw preset has that gate <em>off</em>, so raw still diverged at Jaccard 0.96.</p></li>
+</ol>
+</section>
+<section id="the-fix">
+<h2>The fix<a class="headerlink" href="#the-fix" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Rewrote <code class="docutils literal notranslate"><span class="pre">_ondevice_calibrate_segmented</span></code> as a host orchestrator mirroring the
+reference segmented driver exactly (reusing the reference helpers
+<code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code>, <code class="docutils literal notranslate"><span class="pre">_segment_anchor_coverage</span></code>, <code class="docutils literal notranslate"><span class="pre">_segment_fit_trusted</span></code>,
+<code class="docutils literal notranslate"><span class="pre">_apply_neighbor_fallback</span></code>, <code class="docutils literal notranslate"><span class="pre">_restore_seam_monotonicity</span></code>,
+<code class="docutils literal notranslate"><span class="pre">_build_segmented_result</span></code>, <code class="docutils literal notranslate"><span class="pre">_revert_segmented_to_global</span></code>), routing each robust
+RANSAC core through a new kernel-backed inner calibrator
+<code class="docutils literal notranslate"><span class="pre">_calibrate_axis_kernel_backed</span></code> that re-detects peaks + rebuilds the pool
+<strong>per segment</strong>.</p></li>
+<li><p>Apply the <strong>dense-hull coverage tiebreak (J2 §7 R8) unconditionally</strong> in model
+selection — independent of <code class="docutils literal notranslate"><span class="pre">pipeline.affine_coverage_gate</span></code> — so the
+under-anchored seg-2 affine is rejected in <em>both</em> presets (this is the binding
+fix; raw needed it). <code class="docutils literal notranslate"><span class="pre">exact_dedupe_score=True</span></code> added to <code class="docutils literal notranslate"><span class="pre">calibrate_axis_kernel</span></code>
+as defense-in-depth.</p></li>
+</ol>
+<p>Speed levers (parity-neutral, axis bit-identical): <code class="docutils literal notranslate"><span class="pre">jax.jit</span></code> + <code class="docutils literal notranslate"><span class="pre">lru_cache</span></code> the
+per-segment kernel; <code class="docutils literal notranslate"><span class="pre">k_pair</span></code> 48→16 (measured fan-out ≤16); <code class="docutils literal notranslate"><span class="pre">h_affine</span></code> 256→64
+(saturated). <code class="docutils literal notranslate"><span class="pre">pipeline.py</span></code> unchanged — wiring is in <code class="docutils literal notranslate"><span class="pre">run_front_end_ondevice</span></code>
+(<code class="docutils literal notranslate"><span class="pre">run_one(ondevice_front_end=True)</span></code>, the default). <code class="docutils literal notranslate"><span class="pre">stark.py</span></code> untouched.</p>
+</section>
+<section id="verification-independent">
+<h2>Verification (independent)<a class="headerlink" href="#verification-independent" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">scripts/diag_segmented_calib_flip.py</span></code> against the fixed code, real BHVO-2:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>seg[2] corrected: dev −0.1304 (constant shift) vs ref −0.1301  →  MATCH
+max|Δ| = 0.00025 nm (was 0.077)   0/6144 samples diverge &gt;0.02nm   time 10.9 s (was 293 s)
+</pre></div>
+</div>
+<p>Adversarial verify agent: 0 reference segmented-calib calls under <code class="docutils literal notranslate"><span class="pre">ondevice_front_end=True</span></code>
+(both presets); obs Jaccard 1.0000; reference does real 0.130 nm axis work, on-device
+tracks to 0.000254 nm; <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/jitpipe/test_parity_pipeline.py</span> <span class="pre">tests/jitpipe/test_parity_j2.py</span></code>
+→ 57 passed. Verdict: integrate.</p>
+</section>
+<section id="status">
+<h2>Status<a class="headerlink" href="#status" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>On-device:</strong> response (host), segmented calibration (on-device, kernel-backed),
+J1 detect, kdet coherence filter, J3 comb scan/shift-select/veto/observation-build,
+trapezoid intensity, LineSelector — all JIT kernels. Catalog SQL + gA-Boltzmann
+ranking + scipy peak detection stay host-side (ADR-0001).</p></li>
+<li><p><strong>Remaining delegated:</strong> the Stark n_e diagnostic (<code class="docutils literal notranslate"><span class="pre">measure_stark_ne</span></code>) — delicate
+(pins the n_e ≤ 10% M1 tolerance); follow-up bead.</p></li>
+<li><p><strong>Speed:</strong> warm ~4.4 s / cold ~10.9 s CPU (reference ~1.4 s); amortizes under
+<code class="docutils literal notranslate"><span class="pre">jit(vmap)</span></code> batching on the V100S (the J9 goal).</p></li>
+</ul>
+</section>
+<section id="reproduce">
+<h2>Reproduce<a class="headerlink" href="#reproduce" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">JAX_ENABLE_X64</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>python<span class="w"> </span>scripts/diag_segmented_calib_flip.py
+<span class="nv">JAX_ENABLE_X64</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$PWD</span><span class="w"> </span>python<span class="w"> </span>scripts/diag_seg2_bic_margin.py
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

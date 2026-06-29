@@ -1,0 +1,340 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quick Start for Scientists &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="CF-LIBS User Guide" href="User_Guide.html" />
+    <link rel="prev" title="CF-LIBS Documentation" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quick Start for Scientists</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-you-can-do-first">What You Can Do First</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#check-your-setup">1. Check Your Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#generate-a-first-spectrum">2. Generate a First Spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#edit-the-scientific-inputs">3. Edit the Scientific Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-a-spectrum">4. Analyze a Spectrum</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#presets-geological-default-metallic-raw">Presets: geological (default), metallic, raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#reading-the-trust-report">Reading the trust report</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#batch-process-a-folder">5. Batch-Process a Folder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#common-problems">Common Problems</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#atomic-database-not-found">Atomic Database Not Found</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#no-usable-spectral-lines-detected">No Usable Spectral Lines Detected</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-first-run-is-slow">The First Run Is Slow</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#when-to-use-the-other-docs">When to Use the Other Docs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Quick Start for Scientists</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Quick_Start_For_Scientists.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="quick-start-for-scientists">
+<h1>Quick Start for Scientists<a class="headerlink" href="#quick-start-for-scientists" title="Link to this heading"></a></h1>
+<p>This guide is for users who understand LIBS, spectra, elements, plasma temperature, and
+electron density, but do not want to learn the full codebase before getting a result.</p>
+<p>The technical documentation is still useful later. Start here first.</p>
+<section id="what-you-can-do-first">
+<h2>What You Can Do First<a class="headerlink" href="#what-you-can-do-first" title="Link to this heading"></a></h2>
+<p>CF-LIBS has three practical entry points:</p>
+<ul class="simple">
+<li><p>Generate a synthetic spectrum from a YAML file.</p></li>
+<li><p>Analyze a measured or simulated CSV spectrum for a list of candidate elements.</p></li>
+<li><p>Batch-process a folder of CSV spectra once one single-spectrum workflow works.</p></li>
+</ul>
+<p>The lowest-friction path is the command line. You can use the Python API later when you
+need custom workflows.</p>
+</section>
+<section id="check-your-setup">
+<h2>1. Check Your Setup<a class="headerlink" href="#check-your-setup" title="Link to this heading"></a></h2>
+<p>From the repository root, run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>doctor
+</pre></div>
+</div>
+<p>This checks the Python environment, required packages, the bundled example database, and
+prints the first commands to try.</p>
+<p>If the <code class="docutils literal notranslate"><span class="pre">cflibs</span></code> command is not found, install the package in editable mode:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>venv<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.12
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[dev,jax-cpu,hdf5]&quot;</span>
+</pre></div>
+</div>
+<p>You can also use:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>just<span class="w"> </span>setup-codex
+</pre></div>
+</div>
+</section>
+<section id="generate-a-first-spectrum">
+<h2>2. Generate a First Spectrum<a class="headerlink" href="#generate-a-first-spectrum" title="Link to this heading"></a></h2>
+<p>Run the included forward-model example:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>forward<span class="w"> </span>examples/config_example.yaml<span class="w"> </span>--output<span class="w"> </span>spectrum.csv
+</pre></div>
+</div>
+<p>This writes <code class="docutils literal notranslate"><span class="pre">spectrum.csv</span></code> with two columns:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code>: wavelength in nanometers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">intensity_W_m2_nm_sr</span></code>: modeled spectral intensity.</p></li>
+</ul>
+<p>The example uses the bundled atomic database at <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>. You do not
+need to regenerate the NIST database for a first run.</p>
+</section>
+<section id="edit-the-scientific-inputs">
+<h2>3. Edit the Scientific Inputs<a class="headerlink" href="#edit-the-scientific-inputs" title="Link to this heading"></a></h2>
+<p>Open <code class="docutils literal notranslate"><span class="pre">examples/config_example.yaml</span></code>. The most important fields are:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">plasma</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">Te</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000.0</span>
+<span class="w">  </span><span class="nt">ne</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e17</span>
+<span class="w">  </span><span class="nt">species</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Fe</span>
+<span class="w">      </span><span class="nt">number_density</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e15</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">element</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">H</span>
+<span class="w">      </span><span class="nt">number_density</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0e16</span>
+
+<span class="nt">instrument</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">resolution_fwhm_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span>
+
+<span class="nt">spectrum</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">lambda_min_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200.0</span>
+<span class="w">  </span><span class="nt">lambda_max_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">800.0</span>
+<span class="w">  </span><span class="nt">delta_lambda_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.01</span>
+</pre></div>
+</div>
+<p>Use these as starting points:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Te</span></code>: electron temperature in kelvin. Picosecond LIBS plasmas are often closer to
+0.5-1.3 eV, approximately 5800-15000 K.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ne</span></code>: electron density in cm^-3. A practical first range is <code class="docutils literal notranslate"><span class="pre">1.0e16</span></code> to <code class="docutils literal notranslate"><span class="pre">1.0e18</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">species</span></code>: elements and approximate number densities. The relative values control the
+composition more than the absolute scale for many first comparisons.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">resolution_fwhm_nm</span></code>: spectrometer resolution. Smaller values produce sharper lines.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lambda_min_nm</span></code>, <code class="docutils literal notranslate"><span class="pre">lambda_max_nm</span></code>: wavelength window to simulate.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">delta_lambda_nm</span></code>: wavelength spacing. Larger values run faster but resolve less detail.</p></li>
+</ul>
+</section>
+<section id="analyze-a-spectrum">
+<h2>4. Analyze a Spectrum<a class="headerlink" href="#analyze-a-spectrum" title="Link to this heading"></a></h2>
+<p>The repository includes a small real-data example. Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>analyze<span class="w"> </span>data/aalto_libs/elements/Fe_spectrum.csv<span class="w"> </span>--elements<span class="w"> </span>Fe<span class="w"> </span>--db-path<span class="w"> </span>ASD_da/libs_production.db
+</pre></div>
+</div>
+<p>For your own measured spectrum, use a CSV file with one wavelength column and one
+intensity column. Accepted column names include:</p>
+<ul class="simple">
+<li><p>Wavelength: <code class="docutils literal notranslate"><span class="pre">wavelength</span></code>, <code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code>, <code class="docutils literal notranslate"><span class="pre">wl</span></code>, <code class="docutils literal notranslate"><span class="pre">lambda</span></code>, or <code class="docutils literal notranslate"><span class="pre">lambda_nm</span></code>.</p></li>
+<li><p>Intensity: <code class="docutils literal notranslate"><span class="pre">intensity</span></code>, <code class="docutils literal notranslate"><span class="pre">intensity_W_m2_nm_sr</span></code>, <code class="docutils literal notranslate"><span class="pre">I</span></code>, <code class="docutils literal notranslate"><span class="pre">counts</span></code>, <code class="docutils literal notranslate"><span class="pre">signal</span></code>,
+<code class="docutils literal notranslate"><span class="pre">spectrum</span></code>, or <code class="docutils literal notranslate"><span class="pre">flux</span></code>.</p></li>
+</ul>
+<p>Example:</p>
+<div class="highlight-csv notranslate"><div class="highlight"><pre><span></span>wavelength_nm,counts
+248.30,1200
+248.31,1238
+248.32,1194
+</pre></div>
+</div>
+<p>Then run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>analyze<span class="w"> </span>my_spectrum.csv<span class="w"> </span>--elements<span class="w"> </span>Fe,Cu,Al<span class="w"> </span>--db-path<span class="w"> </span>ASD_da/libs_production.db
+</pre></div>
+</div>
+<p>The element list is a candidate list. Include elements you believe might be present; do
+not include the whole periodic table for a first pass.</p>
+<section id="presets-geological-default-metallic-raw">
+<h3>Presets: geological (default), metallic, raw<a class="headerlink" href="#presets-geological-default-metallic-raw" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">analyze</span></code> (and <code class="docutils literal notranslate"><span class="pre">invert</span></code>/<code class="docutils literal notranslate"><span class="pre">batch</span></code>) defaults to the <code class="docutils literal notranslate"><span class="pre">geological</span></code> preset — the
+configuration that scored best on real geological reference standards: pooled
+Saha-Boltzmann graph intercepts plus the oxide closure. For metal/alloy
+samples, switch the closure off oxide stoichiometry:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>analyze<span class="w"> </span>my_alloy.csv<span class="w"> </span>--elements<span class="w"> </span>Fe,Cr,Ni<span class="w"> </span>--preset<span class="w"> </span>metallic<span class="w"> </span>--db-path<span class="w"> </span>ASD_da/libs_production.db
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--preset</span> <span class="pre">raw</span></code> reproduces the legacy defaults. Explicit <code class="docutils literal notranslate"><span class="pre">--closure-mode</span></code> /
+<code class="docutils literal notranslate"><span class="pre">--saha-boltzmann-graph</span></code> flags override the preset, and every run logs the
+resolved settings.</p>
+<p>To reproduce the documented BHVO-2 basalt reference result (RMSE ~4.03 wt%
+against the USGS certificate) with no extra flags:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>analyze<span class="w"> </span>data/bhvo2_usgs/chemcam_bhvo2_loc1_spectrum.csv<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--elements<span class="w"> </span>Si,Ti,Al,Fe,Mn,Mg,Ca,Na,K,P<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--db-path<span class="w"> </span>ASD_da/libs_production.db
+</pre></div>
+</div>
+</section>
+<section id="reading-the-trust-report">
+<h3>Reading the trust report<a class="headerlink" href="#reading-the-trust-report" title="Link to this heading"></a></h3>
+<p>Each run prints quality information alongside the concentrations: whether the
+solve converged, the Boltzmann-plot R², how many elements were actually fit,
+and where the electron density came from. If you see
+<code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">source</span> <span class="pre">:</span> <span class="pre">1-atm</span> <span class="pre">pressure-balance</span> <span class="pre">fallback</span> <span class="pre">(ASSUMED)</span></code>, the electron density
+was not measured (no usable Stark-width diagnostic) — treat it as an
+order-of-magnitude estimate. <code class="docutils literal notranslate"><span class="pre">WARNING:</span> <span class="pre">requested</span> <span class="pre">elements</span> <span class="pre">dropped:</span> <span class="pre">...</span></code> tells
+you which candidate elements never made it into the fit and at which stage
+(<code class="docutils literal notranslate"><span class="pre">detection</span></code>, <code class="docutils literal notranslate"><span class="pre">selection</span></code>, or <code class="docutils literal notranslate"><span class="pre">solve</span></code>).</p>
+</section>
+</section>
+<section id="batch-process-a-folder">
+<h2>5. Batch-Process a Folder<a class="headerlink" href="#batch-process-a-folder" title="Link to this heading"></a></h2>
+<p>Once one spectrum works:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>batch<span class="w"> </span>spectra/<span class="w"> </span>--elements<span class="w"> </span>Fe,Cu,Al<span class="w"> </span>--db-path<span class="w"> </span>ASD_da/libs_production.db<span class="w"> </span>--output<span class="w"> </span>results.csv
+</pre></div>
+</div>
+<p>This processes every <code class="docutils literal notranslate"><span class="pre">.csv</span></code> file in <code class="docutils literal notranslate"><span class="pre">spectra/</span></code> and writes a summary table.
+Batch uses the exact same pipeline and presets as <code class="docutils literal notranslate"><span class="pre">analyze</span></code> (same flags
+apply), adds per-spectrum trust columns (<code class="docutils literal notranslate"><span class="pre">converged</span></code>, <code class="docutils literal notranslate"><span class="pre">boltzmann_r_squared</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ne_source</span></code>, <code class="docutils literal notranslate"><span class="pre">dropped_elements</span></code>, …), and prints an aggregate summary with
+warnings for non-converged or assumed-n_e spectra.</p>
+</section>
+<section id="common-problems">
+<h2>Common Problems<a class="headerlink" href="#common-problems" title="Link to this heading"></a></h2>
+<section id="atomic-database-not-found">
+<h3>Atomic Database Not Found<a class="headerlink" href="#atomic-database-not-found" title="Link to this heading"></a></h3>
+<p>Use the bundled database:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>--db-path<span class="w"> </span>ASD_da/libs_production.db
+</pre></div>
+</div>
+<p>Only generate a new database when you need a different data source or element subset:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cflibs<span class="w"> </span>generate-db<span class="w"> </span>--db-path<span class="w"> </span>libs_production.db<span class="w"> </span>--elements<span class="w"> </span>Fe<span class="w"> </span>Cu<span class="w"> </span>Al
+</pre></div>
+</div>
+</section>
+<section id="no-usable-spectral-lines-detected">
+<h3>No Usable Spectral Lines Detected<a class="headerlink" href="#no-usable-spectral-lines-detected" title="Link to this heading"></a></h3>
+<p>Try these changes:</p>
+<ul class="simple">
+<li><p>Confirm wavelength units are nanometers.</p></li>
+<li><p>Include the correct candidate elements in <code class="docutils literal notranslate"><span class="pre">--elements</span></code>.</p></li>
+<li><p>Use a narrower wavelength range around strong known lines.</p></li>
+<li><p>Lower the peak threshold in <code class="docutils literal notranslate"><span class="pre">examples/inversion_config_example.yaml</span></code> if the signal is weak.</p></li>
+</ul>
+</section>
+<section id="the-first-run-is-slow">
+<h3>The First Run Is Slow<a class="headerlink" href="#the-first-run-is-slow" title="Link to this heading"></a></h3>
+<p>Use a smaller wavelength range or larger wavelength step while learning:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">spectrum</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">lambda_min_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">240.0</span>
+<span class="w">  </span><span class="nt">lambda_max_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">270.0</span>
+<span class="w">  </span><span class="nt">delta_lambda_nm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.02</span>
+</pre></div>
+</div>
+<p>After the workflow is correct, increase the range or resolution.</p>
+</section>
+</section>
+<section id="when-to-use-the-other-docs">
+<h2>When to Use the Other Docs<a class="headerlink" href="#when-to-use-the-other-docs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">docs/User_Guide.md</span></code> when you are ready for more configuration detail.</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">docs/Database_Generation.md</span></code> only when you need to rebuild atomic data.</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">docs/Manifold_Generation_Guide.md</span></code> for large precomputed search libraries.</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">docs/API_Reference.md</span></code> when writing Python code directly against CF-LIBS.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="CF-LIBS Documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="User_Guide.html" class="btn btn-neutral float-right" title="CF-LIBS User Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

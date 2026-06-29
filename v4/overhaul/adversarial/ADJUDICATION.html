@@ -1,0 +1,261 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADJUDICATION — Adversarial Physics Audit of CF-LIBS &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ADJUDICATION — Adversarial Physics Audit of CF-LIBS</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/ADJUDICATION.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adjudication-adversarial-physics-audit-of-cf-libs">
+<h1>ADJUDICATION — Adversarial Physics Audit of CF-LIBS<a class="headerlink" href="#adjudication-adversarial-physics-audit-of-cf-libs" title="Link to this heading"></a></h1>
+<p><strong>Adjudicator role:</strong> skeptic of the 11 domain skeptics, in both directions. Every “correct”
+verdict was challenged for thin evidence; every “flawed” verdict was sanity-re-derived to rule
+out a false alarm. Independent re-checks were run against the live code/DB at
+<code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5</span></code> (provenance confirmed:
+<code class="docutils literal notranslate"><span class="pre">cflibs.__file__</span></code> resolves inside the worktree).</p>
+<hr class="docutils" />
+<section id="honest-overall-verdict">
+<h2>HONEST OVERALL VERDICT<a class="headerlink" href="#honest-overall-verdict" title="Link to this heading"></a></h2>
+<p><strong>The codebase is NOT deeply flawed on physics fundamentals. It is largely sound, with a small
+number of real, localized bugs — two of which matter on real data.</strong></p>
+<p>The <em>core</em> CF-LIBS physics chain is correct and independently verified to machine precision:
+Saha prefactor (0.08% off CODATA — cosmetic), Boltzmann-plot linearization, the Saha→neutral-plane
+y-shift (including the correct cancellation of <code class="docutils literal notranslate"><span class="pre">ln(U_II/U_I)</span></code> that a <em>prior</em> audit had wrongly
+flagged as missing), emissivity <code class="docutils literal notranslate"><span class="pre">ε=hc/4πλ·A_ki·n_k</span></code>, Doppler width, Voigt/Faddeeva, McWhirter
+constant <code class="docutils literal notranslate"><span class="pre">1.6e12</span></code>, NIST line/A_ki parity (≤0.2%), ILR/Helmert isometry, oxide stoichiometry,
+BIC/AIC/Gaussian/Cash likelihoods, and the <em>main</em> self-absorption module. These are not
+rubber-stamps — they were re-derived with astropy/sympy and executed.</p>
+<p>The flaws that DO exist are real and were correctly caught: a critical Stark H-alpha
+reference-width error, a medium composition mole-vs-mass reporting defect with a peer-reviewed
+citation (Völker 2024), incomplete partition-function atomic data for the primary analyte (Fe I),
+and a dimensionally-broken self-absorption formula in a non-default runtime path. None of these
+invalidate the underlying method; they are fixable bugs and data-completeness gaps.</p>
+<p>So: <strong>largely sound with specific, fixable bugs — not deeply flawed.</strong> A prior audit that
+rubber-stamped <em>everything</em> would have been wrong (the Stark/composition/partition flaws are
+genuine), but an audit claiming the fundamentals are broken would <em>also</em> be wrong.</p>
+</section>
+<hr class="docutils" />
+<section id="confirmed-flaws-ranked-by-severity">
+<h2>CONFIRMED FLAWS (ranked by severity)<a class="headerlink" href="#confirmed-flaws-ranked-by-severity" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Severity</p></th>
+<th class="head"><p>File:line</p></th>
+<th class="head"><p>Violates (literature)</p></th>
+<th class="head"><p>Confirmed?</p></th>
+<th class="head"><p>Fix</p></th>
+<th class="head"><p>Benchmark-gate?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p><strong>CRITICAL (conditional)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> H I 656.279 nm <code class="docutils literal notranslate"><span class="pre">stark_w=0.049</span> <span class="pre">nm</span></code> <code class="docutils literal notranslate"><span class="pre">stark_w_source='stark_b'</span></code>; selected via <code class="docutils literal notranslate"><span class="pre">stark_ne.py:82</span></code> <code class="docutils literal notranslate"><span class="pre">PREFERRED_DIAGNOSTIC_LINES[0]</span></code></p></td>
+<td><p>Gigosos 2003 (<em>Spectrochim. Acta B</em> 58, 1489; 476 cites): H-alpha total Stark FWHM ≈1.3 nm at n_e=1e17, T=1e4 K — ion broadening dominates. Stored 49 pm is electron-impact ONLY (Konjevic 2002).</p></td>
+<td><p><strong>YES</strong> — DB value verified = 0.049/stark_b; Gigosos paper verified real. Re-derivation confirms ~27× deficit.</p></td>
+<td><p>Remove H from <code class="docutils literal notranslate"><span class="pre">PREFERRED_DIAGNOSTIC_LINES</span></code> + exclude <code class="docutils literal notranslate"><span class="pre">H</span></code> in <code class="docutils literal notranslate"><span class="pre">measure_stark_ne()</span></code> until a Gigosos n_e^0.64 path exists; OR store 1.3 nm &#64; n_e^0.64 with a <code class="docutils literal notranslate"><span class="pre">gigosos</span></code> provenance class.</p></td>
+<td><p><strong>YES</strong> — n_e is an input to Saha; gate on real H-bearing spectra.</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inversion/runtime/temporal.py:1024-1025</span></code> <code class="docutils literal notranslate"><span class="pre">SCALE_FACTOR=1e-25;</span> <span class="pre">tau=SCALE_FACTOR*A_ki*lambda_cm**3*n_lower*L</span></code></p></td>
+<td><p>Hutchinson <em>Princ. Plasma Diagnostics</em> eq 5.13 / Mihalas eq 4-2: correct prefactor <code class="docutils literal notranslate"><span class="pre">1/(8π^1.5·v_th)</span></code>≈9e-8 s/cm. 1e-25 is ~10^17–18× too small AND dimensionally wrong (s⁻¹·cm, not dimensionless).</p></td>
+<td><p><strong>YES</strong> — lines verified verbatim; dimensional analysis sound. Corrector returns τ~1e-16 always → permanent silent no-op.</p></td>
+<td><p>Delegate to <code class="docutils literal notranslate"><span class="pre">SelfAbsorptionCorrector._estimate_optical_depth</span></code> (already correct) or insert the proper prefactor+Doppler φ(ν₀).</p></td>
+<td><p>Yes if temporal-gate optimization is used on real data. NOT the default inversion path.</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><strong>MEDIUM</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">benchmark/scoreboard.py:303-305</span></code> reads <code class="docutils literal notranslate"><span class="pre">result.concentrations</span></code> (mole fractions, per <code class="docutils literal notranslate"><span class="pre">iterative.py:109</span></code>) ×100 as wt%; <code class="docutils literal notranslate"><span class="pre">pipeline.py:949</span> <span class="pre">_number_to_mass_fractions</span></code> defined but <strong>0 callers</strong></p></td>
+<td><p>Völker 2024 (<em>J. Anal. At. Spectrom.</em>, DOI 10.1039/D4JA00028E): CF-LIBS closure yields MOLE fractions; omitting <code class="docutils literal notranslate"><span class="pre">w_s=C_s·M_s/ΣC_jM_j</span></code> gives up to +353% error. Tognoni 2010.</p></td>
+<td><p><strong>YES</strong> — verified scoreboard path, 0 callers of the pipeline-level converter, synthetic truth <code class="docutils literal notranslate"><span class="pre">true_composition=recipe.mass_fractions</span></code> (wt%). C-in-steel +362% reproduced.</p></td>
+<td><p>Call <code class="docutils literal notranslate"><span class="pre">_number_to_mass_fractions</span></code> on iterative/closed-form results before scoring (full_spectrum path already does). Check no downstream consumer expects mole fractions.</p></td>
+<td><p><strong>YES</strong> — directly changes reported RMSE on steel/geological wt% truth.</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><strong>MEDIUM (data, not logic)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> energy_levels: Fe I=425 (NIST ~837, 51%), Ca I=76, Ti I=202; <code class="docutils literal notranslate"><span class="pre">partition_functions</span></code> BarklemCollet2016 rows=<strong>0</strong></p></td>
+<td><p>Barklem &amp; Collet 2016 (A&amp;A 588 A96); Irwin 1981 (ApJS 45 621). Incomplete U(T) → ~10–20% U(Fe I) undercount at ≥10⁴ K → Saha N_II/N_I bias.</p></td>
+<td><p><strong>YES</strong> — DB counts verified; 0 BC2016 rows verified. <code class="docutils literal notranslate"><span class="pre">partition.py</span></code> math itself is correct.</p></td>
+<td><p>Run <code class="docutils literal notranslate"><span class="pre">patch_partition_functions_bc2016.py</span></code> / ingest complete NIST levels for Fe/Ti/Cr/Ca/Na/K; verify U(Ca I) error 25%→&lt;1%.</p></td>
+<td><p><strong>YES</strong> — affects Fe (primary steel analyte) Saha correction.</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p><strong>MEDIUM (non-default path)</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">inversion/identify/model_selection.py</span></code> <code class="docutils literal notranslate"><span class="pre">_component_line_strengths</span></code> (L1/σ) + <code class="docutils literal notranslate"><span class="pre">_compute_spic</span></code> (n·log(RSS/n))</p></td>
+<td><p>Webb et al. 2021 (<em>MNRAS</em> 501, 2268, DOI 10.1093/mnras/staa3551): R_a = Σ(c·B/σ)² (L2²) and data-fit = χ²=RSS/σ².</p></td>
+<td><p>Plausible/likely — formulas verified present; not independently re-derived against Webb’s full eq here. <strong>SpIC is NOT default (BIC is).</strong></p></td>
+<td><p>Use L2² R_a and χ² data-fit; pass <code class="docutils literal notranslate"><span class="pre">noise_variance</span></code> into <code class="docutils literal notranslate"><span class="pre">_compute_spic</span></code>. Or document as non-Webb approximation.</p></td>
+<td><p>Only if <code class="docutils literal notranslate"><span class="pre">criterion=SPIC</span></code> is ever used.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="correct-verdicts-challenged-upheld-well-evidenced">
+<h2>“CORRECT” VERDICTS — CHALLENGED, UPHELD (well-evidenced)<a class="headerlink" href="#correct-verdicts-challenged-upheld-well-evidenced" title="Link to this heading"></a></h2>
+<p>These had BOTH a peer-reviewed/DB citation AND executed numerical proof. I re-ran the
+load-bearing checks; they hold.</p>
+<ul class="simple">
+<li><p><strong>Saha prefactor</strong> (<code class="docutils literal notranslate"><span class="pre">constants.py:76</span></code> 6.042e21): re-derived from astropy/CODATA = 6.03713e21,
++0.0806% — cosmetic (≈5 K of 23,000 K). Factor-of-2 spin degeneracy correctly embedded
+(half would be 3.02e21). <strong>Upheld, low.</strong></p></li>
+<li><p><strong>Boltzmann/Saha-plane inversion</strong>: the <code class="docutils literal notranslate"><span class="pre">ln(U_II/U_I)</span></code> cancellation is algebraically real;
+the prior “missing term” alarm was the false one. Round-trip recovers T exactly. <strong>Upheld, none.</strong></p></li>
+<li><p><strong>Emissivity / Doppler / Voigt</strong>: emissivity matches astropy to 1e-12; Voigt = scipy wofz
+exactly. Only nit: <code class="docutils literal notranslate"><span class="pre">2.355</span></code> vs <code class="docutils literal notranslate"><span class="pre">2.35482</span></code> (0.0076%) in a non-production sizing path. <strong>Upheld, low.</strong></p></li>
+<li><p><strong>NIST line parity</strong>: 15 Fe I A/B+ lines ≤0.2% after the gA→A_ki/g_k correction; constants
+exact. <strong>Upheld, none.</strong></p></li>
+<li><p><strong>McWhirter constant</strong> <code class="docutils literal notranslate"><span class="pre">1.6e12</span></code>: exact vs 5 sources. <strong>Upheld, low</strong> (see weak-evidence note).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="correct-flawed-but-weakly-evidenced-needs-deeper-check">
+<h2>“CORRECT/FLAWED” BUT WEAKLY EVIDENCED — NEEDS DEEPER CHECK<a class="headerlink" href="#correct-flawed-but-weakly-evidenced-needs-deeper-check" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>McWhirter ΔE definition (M2)</strong> — verdict “correct/low”, but the <em>default</em> path uses
+<code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> rather than the resonance ΔE that Cristoforetti 2010 §2.1 explicitly requires.
+The agent’s defense (“conservative, false-negative-only, env-flag fix exists, off by default”)
+is reasonable BUT the default ships a paper-NONfaithful threshold. I downgrade confidence:
+this is a <strong>real deviation from the cited paper</strong>, mitigated only by error direction and an
+off-by-default flag. Treat as <strong>low-but-real</strong>, not “correct.” Recommend flipping the
+resonance-ΔE default (it is a documented memory item: <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code>).</p></li>
+<li><p><strong>Stark severity is CONDITIONAL</strong> — on synthetic round-trips the forward model ALSO uses the
+49 pm linear convention, so forward/inverse is self-consistent (the <code class="docutils literal notranslate"><span class="pre">stark_ne.py:46-50</span></code>
+docstring defense holds). The catastrophic 12–60× n_e error manifests ONLY on REAL H-bearing
+spectra. Because <code class="docutils literal notranslate"><span class="pre">stark_ne</span></code> is marketed as the real-data n_e diagnostic and H-alpha is the
+#1 preferred line, I keep <strong>critical</strong> but flag the conditionality explicitly — a deeper check
+on a real H-alpha LIBS spectrum would nail the in-production impact.</p></li>
+<li><p><strong>SpIC (#5)</strong> — formulas present and the L1-vs-L2 / deviance-vs-χ² discrepancy is plausible,
+but I did not independently re-derive Webb’s full Eq. 3/5 numerically here. Non-default, so
+low practical risk; mark <strong>needs deeper check</strong> before any SpIC production use.</p></li>
+<li><p><strong>VALD air/vacuum</strong> — the agent itself concluded the <em>production</em> DB has zero VALD entries and
+the ingest is behaviorally correct; the finding is a wrong docstring + a latent footgun, not a
+live physics error. Correctly NOT counted as a shipped flaw. <strong>Doc/process fix only.</strong></p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="bottom-line-for-the-user">
+<h2>BOTTOM LINE FOR THE USER<a class="headerlink" href="#bottom-line-for-the-user" title="Link to this heading"></a></h2>
+<p>A prior audit that “rubber-stamped” the code would have missed flaws #1–#4, which are real.
+But the user’s stronger hypothesis — that the codebase is <em>deeply flawed on physics
+fundamentals</em> — is <strong>not supported by the evidence</strong>. The governing equations are implemented
+correctly and verified to machine precision. The genuine problems are: one critical reference-data
+mismatch (H-alpha Stark, real-data only), one results-reporting unit bug (mole vs mass), one
+atomic-data-completeness gap (Fe I levels), and one broken formula in a non-default runtime path.
+All four are localized, citable, and fixable; all four should be benchmark-gated.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

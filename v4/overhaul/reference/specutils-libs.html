@@ -1,0 +1,587 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reference: specutils + Python LIBS Ecosystem &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Reference: specutils + Python LIBS Ecosystem</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/reference/specutils-libs.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="reference-specutils-python-libs-ecosystem">
+<h1>Reference: specutils + Python LIBS Ecosystem<a class="headerlink" href="#reference-specutils-python-libs-ecosystem" title="Link to this heading"></a></h1>
+<section id="how-they-structure-the-relevant-computation">
+<h2>How They Structure the Relevant Computation<a class="headerlink" href="#how-they-structure-the-relevant-computation" title="Link to this heading"></a></h2>
+</section>
+<hr class="docutils" />
+<section id="astropy-specutils">
+<h2>1. astropy/specutils<a class="headerlink" href="#astropy-specutils" title="Link to this heading"></a></h2>
+<p><strong>Current version:</strong> v2.4.x (June 2026). Docs: https://specutils.readthedocs.io/en/stable/</p>
+<section id="core-data-model">
+<h3>1.1 Core Data Model<a class="headerlink" href="#core-data-model" title="Link to this heading"></a></h3>
+<p>The central class is <code class="docutils literal notranslate"><span class="pre">Spectrum</span></code> (renamed from <code class="docutils literal notranslate"><span class="pre">Spectrum1D</span></code> in v2.0; the old name raises a deprecation warning). It subclasses <code class="docutils literal notranslate"><span class="pre">NDCube</span></code> and <code class="docutils literal notranslate"><span class="pre">NDData</span></code>, giving it:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Attribute</p></th>
+<th class="head"><p>Type / notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">spectral_axis</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SpectralAxis</span></code> (unit-aware <code class="docutils literal notranslate"><span class="pre">Quantity</span></code>); must be monotonic; can be ascending or descending</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">flux</span></code></p></td>
+<td><p>n-dimensional <code class="docutils literal notranslate"><span class="pre">Quantity</span></code> — the “1D” refers only to the spectral axis, not the whole flux array</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">uncertainty</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">StdDevUncertainty</span></code>, <code class="docutils literal notranslate"><span class="pre">VarianceUncertainty</span></code>, or <code class="docutils literal notranslate"><span class="pre">InverseVariance</span></code> (all <code class="docutils literal notranslate"><span class="pre">NDUncertainty</span></code> subclasses)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mask</span></code></p></td>
+<td><p>boolean ndarray; <code class="docutils literal notranslate"><span class="pre">True</span></code> = bad pixel; avoids NaN “infection” in calculations</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wcs</span></code></p></td>
+<td><p>FITS WCS or GWCS; auto-created as a GWCS if only <code class="docutils literal notranslate"><span class="pre">spectral_axis</span></code> is given</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">meta</span></code></p></td>
+<td><p>dict; file headers stored as <code class="docutils literal notranslate"><span class="pre">meta['header']</span></code> by convention</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">radial_velocity</span></code> / <code class="docutils literal notranslate"><span class="pre">redshift</span></code></p></td>
+<td><p>first-class attributes; <code class="docutils literal notranslate"><span class="pre">shift_spectrum_to()</span></code> shifts axis, <code class="docutils literal notranslate"><span class="pre">set_radial_velocity_to()</span></code> updates frame only</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>v2.0 breaking changes relevant to cflibs:</strong></p>
+<ul class="simple">
+<li><p>Spectral axis is <strong>no longer forced to be last</strong> in multi-dimensional flux arrays (<code class="docutils literal notranslate"><span class="pre">spectral_axis_index</span></code> kwarg added for disambiguation when auto-detection fails).</p></li>
+<li><p>Arithmetic now <strong>validates spectral-axis equality</strong> (not just length equality); spectra on different grids will hard-fail, not silently mismatch.</p></li>
+<li><p>Creating a <code class="docutils literal notranslate"><span class="pre">Spectrum</span></code> from a bare spectral axis generates a GWCS that matches the <strong>full dimensionality</strong> of the flux array.</p></li>
+</ul>
+<p><strong>Unit handling:</strong>
+<code class="docutils literal notranslate"><span class="pre">SpectralAxis</span></code> uses astropy’s spectral equivalencies by default, enabling transparent conversion between nm, Å, cm⁻¹, eV, GHz, km/s. Only vacuum wavelengths are supported. Unit conversion produces a new <code class="docutils literal notranslate"><span class="pre">SpectralAxis</span></code> backed by a lookup-table WCS (the original pixel→world mapping is discarded). For cflibs this means keeping the native nm/Å grid and converting display-only, not in-place.</p>
+<p><strong>Multi-spectrum containers:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectrumCollection</span></code> — multiple flux arrays with matching spectral axis shapes; stored as unified arrays for performance.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectrumList</span></code> — <code class="docutils literal notranslate"><span class="pre">list</span></code> subclass with Astropy IO registry integration; for heterogeneous spectra of different lengths. Users don’t normally need it directly.</p></li>
+<li><p>For ragged collections (different spectral lengths), a plain Python <code class="docutils literal notranslate"><span class="pre">list[Spectrum]</span></code> is recommended.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="uncertainty-hierarchy-astropy-nddata">
+<h3>1.2 Uncertainty Hierarchy (astropy.nddata)<a class="headerlink" href="#uncertainty-hierarchy-astropy-nddata" title="Link to this heading"></a></h3>
+<p>Three concrete types under <code class="docutils literal notranslate"><span class="pre">NDUncertainty</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>NDUncertainty (ABC)
+├── StdDevUncertainty     → stores σ; converts to variance for propagation
+├── VarianceUncertainty   → stores σ²; most efficient internally (no double-conversion)
+└── InverseVariance       → stores 1/σ²; converts to variance for propagation
+</pre></div>
+</div>
+<p><strong>Arithmetic propagation rules:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">+</span></code> / <code class="docutils literal notranslate"><span class="pre">-</span></code>: add variances → √(σ₁² + σ₂²) in result</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">*</span></code> / <code class="docutils literal notranslate"><span class="pre">/</span></code>: relative-error propagation</p></li>
+<li><p>All three types convert internally to variance for computation, then convert back. <code class="docutils literal notranslate"><span class="pre">VarianceUncertainty</span></code> is ~10–15% more efficient than the others for repeated operations.</p></li>
+<li><p>Correlation between operands is possible but requires the correlation coefficient as explicit input; the class cannot derive it.</p></li>
+</ul>
+<p><strong>How fitting uses uncertainties (<code class="docutils literal notranslate"><span class="pre">fit_lines</span></code>):</strong>
+When <code class="docutils literal notranslate"><span class="pre">weights='unc'</span></code> is passed, the code converts the spectrum’s uncertainty to <code class="docutils literal notranslate"><span class="pre">StdDevUncertainty</span></code> representation, then computes <code class="docutils literal notranslate"><span class="pre">weights</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">/</span> <span class="pre">sigma</span></code> (inverse-sigma weighting) for the underlying <code class="docutils literal notranslate"><span class="pre">TRFLSQFitter</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="continuum-baseline-fitting">
+<h3>1.3 Continuum / Baseline Fitting<a class="headerlink" href="#continuum-baseline-fitting" title="Link to this heading"></a></h3>
+<p>Two public functions:</p>
+<section id="fit-generic-continuum-spectrum">
+<h4><code class="docutils literal notranslate"><span class="pre">fit_generic_continuum(spectrum,</span> <span class="pre">...)</span></code><a class="headerlink" href="#fit-generic-continuum-spectrum" title="Link to this heading"></a></h4>
+<ol class="arabic simple">
+<li><p>Median-smooths the spectrum with configurable window (default: 3 pixels) to suppress sharp features before fitting.</p></li>
+<li><p>Delegates to <code class="docutils literal notranslate"><span class="pre">fit_continuum()</span></code> with a <code class="docutils literal notranslate"><span class="pre">Chebyshev1D(3)</span></code> default model.</p></li>
+</ol>
+</section>
+<section id="fit-continuum-spectrum-model-fitter-trflsqfitter-exclude-regions-none-window-none">
+<h4><code class="docutils literal notranslate"><span class="pre">fit_continuum(spectrum,</span> <span class="pre">model,</span> <span class="pre">fitter=TRFLSQFitter,</span> <span class="pre">exclude_regions=None,</span> <span class="pre">window=None)</span></code><a class="headerlink" href="#fit-continuum-spectrum-model-fitter-trflsqfitter-exclude-regions-none-window-none" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Accepts single model or list of models; multiple models are summed into a compound model.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exclude_regions</span></code> takes a <code class="docutils literal notranslate"><span class="pre">SpectralRegion</span></code>; the <code class="docutils literal notranslate"><span class="pre">exclude_region_upper_bounds</span></code> flag controls whether the upper boundary is exclusive or inclusive.</p></li>
+<li><p>Delegates to <code class="docutils literal notranslate"><span class="pre">fit_lines()</span></code> internally.</p></li>
+<li><p><strong>No iterative sigma-clipping</strong> is implemented; median pre-smoothing is the only outlier mitigation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">weights</span></code> parameter is <strong>not yet implemented</strong> (<code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code> raised).</p></li>
+<li><p>Default fitter is <code class="docutils literal notranslate"><span class="pre">TRFLSQFitter</span></code> (Trust Region Reflective least squares).</p></li>
+</ul>
+<p><strong>Pitfall:</strong> Continuum fitting fails on pixel-axis spectra (no physical spectral units) — Issue #453. cflibs must always attach units to its spectral axis before passing to these routines.</p>
+<p><strong>Pitfall:</strong> <code class="docutils literal notranslate"><span class="pre">fit_generic_continuum</span></code> and <code class="docutils literal notranslate"><span class="pre">fit_continuum</span></code> do not sigma-clip. For LIBS baselines (where large emission lines sit on a slowly-varying continuum), the recommended pattern is to first identify and mask emission peaks, then fit the continuum only over the masked-out baseline channels.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="line-detection">
+<h3>1.4 Line Detection<a class="headerlink" href="#line-detection" title="Link to this heading"></a></h3>
+<p>Two detection strategies:</p>
+<section id="find-lines-threshold-spectrum-noise-factor">
+<h4><code class="docutils literal notranslate"><span class="pre">find_lines_threshold(spectrum,</span> <span class="pre">noise_factor)</span></code><a class="headerlink" href="#find-lines-threshold-spectrum-noise-factor" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Requires <strong>continuum-subtracted</strong> spectrum with uncertainty defined.</p></li>
+<li><p>Logic: <code class="docutils literal notranslate"><span class="pre">abs(flux)</span> <span class="pre">&gt;</span> <span class="pre">noise_factor</span> <span class="pre">*</span> <span class="pre">stddev_uncertainty</span></code> → candidate pixels.</p></li>
+<li><p>Groups consecutive above-threshold pixels; extracts peak per group.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;warn_continuum_below_threshold(threshold=0.01)</span></code> decorator warns if continuum residuals are still large.</p></li>
+<li><p><strong>Known pitfall (Issue #504):</strong> Setting a <em>higher</em> <code class="docutils literal notranslate"><span class="pre">noise_factor</span></code> can paradoxically detect <em>more</em> lines in some spectra due to how consecutive-index grouping interacts with noise shapes. Not a monotone threshold in practice.</p></li>
+</ul>
+</section>
+<section id="find-lines-derivative-spectrum-flux-threshold-none">
+<h4><code class="docutils literal notranslate"><span class="pre">find_lines_derivative(spectrum,</span> <span class="pre">flux_threshold=None)</span></code><a class="headerlink" href="#find-lines-derivative-spectrum-flux-threshold-none" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Discrete derivative via <code class="docutils literal notranslate"><span class="pre">[1,</span> <span class="pre">0,</span> <span class="pre">-1]</span></code> convolution.</p></li>
+<li><p>Emission peaks: <code class="docutils literal notranslate"><span class="pre">dY</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> AND <code class="docutils literal notranslate"><span class="pre">ddS</span> <span class="pre">==</span> <span class="pre">-2</span></code> (sign-flip detection).</p></li>
+<li><p>Absorption troughs: <code class="docutils literal notranslate"><span class="pre">dY</span> <span class="pre">&lt;</span> <span class="pre">0</span></code> AND <code class="docutils literal notranslate"><span class="pre">ddS</span> <span class="pre">==</span> <span class="pre">2</span></code>.</p></li>
+<li><p>Optional post-hoc <code class="docutils literal notranslate"><span class="pre">flux_threshold</span></code> filter.</p></li>
+<li><p>No uncertainty required; works on non-continuum-subtracted spectra.</p></li>
+</ul>
+<p>Both return a <code class="docutils literal notranslate"><span class="pre">QTable</span></code> with columns: <code class="docutils literal notranslate"><span class="pre">line_center</span></code> (wavelength Quantity), <code class="docutils literal notranslate"><span class="pre">line_type</span></code> (<code class="docutils literal notranslate"><span class="pre">'emission'</span></code>/<code class="docutils literal notranslate"><span class="pre">'absorption'</span></code>), <code class="docutils literal notranslate"><span class="pre">line_center_index</span></code> (pixel index).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="line-fitting">
+<h3>1.5 Line Fitting<a class="headerlink" href="#line-fitting" title="Link to this heading"></a></h3>
+<section id="fit-lines-spectrum-model-fitter-trflsqfitter-window-none-exclude-regions-none-weights-none-get-fit-info-false">
+<h4><code class="docutils literal notranslate"><span class="pre">fit_lines(spectrum,</span> <span class="pre">model,</span> <span class="pre">fitter=TRFLSQFitter,</span> <span class="pre">window=None,</span> <span class="pre">exclude_regions=None,</span> <span class="pre">weights=None,</span> <span class="pre">get_fit_info=False)</span></code><a class="headerlink" href="#fit-lines-spectrum-model-fitter-trflsqfitter-window-none-exclude-regions-none-weights-none-get-fit-info-false" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Accepts single or list of models + matching list of windows.</p></li>
+<li><p>Window formats: single <code class="docutils literal notranslate"><span class="pre">Quantity</span></code> (symmetric region around model center), tuple of bounds, <code class="docutils literal notranslate"><span class="pre">SpectralRegion</span></code>.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">weights='unc'</span></code>: uses <code class="docutils literal notranslate"><span class="pre">1/sigma</span></code> weighting.</p></li>
+<li><p>If model lacks unit support (<code class="docutils literal notranslate"><span class="pre">_supports_unit_fitting=False</span></code>): strips units, fits, re-wraps in <code class="docutils literal notranslate"><span class="pre">QuantityModel</span></code>.</p></li>
+<li><p>Compound model reconstruction via reverse-Polish notation traversal.</p></li>
+<li><p><strong>Edge case:</strong> “The whole spectrum is windowed out!” error if window produces an empty slice.</p></li>
+<li><p>Returns fitted model(s); covariance/fit info available with <code class="docutils literal notranslate"><span class="pre">get_fit_info=True</span></code>.</p></li>
+</ul>
+</section>
+<section id="estimate-line-parameters-spectrum-model">
+<h4><code class="docutils literal notranslate"><span class="pre">estimate_line_parameters(spectrum,</span> <span class="pre">model)</span></code><a class="headerlink" href="#estimate-line-parameters-spectrum-model" title="Link to this heading"></a></h4>
+<p>Pre-fills initial parameter guesses for built-in models:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Gaussian1D</span></code>: amplitude = max flux, mean = centroid, stddev = Gaussian sigma width.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Lorentz1D</span></code>: amplitude, x_0, fwhm.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Voigt1D</span></code>: x_0, amplitude_L, fwhm_L, fwhm_G (split 50/50 if not known a priori).</p></li>
+</ul>
+<p>Custom models require user-supplied estimator dict mapping parameter names to callables.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="analysis-functions">
+<h3>1.6 Analysis Functions<a class="headerlink" href="#analysis-functions" title="Link to this heading"></a></h3>
+<p>All accept optional <code class="docutils literal notranslate"><span class="pre">SpectralRegion</span></code> to operate on a sub-range.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Function</p></th>
+<th class="head"><p>Key behavior</p></th>
+<th class="head"><p>Pitfall</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">snr(spectrum)</span></code></p></td>
+<td><p>Mean flux/uncertainty within region</p></td>
+<td><p>Requires uncertainty on spectrum</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">snr_derived(spectrum)</span></code></p></td>
+<td><p>DER_SNR estimator (MAST/ECF) from flux alone</p></td>
+<td><p>Valid only if noise is pixel-uncorrelated and signal varies slowly</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">centroid(spectrum)</span></code></p></td>
+<td><p>First moment; uncertainty via analytic or MC (<code class="docutils literal notranslate"><span class="pre">analytic=False</span></code>)</p></td>
+<td><p>Fails without continuum subtraction</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">line_flux(spectrum)</span></code></p></td>
+<td><p>Integrated flux; propagates uncertainty</p></td>
+<td><p>Assumes continuum already subtracted</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">equivalent_width(spectrum,</span> <span class="pre">continuum=1)</span></code></p></td>
+<td><p>Continuum-normalized</p></td>
+<td><p>Assumes continuum = 1 unless <code class="docutils literal notranslate"><span class="pre">continuum</span></code> kwarg set</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">moment(spectrum,</span> <span class="pre">order=N)</span></code></p></td>
+<td><p>Spectral moments of any order</p></td>
+<td><p>Non-spectral-axis moments use pixel values → meaningless units</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fwhm(spectrum)</span></code></p></td>
+<td><p>True FWHM (no Gaussian assumption)</p></td>
+<td><p>Requires continuum-subtracted spectrum</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gaussian_fwhm(spectrum)</span></code></p></td>
+<td><p>Gaussian FWHM via second-moment approximation; MC support</p></td>
+<td><p>Assumes Gaussian profiles</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">gaussian_sigma_width(spectrum)</span></code></p></td>
+<td><p>Second-moment width</p></td>
+<td><p>Same</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fwzi(spectrum)</span></code></p></td>
+<td><p>Full width at zero intensity</p></td>
+<td><p>Requires continuum subtraction</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">template_match(obs,</span> <span class="pre">templates,</span> <span class="pre">redshift_grid=None)</span></code></p></td>
+<td><p>chi-square minimization; handles redshift sweep</p></td>
+<td><p>Template normalized to observed spectrum</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">template_correlate(obs,</span> <span class="pre">template)</span></code></p></td>
+<td><p>Cross-correlation; returns lags in km/s</p></td>
+<td><p>obs must have rest wavelength set</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Critical mask issue (Issue #516, partially resolved):</strong>
+As of ~2025, several analysis functions (<code class="docutils literal notranslate"><span class="pre">centroid</span></code>, <code class="docutils literal notranslate"><span class="pre">equivalent_width</span></code>, <code class="docutils literal notranslate"><span class="pre">fwhm</span></code>, <code class="docutils literal notranslate"><span class="pre">gaussian_fwhm</span></code>, <code class="docutils literal notranslate"><span class="pre">gaussian_sigma_width</span></code>, <code class="docutils literal notranslate"><span class="pre">line_flux</span></code>, <code class="docutils literal notranslate"><span class="pre">snr</span></code>) historically ignored the spectrum’s <code class="docutils literal notranslate"><span class="pre">mask</span></code> attribute. The fix (<code class="docutils literal notranslate"><span class="pre">flux[~mask]</span></code>) was proposed with a <code class="docutils literal notranslate"><span class="pre">without_mask()</span></code> convenience method rather than per-function <code class="docutils literal notranslate"><span class="pre">use_mask</span></code> parameters. cflibs should not assume these functions honor masks automatically — always extract <code class="docutils literal notranslate"><span class="pre">spectrum[mask].flux</span></code> manually or check current specutils version behavior.</p>
+</section>
+<hr class="docutils" />
+<section id="manipulation">
+<h3>1.7 Manipulation<a class="headerlink" href="#manipulation" title="Link to this heading"></a></h3>
+<section id="smoothing">
+<h4>Smoothing<a class="headerlink" href="#smoothing" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">box_smooth(spectrum,</span> <span class="pre">width)</span></code>, <code class="docutils literal notranslate"><span class="pre">gaussian_smooth(spectrum,</span> <span class="pre">stddev)</span></code>, <code class="docutils literal notranslate"><span class="pre">trapezoid_smooth(spectrum,</span> <span class="pre">width)</span></code> — convolution-based; uncertainty propagated via standard error rules; <strong>kernel widths in pixel units, not physical units</strong>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">median_smooth(spectrum,</span> <span class="pre">width)</span></code> — not flux-conserving; <strong>errors NOT propagated</strong>.</p></li>
+</ul>
+</section>
+<section id="resampling">
+<h4>Resampling<a class="headerlink" href="#resampling" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Class</p></th>
+<th class="head"><p>Flux-conserving</p></th>
+<th class="head"><p>Uncertainty</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FluxConservingResampler</span></code></p></td>
+<td><p>Yes</p></td>
+<td><p>Propagated</p></td>
+<td><p>Appropriate when integrating over bins (e.g., degrading resolution)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LinearInterpolatedResampler</span></code></p></td>
+<td><p>No</p></td>
+<td><p>Not propagated</p></td>
+<td><p>Simple interpolation; faster</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SplineInterpolatedResampler</span></code></p></td>
+<td><p>No</p></td>
+<td><p>Not propagated</p></td>
+<td><p>Higher-order but no error tracking</p></td>
+</tr>
+</tbody>
+</table>
+<p>All accept <code class="docutils literal notranslate"><span class="pre">extrapolation_treatment</span></code>: <code class="docutils literal notranslate"><span class="pre">'nan_fill'</span></code>, <code class="docutils literal notranslate"><span class="pre">'zero_fill'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'truncate'</span></code>.</p>
+<p><strong>Pitfall:</strong> Only <code class="docutils literal notranslate"><span class="pre">FluxConservingResampler</span></code> is appropriate when absolute flux matters (e.g., template matching for CF-LIBS composition estimates). Linear/spline resamplers silently discard uncertainty.</p>
+</section>
+<section id="noise-region-uncertainty-spectrum-spectral-region-noise-func-np-std">
+<h4><code class="docutils literal notranslate"><span class="pre">noise_region_uncertainty(spectrum,</span> <span class="pre">spectral_region,</span> <span class="pre">noise_func=np.std)</span></code><a class="headerlink" href="#noise-region-uncertainty-spectrum-spectral-region-noise-func-np-std" title="Link to this heading"></a></h4>
+<p>Estimates a <strong>constant scalar uncertainty</strong> from a user-specified line-free region and applies it uniformly across the entire spectrum. Returns the spectrum with <code class="docutils literal notranslate"><span class="pre">uncertainty</span></code> set. Appropriate as a first-order estimate when the detector read-noise is approximately flat. Not appropriate when shot noise dominates (where uncertainty ∝ √flux). cflibs currently uses noise estimation from an explicit baseline region; this is the same pattern.</p>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="pyhat-usgs-python-hyperspectral-analysis-tool">
+<h2>2. PyHAT (USGS Python Hyperspectral Analysis Tool)<a class="headerlink" href="#pyhat-usgs-python-hyperspectral-analysis-tool" title="Link to this heading"></a></h2>
+<p><strong>GitHub:</strong> https://github.com/USGS-Astrogeology/PyHAT (v0.1.2, Aug 2025). Docs: https://pubs.usgs.gov/publication/ofr20251038/full</p>
+<p>PyHAT was originally designed specifically for ChemCam/SuperCam LIBS data on Mars Science Laboratory and Perseverance.</p>
+<section id="data-model">
+<h3>2.1 Data Model<a class="headerlink" href="#data-model" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>CSV-based tabular format</strong> with two-level column headers: <code class="docutils literal notranslate"><span class="pre">('wvl',</span> <span class="pre">&lt;wavelength&gt;)</span></code> for spectra, <code class="docutils literal notranslate"><span class="pre">('meta',</span> <span class="pre">&lt;field&gt;)</span></code> for metadata, <code class="docutils literal notranslate"><span class="pre">('comp',</span> <span class="pre">&lt;element&gt;)</span></code> for ground-truth compositions.</p></li>
+<li><p>Core object is <code class="docutils literal notranslate"><span class="pre">SpectralData</span></code>, a pandas DataFrame wrapper.</p></li>
+<li><p>Operations are vectorized row-by-row across the DataFrame.</p></li>
+<li><p>Heterogeneous multi-spectrometer spectra are stored as separate column blocks; <code class="docutils literal notranslate"><span class="pre">Combine</span> <span class="pre">Datasets</span></code> concatenates via pandas outer join.</p></li>
+<li><p>Workflows saved as JSON for reproducibility.</p></li>
+</ul>
+</section>
+<section id="libs-specific-preprocessing">
+<h3>2.2 LIBS-Specific Preprocessing<a class="headerlink" href="#libs-specific-preprocessing" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Baseline/continuum removal:</strong> multiple algorithms including polynomial fitting, ALS (Asymmetric Least Squares), airPLS, wavelet-based methods, and the Dietrich algorithm (recommended for LIBS). The Wavelet à Trous Plus Spline method approximates the ChemCam pipeline baseline algorithm.</p></li>
+<li><p><strong>Normalization:</strong> divides spectral sub-ranges by their sums (so each sub-range sums to 1.0). Mitigates plasma emission fluctuations across shots. cflibs does not have this explicit sub-range normalization.</p></li>
+<li><p><strong>Masking:</strong> excludes wavelength ranges via a CSV mask file.</p></li>
+<li><p><strong>Resampling:</strong> linear interpolation onto a reference grid via SciPy.</p></li>
+<li><p><strong>Peak area integration:</strong> bins adjacent channels based on local minima/maxima (Clegg et al.).</p></li>
+</ul>
+</section>
+<section id="ml-heavy-design">
+<h3>2.3 ML-heavy design<a class="headerlink" href="#ml-heavy-design" title="Link to this heading"></a></h3>
+<p>PyHAT leans heavily on scikit-learn/PySptools for regression (PLS, ridge, LASSO, etc.) and dimensionality reduction (PCA, ICA, t-SNE). For cflibs purposes the preprocessing modules (not the ML modules) are the relevant reference.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="libssa">
+<h2>3. LIBSsa<a class="headerlink" href="#libssa" title="Link to this heading"></a></h2>
+<p><strong>GitHub:</strong> https://github.com/kstenio/libssa. Paper: J. Open Source Software 2024.</p>
+<p>A Python 3.9+ GUI + library specifically for LIBS. Key capabilities:</p>
+<ul class="simple">
+<li><p>Saha-Boltzmann temperature/electron density estimation.</p></li>
+<li><p>Boltzmann plot output.</p></li>
+<li><p>Gaussian/Lorentzian/Voigt peak fitting.</p></li>
+<li><p>SAM and MAD outlier removal.</p></li>
+<li><p>Full spectrum normalization (FSN).</p></li>
+<li><p>PCA / PLSR multivariate modeling.</p></li>
+</ul>
+<p>LIBSsa is less architecturally sophisticated than cflibs but provides a useful public point of comparison for validating Saha-Boltzmann results against an independent open-source implementation.</p>
+</section>
+<hr class="docutils" />
+<section id="spectroscopyx-plasmapy">
+<h2>4. SpectroscoPyx (PlasmaPy)<a class="headerlink" href="#spectroscopyx-plasmapy" title="Link to this heading"></a></h2>
+<p><strong>GitHub:</strong> https://github.com/PlasmaPy/SpectroscoPyx — <strong>ARCHIVED March 2023</strong>, read-only.</p>
+<p>Intended features (never fully implemented): NIST/CHIANTI database interfaces, atomic energy level descriptors, multi-database identifier tracking. Not a viable reference.</p>
+</section>
+<hr class="docutils" />
+<section id="specific-apis-patterns-worth-adopting-in-cflibs">
+<h2>5. Specific APIs / Patterns Worth Adopting in cflibs<a class="headerlink" href="#specific-apis-patterns-worth-adopting-in-cflibs" title="Link to this heading"></a></h2>
+<section id="uncertainty-class-hierarchy-high-value">
+<h3>5.1 Uncertainty class hierarchy (HIGH VALUE)<a class="headerlink" href="#uncertainty-class-hierarchy-high-value" title="Link to this heading"></a></h3>
+<p>Adopt the <code class="docutils literal notranslate"><span class="pre">StdDevUncertainty</span> <span class="pre">/</span> <span class="pre">VarianceUncertainty</span> <span class="pre">/</span> <span class="pre">InverseVariance</span></code> three-way hierarchy with a common ABC. Currently cflibs tracks uncertainty as bare NumPy arrays. Using typed uncertainty objects would:</p>
+<ul class="simple">
+<li><p>Make uncertainty representation explicit at API boundaries (avoids “is this σ or σ² or 1/σ²?”).</p></li>
+<li><p>Enable automatic propagation through arithmetic (<code class="docutils literal notranslate"><span class="pre">spectrum_a</span> <span class="pre">+</span> <span class="pre">spectrum_b</span></code>).</p></li>
+<li><p>Support the pattern where fitting weights are <code class="docutils literal notranslate"><span class="pre">1/sigma</span></code> with a safe type-check rather than a silent squaring error.</p></li>
+</ul>
+<p>Reference: https://docs.astropy.org/en/stable/nddata/index.html</p>
+<p><strong>VarianceUncertainty is internally most efficient</strong> (no double-conversion). cflibs should consider storing variance internally and converting to stddev for display.</p>
+</section>
+<section id="immutable-spectrum-objects-with-arithmetic-returning-new-objects-high-value">
+<h3>5.2 Immutable spectrum objects with arithmetic returning new objects (HIGH VALUE)<a class="headerlink" href="#immutable-spectrum-objects-with-arithmetic-returning-new-objects-high-value" title="Link to this heading"></a></h3>
+<p>specutils creates new <code class="docutils literal notranslate"><span class="pre">Spectrum</span></code> objects rather than mutating in place. cflibs’s <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code> and <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code> should follow this — especially for the manifold builder where a pipeline builds many spectra from one base state.</p>
+</section>
+<section id="spectralregion-as-first-class-api-primitive-medium-value">
+<h3>5.3 SpectralRegion as first-class API primitive (MEDIUM VALUE)<a class="headerlink" href="#spectralregion-as-first-class-api-primitive-medium-value" title="Link to this heading"></a></h3>
+<p>A lightweight <code class="docutils literal notranslate"><span class="pre">SpectralRegion(lower,</span> <span class="pre">upper)</span></code> dataclass that can be composed (<code class="docutils literal notranslate"><span class="pre">region1</span> <span class="pre">|</span> <span class="pre">region2</span></code>), inverted, and passed to analysis/fitting functions. cflibs currently uses raw tuples/arrays for wavelength windows. A <code class="docutils literal notranslate"><span class="pre">SpectralRegion</span></code> abstraction would:</p>
+<ul class="simple">
+<li><p>Make <code class="docutils literal notranslate"><span class="pre">exclude_regions</span></code> semantics explicit in continuum fitting.</p></li>
+<li><p>Enable the <code class="docutils literal notranslate"><span class="pre">noise_region_uncertainty</span></code> pattern (estimate noise from a specific line-free window).</p></li>
+<li><p>Unify the window parameter across <code class="docutils literal notranslate"><span class="pre">find_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">fit_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">line_flux</span></code>, etc.</p></li>
+</ul>
+<p>Reference: https://specutils.readthedocs.io/en/stable/</p>
+</section>
+<section id="noise-region-uncertainty-pattern-medium-value">
+<h3>5.4 <code class="docutils literal notranslate"><span class="pre">noise_region_uncertainty</span></code> pattern (MEDIUM VALUE)<a class="headerlink" href="#noise-region-uncertainty-pattern-medium-value" title="Link to this heading"></a></h3>
+<p>When per-pixel uncertainty is unavailable (common in real LIBS measurements), estimate a scalar <code class="docutils literal notranslate"><span class="pre">σ_noise</span></code> from a line-free region of the spectrum. cflibs’s <code class="docutils literal notranslate"><span class="pre">preprocess/</span></code> module does noise estimation; formalizing it as a function with the specutils signature would improve composability with downstream fitting.</p>
+</section>
+<section id="estimate-line-parameters-before-fit-lines-medium-value">
+<h3>5.5 <code class="docutils literal notranslate"><span class="pre">estimate_line_parameters</span></code> before <code class="docutils literal notranslate"><span class="pre">fit_lines</span></code> (MEDIUM VALUE)<a class="headerlink" href="#estimate-line-parameters-before-fit-lines-medium-value" title="Link to this heading"></a></h3>
+<p>For the Boltzmann plot fitting in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code>, pre-estimating line amplitude, center, and width from the measured spectrum (rather than from the atomic database nominal wavelength) reduces convergence failures. Specifically:</p>
+<ul class="simple">
+<li><p>Use spectral centroid (first moment) as <code class="docutils literal notranslate"><span class="pre">mean</span></code> initial guess rather than database λ.</p></li>
+<li><p>Use second-moment σ as <code class="docutils literal notranslate"><span class="pre">stddev</span></code> initial guess rather than instrument FWHM.</p></li>
+</ul>
+<p>Reference: https://specutils.readthedocs.io/en/stable/fitting.html</p>
+</section>
+<section id="find-lines-derivative-for-candidate-detection-medium-value">
+<h3>5.6 <code class="docutils literal notranslate"><span class="pre">find_lines_derivative</span></code> for candidate detection (MEDIUM VALUE)<a class="headerlink" href="#find-lines-derivative-for-candidate-detection-medium-value" title="Link to this heading"></a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">[1,</span> <span class="pre">0,</span> <span class="pre">-1]</span></code> discrete-derivative approach followed by sign-flip detection is numerically simpler and more robust than threshold-based detection when SNR is moderate. Unlike <code class="docutils literal notranslate"><span class="pre">find_lines_threshold</span></code>, it does not require an uncertainty estimate a priori. cflibs’s <code class="docutils literal notranslate"><span class="pre">identify/</span></code> module’s line detection could use this as a cheap initial candidate list before the expensive ALIAS/comb correlation step.</p>
+</section>
+<section id="pyhat-sub-range-normalization-medium-value">
+<h3>5.7 PyHAT sub-range normalization (MEDIUM VALUE)<a class="headerlink" href="#pyhat-sub-range-normalization-medium-value" title="Link to this heading"></a></h3>
+<p>PyHAT normalizes each spectral sub-range (e.g., one per spectrometer detector arm) to unit sum, mitigating shot-to-shot plasma emission fluctuations. cflibs normalizes by a single global factor. Implementing per-arm normalization before the Boltzmann plot would reduce one source of systematic error when using multi-detector setups (UV/VIS/NIR arms).</p>
+<p>Reference: https://pubs.usgs.gov/publication/ofr20251038/full</p>
+</section>
+<section id="fluxconservingresampler-for-instrument-convolution-low-value-flag">
+<h3>5.8 <code class="docutils literal notranslate"><span class="pre">FluxConservingResampler</span></code> for instrument convolution (LOW VALUE, flag)<a class="headerlink" href="#fluxconservingresampler-for-instrument-convolution-low-value-flag" title="Link to this heading"></a></h3>
+<p>When degrading synthetic spectra to instrument resolution for template matching, specutils uses <code class="docutils literal notranslate"><span class="pre">FluxConservingResampler</span></code> (which preserves integrated flux) rather than spline/linear interpolation. cflibs’s <code class="docutils literal notranslate"><span class="pre">profiles.py</span></code> uses Gaussian broadening in pixel space; this is correct for the forward model but worth noting that if cflibs ever needs to resample onto a new grid (e.g., for cross-instrument comparison), only flux-conserving resampling is appropriate.</p>
+</section>
+<section id="mask-aware-arithmetic-high-value-negative-example">
+<h3>5.9 Mask-aware arithmetic (HIGH VALUE — negative example)<a class="headerlink" href="#mask-aware-arithmetic-high-value-negative-example" title="Link to this heading"></a></h3>
+<p>specutils Issue #516 documents that many analysis functions ignore <code class="docutils literal notranslate"><span class="pre">mask</span></code> arrays; this was a latent bug for years. cflibs should audit all analysis entry points to ensure <code class="docutils literal notranslate"><span class="pre">spectrum.mask</span></code> (or its equivalent <code class="docutils literal notranslate"><span class="pre">bad_pixel_mask</span></code>) is applied before computing integrals, centroids, and SNR estimates. Do NOT assume that passing a masked array to <code class="docutils literal notranslate"><span class="pre">np.sum</span></code> or <code class="docutils literal notranslate"><span class="pre">np.mean</span></code> will honor the mask without explicit <code class="docutils literal notranslate"><span class="pre">np.ma.sum</span></code> or explicit indexing.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="documented-pitfalls">
+<h2>6. Documented Pitfalls<a class="headerlink" href="#documented-pitfalls" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Pitfall</p></th>
+<th class="head"><p>Source</p></th>
+<th class="head"><p>cflibs impact</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">find_lines_threshold</span></code> is not monotone in <code class="docutils literal notranslate"><span class="pre">noise_factor</span></code> — higher factor can detect <em>more</em> lines due to grouping logic</p></td>
+<td><p>specutils Issue #504</p></td>
+<td><p>Use <code class="docutils literal notranslate"><span class="pre">find_lines_derivative</span></code> as a sanity check; do not rely on threshold tuning alone</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fit_continuum</span></code> weights parameter is <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code></p></td>
+<td><p>specutils source</p></td>
+<td><p>Cannot weight continuum fit by uncertainty; use explicit masking instead</p></td>
+</tr>
+<tr class="row-even"><td><p>Median smoothing in <code class="docutils literal notranslate"><span class="pre">fit_generic_continuum</span></code> does not propagate uncertainties</p></td>
+<td><p>specutils docs</p></td>
+<td><p>If uncertainty tracking through baseline removal matters, do not use this; implement explicit ALS/airPLS with propagation</p></td>
+</tr>
+<tr class="row-odd"><td><p>Analysis functions may silently ignore <code class="docutils literal notranslate"><span class="pre">mask</span></code> (Issue #516)</p></td>
+<td><p>specutils</p></td>
+<td><p>Always apply mask manually before analysis; do not rely on framework propagation</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">noise_region_uncertainty</span></code> returns constant σ — invalid when shot noise dominates</p></td>
+<td><p>specutils docs</p></td>
+<td><p>For high-signal LIBS lines, use per-pixel Poisson σ = √(flux × gain); constant σ underestimates uncertainty in bright regions</p></td>
+</tr>
+<tr class="row-odd"><td><p>Arithmetic requires spectral axis equality in v2.x (not just length equality)</p></td>
+<td><p>specutils CHANGES</p></td>
+<td><p>When comparing synthetic vs. measured spectrum, must resample to identical grids first; subtraction on misaligned grids raises an error</p></td>
+</tr>
+<tr class="row-even"><td><p>Kernel widths in <code class="docutils literal notranslate"><span class="pre">gaussian_smooth</span></code> are in <strong>pixels</strong>, not physical units</p></td>
+<td><p>specutils docs</p></td>
+<td><p>A 3-pixel FWHM smooth at 220 nm is different in Å than at 800 nm; convert to pixels before smoothing</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SplineInterpolatedResampler</span></code> and <code class="docutils literal notranslate"><span class="pre">LinearInterpolatedResampler</span></code> do NOT propagate uncertainty</p></td>
+<td><p>specutils docs</p></td>
+<td><p>Do not use these when fitting will rely on propagated uncertainties</p></td>
+</tr>
+<tr class="row-even"><td><p>PyHAT <code class="docutils literal notranslate"><span class="pre">Combine</span> <span class="pre">Datasets</span></code> uses outer join → introduces NaN columns for unmatched wavelengths</p></td>
+<td><p>PyHAT user guide</p></td>
+<td><p>When merging multi-arm spectra, handle NaN columns explicitly; do not assume concatenation gives dense coverage</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">VarianceUncertainty</span></code> is ~15% more efficient for arithmetic than <code class="docutils literal notranslate"><span class="pre">StdDevUncertainty</span></code></p></td>
+<td><p>astropy nddata</p></td>
+<td><p>Store variance internally in cflibs uncertainty objects; convert to σ only for output</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="concrete-cflibs-recommendations">
+<h2>7. Concrete cflibs Recommendations<a class="headerlink" href="#concrete-cflibs-recommendations" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Define a <code class="docutils literal notranslate"><span class="pre">SpectrumUncertainty</span></code> typed hierarchy</strong> in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/</span></code> (or <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/</span></code>) with <code class="docutils literal notranslate"><span class="pre">StdDev</span></code>, <code class="docutils literal notranslate"><span class="pre">Variance</span></code>, <code class="docutils literal notranslate"><span class="pre">InverseVariance</span></code> variants, mirroring the astropy NDData design. This cleanly resolves the “is this σ or σ²?” ambiguity that currently exists at the <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code> → <code class="docutils literal notranslate"><span class="pre">BoltzmannFitResult</span></code> boundary.<br />
+See: https://docs.astropy.org/en/stable/nddata/index.html</p></li>
+<li><p><strong>Implement a <code class="docutils literal notranslate"><span class="pre">SpectralRegion</span></code> dataclass</strong> (wavelength lower/upper bounds, unit-aware) and plumb it through <code class="docutils literal notranslate"><span class="pre">find_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">line_flux</span></code>, <code class="docutils literal notranslate"><span class="pre">noise_region_uncertainty</span></code>, and <code class="docutils literal notranslate"><span class="pre">fit_continuum</span></code> equivalents. Replace raw tuple/array windows throughout <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code>.<br />
+See: https://specutils.readthedocs.io/en/stable/</p></li>
+<li><p><strong>Add a <code class="docutils literal notranslate"><span class="pre">noise_region_uncertainty</span></code> utility</strong> to <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/</span></code> that accepts a <code class="docutils literal notranslate"><span class="pre">SpectralRegion</span></code> and returns a constant σ estimate. Flag it clearly as a flat-noise approximation; add a separate Poisson-noise variant for bright-line regimes.<br />
+See: https://specutils.readthedocs.io/en/stable/api/specutils.manipulation.noise_region_uncertainty.html</p></li>
+<li><p><strong>Implement <code class="docutils literal notranslate"><span class="pre">find_lines_derivative</span></code></strong> as a second line detection path in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/</span></code>. The <code class="docutils literal notranslate"><span class="pre">[1,</span> <span class="pre">0,</span> <span class="pre">-1]</span></code> kernel approach is a zero-cost sanity check that requires no uncertainty estimate; compare its output with the current threshold-based detector to catch grouping artifacts.<br />
+See: https://specutils.readthedocs.io/en/stable/fitting.html</p></li>
+<li><p><strong>Adopt per-arm normalization</strong> (PyHAT pattern): before Boltzmann plot construction in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code>, normalize each spectrometer arm’s sub-range to unit sum. This mitigates shot-to-shot intensity jitter, which currently propagates directly into temperature estimates.<br />
+See: https://pubs.usgs.gov/publication/ofr20251038/full</p></li>
+<li><p><strong>Use <code class="docutils literal notranslate"><span class="pre">estimate_line_parameters</span></code> logic in Boltzmann fitting</strong>: derive initial <code class="docutils literal notranslate"><span class="pre">(amplitude,</span> <span class="pre">center,</span> <span class="pre">width)</span></code> from spectral moments of the measured peak rather than database values. Reduces convergence failures when instrument calibration shifts peaks by 0.1–0.3 nm.<br />
+See: https://specutils.readthedocs.io/en/stable/fitting.html</p></li>
+<li><p><strong>Audit all mask usage in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/</span></code></strong> for the Issue #516 anti-pattern. Grep for <code class="docutils literal notranslate"><span class="pre">np.sum(flux)</span></code>, <code class="docutils literal notranslate"><span class="pre">np.mean(flux)</span></code>, <code class="docutils literal notranslate"><span class="pre">np.trapz(flux,</span> <span class="pre">wl)</span></code> without mask application — these are silent bugs if a <code class="docutils literal notranslate"><span class="pre">bad_pixel_mask</span></code> exists on the spectrum.</p></li>
+<li><p><strong>Store resampled/comparison spectra on identical grids with an equality check</strong>: when computing residuals between synthetic and measured spectra, enforce spectral-axis equality (or explicit interpolation to a shared grid) before subtraction. The v2.x specutils behavior (hard-fail on axis mismatch) is the correct behavior for cflibs too.</p></li>
+</ol>
+<hr class="docutils" />
+<p><em>Sources consulted:</em></p>
+<ul class="simple">
+<li><p>https://specutils.readthedocs.io/en/stable/</p></li>
+<li><p>https://specutils.readthedocs.io/en/latest/spectrum.html</p></li>
+<li><p>https://specutils.readthedocs.io/en/stable/fitting.html</p></li>
+<li><p>https://specutils.readthedocs.io/en/stable/manipulation.html</p></li>
+<li><p>https://specutils.readthedocs.io/en/stable/analysis.html</p></li>
+<li><p>https://specutils.readthedocs.io/en/stable/_modules/specutils/fitting/fitmodels.html</p></li>
+<li><p>https://docs.astropy.org/en/stable/nddata/index.html</p></li>
+<li><p>https://github.com/astropy/specutils/issues/504</p></li>
+<li><p>https://github.com/astropy/specutils/issues/516</p></li>
+<li><p>https://pubs.usgs.gov/publication/ofr20251038/full (PyHAT user guide)</p></li>
+<li><p>https://github.com/kstenio/libssa (LIBSsa)</p></li>
+<li><p>https://github.com/PlasmaPy/SpectroscoPyx (archived)</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

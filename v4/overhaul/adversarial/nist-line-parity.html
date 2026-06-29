@@ -1,0 +1,450 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NIST Line Parity Audit: CF-LIBS Forward Model vs NIST ASD Ground Truth &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">NIST Line Parity Audit: CF-LIBS Forward Model vs NIST ASD Ground Truth</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/nist-line-parity.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="nist-line-parity-audit-cf-libs-forward-model-vs-nist-asd-ground-truth">
+<h1>NIST Line Parity Audit: CF-LIBS Forward Model vs NIST ASD Ground Truth<a class="headerlink" href="#nist-line-parity-audit-cf-libs-forward-model-vs-nist-asd-ground-truth" title="Link to this heading"></a></h1>
+<p><strong>Auditor:</strong> Adversarial physics check (auto-generated)
+<strong>Date:</strong> 2026-06-25
+<strong>Elements tested:</strong> Fe I (370–390 nm, 15 A/B+ grade lines), Ca II (H&amp;K at 393/397 nm)
+<strong>DB:</strong> <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> (SQLite)
+<strong>Code:</strong> cflibs at <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5</span></code></p>
+<hr class="docutils" />
+<section id="verdict">
+<h2>VERDICT<a class="headerlink" href="#verdict" title="Link to this heading"></a></h2>
+<p><strong>correct</strong> — severity: <strong>none</strong></p>
+<p>The cflibs atomic database (<code class="docutils literal notranslate"><span class="pre">libs_production.db</span></code>) matches NIST ASD ground-truth values
+for both A_ki (transition probabilities), energy levels, and wavelengths across all 15 tested
+A/B+ grade Fe I lines (370–390 nm) and the 2 Ca II H&amp;K resonance lines. The emissivity
+formula <code class="docutils literal notranslate"><span class="pre">ε</span> <span class="pre">=</span> <span class="pre">(hc/4πλ)</span> <span class="pre">A_ki</span> <span class="pre">n_k</span></code> is implemented correctly and numerically exact against
+an independent astropy-constants reference computation. The initial apparent “10x mismatch”
+was a false alarm: the NIST ASD REST API returns <code class="docutils literal notranslate"><span class="pre">gA</span></code> (= g_k × A_ki), not A_ki alone.
+After dividing by gk, all DB Aki values agree with NIST to better than 0.3%.</p>
+</section>
+<hr class="docutils" />
+<section id="ground-truth">
+<h2>GROUND TRUTH<a class="headerlink" href="#ground-truth" title="Link to this heading"></a></h2>
+<section id="transition-probabilities-nist-asd-fuhr-wiese-2006-martin-et-al">
+<h3>Transition probabilities: NIST ASD (Fuhr &amp; Wiese 2006 / Martin et al.)<a class="headerlink" href="#transition-probabilities-nist-asd-fuhr-wiese-2006-martin-et-al" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Citation:</strong> Fuhr, J. R., &amp; Wiese, W. L. (2006). <em>Atomic Transition Probabilities.</em> CRC
+Handbook of Chemistry and Physics, 87th ed. (Tables of A-values for Fe I–XXVI.)
+Available via NIST ASD: https://physics.nist.gov/PhysRefData/ASD/lines_form.html</p></li>
+<li><p><strong>Citation:</strong> Wiese, W. L., &amp; Fuhr, J. R. (2009). <em>Accurate Atomic Transition Probabilities
+for Hydrogen, Helium, and Lithium.</em> Journal of Physical and Chemical Reference Data, 38(3),
+565. DOI: 10.1063/1.3077727</p></li>
+<li><p><strong>Ca II H&amp;K reference:</strong> Wiese, W. L., Smith, M. W., &amp; Miles, B. M. (1969). <em>Atomic
+Transition Probabilities, Vol. II.</em> NSRDS-NBS 22. NBS Gaithersburg.</p></li>
+</ul>
+</section>
+<section id="nist-asd-query-performed">
+<h3>NIST ASD Query performed:<a class="headerlink" href="#nist-asd-query-performed" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>GET https://physics.nist.gov/cgi-bin/ASD/lines1.pl?spectra=Fe+I&amp;limits_type=0&amp;low_w=370&amp;upp_w=390&amp;unit=1&amp;submit=Retrieve+Data&amp;de=0&amp;format=3&amp;line_out=0&amp;en_unit=1&amp;output=0&amp;bibrefs=1&amp;page_size=15&amp;show_obs_wl=1&amp;A_out=1&amp;intens_out=on&amp;allowed_out=1&amp;enrg_out=1&amp;J_out=on&amp;g_out=on
+</pre></div>
+</div>
+<p><strong>Critical API note:</strong> The NIST ASD lines REST endpoint returns the column <code class="docutils literal notranslate"><span class="pre">gA(s^-1)</span></code> which is
+the <strong>weighted transition probability</strong> g_k × A_ki, NOT A_ki itself. The DB stores A_ki.
+To compare: A_ki_NIST = gA_NIST / g_k.</p>
+</section>
+<section id="ca-ii-h-k-canonical-values-nist-asd-wiese-et-al">
+<h3>Ca II H&amp;K canonical values (NIST ASD, Wiese et al.):<a class="headerlink" href="#ca-ii-h-k-canonical-values-nist-asd-wiese-et-al" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Line</p></th>
+<th class="head"><p>λ_NIST (nm)</p></th>
+<th class="head"><p>A_ki_NIST (s⁻¹)</p></th>
+<th class="head"><p>E_k (eV)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Ca II K</p></td>
+<td><p>393.3664</p></td>
+<td><p>1.47×10⁸</p></td>
+<td><p>3.1510</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca II H</p></td>
+<td><p>396.8469</p></td>
+<td><p>1.40×10⁸</p></td>
+<td><p>3.1233</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="physical-constants-codata-2018-exact-by-si-definition">
+<h3>Physical constants (CODATA 2018, exact by SI definition):<a class="headerlink" href="#physical-constants-codata-2018-exact-by-si-definition" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>h = 6.62607015×10⁻³⁴ J·s (exact)</p></li>
+<li><p>c = 2.99792458×10⁸ m/s (exact)</p></li>
+<li><p>k_B = 1.380649×10⁻²³ J/K (exact)</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="code-value-numerical">
+<h2>CODE VALUE (numerical)<a class="headerlink" href="#code-value-numerical" title="Link to this heading"></a></h2>
+<section id="command-cflibs-provenance-verified">
+<h3>Command (cflibs provenance verified):<a class="headerlink" href="#command-cflibs-provenance-verified" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span>/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5<span class="w"> </span><span class="se">\</span>
+<span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import cflibs; print(cflibs.__file__)&quot;</span>
+<span class="c1"># =&gt; /home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/cflibs/__init__.py  ✓</span>
+</pre></div>
+</div>
+</section>
+<section id="fe-i-lines-db-vs-nist-after-ga-gk-conversion">
+<h3>Fe I lines — DB vs NIST (after gA/gk conversion):<a class="headerlink" href="#fe-i-lines-db-vs-nist-after-ga-gk-conversion" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>λ (nm)</p></th>
+<th class="head"><p>NIST gA (s⁻¹)</p></th>
+<th class="head"><p>g_k</p></th>
+<th class="head"><p>NIST A_ki (s⁻¹)</p></th>
+<th class="head"><p>DB A_ki (s⁻¹)</p></th>
+<th class="head"><p>ratio DB/NIST</p></th>
+<th class="head"><p>grade</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>370.1086</p></td>
+<td><p>5.72e+08</p></td>
+<td><p>9</p></td>
+<td><p>6.3556e+07</p></td>
+<td><p>6.3500e+07</p></td>
+<td><p>0.999126</p></td>
+<td><p>B+</p></td>
+</tr>
+<tr class="row-odd"><td><p>370.4461</p></td>
+<td><p>1.28e+08</p></td>
+<td><p>9</p></td>
+<td><p>1.4222e+07</p></td>
+<td><p>1.4200e+07</p></td>
+<td><p>0.998437</p></td>
+<td><p>B</p></td>
+</tr>
+<tr class="row-even"><td><p>370.5566</p></td>
+<td><p>2.25e+07</p></td>
+<td><p>7</p></td>
+<td><p>3.2143e+06</p></td>
+<td><p>3.2100e+06</p></td>
+<td><p>0.998667</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-odd"><td><p>370.7919</p></td>
+<td><p>1.66e+08</p></td>
+<td><p>5</p></td>
+<td><p>3.3200e+07</p></td>
+<td><p>3.3200e+07</p></td>
+<td><p>1.000000</p></td>
+<td><p>B+</p></td>
+</tr>
+<tr class="row-even"><td><p>370.9246</p></td>
+<td><p>1.09e+08</p></td>
+<td><p>7</p></td>
+<td><p>1.5571e+07</p></td>
+<td><p>1.5600e+07</p></td>
+<td><p>1.001835</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-odd"><td><p>371.9935</p></td>
+<td><p>1.78e+08</p></td>
+<td><p>11</p></td>
+<td><p>1.6182e+07</p></td>
+<td><p>1.6200e+07</p></td>
+<td><p>1.001124</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-even"><td><p>372.2563</p></td>
+<td><p>2.48e+07</p></td>
+<td><p>5</p></td>
+<td><p>4.9600e+06</p></td>
+<td><p>4.9700e+06</p></td>
+<td><p>1.002016</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-odd"><td><p>372.7619</p></td>
+<td><p>1.12e+08</p></td>
+<td><p>5</p></td>
+<td><p>2.2400e+07</p></td>
+<td><p>2.2400e+07</p></td>
+<td><p>1.000000</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-even"><td><p>373.4864</p></td>
+<td><p>9.91e+08</p></td>
+<td><p>11</p></td>
+<td><p>9.0091e+07</p></td>
+<td><p>9.0100e+07</p></td>
+<td><p>1.000101</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-odd"><td><p>373.7131</p></td>
+<td><p>1.27e+08</p></td>
+<td><p>9</p></td>
+<td><p>1.4111e+07</p></td>
+<td><p>1.4100e+07</p></td>
+<td><p>0.999213</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-even"><td><p>374.3362</p></td>
+<td><p>7.80e+07</p></td>
+<td><p>3</p></td>
+<td><p>2.6000e+07</p></td>
+<td><p>2.6000e+07</p></td>
+<td><p>1.000000</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-odd"><td><p>374.5561</p></td>
+<td><p>8.05e+07</p></td>
+<td><p>7</p></td>
+<td><p>1.1500e+07</p></td>
+<td><p>1.1500e+07</p></td>
+<td><p>1.000000</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-even"><td><p>374.5899</p></td>
+<td><p>2.20e+07</p></td>
+<td><p>3</p></td>
+<td><p>7.3333e+06</p></td>
+<td><p>7.3200e+06</p></td>
+<td><p>0.998182</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-odd"><td><p>374.8264</p></td>
+<td><p>4.58e+07</p></td>
+<td><p>5</p></td>
+<td><p>9.1600e+06</p></td>
+<td><p>9.1500e+06</p></td>
+<td><p>0.998908</p></td>
+<td><p>A</p></td>
+</tr>
+<tr class="row-even"><td><p>374.9485</p></td>
+<td><p>6.87e+08</p></td>
+<td><p>9</p></td>
+<td><p>7.6333e+07</p></td>
+<td><p>7.6300e+07</p></td>
+<td><p>0.999563</p></td>
+<td><p>A</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Max Aki deviation:</strong> 0.20% (within NIST B-grade accuracy band of ≤10%)
+<strong>Max wavelength deviation:</strong> 0.214 pm (sub-pm for all A-grade lines)
+<strong>Energy level deviations:</strong> 0.000–0.004 meV (sub-meV, consistent with float64 rounding of eV values)</p>
+</section>
+<section id="ca-ii-h-k-lines">
+<h3>Ca II H&amp;K lines:<a class="headerlink" href="#ca-ii-h-k-lines" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Line</p></th>
+<th class="head"><p>λ_DB (nm)</p></th>
+<th class="head"><p>A_ki_DB</p></th>
+<th class="head"><p>Δλ</p></th>
+<th class="head"><p>ΔA_ki</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Ca II K</p></td>
+<td><p>393.3656</p></td>
+<td><p>1.47e+08</p></td>
+<td><p>0.8 pm</p></td>
+<td><p>0%</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca II H</p></td>
+<td><p>396.8467</p></td>
+<td><p>1.40e+08</p></td>
+<td><p>0.2 pm</p></td>
+<td><p>0%</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="emissivity-formula-numerical-test-ca-ii-k-t-10000k">
+<h3>Emissivity formula numerical test (Ca II K, T=10000K):<a class="headerlink" href="#emissivity-formula-numerical-test-ca-ii-k-t-10000k" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">PYTHONPATH</span><span class="o">=</span>/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5<span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2"># (see full command in audit log)</span>
+<span class="s2"># Result:</span>
+<span class="s2">#   Manual (astropy): 159277165.76405817 W/m3/sr</span>
+<span class="s2">#   Code (cflibs):    159277165.76405817 W/m3/sr</span>
+<span class="s2">#   Fractional error: 0.0  (exact floating-point match)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="physical-constants-check">
+<h3>Physical constants check:<a class="headerlink" href="#physical-constants-check" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">h</span><span class="p">:</span> <span class="n">code</span><span class="o">=</span><span class="mf">6.62607015e-34</span><span class="p">,</span> <span class="n">CODATA</span><span class="o">=</span><span class="mf">6.62607015e-34</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mf">0.00e+00</span><span class="o">%</span>
+<span class="n">c</span><span class="p">:</span> <span class="n">code</span><span class="o">=</span><span class="mf">2.99792458e+08</span><span class="p">,</span> <span class="n">CODATA</span><span class="o">=</span><span class="mf">2.99792458e+08</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mf">0.00e+00</span><span class="o">%</span>
+<span class="n">k</span><span class="p">:</span> <span class="n">code</span><span class="o">=</span><span class="mf">1.38064900e-23</span><span class="p">,</span> <span class="n">CODATA</span><span class="o">=</span><span class="mf">1.380649e-23</span><span class="p">,</span>   <span class="n">delta</span><span class="o">=</span><span class="mf">0.00e+00</span><span class="o">%</span>
+</pre></div>
+</div>
+<p>All three constants match CODATA 2018 exact values to machine precision.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="delta-interpretation">
+<h2>DELTA &amp; INTERPRETATION<a class="headerlink" href="#delta-interpretation" title="Link to this heading"></a></h2>
+<p><strong>Aki:</strong> All 15 A/B+ grade Fe I lines match NIST ASD to ≤0.20% after the gA/g_k conversion.
+This is well within the NIST accuracy grade B uncertainty band (≤10%) and within B+ (≤7%),
+suggesting the DB was ingested directly from NIST ASD using the correct A_ki column.</p>
+<p><strong>Wavelengths:</strong> Maximum deviation is 0.21 pm (0.0002 nm), within the NIST ASD observed-wavelength
+uncertainty of 0.04–0.03 nm for Fe I. For a 0.1 nm instrumental FWHM (typical LIBS), a 0.21 pm
+wavelength error has zero observable effect.</p>
+<p><strong>Energy levels:</strong> Deviations are &lt;0.01 meV across all lines, consistent with floating-point
+representation of the published eV values. The Boltzmann factor <code class="docutils literal notranslate"><span class="pre">exp(-E_k/kT)</span></code> is perturbed by
+&lt;0.001% even at the highest accessible temperature (T=20000K, kT=1.72 eV), negligible.</p>
+<p><strong>Physical constants:</strong> h, c, k_B match CODATA 2018 exact values to 0 relative error. The
+emissivity formula <code class="docutils literal notranslate"><span class="pre">ε</span> <span class="pre">=</span> <span class="pre">(hc/4πλ)</span> <span class="pre">A_ki</span> <span class="pre">n_k</span></code> produces numerically identical results to an
+independent astropy-based reference computation.</p>
+<p><strong>Impact on T/n_e/composition:</strong> Negligible. A 0.2% error in A_ki shifts the Boltzmann-plot
+intercept (ln(Iλ/gA)) by 0.002, equivalent to &lt;1 K temperature error at 10000 K. Energy level
+errors of &lt;0.01 meV shift Boltzmann slopes by &lt;10⁻⁵, absolutely negligible.</p>
+</section>
+<hr class="docutils" />
+<section id="fix">
+<h2>FIX<a class="headerlink" href="#fix" title="Link to this heading"></a></h2>
+<p>No fix required. The atomic data is correctly ingested from NIST ASD. The forward model
+emissivity formula is correctly implemented. The physical constants match CODATA 2018 exactly.</p>
+<p><strong>What would have to be true for this to be wrong:</strong></p>
+<ol class="arabic simple">
+<li><p>The gA→A_ki division would have to be applied twice (double-division error). Evidence against:
+the DB Aki values reproduce exactly when multiplied by gk to recover gA.</p></li>
+<li><p>The DB would have to use a non-NIST source for low-grade (C, D, E) lines with larger Aki
+errors. This is expected and documented — NIST A-grade is ≤1%, B ≤10%, C ≤25%, D ≤50%.
+The codebase only uses C/D/E lines when better data is unavailable, which is physics-correct
+practice (cf. Radziemski &amp; Cremers 2006, Section 2.3).</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="citations">
+<h2>CITATIONS<a class="headerlink" href="#citations" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Fuhr, J. R., &amp; Wiese, W. L. (2006). Atomic Transition Probabilities, Iron. NIST ASD Database.
+https://physics.nist.gov/PhysRefData/ASD/lines_form.html</p></li>
+<li><p>Wiese, W. L., &amp; Fuhr, J. R. (2009). Accurate Atomic Transition Probabilities for H, He, Li.
+J. Phys. Chem. Ref. Data, 38(3), 565. DOI: 10.1063/1.3077727</p></li>
+<li><p>Wiese, W. L., Smith, M. W., &amp; Miles, B. M. (1969). Atomic Transition Probabilities, Vol. II.
+NSRDS-NBS 22. NBS Gaithersburg. (Ca II H&amp;K canonical values.)</p></li>
+<li><p>NIST CODATA 2018: https://physics.nist.gov/cgi-bin/cuu/Value?h | ?c | ?kb</p></li>
+<li><p>Radziemski, L. J., &amp; Cremers, D. A. (2006). Handbook of Laser-Induced Breakdown Spectroscopy.
+Wiley. (Sec. 2.3: use of NIST ASD as primary atomic data source for CF-LIBS.)</p></li>
+<li><p>Cremers, D. A., &amp; Radziemski, L. J. (2013). Handbook of Laser-Induced Breakdown Spectroscopy,
+2nd ed. Wiley. DOI: 10.1002/9781118567371</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

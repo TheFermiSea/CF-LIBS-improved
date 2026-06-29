@@ -1,0 +1,365 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/validation/round_trip.py Census Findings &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: cflibs/validation/round_trip.py Census Findings</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/validation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-validation-round-trip-py-census-findings">
+<h1>Adversarial Verification: cflibs/validation/round_trip.py Census Findings<a class="headerlink" href="#adversarial-verification-cflibs-validation-round-trip-py-census-findings" title="Link to this heading"></a></h1>
+<p><strong>Verifier:</strong> Adversarial sub-agent (claude-sonnet-4-6)
+<strong>Date:</strong> 2026-06-25
+<strong>Method:</strong> ripgrep + Read on actual source at worktree v4-m5; cross-referenced with
+<code class="docutils literal notranslate"><span class="pre">saha-boltzmann-lte.md</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs-method.md</span></code> literature notes.</p>
+<hr class="docutils" />
+<section id="finding-1-critical-missing-hc-in-intensity-formula">
+<h2>Finding 1 — CRITICAL: Missing <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code> in intensity formula<a class="headerlink" href="#finding-1-critical-missing-hc-in-intensity-formula" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">_append_stage_observations</span></code> uses <code class="docutils literal notranslate"><span class="pre">base_intensity</span> <span class="pre">*</span> <span class="pre">1e-4</span></code> instead of the physical
+<code class="docutils literal notranslate"><span class="pre">(hc/λ)</span> <span class="pre">*</span> <span class="pre">g*A*exp(-E/kT)/U</span></code>, causing a wavelength-dependent bias in recovered concentrations.</p>
+<p><strong>REAL: TRUE</strong> — confirmed.</p>
+<p><strong>Corrected severity: CRITICAL</strong> (upheld).</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">round_trip.py:306</span></code> computes
+<code class="docutils literal notranslate"><span class="pre">base_intensity</span> <span class="pre">=</span> <span class="pre">concentration</span> <span class="pre">*</span> <span class="pre">stage_fraction</span> <span class="pre">*</span> <span class="pre">g_k</span> <span class="pre">*</span> <span class="pre">A_ki</span> <span class="pre">*</span> <span class="pre">boltzmann_factor</span> <span class="pre">/</span> <span class="pre">U</span></code>
+then <code class="docutils literal notranslate"><span class="pre">intensity</span> <span class="pre">=</span> <span class="pre">base_intensity</span> <span class="pre">*</span> <span class="pre">1e-4</span></code> (line 309). The inversion’s <code class="docutils literal notranslate"><span class="pre">LineObservation.y_value</span></code>
+at <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/data_structures.py:78</span></code> is
+<code class="docutils literal notranslate"><span class="pre">ln(I</span> <span class="pre">*</span> <span class="pre">wavelength_nm</span> <span class="pre">/</span> <span class="pre">(g_k</span> <span class="pre">*</span> <span class="pre">A_ki))</span></code>. For the Boltzmann plot to self-cancel the wavelength
+dependence in the y-axis, the forward intensity must include a <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code> factor so that
+<code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">ln((hc/λ</span> <span class="pre">*</span> <span class="pre">g*A*exp(-E/kT)/U)</span> <span class="pre">*</span> <span class="pre">λ</span> <span class="pre">/</span> <span class="pre">(g*A))</span> <span class="pre">=</span> <span class="pre">ln(hc</span> <span class="pre">*</span> <span class="pre">exp(-E/kT)</span> <span class="pre">/</span> <span class="pre">U)</span></code> — λ cancels.
+With the <code class="docutils literal notranslate"><span class="pre">1e-4</span></code> approximation, <code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">ln(1e-4</span> <span class="pre">*</span> <span class="pre">λ</span> <span class="pre">*</span> <span class="pre">exp(-E/kT)</span> <span class="pre">/</span> <span class="pre">U)</span></code> and the <code class="docutils literal notranslate"><span class="pre">λ</span></code> term
+persists in the intercept. The closure equation (<code class="docutils literal notranslate"><span class="pre">closure.py:721</span></code>) then uses <code class="docutils literal notranslate"><span class="pre">U_s</span> <span class="pre">*</span> <span class="pre">exp(q_s)</span></code>
+to set relative concentrations: the <code class="docutils literal notranslate"><span class="pre">ln(λ_s)</span></code> shift in <code class="docutils literal notranslate"><span class="pre">q_s</span></code> is different for each element
+because different species have transitions at different wavelengths, producing a
+wavelength-dependent systematic bias in concentration ratios. This is a genuine physics error,
+not a sign-convention difference or an already-handled edge case.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-high-compute-equilibrium-ne-uses-wrong-denominator-1-avg-z">
+<h2>Finding 2 — HIGH: <code class="docutils literal notranslate"><span class="pre">compute_equilibrium_ne</span></code> uses wrong denominator <code class="docutils literal notranslate"><span class="pre">(1</span> <span class="pre">+</span> <span class="pre">avg_Z)</span></code><a class="headerlink" href="#finding-2-high-compute-equilibrium-ne-uses-wrong-denominator-1-avg-z" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> The denominator should be <code class="docutils literal notranslate"><span class="pre">(1</span> <span class="pre">+</span> <span class="pre">2*avg_Z)</span></code> because the total particle count
+includes both heavy particles and electrons.</p>
+<p><strong>REAL: FALSE</strong> — the formula is correct; the variable name is misleading.</p>
+<p><strong>Corrected severity: N/A</strong> (false alarm — no bug).</p>
+<p><strong>Reasoning:</strong> Let N0 = heavy-particle number density (neutrals + all ions). By charge
+neutrality, n_e = avg_Z * N0. The ideal-gas pressure is P = (N0 + n_e) * kT = N0 * (1 + avg_Z) * kT,
+so N0 = P / (kT * (1 + avg_Z)). The code computes <code class="docutils literal notranslate"><span class="pre">n_total_m3</span> <span class="pre">=</span> <span class="pre">P</span> <span class="pre">/</span> <span class="pre">(kT</span> <span class="pre">*</span> <span class="pre">(1</span> <span class="pre">+</span> <span class="pre">avg_Z))</span></code> — this
+IS N0 (heavy-particle density, misnamed as “n_total”), then <code class="docutils literal notranslate"><span class="pre">n_e_new</span> <span class="pre">=</span> <span class="pre">avg_Z</span> <span class="pre">*</span> <span class="pre">n_total_m3</span> <span class="pre">=</span> <span class="pre">avg_Z</span> <span class="pre">*</span> <span class="pre">N0</span></code>,
+which is the correct electron density. The <code class="docutils literal notranslate"><span class="pre">(1</span> <span class="pre">+</span> <span class="pre">2*avg_Z)</span></code> denominator would only apply if
+<code class="docutils literal notranslate"><span class="pre">n_total_m3</span></code> represented all particles including electrons, but it doesn’t — the math chain is
+self-consistent. The docstring at line 457-459 says <code class="docutils literal notranslate"><span class="pre">n_total</span> <span class="pre">=</span> <span class="pre">P</span> <span class="pre">/</span> <span class="pre">(kT</span> <span class="pre">*</span> <span class="pre">(1</span> <span class="pre">+</span> <span class="pre">Z_avg))</span></code> and
+<code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">=</span> <span class="pre">Z_avg</span> <span class="pre">*</span> <span class="pre">n_total</span></code>, which describes the heavy-particle count correctly. The variable name
+<code class="docutils literal notranslate"><span class="pre">n_total_m3</span></code> is misleading (it is really N0), but the calculation gives the right n_e.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-3-original-high-s2-missing-factor-of-2-for-electron-spin-degeneracy">
+<h2>Finding 3 (original) — HIGH: S2 missing factor of 2 for electron spin degeneracy<a class="headerlink" href="#finding-3-original-high-s2-missing-factor-of-2-for-electron-spin-degeneracy" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> S2 formula omits the factor-of-2 electron spin degeneracy.</p>
+<p><strong>REAL: FALSE</strong> (census self-retracted in the original report, marked as non-finding).</p>
+<p><strong>Corrected severity: N/A</strong> — confirmed non-finding.</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">constants.py:72-76</span></code> explicitly states: “The factor of 2 for electron spin
+degeneracy (g_e = 2) is INCLUDED in this value.” <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span> <span class="pre">=</span> <span class="pre">6.042e21</span></code> already includes
+the factor of 2. Both S1 and S2 use <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> identically, so neither is missing the
+factor. The census correctly identified this as a false alarm during the audit process.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-3-revised-high-noisemodel-shot-noise-applied-to-background-inflated-signal-uncertainty-formula-circular">
+<h2>Finding 3 (revised) — HIGH: <code class="docutils literal notranslate"><span class="pre">NoiseModel</span></code> shot noise applied to background-inflated signal; uncertainty formula circular<a class="headerlink" href="#finding-3-revised-high-noisemodel-shot-noise-applied-to-background-inflated-signal-uncertainty-formula-circular" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> Shot noise is computed from <code class="docutils literal notranslate"><span class="pre">intensity</span></code> after background has been added
+(inflating Poisson variance). The uncertainty formula then uses the post-noise intensity,
+creating a circular estimate.</p>
+<p><strong>REAL: TRUE</strong> — confirmed.</p>
+<p><strong>Corrected severity: HIGH</strong> (upheld).</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">round_trip.py:588-615</span></code> confirms the sequence: (1) <code class="docutils literal notranslate"><span class="pre">intensity</span> <span class="pre">+=</span> <span class="pre">self.background</span></code>
+(line 591) adds background before shot noise; (2) <code class="docutils literal notranslate"><span class="pre">shot_std</span> <span class="pre">=</span> <span class="pre">np.sqrt(max(intensity,</span> <span class="pre">1.0))</span></code>
+(line 600) applies Poisson approximation to the signal+background sum, inflating the shot
+variance by background counts; (3) <code class="docutils literal notranslate"><span class="pre">var_shot</span> <span class="pre">=</span> <span class="pre">max(intensity,</span> <span class="pre">1.0)</span></code> (line 612) uses the
+final noisy <code class="docutils literal notranslate"><span class="pre">intensity</span></code> (which already encodes the shot realization) as the variance estimate.
+Physical Poisson shot noise should be applied to photon counts (the signal before background
+subtraction), and the uncertainty estimate should be derived from known noise parameters
+applied to the clean signal, not from the noise-contaminated measurement. This inflates the
+uncertainty for bright background, and makes the uncertainty formula depend on the noise
+realization rather than the noise model parameters — the “circular” diagnosis is accurate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-4-medium-boltzmann-factor-uses-kb-ev-temperature-k-instead-of-pre-computed-t-ev">
+<h2>Finding 4 — MEDIUM: Boltzmann factor uses <code class="docutils literal notranslate"><span class="pre">KB_EV</span> <span class="pre">*</span> <span class="pre">temperature_K</span></code> instead of pre-computed <code class="docutils literal notranslate"><span class="pre">T_eV</span></code><a class="headerlink" href="#finding-4-medium-boltzmann-factor-uses-kb-ev-temperature-k-instead-of-pre-computed-t-ev" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> Clarity/consistency issue — <code class="docutils literal notranslate"><span class="pre">KB_EV</span> <span class="pre">*</span> <span class="pre">temperature_K</span></code> recomputes what <code class="docutils literal notranslate"><span class="pre">T_eV</span></code>
+already is.</p>
+<p><strong>REAL: TRUE</strong> — confirmed as a clarity issue.</p>
+<p><strong>Corrected severity: MEDIUM</strong> (upheld, no math error).</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">round_trip.py:305</span></code> is <code class="docutils literal notranslate"><span class="pre">np.exp(-E_k</span> <span class="pre">/</span> <span class="pre">(KB_EV</span> <span class="pre">*</span> <span class="pre">temperature_K))</span></code> while
+<code class="docutils literal notranslate"><span class="pre">T_eV</span> <span class="pre">=</span> <span class="pre">temperature_K</span> <span class="pre">/</span> <span class="pre">EV_TO_K</span></code> is computed at line 205 and passed into the Saha computation
+but not forwarded to <code class="docutils literal notranslate"><span class="pre">_append_stage_observations</span></code>. <code class="docutils literal notranslate"><span class="pre">KB_EV</span> <span class="pre">=</span> <span class="pre">8.617e-5</span> <span class="pre">eV/K</span></code> and
+<code class="docutils literal notranslate"><span class="pre">EV_TO_K</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">/</span> <span class="pre">KB_EV</span></code>, so <code class="docutils literal notranslate"><span class="pre">KB_EV</span> <span class="pre">*</span> <span class="pre">temperature_K</span> <span class="pre">==</span> <span class="pre">T_eV</span></code> algebraically — no numeric error.
+The inconsistency invites future maintenance mistakes and should be fixed, but it is not a
+physics bug.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-high-iterativecflibssolver-hardwired-no-solver-injection-seam">
+<h2>Finding 5 — HIGH: <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code> hardwired; no solver injection seam<a class="headerlink" href="#finding-5-high-iterativecflibssolver-hardwired-no-solver-injection-seam" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">RoundTripValidator</span></code> imports and instantiates <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code> via
+deferred import at line 779; no way to inject other <code class="docutils literal notranslate"><span class="pre">SolverStrategy</span></code> implementations.</p>
+<p><strong>REAL: TRUE</strong> — confirmed.</p>
+<p><strong>Corrected severity: HIGH</strong> (upheld).</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">round_trip.py:779-781</span></code> performs
+<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.iterative</span> <span class="pre">import</span> <span class="pre">IterativeCFLIBSSolver;</span> <span class="pre">solver</span> <span class="pre">=</span> <span class="pre">IterativeCFLIBSSolver(self.atomic_db,</span> <span class="pre">**solver_kwargs)</span></code>.
+The <code class="docutils literal notranslate"><span class="pre">RoundTripValidator.__init__</span></code> signature (lines 665-691) accepts no <code class="docutils literal notranslate"><span class="pre">solver_factory</span></code>
+parameter. The <code class="docutils literal notranslate"><span class="pre">SolverStrategy</span></code> ABC exists in the codebase. This means the validator cannot
+gate regressions in the Bayesian, joint L-BFGS-B, or closed-form ILR solvers — those require
+separate bespoke tests or manual wiring. The deferred import pattern makes the dependency
+invisible at the constructor call site. This is a real architectural gap, not merely
+theoretical.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-10-high-round-trip-test-asserts-50-temperature-error-tolerance">
+<h2>Finding 10 — HIGH: Round-trip test asserts 50% temperature error tolerance<a class="headerlink" href="#finding-10-high-round-trip-test-asserts-50-temperature-error-tolerance" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> <code class="docutils literal notranslate"><span class="pre">test_round_trip_no_noise</span></code> asserts <code class="docutils literal notranslate"><span class="pre">result.temperature_error_frac</span> <span class="pre">&lt;</span> <span class="pre">0.50</span></code>,
+which is 10× looser than the validator default of 5%. <code class="docutils literal notranslate"><span class="pre">test_round_trip_with_noise</span></code> asserts
+only <code class="docutils literal notranslate"><span class="pre">result.converged</span></code> with no accuracy check.</p>
+<p><strong>REAL: TRUE</strong> — confirmed.</p>
+<p><strong>Corrected severity: HIGH</strong> (upheld).</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">tests/test_round_trip.py:258-260</span></code> reads:
+<code class="docutils literal notranslate"><span class="pre">assert</span> <span class="pre">result.temperature_error_frac</span> <span class="pre">&lt;</span> <span class="pre">0.50</span></code>. The <code class="docutils literal notranslate"><span class="pre">RoundTripValidator</span></code> has a
+<code class="docutils literal notranslate"><span class="pre">temperature_tolerance=0.10</span></code> (10%) in that test’s constructor call (line 241), but the test
+asserts 50%. Line 282 in <code class="docutils literal notranslate"><span class="pre">test_round_trip_with_noise</span></code> checks only <code class="docutils literal notranslate"><span class="pre">assert</span> <span class="pre">result.converged</span></code>
+with no temperature or concentration accuracy check. A 40% temperature error or a completely
+wrong concentration set would pass both tests silently. The <code class="docutils literal notranslate"><span class="pre">result.passed</span></code> attribute (which
+uses the configured tolerances) is never asserted in any of these round-trip tests.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-11-high-nist-parity-tolerances-guard-only-against-catastrophic-failure">
+<h2>Finding 11 — HIGH: NIST parity tolerances guard only against catastrophic failure<a class="headerlink" href="#finding-11-high-nist-parity-tolerances-guard-only-against-catastrophic-failure" title="Link to this heading"></a></h2>
+<p><strong>Census claim:</strong> Partition-function tolerances of 65–70% and ionization-fraction tolerances
+up to 150% are too loose to catch real regressions that matter for concentration recovery.</p>
+<p><strong>REAL: TRUE</strong> — confirmed.</p>
+<p><strong>Corrected severity: HIGH</strong> (upheld).</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">tests/test_nist_parity.py:110-115</span></code> sets <code class="docutils literal notranslate"><span class="pre">tol</span> <span class="pre">=</span> <span class="pre">0.70</span></code> (T &gt;= 15000 K) and
+<code class="docutils literal notranslate"><span class="pre">tol</span> <span class="pre">=</span> <span class="pre">0.65</span></code> (T &lt;= 10000 K). Line 340 permits 150% relative error for minority ionization
+stages (nist_f &lt; 0.05). Per the literature note <code class="docutils literal notranslate"><span class="pre">saha-boltzmann-lte.md</span> <span class="pre">§P6</span></code>, partition-function
+errors propagate linearly into concentration recovery via <code class="docutils literal notranslate"><span class="pre">C_s</span> <span class="pre">∝</span> <span class="pre">U_s(T)</span> <span class="pre">*</span> <span class="pre">exp(q_s)</span></code>. A 70%
+error in U_s(T) translates directly into a 70% error in C_s — well outside any physically
+meaningful recovery target. The 150% tolerance on minority stages is particularly problematic
+because Saha correction for ionic lines uses those minor-stage fractions. The note in the test
+code attributes the large discrepancy to energy-level cleanup and autoionizing levels, but the
+tolerance should be tightened with documented acknowledged deviations tracked to specific issues
+rather than absorbed into a blanket 70% / 150% pass window.</p>
+</section>
+<hr class="docutils" />
+<section id="summary-of-verdicts">
+<h2>Summary of Verdicts<a class="headerlink" href="#summary-of-verdicts" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Census Severity</p></th>
+<th class="head"><p>REAL?</p></th>
+<th class="head"><p>Confirmed Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>CRITICAL</p></td>
+<td><p>TRUE</p></td>
+<td><p>CRITICAL</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>HIGH</p></td>
+<td><p>FALSE</p></td>
+<td><p>N/A (no bug)</p></td>
+</tr>
+<tr class="row-even"><td><p>3 (original)</p></td>
+<td><p>HIGH</p></td>
+<td><p>FALSE</p></td>
+<td><p>N/A (self-retracted)</p></td>
+</tr>
+<tr class="row-odd"><td><p>3 (revised)</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>5</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE (design dup)</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>7</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-even"><td><p>8</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>9</p></td>
+<td><p>LOW</p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+</tr>
+<tr class="row-even"><td><p>10</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-odd"><td><p>11</p></td>
+<td><p>HIGH</p></td>
+<td><p>TRUE</p></td>
+<td><p>HIGH</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: CRITICAL</strong> (Finding 1 — missing <code class="docutils literal notranslate"><span class="pre">hc/λ</span></code>).</p>
+</section>
+<hr class="docutils" />
+<section id="new-findings-missed-by-census">
+<h2>New Findings (Missed by Census)<a class="headerlink" href="#new-findings-missed-by-census" title="Link to this heading"></a></h2>
+<section id="new-finding-a-medium-silent-fallback-to-physically-meaningless-synthetic-transitions">
+<h3>New Finding A — MEDIUM: Silent fallback to physically meaningless synthetic transitions<a class="headerlink" href="#new-finding-a-medium-silent-fallback-to-physically-meaningless-synthetic-transitions" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">round_trip.py:364-391</span></code></p>
+<p><strong>Evidence:</strong> <code class="docutils literal notranslate"><span class="pre">_generate_synthetic_transitions</span></code> generates <code class="docutils literal notranslate"><span class="pre">E_k_ev</span> <span class="pre">=</span> <span class="pre">rng.uniform(0.5,</span> <span class="pre">6.0)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">g_k</span> <span class="pre">=</span> <span class="pre">rng.integers(3,</span> <span class="pre">15)</span></code>, <code class="docutils literal notranslate"><span class="pre">A_ki</span> <span class="pre">=</span> <span class="pre">10**rng.uniform(6,</span> <span class="pre">8)</span></code> from a deterministic seed. If
+the atomic database is unavailable or returns no transitions for an element/stage pair
+(including a common DB-unavailable scenario in CI), the round-trip test silently proceeds with
+these fictitious atomic data. The recovered temperature and concentrations are then compared
+to ground truth but were generated with fake atomic parameters that have no correlation to
+real LIBS physics. The test passes if the inversion happens to converge, even though the
+data are physically meaningless. <strong>Fix:</strong> add a warning log AND a <code class="docutils literal notranslate"><span class="pre">metadata[&quot;used_synthetic_fallback&quot;]</span></code>
+flag that the test can assert is <code class="docutils literal notranslate"><span class="pre">False</span></code> to ensure DB-backed transitions were used.</p>
+</section>
+<section id="new-finding-b-low-noisemodel-clamps-negative-intensity-to-1-0-not-0-0">
+<h3>New Finding B — LOW: <code class="docutils literal notranslate"><span class="pre">NoiseModel</span></code> clamps negative intensity to <code class="docutils literal notranslate"><span class="pre">1.0</span></code>, not <code class="docutils literal notranslate"><span class="pre">0.0</span></code><a class="headerlink" href="#new-finding-b-low-noisemodel-clamps-negative-intensity-to-1-0-not-0-0" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">round_trip.py:608</span></code></p>
+<p><strong>Evidence:</strong> <code class="docutils literal notranslate"><span class="pre">intensity</span> <span class="pre">=</span> <span class="pre">max(intensity,</span> <span class="pre">1.0)</span></code> forces a minimum of 1.0 on all noisy
+intensities, even those that physically should be undetected (i.e., signal &lt; 0 after
+noise). Clamping to 1.0 rather than 0.0 means all “dark” lines have a fabricated positive
+intensity equal to the minimum detection unit. This is noted in the census as Finding 8
+(the “phantom-line bias”), but the more precise observation is that 1.0 is arbitrary in the
+same undocumented unit system as the <code class="docutils literal notranslate"><span class="pre">1e-4</span></code> scale. If Finding 1 is fixed and intensities
+are in physical units, the clamp floor of <code class="docutils literal notranslate"><span class="pre">1.0</span></code> will be either catastrophically high or
+negligibly low — it will need to be updated in the same pass. This cross-dependency is not
+noted in the census.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

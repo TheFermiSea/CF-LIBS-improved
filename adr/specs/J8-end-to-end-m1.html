@@ -1,0 +1,171 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J8 Implementation Spec — End-to-End Single-Spectrum Graph + Scoreboard Flag → Milestone M1 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J8 Implementation Spec — End-to-End Single-Spectrum Graph + Scoreboard Flag → Milestone M1</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J8-end-to-end-m1.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j8-implementation-spec-end-to-end-single-spectrum-graph-scoreboard-flag-milestone-m1">
+<h1>J8 Implementation Spec — End-to-End Single-Spectrum Graph + Scoreboard Flag → Milestone M1<a class="headerlink" href="#j8-implementation-spec-end-to-end-single-spectrum-graph-scoreboard-flag-milestone-m1" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J8 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §8.1/§8.2 (M1), §5.4 · <strong>Track:</strong> spine · <strong>Depends:</strong> J1–J7 · <strong>Estimated effort:</strong> 5–8 pd / ~1.5 wk</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Compose J1–J7 into one jitted stage graph (<code class="docutils literal notranslate"><span class="pre">jitpipe/pipeline.py</span></code>): response multiply → calibrate → detect/identify → self-absorption → Stark → solve, mirroring the reference stage order of <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:666</span></code>: <code class="docutils literal notranslate"><span class="pre">:697-706</span></code> response, <code class="docutils literal notranslate"><span class="pre">:709-733</span></code> detect_and_select via <code class="docutils literal notranslate"><span class="pre">:337</span></code>, <code class="docutils literal notranslate"><span class="pre">:761-795</span></code> Stark, <code class="docutils literal notranslate"><span class="pre">:797-818</span></code> solve).</p></li>
+<li><p><strong>Quality-flag failure semantics:</strong> the reference raises <code class="docutils literal notranslate"><span class="pre">ValueError(&quot;No</span> <span class="pre">usable</span> <span class="pre">spectral</span> <span class="pre">lines</span> <span class="pre">detected</span> <span class="pre">for</span> <span class="pre">inversion.&quot;)</span></code> at zero observations (<code class="docutils literal notranslate"><span class="pre">pipeline.py:751-752</span></code>) and the board scores it all-FN (<code class="docutils literal notranslate"><span class="pre">benchmark/scoreboard.py:159-166</span></code>); the jit pipeline’s masked equivalent (zero valid observations) must produce <strong>the same all-FN record</strong> — not NaN concentrations, not a crash. Kernels never raise; <code class="docutils literal notranslate"><span class="pre">host.py</span></code> interprets <code class="docutils literal notranslate"><span class="pre">failed</span></code> masks.</p></li>
+<li><p>Wire <code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">{reference,jit}</span></code> into the scoreboard: subparser (<code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:1255-1290</span></code>) → <code class="docutils literal notranslate"><span class="pre">scoreboard_cmd</span></code> (<code class="docutils literal notranslate"><span class="pre">:1012</span></code>) → <code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code> (<code class="docutils literal notranslate"><span class="pre">scoreboard.py:274</span></code>) → <code class="docutils literal notranslate"><span class="pre">_score_spectrum</span></code> (<code class="docutils literal notranslate"><span class="pre">:132</span></code>). Reference path unchanged (<code class="docutils literal notranslate"><span class="pre">:153-158</span></code>). Everything score-defining is shared and untouched: candidate policy truth ∪ CONFOUNDER_ELEMENTS (<code class="docutils literal notranslate"><span class="pre">:142</span></code>), presence rule, seeded sampling (<code class="docutils literal notranslate"><span class="pre">:193-198</span></code>), micro-averaged confusion (<code class="docutils literal notranslate"><span class="pre">:214-217</span></code>), failure policy (<code class="docutils literal notranslate"><span class="pre">:159-166</span></code>).</p></li>
+<li><p>Emit the identical per-spectrum record schema (<code class="docutils literal notranslate"><span class="pre">scoreboard.py:143-185</span></code>) including <code class="docutils literal notranslate"><span class="pre">stage_timings_s</span></code> (single-spectrum mode: real timings; batched mode later in J9 reports batch_time/B with B recorded); <code class="docutils literal notranslate"><span class="pre">&quot;pipeline&quot;:</span> <span class="pre">&quot;jit&quot;</span></code> recorded in board JSON + reproduce line (<code class="docutils literal notranslate"><span class="pre">:377</span></code>).</p></li>
+</ul>
+</section>
+<section id="scope-notes">
+<h2>2. Scope notes<a class="headerlink" href="#scope-notes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Single-spectrum (<code class="docutils literal notranslate"><span class="pre">run_one</span></code>) end-to-end jit only; the batch axis is J9’s job (the stage kernels are already vmap-tested individually).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">host.py</span></code> unpacking to the reference result dataclasses is the integration surface: <code class="docutils literal notranslate"><span class="pre">WavelengthCalibrationResult</span></code>, <code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code>, <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:81</span></code>) — downstream consumers and the parity adapters see identical types.</p></li>
+<li><p>Stage-boundary outputs are first-class NamedTuples surfaced under <code class="docutils literal notranslate"><span class="pre">CFLIBS_JITPIPE_DEBUG</span></code> (ADR-0004 R5); this bead builds that switch.</p></li>
+<li><p>The divergence-ledger document is created here (<code class="docutils literal notranslate"><span class="pre">docs/jitpipe/divergence-ledger.md</span></code>) and seeded with any M1 adjudications.</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria-milestone-m1-gate">
+<h2>3. Acceptance criteria — <strong>Milestone M1 gate</strong><a class="headerlink" href="#acceptance-criteria-milestone-m1-gate" title="Link to this heading"></a></h2>
+<p>On the two M1 datasets — <strong>bhvo2_chemcam</strong> (4 spectra; headline; response-corrected) and <strong>chemcam_calib</strong> (240 spectra; known R≈2000; real spectral gaps exercising masking):</p>
+<ol class="arabic simple">
+<li><p>Element calls agree ≥95 % of spectra (Tier-D).</p></li>
+<li><p>T within 2 %; n_e within 10 % (the Stark-stage tolerance dominates); concentrations rtol 5 % / atol 0.01.</p></li>
+<li><p>2-dataset scoreboard F1 delta ≥ −0.02 vs the frozen baseline protocol (<code class="docutils literal notranslate"><span class="pre">docs/benchmarks/SCOREBOARD-2026-06-10-baseline.md</span></code>, seed 20260610).</p></li>
+<li><p>Failure-policy parity demonstrated: a fixture spectrum with zero usable lines produces the same all-FN scored record on both pipelines.</p></li>
+<li><p>All per-stage Tier-K/S contracts green when the composed graph is stage-bisected via <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> (no contract regressions from composition — catches inter-stage padding/mask handoff bugs).</p></li>
+<li><p>End-to-end jit compiles once per bucket; no recompile on <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> leaf changes (extends J0’s AC-6 to the full graph).</p></li>
+<li><p>CPU x64 full-graph parity test in CI (subset-sized per watchdog rules); GPU smoke on one vasp node.</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>4. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_pipeline.py</span></code> (end-to-end vs <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> on M1 fixtures; failure-policy fixture; padding invariance at the graph level); <code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_scoreboard_dispatch.py</span></code> (flag threading, record-schema equality incl. <code class="docutils literal notranslate"><span class="pre">stage_timings_s</span></code> keys, <code class="docutils literal notranslate"><span class="pre">&quot;pipeline&quot;</span></code> field, reproduce line). Shadow-mode hook: both pipelines run on every scoreboard invocation with deltas logged (Tier-B harness, consumed by J12’s ≥1-release shadow requirement).</p>
+</section>
+<section id="risks">
+<h2>5. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Inter-stage shape/mask handoffs (the composition is where mask bugs surface) — mitigated by AC-5 stage-bisect + graph-level padding invariance.</p></li>
+<li><p>The 23/76 sampled-spectrum hard-failure surface of the reference (<code class="docutils literal notranslate"><span class="pre">SCOREBOARD…md</span></code>) must map onto jit <code class="docutils literal notranslate"><span class="pre">failed</span></code> masks case-by-case; budget triage time for chemcam_calib’s gap regions.</p></li>
+<li><p>Watchdog discipline: commit after each integration step; never run the full board inside a sub-agent (CLAUDE.md rules).</p></li>
+</ul>
+</section>
+<section id="dependencies-files">
+<h2>6. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J1–J7 (all stages). Enables J9, J12. Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/pipeline.py</span></code>, <code class="docutils literal notranslate"><span class="pre">host.py</span></code> completion, <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> completion, <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py</span></code> (flag), <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/scoreboard.py</span></code> (dispatch only — scoring logic untouched), tests, <code class="docutils literal notranslate"><span class="pre">docs/jitpipe/divergence-ledger.md</span></code>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

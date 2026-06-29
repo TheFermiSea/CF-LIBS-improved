@@ -1,0 +1,439 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RADIS Reference Analysis for CF-LIBS Overhaul &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">RADIS Reference Analysis for CF-LIBS Overhaul</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/reference/radis.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="radis-reference-analysis-for-cf-libs-overhaul">
+<h1>RADIS Reference Analysis for CF-LIBS Overhaul<a class="headerlink" href="#radis-reference-analysis-for-cf-libs-overhaul" title="Link to this heading"></a></h1>
+<p><strong>Source project:</strong> <a class="reference external" href="https://github.com/radis/radis">radis/radis</a> — fast line-by-line emission/absorption spectra (equilibrium + non-LTE), Python/NumPy/Numba, LGPL-3.0.<br />
+<strong>RADIS version surveyed:</strong> 0.16.4–0.17 (docs), 2021 DIT paper.<br />
+<strong>Relevance to CF-LIBS:</strong> RADIS is a reference implementation for the <em>forward model</em> side: spectral line database access, Voigt broadening, partition functions for atomic species, instrument slit convolution, and spectrum container design. CF-LIBS and RADIS share the same physics layer (LTE line emission); RADIS goes further into non-LTE molecular cases and RADIS does not implement CF-LIBS inversion (Saha–Boltzmann composition inference).</p>
+<hr class="docutils" />
+<section id="how-radis-structures-the-relevant-computation">
+<h2>1. How RADIS Structures the Relevant Computation<a class="headerlink" href="#how-radis-structures-the-relevant-computation" title="Link to this heading"></a></h2>
+<section id="module-hierarchy">
+<h3>1.1 Module Hierarchy<a class="headerlink" href="#module-hierarchy" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>radis/
+├── lbl/                   # Line-by-line engine (core)
+│   ├── calc.py            # High-level calc_spectrum() wrapper
+│   ├── loader.py          # DatabankLoader (db loading, HDF5 caching)
+│   ├── base.py            # BaseFactory: populations, linestrengths, Einstein A
+│   ├── bands.py           # BandFactory: band-level aggregation
+│   ├── broadening.py      # BroadenFactory: Voigt/Doppler/Lorentz, LDM, FFT
+│   ├── factory.py         # SpectrumFactory: orchestrates full pipeline + RTE
+│   └── overp.py           # Pre-calculated band store (LevelsList)
+├── spectrum/              # Spectrum container + operations
+│   ├── spectrum.py        # Spectrum class (dict-based, unit-aware)
+│   ├── operations.py      # add_spectra, multiply, crop, etc.
+│   ├── compare.py         # compare_with, get_distance
+│   └── equations.py       # Kirchhoff&#39;s law, RTE helpers
+├── levels/                # Partition functions
+│   ├── partfunc.py        # RovibParFuncTabulator, RovibParFuncCalculator
+│   │                      # PartFuncKurucz, PartFuncNIST, PartFuncBarklem
+│   │                      # PartFuncTIPS (HAPI), PartFuncExoMol
+├── los/                   # Line-of-sight / multi-slab
+│   └── slabs.py           # MergeSlabs(), SerialSlabs() + operator overloads
+├── api/                   # Database readers (HITRAN, HITEMP, Kurucz, ExoMol)
+├── phys/                  # Constants, unit conversions, Planck function
+│   └── blackbody.py
+└── misc/                  # Config, array utilities, warning system
+</pre></div>
+</div>
+<p><strong>Factory inheritance chain</strong> (each layer adds a narrower concern):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>DatabankLoader
+  └─ BaseFactory        (populations, linestrengths, Einstein A)
+       └─ BandFactory   (band aggregation)
+            └─ BroadenFactory  (Voigt/LDM/FFT convolution)
+                 └─ SpectrumFactory  (RTE, eq/non_eq entry points)
+</pre></div>
+</div>
+</section>
+<section id="computation-pipeline-step-by-step">
+<h3>1.2 Computation Pipeline (step-by-step)<a class="headerlink" href="#computation-pipeline-step-by-step" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Database load</strong> — <code class="docutils literal notranslate"><span class="pre">DatabankLoader.load_databank()</span></code> reads HITRAN/.par, HDF5, or Kurucz formats. Result is <code class="docutils literal notranslate"><span class="pre">df0</span></code> (raw Pandas DataFrame of lines). Cached to HDF5 after first parse.</p></li>
+<li><p><strong>Population calculation</strong> — <code class="docutils literal notranslate"><span class="pre">BaseFactory</span></code> computes Boltzmann/Treanor level populations. For atoms, partition functions come from <code class="docutils literal notranslate"><span class="pre">PartFuncNIST</span></code>/<code class="docutils literal notranslate"><span class="pre">PartFuncKurucz</span></code>/<code class="docutils literal notranslate"><span class="pre">PartFuncBarklem</span></code>.</p></li>
+<li><p><strong>Linestrength scaling</strong> — Intensities rescaled from Tref (296 K) to Tgas using populations and Einstein coefficients.</p></li>
+<li><p><strong>Cutoff filtering</strong> — Lines weaker than <code class="docutils literal notranslate"><span class="pre">cutoff</span></code> threshold discarded (typical: 1e-27). Produces <code class="docutils literal notranslate"><span class="pre">df1</span></code>.</p></li>
+<li><p><strong>Broadening parameters</strong> — Per-line Doppler HWHM (from Tgas, molar mass), collisional HWHM (from pressure, air/self-broadening coefficients), Stark HWHM (custom <code class="docutils literal notranslate"><span class="pre">lbfunc</span></code> for atoms).</p></li>
+<li><p><strong>Lineshape convolution</strong> — LDM (default) or direct; Voigt via Whiting approximation (Numba-JIT). For large line counts: DIT/FFT (<code class="docutils literal notranslate"><span class="pre">broadening_method='fft'</span></code>).</p></li>
+<li><p><strong>Pseudo-continuum</strong> — Lines below <code class="docutils literal notranslate"><span class="pre">pseudo_continuum_threshold</span></code> folded into a continuum array (~5× speedup when 80% of lines qualify).</p></li>
+<li><p><strong>Spectrum assembly</strong> — Sum emissivity/absorption over all lines → spectral arrays.</p></li>
+<li><p><strong>RTE</strong> — Single-slab radiative transfer. Produces <code class="docutils literal notranslate"><span class="pre">Spectrum</span></code> object with <code class="docutils literal notranslate"><span class="pre">radiance_noslit</span></code>, <code class="docutils literal notranslate"><span class="pre">abscoeff</span></code>, etc.</p></li>
+<li><p><strong>Instrument slit</strong> — <code class="docutils literal notranslate"><span class="pre">Spectrum.apply_slit()</span></code> convolves with instrumental function (Gaussian, triangular, or file-provided).</p></li>
+</ol>
+</section>
+<section id="entry-points">
+<h3>1.3 Entry Points<a class="headerlink" href="#entry-points" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">calc_spectrum(wmin,</span> <span class="pre">wmax,</span> <span class="pre">molecule,</span> <span class="pre">Tgas,</span> <span class="pre">...)</span></code> — high-level, one-call</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectrumFactory.eq_spectrum(Tgas)</span></code> — equilibrium, full control</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectrumFactory.non_eq_spectrum(Tvib,</span> <span class="pre">Trot,</span> <span class="pre">Ttrans,</span> <span class="pre">Telec)</span></code> — non-LTE</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectrumFactory.eq_spectrum_gpu()</span></code> — GPU (Vulkan/CUDA backend, equilibrium only)</p></li>
+</ul>
+</section>
+<section id="spectrum-container">
+<h3>1.4 Spectrum Container<a class="headerlink" href="#spectrum-container" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Spectrum</span></code> is a dict-based container holding named spectral arrays (<code class="docutils literal notranslate"><span class="pre">'radiance'</span></code>, <code class="docutils literal notranslate"><span class="pre">'abscoeff'</span></code>, <code class="docutils literal notranslate"><span class="pre">'transmittance'</span></code>, <code class="docutils literal notranslate"><span class="pre">'emisscoeff'</span></code>, etc.) plus a <code class="docutils literal notranslate"><span class="pre">conditions</span></code> dict and a <code class="docutils literal notranslate"><span class="pre">units</span></code> dict. Key design decisions:</p>
+<ul class="simple">
+<li><p><strong>Quantities are split</strong> into convoluted (instrument-processed) and non-convoluted categories. <code class="docutils literal notranslate"><span class="pre">'radiance_noslit'</span></code> is the pre-slit theoretical quantity; <code class="docutils literal notranslate"><span class="pre">'radiance'</span></code> is post-slit.</p></li>
+<li><p><strong>Units are explicit and separate</strong> from values. The <code class="docutils literal notranslate"><span class="pre">.get(qty,</span> <span class="pre">wunit='nm')</span></code> method returns a copy in any requested unit.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">update()</span></code> regenerates</strong> missing derived quantities from Kirchhoff’s law without storing all redundant arrays.</p></li>
+<li><p><strong>Method chaining</strong> is supported: <code class="docutils literal notranslate"><span class="pre">s.normalize().crop(400,</span> <span class="pre">500,</span> <span class="pre">'nm').apply_slit(0.5,</span> <span class="pre">'nm')</span></code>.</p></li>
+<li><p><strong>Factory methods</strong>: <code class="docutils literal notranslate"><span class="pre">from_array()</span></code>, <code class="docutils literal notranslate"><span class="pre">from_txt()</span></code>, <code class="docutils literal notranslate"><span class="pre">from_hdf5()</span></code>, <code class="docutils literal notranslate"><span class="pre">from_specutils()</span></code>.</p></li>
+</ul>
+</section>
+<section id="multi-zone-line-of-sight">
+<h3>1.5 Multi-Zone / Line-of-Sight<a class="headerlink" href="#multi-zone-line-of-sight" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">radis.los.slabs</span></code> provides composable slab operations:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">SerialSlabs(s1,</span> <span class="pre">s2,</span> <span class="pre">...)</span></code> or <code class="docutils literal notranslate"><span class="pre">s1</span> <span class="pre">&gt;</span> <span class="pre">s2</span></code> — serial combination (downstream absorption of upstream emission).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">MergeSlabs(s1,</span> <span class="pre">s2,</span> <span class="pre">...)</span></code> or <code class="docutils literal notranslate"><span class="pre">s1</span> <span class="pre">//</span> <span class="pre">s2</span></code> — parallel merge (sum absorption coefficients, recompute RTE). Used for multi-species or multi-zone at same position.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PerfectAbsorber(s)</span></code> — zeros emission while preserving absorption, isolating upstream contribution.</p></li>
+</ul>
+<p>These compose cleanly via operator overloading and enable multi-zone inhomogeneous plasma modeling without restructuring the factory.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="specific-apis-patterns-numerical-techniques-worth-adopting">
+<h2>2. Specific APIs / Patterns / Numerical Techniques Worth Adopting<a class="headerlink" href="#specific-apis-patterns-numerical-techniques-worth-adopting" title="Link to this heading"></a></h2>
+<section id="discrete-integral-transform-dit-for-broadening-high-priority">
+<h3>2.1 Discrete Integral Transform (DIT) for Broadening — <strong>High Priority</strong><a class="headerlink" href="#discrete-integral-transform-dit-for-broadening-high-priority" title="Link to this heading"></a></h3>
+<p><strong>Reference:</strong> van den Bekerom &amp; Pannier (2021), <em>“A Discrete Integral Transform for Rapid Spectral Synthesis”</em>, JQSRT. (<a class="reference external" href="https://www.osti.gov/pages/biblio/1877133">OSTI</a> | <a class="reference external" href="https://www.sciencedirect.com/science/article/abs/pii/S0022407320310049">ScienceDirect</a>)</p>
+<p>Instead of computing N_lines × N_grid Voigt profiles (O(N_i × N_v) cost), DIT builds a 3-D “lineshape distribution function” binned by (wavenumber position, Gaussian width γ_G, Lorentzian width γ_L). The full spectrum is then recovered by a single FFT convolution. Scaling: O(N_i + N_v log N_v) vs. O(N_i × N_v).</p>
+<p><strong>Benchmark:</strong> 1.8 M CO₂ lines, 200k spectral points → 3.1 s (vs. ~15 min conventional), ~300× speedup.</p>
+<p>RADIS exposes this as <code class="docutils literal notranslate"><span class="pre">broadening_method='fft'</span></code> with <code class="docutils literal notranslate"><span class="pre">optimization='min-RMS'</span></code> or <code class="docutils literal notranslate"><span class="pre">'simple'</span></code> (controls how line contributions are weighted in the distribution bins). Default is <code class="docutils literal notranslate"><span class="pre">'voigt_poly'</span></code> (Whiting 1968 polynomial, Numba-JIT, fastest for moderate line counts).</p>
+<p><strong>CF-LIBS relevance:</strong> CF-LIBS forward model computes Gaussian-broadened lines over a fixed instrument grid. Even for modest line counts (hundreds to low thousands for LIBS), the LDM/DIT approach avoids per-line profile allocation. Adopting this as the default broadening backend for the JAX manifold generator would improve throughput with no accuracy loss.</p>
+</section>
+<section id="lineshape-database-mapping-ldm-high-priority">
+<h3>2.2 Lineshape Database Mapping (LDM) — <strong>High Priority</strong><a class="headerlink" href="#lineshape-database-mapping-ldm-high-priority" title="Link to this heading"></a></h3>
+<p>RADIS projects all lines onto a precomputed lineshape database, grouping lines with similar (γ_G, γ_L) together and interpolating rather than recomputing. The number of unique lineshapes computed drops from millions to O(ldm_res_L × ldm_res_G) ≈ dozens.</p>
+<p><strong>API:</strong> controlled by <code class="docutils literal notranslate"><span class="pre">ldm_res_L</span></code>, <code class="docutils literal notranslate"><span class="pre">ldm_res_G</span></code>, and <code class="docutils literal notranslate"><span class="pre">optimization</span></code> parameters on <code class="docutils literal notranslate"><span class="pre">SpectrumFactory</span></code>.</p>
+<p><strong>CF-LIBS takeaway:</strong> For the manifold pre-computation loop (vmap over thousands of (T, ne, composition) points), grouping lines by broadening parameters and batching the Gaussian convolution would reduce redundant computation. The current <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> computes a Gaussian per-line per-spectrum; switching to a grouped-HWHM strategy would give substantial speedup.</p>
+</section>
+<section id="wstep-auto-adaptive-grid-resolution">
+<h3>2.3 <code class="docutils literal notranslate"><span class="pre">wstep='auto'</span></code> Adaptive Grid Resolution<a class="headerlink" href="#wstep-auto-adaptive-grid-resolution" title="Link to this heading"></a></h3>
+<p>RADIS added <code class="docutils literal notranslate"><span class="pre">wstep='auto'</span></code> (v0.9.30) which computes the minimum grid resolution needed so that every linewidth is resolved by at least <code class="docutils literal notranslate"><span class="pre">GRIDPOINTS_PER_LINEWIDTH_WARN_THRESHOLD</span></code> points. This prevents both over-sampling (slow) and under-sampling (artifact) automatically.</p>
+<p><strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs</span></code> uses a fixed <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code> or fixed FWHM. An auto-grid mode that adapts to the narrowest line in the selected database would make the forward model self-consistent across different plasma conditions (high-T → broader Doppler; low-pressure → narrower collisional). Reference: <a class="reference external" href="https://github.com/radis/radis/pull/271">RADIS PR #271</a>.</p>
+</section>
+<section id="multi-source-partition-functions-for-atomic-species">
+<h3>2.4 Multi-Source Partition Functions for Atomic Species<a class="headerlink" href="#multi-source-partition-functions-for-atomic-species" title="Link to this heading"></a></h3>
+<p>RADIS implements three interchangeable sources for atomic partition functions:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Source</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Temperature range</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">'nist'</span></code></p></td>
+<td><p>Calculator (sum over levels)</p></td>
+<td><p>Up to highest NIST level</p></td>
+<td><p>Default; no broadening params</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">'barklem'</span></code></p></td>
+<td><p>Interpolator (Barklem &amp; Collet 2016)</p></td>
+<td><p>1e-5–10,000 K</p></td>
+<td><p>Limited species</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">'kurucz'</span></code></p></td>
+<td><p>Interpolator (Kurucz linelists)</p></td>
+<td><p>100–208,930 K</p></td>
+<td><p>Requires <code class="docutils literal notranslate"><span class="pre">potential_lowering</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal notranslate"><span class="pre">PartFuncKurucz.at(T,</span> <span class="pre">potential_lowering=...)</span></code> is the only source that accounts for plasma-induced ionization potential lowering — directly analogous to the Debye–Hückel depression used in CF-LIBS Saha calculations.</p>
+<p><strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code> currently uses polynomial log-U(T) partition functions. The Barklem &amp; Collet tabulated source covers the 4,000–20,000 K LIBS range well. The Kurucz source’s <code class="docutils literal notranslate"><span class="pre">potential_lowering</span></code> parameter is the right hook for n_e-dependent partition function correction (currently absent in CF-LIBS). API reference: <a class="reference external" href="https://radis.readthedocs.io/en/latest/source/radis.levels.partfunc.html"><code class="docutils literal notranslate"><span class="pre">radis.levels.partfunc</span></code></a>.</p>
+</section>
+<section id="custom-broadening-via-lbfunc">
+<h3>2.5 Custom Broadening via <code class="docutils literal notranslate"><span class="pre">lbfunc</span></code><a class="headerlink" href="#custom-broadening-via-lbfunc" title="Link to this heading"></a></h3>
+<p>RADIS defines a clean extension point for per-line broadening that the built-in database lacks (e.g., NIST doesn’t supply pressure-broadening coefficients):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">lbfunc</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">Tgas</span><span class="p">,</span> <span class="n">pressure_atm</span><span class="p">,</span> <span class="n">mole_fraction</span><span class="p">,</span> <span class="n">diluent</span><span class="p">,</span> <span class="n">isneutral</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="c1"># df has columns: wav, El, ionE, gamRad, gamSta, gamvdW, ...</span>
+    <span class="n">gamma_stark</span> <span class="o">=</span> <span class="n">compute_stark</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;El&#39;</span><span class="p">],</span> <span class="n">Tgas</span><span class="p">,</span> <span class="n">ne</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">gamma_stark</span><span class="p">,</span> <span class="kc">None</span>  <span class="c1"># (broadening_HWHM, line_shift or None)</span>
+
+<span class="n">sf</span> <span class="o">=</span> <span class="n">SpectrumFactory</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">lbfunc</span><span class="o">=</span><span class="n">lbfunc</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code> has Stark broadening for n_e inference but the forward model in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/</span></code> applies only a fixed Gaussian FWHM (instrument function) without Stark or van der Waals terms. RADIS’s <code class="docutils literal notranslate"><span class="pre">lbfunc</span></code> pattern is the right template for injecting per-line Stark width (from the on-device n_e solver) into the forward model emissivity sum. Reference: <a class="reference external" href="https://radis.readthedocs.io/en/develop/auto_examples/1_Spectra_handling/plot_2custom_Lorentzian_broadening.html">RADIS atomic broadening example</a>.</p>
+</section>
+<section id="pseudo-continuum-for-weak-lines">
+<h3>2.6 Pseudo-Continuum for Weak Lines<a class="headerlink" href="#pseudo-continuum-for-weak-lines" title="Link to this heading"></a></h3>
+<p>RADIS identifies lines below <code class="docutils literal notranslate"><span class="pre">pseudo_continuum_threshold</span></code> (fraction of peak line intensity) and sums their pre-broadened contributions into a continuum array rather than computing individual Voigt profiles. Reported benefit: up to 5× speedup when 80% of database lines are weak.</p>
+<p><strong>CF-LIBS relevance:</strong> LIBS spectra have a small number of bright diagnostic lines riding on a large number of weak satellite transitions. The continuum approximation for the weak tails would keep the forward model fast while correctly accounting for the baseline offset introduced by many weak lines. This is not currently in CF-LIBS.</p>
+</section>
+<section id="df0-df1-separation-pattern">
+<h3>2.7 <code class="docutils literal notranslate"><span class="pre">df0</span></code> / <code class="docutils literal notranslate"><span class="pre">df1</span></code> Separation Pattern<a class="headerlink" href="#df0-df1-separation-pattern" title="Link to this heading"></a></h3>
+<p>RADIS keeps two DataFrames: <code class="docutils literal notranslate"><span class="pre">df0</span></code> (raw immutable database load, cached) and <code class="docutils literal notranslate"><span class="pre">df1</span></code> (computed quantities: populations, cutoff-filtered lines). The invariant “never overwrite <code class="docutils literal notranslate"><span class="pre">df0</span></code>, only operate in-place” prevents cache invalidation bugs.</p>
+<p><strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py</span></code> returns query results on demand. A staged cache like RADIS’s (<code class="docutils literal notranslate"><span class="pre">df0</span></code> on cold load, <code class="docutils literal notranslate"><span class="pre">df1</span></code> with populations at each T) would avoid re-querying SQLite on every forward model call and is worth adopting for the manifold generator inner loop.</p>
+</section>
+<section id="voigt-profile-via-whiting-1968-numba-jit">
+<h3>2.8 Voigt Profile via Whiting 1968 + Numba JIT<a class="headerlink" href="#voigt-profile-via-whiting-1968-numba-jit" title="Link to this heading"></a></h3>
+<p>RADIS uses the empirical Whiting (1968) approximation to Voigt profiles (accurate to ~0.02%), accelerated with <code class="docutils literal notranslate"><span class="pre">&#64;numba.jit</span></code>. Performance improvement measured at 8.9 s → 5.1 s for 50k-line datasets.</p>
+<p><strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> uses <code class="docutils literal notranslate"><span class="pre">scipy.signal.fftconvolve</span></code>. For non-JAX code paths (inversion pipeline), switching to a JIT-compiled Whiting approximation or the Thompson (1987) pseudo-Voigt would cut forward model time for real-time DAQ use. For JAX paths, a polynomial Voigt approximation is already differentiable.</p>
+</section>
+<section id="parsum-mode-tabulation-5004000-speedup">
+<h3>2.9 <code class="docutils literal notranslate"><span class="pre">parsum_mode='tabulation'</span></code> — 500–4000× Speedup<a class="headerlink" href="#parsum-mode-tabulation-5004000-speedup" title="Link to this heading"></a></h3>
+<p>RADIS’s partition function tabulator pre-computes U(T) on a temperature grid just-in-time and interpolates. The <code class="docutils literal notranslate"><span class="pre">'full</span> <span class="pre">summation'</span></code> mode sums over all rovibrational levels every call; <code class="docutils literal notranslate"><span class="pre">'tabulation'</span></code> interpolates from a pre-built table with &lt;0.1% error.</p>
+<p><strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code> already uses polynomial partition functions (log U = Σ aₙ(log T)ⁿ), which is architecturally equivalent to RADIS’s tabulation mode. The CF-LIBS approach is correct. The RADIS pattern confirms this is the right tradeoff.</p>
+</section>
+<section id="spectrum-algebra-and-operator-overloading">
+<h3>2.10 Spectrum Algebra and Operator Overloading<a class="headerlink" href="#spectrum-algebra-and-operator-overloading" title="Link to this heading"></a></h3>
+<p>RADIS exposes <code class="docutils literal notranslate"><span class="pre">MergeSlabs</span></code>, <code class="docutils literal notranslate"><span class="pre">SerialSlabs</span></code>, and arithmetic operators (<code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">//</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;</span></code>) for composing spectra. This pattern makes multi-zone or multi-element forward models composable without parameter coupling.</p>
+<p><strong>CF-LIBS relevance:</strong> The current <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code> computes the full multi-element spectrum in one shot. Decomposing it into per-element Spectrum objects that are then <code class="docutils literal notranslate"><span class="pre">MergeSlabs</span></code>-ed would enable partial updates (re-computing only the element whose concentration changed in an iterative solver step) and cleaner uncertainty attribution.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="pitfalls-documented-in-radis">
+<h2>3. Pitfalls Documented in RADIS<a class="headerlink" href="#pitfalls-documented-in-radis" title="Link to this heading"></a></h2>
+<section id="circular-import-problem">
+<h3>3.1 Circular Import Problem<a class="headerlink" href="#circular-import-problem" title="Link to this heading"></a></h3>
+<p>RADIS explicitly documents circular imports requiring manual cleanup in their long-term TODO. Their factory-chain architecture pushes all imports into subclasses, which can create cycles when modules reach upward. <strong>CF-LIBS risk:</strong> the inversion pipeline imports from both <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/</span></code> and <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code>; keeping the dependency direction strict (plasma → radiation, not the reverse) prevents this.</p>
+</section>
+<section id="df0-overwrite-bug">
+<h3>3.2 <code class="docutils literal notranslate"><span class="pre">df0</span></code> Overwrite Bug<a class="headerlink" href="#df0-overwrite-bug" title="Link to this heading"></a></h3>
+<p>The documentation warns: “never overwrite the <code class="docutils literal notranslate"><span class="pre">df0</span></code> attribute; else some metadata may be lost.” Overwriting it resets the HDF5 cache pointer, causing silent reloads. <strong>CF-LIBS relevance:</strong> if CF-LIBS ever adopts a staged-cache pattern, the same invariant applies to the raw database query cache.</p>
+</section>
+<section id="temperature-out-of-range-for-partition-functions">
+<h3>3.3 Temperature Out-of-Range for Partition Functions<a class="headerlink" href="#temperature-out-of-range-for-partition-functions" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">PartFuncBarklem</span></code> covers up to 10,000 K; <code class="docutils literal notranslate"><span class="pre">PartFuncKurucz</span></code> requires explicit <code class="docutils literal notranslate"><span class="pre">potential_lowering</span></code>. Using NIST beyond its tabulated level range raises <code class="docutils literal notranslate"><span class="pre">OutOfBoundError</span></code>. LIBS plasmas run 6,000–20,000 K. <strong>CF-LIBS action:</strong> validate the polynomial partition function range against the LIBS operating envelope (6,000–20,000 K, ionization stages I–II). Barklem &amp; Collet is insufficient above 10,000 K.</p>
+</section>
+<section id="nist-atomic-source-has-no-broadening-parameters">
+<h3>3.4 NIST Atomic Source Has No Broadening Parameters<a class="headerlink" href="#nist-atomic-source-has-no-broadening-parameters" title="Link to this heading"></a></h3>
+<p>NIST’s level table (used for <code class="docutils literal notranslate"><span class="pre">pfsource='nist'</span></code>) provides no collisional or Stark broadening parameters, making <code class="docutils literal notranslate"><span class="pre">lbfunc</span></code> mandatory for atomic spectra. RADIS documents this explicitly. <strong>CF-LIBS relevance:</strong> This is already handled via <code class="docutils literal notranslate"><span class="pre">gamSta</span></code> per-line in the forward model, but CF-LIBS should verify that Stark widths are assigned before the broadening step and not silently zeroed for lines with missing database entries.</p>
+</section>
+<section id="wstep-undersampling">
+<h3>3.5 <code class="docutils literal notranslate"><span class="pre">wstep</span></code> Undersampling<a class="headerlink" href="#wstep-undersampling" title="Link to this heading"></a></h3>
+<p>Using too-coarse a wavenumber grid (large <code class="docutils literal notranslate"><span class="pre">wstep</span></code>) produces artifacts in lineshape wings — lines can be missed if the grid spacing exceeds the HWHM. RADIS’s <code class="docutils literal notranslate"><span class="pre">wstep='auto'</span></code> is the fix. <strong>CF-LIBS relevance:</strong> The fixed resolving-power grid mode may under-resolve narrow lines at low temperature. A guard asserting <code class="docutils literal notranslate"><span class="pre">grid_step</span> <span class="pre">&lt;</span> <span class="pre">0.5</span> <span class="pre">×</span> <span class="pre">min_HWHM</span></code> would catch this.</p>
+</section>
+<section id="pressure-unit-inconsistency">
+<h3>3.6 Pressure Unit Inconsistency<a class="headerlink" href="#pressure-unit-inconsistency" title="Link to this heading"></a></h3>
+<p>RADIS TODO: pressure_mbar vs. pressure naming inconsistency across modules. A known source of silent unit bugs. <strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/core/constants.py</span></code> should have unit-safe wrappers or explicit <code class="docutils literal notranslate"><span class="pre">_Pa</span></code>, <code class="docutils literal notranslate"><span class="pre">_bar</span></code>, <code class="docutils literal notranslate"><span class="pre">_atm</span></code> suffixes on all pressure variables.</p>
+</section>
+<section id="pseudo-continuum-deprecated">
+<h3>3.7 Pseudo-Continuum Deprecated<a class="headerlink" href="#pseudo-continuum-deprecated" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">pseudo_continuum_threshold</span></code> is flagged as “will be deprecated in future versions.” RADIS recommends DIT/LDM as the replacement. <strong>CF-LIBS:</strong> if adopting pseudo-continuum, treat it as a transient optimization, not an architectural feature.</p>
+</section>
+<section id="gpu-path-limited-to-equilibrium">
+<h3>3.8 GPU Path Limited to Equilibrium<a class="headerlink" href="#gpu-path-limited-to-equilibrium" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">eq_spectrum_gpu()</span></code> (Vulkan backend) is equilibrium-only. Non-equilibrium and non-LTE cases fall back to CPU. <strong>CF-LIBS relevance:</strong> The JAX-based manifold generator already handles this correctly (it is equilibrium LTE by design). Stark n_e paths are CPU-side by intent (ADR per reference notes).</p>
+</section>
+<section id="import-speed">
+<h3>3.9 Import Speed<a class="headerlink" href="#import-speed" title="Link to this heading"></a></h3>
+<p>RADIS documents “import speed improvements needed” in the long-term TODO. Heavy module-level imports cause ~0.3 s cold-start penalty. <strong>CF-LIBS action:</strong> audit <code class="docutils literal notranslate"><span class="pre">cflibs/__init__.py</span></code> for eager imports of heavy dependencies (SQLite, JAX, NumPyro) and move to lazy imports.</p>
+</section>
+<section id="hdf5-library-conflicts">
+<h3>3.10 HDF5 Library Conflicts<a class="headerlink" href="#hdf5-library-conflicts" title="Link to this heading"></a></h3>
+<p>RADIS offers three HDF5 backends (<code class="docutils literal notranslate"><span class="pre">pytables</span></code>, <code class="docutils literal notranslate"><span class="pre">vaex</span></code>, <code class="docutils literal notranslate"><span class="pre">feather</span></code>) because each has lock/compatibility issues in different environments. <strong>CF-LIBS relevance:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/</span></code> uses h5py; cluster runs using multiple workers need advisory file locking or Zarr (already supported) to avoid corruption.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="concrete-cf-libs-should-consider-x-recommendations">
+<h2>4. Concrete “CF-LIBS Should Consider X” Recommendations<a class="headerlink" href="#concrete-cf-libs-should-consider-x-recommendations" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Recommendation</p></th>
+<th class="head"><p>RADIS pattern</p></th>
+<th class="head"><p>Priority</p></th>
+<th class="head"><p>Link</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>R1</p></td>
+<td><p>Adopt the DIT/FFT broadening algorithm for the JAX manifold generator inner loop</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">broadening_method='fft'</span></code> + LDM, van den Bekerom &amp; Pannier 2021</p></td>
+<td><p><strong>High</strong></p></td>
+<td><p><a class="reference external" href="https://www.sciencedirect.com/science/article/abs/pii/S0022407320310049">JQSRT DIT paper</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>R2</p></td>
+<td><p>Add a <code class="docutils literal notranslate"><span class="pre">lbfunc</span></code>-style injection point in <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code> for per-line Stark widths driven by the on-device n_e estimate</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SpectrumFactory(lbfunc=...)</span></code></p></td>
+<td><p><strong>High</strong></p></td>
+<td><p><a class="reference external" href="https://radis.readthedocs.io/en/develop/auto_examples/1_Spectra_handling/plot_2custom_Lorentzian_broadening.html">RADIS atomic broadening example</a></p></td>
+</tr>
+<tr class="row-even"><td><p>R3</p></td>
+<td><p>Upgrade partition functions for ions (I–III) using Kurucz tables with <code class="docutils literal notranslate"><span class="pre">potential_lowering</span></code> proportional to Debye screening, replacing or validating current polynomial fits above 10 kK</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PartFuncKurucz.at(T,</span> <span class="pre">potential_lowering)</span></code></p></td>
+<td><p><strong>High</strong></p></td>
+<td><p><a class="reference external" href="https://radis.readthedocs.io/en/latest/auto_examples/1_Spectra_handling/plot_1partitionFunction_potentialLowering.html">RADIS partfunc example</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>R4</p></td>
+<td><p>Split the <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code> forward model output into a <code class="docutils literal notranslate"><span class="pre">Spectrum</span></code>-like container (per-element spectra, conditions dict, unit-aware <code class="docutils literal notranslate"><span class="pre">get()</span></code>) to enable partial updates in iterative solvers</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Spectrum</span></code> class design (<a class="reference external" href="https://radis.readthedocs.io/en/latest/spectrum/spectrum.html">docs</a>)</p></td>
+<td><p><strong>Medium</strong></p></td>
+<td><p><a class="reference external" href="https://radis.readthedocs.io/en/latest/spectrum/spectrum.html">Spectrum object docs</a></p></td>
+</tr>
+<tr class="row-even"><td><p>R5</p></td>
+<td><p>Implement <code class="docutils literal notranslate"><span class="pre">MergeSlabs</span></code>-style element composition in the forward model so each element’s contribution is independently computed and summed, enabling per-element sensitivity analysis</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MergeSlabs()</span></code> / <code class="docutils literal notranslate"><span class="pre">//</span></code> operator</p></td>
+<td><p><strong>Medium</strong></p></td>
+<td><p><a class="reference external" href="https://radis.readthedocs.io/en/latest/los/los.html">LOS module docs</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>R6</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">wstep='auto'</span></code> equivalent: assert <code class="docutils literal notranslate"><span class="pre">grid_step</span> <span class="pre">&lt;</span> <span class="pre">0.5</span> <span class="pre">×</span> <span class="pre">min_Doppler_HWHM(T_min,</span> <span class="pre">heaviest_element)</span></code> at forward model construction time</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">wstep='auto'</span></code> in <code class="docutils literal notranslate"><span class="pre">SpectrumFactory</span></code></p></td>
+<td><p><strong>Medium</strong></p></td>
+<td><p><a class="reference external" href="https://github.com/radis/radis/pull/271">RADIS PR #271</a></p></td>
+</tr>
+<tr class="row-even"><td><p>R7</p></td>
+<td><p>Adopt RADIS’s staged database caching (<code class="docutils literal notranslate"><span class="pre">df0</span></code> raw, <code class="docutils literal notranslate"><span class="pre">df1</span></code> with populations) for the SQLite atomic query cache in <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py</span></code>; avoids re-querying on every manifold grid point</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DatabankLoader.df0</span></code>/<code class="docutils literal notranslate"><span class="pre">df1</span></code> pattern</p></td>
+<td><p><strong>Medium</strong></p></td>
+<td><p><a class="reference external" href="https://radis.readthedocs.io/en/latest/source/radis.lbl.loader.html">loader docs</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>R8</p></td>
+<td><p>Implement weak-line pseudo-continuum aggregation for lines below <code class="docutils literal notranslate"><span class="pre">I_line</span> <span class="pre">/</span> <span class="pre">I_peak</span> <span class="pre">&lt;</span> <span class="pre">threshold</span></code> in the forward model; reduces profile computation overhead for LIBS where a few bright lines dominate</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pseudo_continuum_threshold</span></code> in <code class="docutils literal notranslate"><span class="pre">SpectrumFactory</span></code></p></td>
+<td><p><strong>Low</strong></p></td>
+<td><p><a class="reference external" href="https://radis.readthedocs.io/en/latest/source/radis.lbl.factory.html">factory docs</a></p></td>
+</tr>
+<tr class="row-even"><td><p>R9</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">predict_time()</span></code> / <code class="docutils literal notranslate"><span class="pre">print_perf_profile()</span></code> equivalents to the manifold generator; RADIS’s built-in profiling instruments every major pipeline step and warns on slow configurations</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SpectrumFactory.predict_time()</span></code></p></td>
+<td><p><strong>Low</strong></p></td>
+<td><p><a class="reference external" href="https://radis.readthedocs.io/en/latest/source/radis.lbl.factory.html">factory docs</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>R10</p></td>
+<td><p>Guard all pressure variables with explicit unit suffixes or unit-typed wrappers (<code class="docutils literal notranslate"><span class="pre">pressure_Pa</span></code>, <code class="docutils literal notranslate"><span class="pre">pressure_bar</span></code>) — RADIS documents this as a known silent bug source</p></td>
+<td><p>RADIS long-term TODO <a class="reference external" href="https://github.com/radis/radis/issues/53">#53</a></p></td>
+<td><p><strong>Low</strong></p></td>
+<td><p><a class="reference external" href="https://github.com/radis/radis/issues/53">issues #53</a></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="key-references">
+<h2>Key References<a class="headerlink" href="#key-references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>[RADIS-2018] Pannier &amp; Laux, <em>RADIS: A Nonequilibrium Line-by-Line Radiative Code for CO2 and HITRAN-like database species</em>, JQSRT (2018). https://www.sciencedirect.com/science/article/abs/pii/S0022407318305867</p></li>
+<li><p>[DIT-2021] van den Bekerom &amp; Pannier, <em>A Discrete Integral Transform for Rapid Spectral Synthesis</em>, JQSRT (2021). https://www.sciencedirect.com/science/article/abs/pii/S0022407320310049</p></li>
+<li><p>[Barklem-2016] Barklem &amp; Collet, <em>Partition functions and equilibrium constants for diatomic molecules and atoms of astrophysical interest</em> (2016). — basis for <code class="docutils literal notranslate"><span class="pre">PartFuncBarklem</span></code>.</p></li>
+<li><p>[Kurucz-2017] Kurucz, <em>Including all the lines</em>, Canadian Journal of Physics 95(9) (2017). — basis for <code class="docutils literal notranslate"><span class="pre">PartFuncKurucz</span></code>.</p></li>
+<li><p>[Whiting-1968] Whiting, <em>An empirical approximation to the Voigt profile</em>, JQSRT (1968). — basis for RADIS Voigt implementation.</p></li>
+<li><p>RADIS docs: https://radis.readthedocs.io/en/latest/</p></li>
+<li><p>RADIS GitHub: https://github.com/radis/radis</p></li>
+<li><p>RADIS developer guide: https://radis.readthedocs.io/en/latest/dev/developer.html</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

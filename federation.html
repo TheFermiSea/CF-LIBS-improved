@@ -1,0 +1,426 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beads federation hub &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Beads federation hub</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/federation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="beads-federation-hub">
+<h1>Beads federation hub<a class="headerlink" href="#beads-federation-hub" title="Link to this heading"></a></h1>
+<p>This repository tracks issues with <a class="reference external" href="https://github.com/steveyegge/beads">beads (<code class="docutils literal notranslate"><span class="pre">bd</span></code>)</a>,
+which stores its data in a Dolt SQL database. Federation lets multiple environments
+(laptop, cluster, server, cloud) share the same issue data by syncing through a
+central Dolt SQL server.</p>
+<p>This document describes the hub design we use here and the runbook for bringing
+it up and onboarding repos.</p>
+<section id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>                        ┌──────────────────────────┐
+                        │   beads-lxc              │
+                        │   ──────────────         │
+                        │   dolt sql-server        │
+                        │   :3306  (SQL)           │
+                        │   :50051 (remotesapi)    │
+                        │                          │
+                        │   /var/lib/dolt/         │
+                        │     CF_LIBS_improved/    │
+                        │     beefcake_swarm/      │
+                        │     &lt;one dir per repo&gt;/  │
+                        └──────────────┬───────────┘
+                                       │ Tailscale (WireGuard)
+                ┌──────────────────────┼──────────────────────┐
+                │                      │                      │
+        ┌───────┴─────┐        ┌───────┴───────┐      ┌───────┴───────┐
+        │   laptop    │        │   cluster     │      │   cloud / CI  │
+        │   bd 1.0.x  │        │   bd 1.0.x    │      │   bd 1.0.x    │
+        └─────────────┘        └───────────────┘      └───────────────┘
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>One LXC, many repos.</strong> Each beads workspace gets its own Dolt database
+(<code class="docutils literal notranslate"><span class="pre">/var/lib/dolt/&lt;dbname&gt;</span></code>). Database names match <code class="docutils literal notranslate"><span class="pre">.beads/metadata.json</span></code>’s
+<code class="docutils literal notranslate"><span class="pre">dolt_database</span></code> field — usually a sanitised form of the repo name.</p></li>
+<li><p><strong>One auth identity.</strong> A single SQL user (<code class="docutils literal notranslate"><span class="pre">beads</span></code> by default) has privileges
+on every database. Network access is gated by Tailscale ACLs / firewall, so
+the SQL password is defence-in-depth, not the only line of defence.</p></li>
+<li><p><strong>Two ports.</strong> SQL on <code class="docutils literal notranslate"><span class="pre">3306</span></code>, gRPC remotesapi on <code class="docutils literal notranslate"><span class="pre">50051</span></code>. Both must be
+reachable from every client. Restrict both to your Tailnet / management VLAN.</p></li>
+<li><p><strong>No public exposure.</strong> Dolt’s auth surface has not been hardened against the
+open internet. Treat the hub as an internal service.</p></li>
+</ul>
+</section>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Proxmox (or any LXC host).</p></li>
+<li><p>Tailscale (or another VPN) joining the LXC and every client.</p></li>
+<li><p>An LXC template that can run a single Go binary — Debian 12 / Ubuntu 24.04
+minimal is fine. ~1 GB RAM, 10 GB disk to start.</p></li>
+</ul>
+</section>
+<section id="hub-bring-up">
+<h2>Hub bring-up<a class="headerlink" href="#hub-bring-up" title="Link to this heading"></a></h2>
+<section id="provision-the-lxc">
+<h3>1. Provision the LXC<a class="headerlink" href="#provision-the-lxc" title="Link to this heading"></a></h3>
+<p>In Proxmox:</p>
+<ul class="simple">
+<li><p>Hostname: <code class="docutils literal notranslate"><span class="pre">beads-lxc</span></code></p></li>
+<li><p>Distro: Debian 12 minimal</p></li>
+<li><p>Resources: 2 vCPU, 1–2 GB RAM, 10 GB disk</p></li>
+<li><p>Network: static IP on your management VLAN</p></li>
+<li><p>Features: <code class="docutils literal notranslate"><span class="pre">nesting=1</span></code> is fine; no special device passthrough needed</p></li>
+</ul>
+<p>Then on the host:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pct<span class="w"> </span>enter<span class="w"> </span>&lt;vmid&gt;<span class="w">            </span><span class="c1"># or ssh root@&lt;ip&gt;</span>
+apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>curl<span class="w"> </span>ca-certificates<span class="w"> </span>openssl<span class="w"> </span>tar
+curl<span class="w"> </span>-fsSL<span class="w"> </span>https://tailscale.com/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+tailscale<span class="w"> </span>up<span class="w"> </span>--hostname<span class="o">=</span>beads-lxc
+tailscale<span class="w"> </span>ip<span class="w"> </span>-4<span class="w">             </span><span class="c1"># note this — clients will use it</span>
+</pre></div>
+</div>
+</section>
+<section id="run-the-setup-script">
+<h3>2. Run the setup script<a class="headerlink" href="#run-the-setup-script" title="Link to this heading"></a></h3>
+<p>Copy <code class="docutils literal notranslate"><span class="pre">scripts/setup-beads-lxc.sh</span></code> from this repo into the LXC and execute it:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>scp<span class="w"> </span>scripts/setup-beads-lxc.sh<span class="w"> </span>root@beads-lxc:/root/
+ssh<span class="w"> </span>root@beads-lxc<span class="w"> </span><span class="s2">&quot;bash /root/setup-beads-lxc.sh&quot;</span>
+</pre></div>
+</div>
+<p>The script will:</p>
+<ol class="arabic simple">
+<li><p>Create an unprivileged <code class="docutils literal notranslate"><span class="pre">dolt</span></code> system user.</p></li>
+<li><p>Install the pinned Dolt binary (<code class="docutils literal notranslate"><span class="pre">DOLT_VERSION</span></code> env var to override).</p></li>
+<li><p>Generate a random 40-character password and write <code class="docutils literal notranslate"><span class="pre">/etc/default/beads-dolt</span></code>.</p></li>
+<li><p>Install <code class="docutils literal notranslate"><span class="pre">beads-dolt.service</span></code> and enable+start it.</p></li>
+</ol>
+<p>Save the printed password — every client needs it. To retrieve later:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ssh<span class="w"> </span>root@beads-lxc<span class="w"> </span><span class="s2">&quot;cat /etc/default/beads-dolt&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="restrict-the-network-surface">
+<h3>3. Restrict the network surface<a class="headerlink" href="#restrict-the-network-surface" title="Link to this heading"></a></h3>
+<p>Use whatever tag your Tailnet ACL already defines for backend infrastructure
+(e.g. <code class="docutils literal notranslate"><span class="pre">tag:server</span></code>). The LXC advertises that tag at <code class="docutils literal notranslate"><span class="pre">tailscale</span> <span class="pre">up</span></code> time:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>tailscale<span class="w"> </span>up<span class="w"> </span>--hostname<span class="o">=</span>beads-lxc<span class="w"> </span>--advertise-tags<span class="o">=</span>tag:server<span class="w"> </span>--ssh
+</pre></div>
+</div>
+<p>Tailscale ACL fragment locking ports <code class="docutils literal notranslate"><span class="pre">3306</span></code> and <code class="docutils literal notranslate"><span class="pre">50051</span></code> to clients tagged
+<code class="docutils literal notranslate"><span class="pre">tag:beads-client</span></code> (or <code class="docutils literal notranslate"><span class="pre">autogroup:member</span></code>, etc.):</p>
+<div class="highlight-hujson notranslate"><div class="highlight"><pre><span></span>&quot;acls&quot;: [
+  { &quot;action&quot;: &quot;accept&quot;,
+    &quot;src&quot;:    [&quot;autogroup:member&quot;],
+    &quot;dst&quot;:    [&quot;tag:server:3306&quot;, &quot;tag:server:50051&quot;] }
+]
+</pre></div>
+</div>
+<p>If <code class="docutils literal notranslate"><span class="pre">tag:server</span></code> is not yet defined in your tailnet, add it to <code class="docutils literal notranslate"><span class="pre">tagOwners</span></code>
+in the admin console first, otherwise <code class="docutils literal notranslate"><span class="pre">tailscale</span> <span class="pre">up</span></code> returns
+<code class="docutils literal notranslate"><span class="pre">requested</span> <span class="pre">tags</span> <span class="pre">[tag:server]</span> <span class="pre">are</span> <span class="pre">invalid</span> <span class="pre">or</span> <span class="pre">not</span> <span class="pre">permitted</span></code>.</p>
+</section>
+<section id="smoke-test">
+<h3>4. Smoke test<a class="headerlink" href="#smoke-test" title="Link to this heading"></a></h3>
+<p>From any client on the Tailnet:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nc<span class="w"> </span>-zv<span class="w"> </span>&lt;hub-tailscale-ip&gt;<span class="w"> </span><span class="m">3306</span><span class="w">    </span><span class="c1"># SQL port</span>
+nc<span class="w"> </span>-zv<span class="w"> </span>&lt;hub-tailscale-ip&gt;<span class="w"> </span><span class="m">50051</span><span class="w">   </span><span class="c1"># remotesapi</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="client-onboarding-per-repo">
+<h2>Client onboarding (per repo)<a class="headerlink" href="#client-onboarding-per-repo" title="Link to this heading"></a></h2>
+<p>Run from the repo root after <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">init</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">BEADS_HUB_HOST</span><span class="o">=</span>&lt;hub-tailscale-ip&gt;
+<span class="nb">export</span><span class="w"> </span><span class="nv">BEADS_HUB_PASSWORD</span><span class="o">=</span>&lt;password-from-setup&gt;
+
+scripts/add-repo-to-hub.sh
+</pre></div>
+</div>
+<p>The script:</p>
+<ol class="arabic simple">
+<li><p>Reads the local Dolt DB name from <code class="docutils literal notranslate"><span class="pre">.beads/metadata.json</span></code>.</p></li>
+<li><p>Adds the hub as a Dolt remote (<code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">dolt</span> <span class="pre">remote</span> <span class="pre">add</span> <span class="pre">hub</span> <span class="pre">…</span></code>).</p></li>
+<li><p>Pushes local Dolt history to the hub — first push for the repo creates the
+database server-side.</p></li>
+<li><p>Adds the hub as a federation peer with stored credentials.</p></li>
+<li><p>Prints <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">federation</span> <span class="pre">status</span></code> so you can confirm the peer is reachable.</p></li>
+</ol>
+<p>The local git pre-push and post-merge hooks (already installed by <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">hooks</span> <span class="pre">install</span></code>) will keep things in sync as you commit and push code.</p>
+<section id="onboarding-additional-repos">
+<h3>Onboarding additional repos<a class="headerlink" href="#onboarding-additional-repos" title="Link to this heading"></a></h3>
+<p>Repeat the same script in each repo’s root. The script is idempotent — it
+detects existing Dolt remotes and federation peers and skips them.</p>
+</section>
+</section>
+<section id="continuous-sync">
+<h2>Continuous sync<a class="headerlink" href="#continuous-sync" title="Link to this heading"></a></h2>
+<p>The git hooks cover the common case (push-on-commit, pull-on-merge). For
+unattended environments where you want sync without git activity, install a
+systemd timer:</p>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="c1"># /etc/systemd/system/beads-sync.service</span>
+<span class="k">[Unit]</span>
+<span class="na">Description</span><span class="o">=</span><span class="s">Periodic beads federation sync</span>
+<span class="na">After</span><span class="o">=</span><span class="s">network-online.target</span>
+
+<span class="k">[Service]</span>
+<span class="na">Type</span><span class="o">=</span><span class="s">oneshot</span>
+<span class="na">User</span><span class="o">=</span><span class="s">&lt;your-user&gt;</span>
+<span class="na">WorkingDirectory</span><span class="o">=</span><span class="s">/path/to/repo</span>
+<span class="na">ExecStart</span><span class="o">=</span><span class="s">/usr/local/bin/bd federation sync</span>
+</pre></div>
+</div>
+<div class="highlight-ini notranslate"><div class="highlight"><pre><span></span><span class="c1"># /etc/systemd/system/beads-sync.timer</span>
+<span class="k">[Unit]</span>
+<span class="na">Description</span><span class="o">=</span><span class="s">Run beads federation sync every 5 minutes</span>
+
+<span class="k">[Timer]</span>
+<span class="na">OnBootSec</span><span class="o">=</span><span class="s">2min</span>
+<span class="na">OnUnitActiveSec</span><span class="o">=</span><span class="s">5min</span>
+<span class="na">Unit</span><span class="o">=</span><span class="s">beads-sync.service</span>
+
+<span class="k">[Install]</span>
+<span class="na">WantedBy</span><span class="o">=</span><span class="s">timers.target</span>
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--now<span class="w"> </span>beads-sync.timer
+</pre></div>
+</div>
+<p>Repeat per repo (one timer + service per beads workspace), or wrap a
+multi-repo loop in the <code class="docutils literal notranslate"><span class="pre">ExecStart</span></code> script.</p>
+</section>
+<section id="operations">
+<h2>Operations<a class="headerlink" href="#operations" title="Link to this heading"></a></h2>
+<section id="daily">
+<h3>Daily<a class="headerlink" href="#daily" title="Link to this heading"></a></h3>
+<p>Nothing. The hub is self-running.</p>
+</section>
+<section id="when-bd-doctor-flags-peer-unreachable">
+<h3>When <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">doctor</span></code> flags peer unreachable<a class="headerlink" href="#when-bd-doctor-flags-peer-unreachable" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ssh<span class="w"> </span>root@beads-lxc<span class="w"> </span><span class="s2">&quot;systemctl status beads-dolt.service&quot;</span>
+ssh<span class="w"> </span>root@beads-lxc<span class="w"> </span><span class="s2">&quot;journalctl -u beads-dolt.service -n 50&quot;</span>
+tailscale<span class="w"> </span>status<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>beads-lxc<span class="w">        </span><span class="c1"># is the LXC online?</span>
+</pre></div>
+</div>
+</section>
+<section id="upgrading-dolt">
+<h3>Upgrading Dolt<a class="headerlink" href="#upgrading-dolt" title="Link to this heading"></a></h3>
+<p>Dolt is generally backward-compatible across minor versions, but pin the
+version on the hub for predictability:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ssh<span class="w"> </span>root@beads-lxc<span class="w"> </span><span class="s2">&quot;DOLT_VERSION=&lt;new-version&gt; bash /root/setup-beads-lxc.sh&quot;</span>
+systemctl<span class="w"> </span>restart<span class="w"> </span>beads-dolt.service<span class="w">       </span><span class="c1"># script does this for you</span>
+</pre></div>
+</div>
+</section>
+<section id="upgrading-bd">
+<h3>Upgrading bd<a class="headerlink" href="#upgrading-bd" title="Link to this heading"></a></h3>
+<p>Stay on the latest tagged release. On macOS:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>brew<span class="w"> </span>upgrade<span class="w"> </span>beads
+</pre></div>
+</div>
+<p>Linux clients: re-download the matching release from
+<a class="reference external" href="https://github.com/steveyegge/beads/releases">beads releases</a>. Don’t run
+<code class="docutils literal notranslate"><span class="pre">HEAD</span></code> builds in production — they’re a moving target.</p>
+</section>
+<section id="backup">
+<h3>Backup<a class="headerlink" href="#backup" title="Link to this heading"></a></h3>
+<p>The Dolt data dir (<code class="docutils literal notranslate"><span class="pre">/var/lib/dolt</span></code>) is the source of truth on the hub. Two
+sufficient backup strategies:</p>
+<ul>
+<li><p><strong>Snapshot the LXC</strong> in Proxmox (cheap, fast, full-state).</p></li>
+<li><p><strong>Off-site mirror</strong> to DoltHub or a second Dolt server:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># On the hub:</span>
+<span class="nb">cd</span><span class="w"> </span>/var/lib/dolt/&lt;dbname&gt;
+dolt<span class="w"> </span>remote<span class="w"> </span>add<span class="w"> </span>backup<span class="w"> </span>dolthub.com/&lt;account&gt;/&lt;repo&gt;-beads
+dolt<span class="w"> </span>push<span class="w"> </span>backup<span class="w"> </span>main
+</pre></div>
+</div>
+</li>
+</ul>
+</section>
+<section id="rotating-the-password">
+<h3>Rotating the password<a class="headerlink" href="#rotating-the-password" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ssh<span class="w"> </span>root@beads-lxc
+sudo<span class="w"> </span>nano<span class="w"> </span>/etc/default/beads-dolt<span class="w">        </span><span class="c1"># change BEADS_DOLT_PASSWORD</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>beads-dolt.service
+
+<span class="c1"># Then on every client:</span>
+bd<span class="w"> </span>federation<span class="w"> </span>remove-peer<span class="w"> </span>hub
+bd<span class="w"> </span>dolt<span class="w"> </span>remote<span class="w"> </span>remove<span class="w"> </span>hub
+<span class="nv">BEADS_HUB_PASSWORD</span><span class="o">=</span>&lt;new-password&gt;<span class="w"> </span>scripts/add-repo-to-hub.sh
+</pre></div>
+</div>
+</section>
+</section>
+<section id="troubleshooting">
+<h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h2>
+<section id="dolt-server-unreachable-at-127-0-0-1-0">
+<h3><code class="docutils literal notranslate"><span class="pre">Dolt</span> <span class="pre">server</span> <span class="pre">unreachable</span> <span class="pre">at</span> <span class="pre">127.0.0.1:0</span></code><a class="headerlink" href="#dolt-server-unreachable-at-127-0-0-1-0" title="Link to this heading"></a></h3>
+<p>Local Dolt server fell over, not a federation problem. See the
+project’s <code class="docutils literal notranslate"><span class="pre">CLAUDE.md</span></code> § “Native Beads Repair”.</p>
+</section>
+<section id="failed-to-get-peer-credentials-not-found-federation-peer-name">
+<h3><code class="docutils literal notranslate"><span class="pre">failed</span> <span class="pre">to</span> <span class="pre">get</span> <span class="pre">peer</span> <span class="pre">credentials:</span> <span class="pre">not</span> <span class="pre">found:</span> <span class="pre">federation</span> <span class="pre">peer</span> <span class="pre">&lt;name&gt;</span></code><a class="headerlink" href="#failed-to-get-peer-credentials-not-found-federation-peer-name" title="Link to this heading"></a></h3>
+<p>You have a Dolt remote with that name but no federation peer entry. Add the
+peer:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bd<span class="w"> </span>federation<span class="w"> </span>add-peer<span class="w"> </span>hub<span class="w"> </span>&lt;hub-host&gt;:3306/&lt;dbname&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--user<span class="w"> </span>beads<span class="w"> </span>--password<span class="w"> </span>&lt;password&gt;
+</pre></div>
+</div>
+</section>
+<section id="database-name-not-found-on-dolt-server">
+<h3><code class="docutils literal notranslate"><span class="pre">database</span> <span class="pre">&quot;&lt;name&gt;&quot;</span> <span class="pre">not</span> <span class="pre">found</span> <span class="pre">on</span> <span class="pre">Dolt</span> <span class="pre">server</span></code><a class="headerlink" href="#database-name-not-found-on-dolt-server" title="Link to this heading"></a></h3>
+<p>The hub doesn’t have a database with that name. Check the local
+<code class="docutils literal notranslate"><span class="pre">.beads/metadata.json</span></code> <code class="docutils literal notranslate"><span class="pre">dolt_database</span></code> value, then <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">dolt</span> <span class="pre">push</span> <span class="pre">--remote</span> <span class="pre">hub</span></code>
+to create it remotely.</p>
+</section>
+<section id="conflicts-during-sync">
+<h3>Conflicts during sync<a class="headerlink" href="#conflicts-during-sync" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bd<span class="w"> </span>federation<span class="w"> </span>sync<span class="w"> </span>--strategy<span class="w"> </span>theirs<span class="w">    </span><span class="c1"># accept hub&#39;s version</span>
+bd<span class="w"> </span>federation<span class="w"> </span>sync<span class="w"> </span>--strategy<span class="w"> </span>ours<span class="w">      </span><span class="c1"># keep local</span>
+</pre></div>
+</div>
+<p>For non-trivial conflicts, sync without a strategy and resolve manually
+(beads will tell you which tables conflicted).</p>
+</section>
+</section>
+<section id="why-a-dedicated-lxc">
+<h2>Why a dedicated LXC<a class="headerlink" href="#why-a-dedicated-lxc" title="Link to this heading"></a></h2>
+<p>Considered alternatives:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Option</p></th>
+<th class="head"><p>Why we didn’t pick it</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Co-host on ai-proxy</p></td>
+<td><p>Couples unrelated services; Dolt OOM/crash hits inference.</p></td>
+</tr>
+<tr class="row-odd"><td><p>DoltHub</p></td>
+<td><p>Public repos free, private $$; less control, external dep.</p></td>
+</tr>
+<tr class="row-even"><td><p>Local-only</p></td>
+<td><p>No multi-environment story.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Self-host on laptop</p></td>
+<td><p>Only available when laptop is awake and on the right VPN.</p></td>
+</tr>
+</tbody>
+</table>
+<p>A dedicated LXC is small (1 GB RAM is plenty), has its own lifecycle, and
+becomes the natural home for any future beads workspace.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

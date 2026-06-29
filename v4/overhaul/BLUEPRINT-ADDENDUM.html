@@ -1,0 +1,755 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Overhaul — Blueprint Addendum &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Overhaul — Blueprint Addendum</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/v4/overhaul/BLUEPRINT-ADDENDUM.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-overhaul-blueprint-addendum">
+<h1>CF-LIBS Overhaul — Blueprint Addendum<a class="headerlink" href="#cf-libs-overhaul-blueprint-addendum" title="Link to this heading"></a></h1>
+<p><strong>Author:</strong> Lead Architect (addendum pass)
+<strong>Date:</strong> 2026-06-25
+<strong>Purpose:</strong> Fold all 16 CRITIC gaps into properly-classified, dependency-ordered milestone items
+in the same format as BLUEPRINT.md. Cross-reference to ARCHITECTURE.md §§ where applicable.</p>
+<p>Classification legend same as BLUEPRINT.md:</p>
+<ul class="simple">
+<li><p><strong>SAFE-NOW</strong> — behavior-preserving; acceptance = green targeted test</p></li>
+<li><p><strong>BENCHMARK-GATED</strong> — changes scoring output; ships flag-default-OFF until gate passes</p></li>
+<li><p><strong>DESIGN-DECISION</strong> — requires measured comparison before one option is chosen</p></li>
+<li><p><strong>AUDIT</strong> — no code change until convention/invariant confirmed by rg + Read</p></li>
+</ul>
+<hr class="docutils" />
+<section id="m0-additions-test-benchmark-scaffolding-enable-everything-else">
+<h2>M0 Additions — Test &amp; benchmark scaffolding (enable everything else)<a class="headerlink" href="#m0-additions-test-benchmark-scaffolding-enable-everything-else" title="Link to this heading"></a></h2>
+<p>These items join M0 in the blueprint because they are gate infrastructure, not late refactors.
+They must land before any benchmark-gated accuracy item can be verified.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M0-A1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">RoundTripValidator</span></code> solver-injection seam</p></td>
+<td><p>validation F5 (<code class="docutils literal notranslate"><span class="pre">round_trip.py:779</span></code>): hardwired <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code>, no <code class="docutils literal notranslate"><span class="pre">solver_factory</span></code> param</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Constructor gains <code class="docutils literal notranslate"><span class="pre">solver_factory:</span> <span class="pre">Callable[...,</span> <span class="pre">SolverStrategy]</span> <span class="pre">=</span> <span class="pre">None</span></code> (default = iterative); <code class="docutils literal notranslate"><span class="pre">_validate()</span></code> uses it; test passes <code class="docutils literal notranslate"><span class="pre">BayesianSolver</span></code> factory; no behavior change with default.</p></td>
+<td><p>M0</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M0-A2</p></td>
+<td><p>ID F1/recall benchmark harness</p></td>
+<td><p>benchmark F5 (gap: M0-2 names composition metrics only), CRITIC GAP-16</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scripts/benchmark_synthetic_identifiers.py</span></code> wrapped behind the same command interface as M0-2; emits <code class="docutils literal notranslate"><span class="pre">id_f1</span></code>, <code class="docutils literal notranslate"><span class="pre">id_recall</span></code>, <code class="docutils literal notranslate"><span class="pre">id_precision</span></code> JSON alongside composition metrics; committed baseline snapshot; used as gate for all identifier-scoring items (M5-2/M5-3, comb fix).</p></td>
+<td><p>M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M0-A3</p></td>
+<td><p>LOD estimator: document deviation + define defensible estimator</p></td>
+<td><p>benchmark F2 (<code class="docutils literal notranslate"><span class="pre">metrics.py:550</span></code>): LOD = 3·std(bottom-25th-percentile), not 3σ_blank</p></td>
+<td><p>DESIGN-DECISION</p></td>
+<td><p>Decide: (a) add <code class="docutils literal notranslate"><span class="pre">blank_spectra</span></code> concept to <code class="docutils literal notranslate"><span class="pre">BenchmarkSpectrum</span></code> and compute LOD from certified blanks; (b) document the deviation from IUPAC ISO 11843 and use it only for relative ranking. Decision + comment + test; <code class="docutils literal notranslate"><span class="pre">traces</span></code> stratum gate re-evaluated.</p></td>
+<td><p>M0-2</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="m1-additions-safe-now-correctness-no-benchmark-needed">
+<h2>M1 Additions — SAFE-NOW correctness (no benchmark needed)<a class="headerlink" href="#m1-additions-safe-now-correctness-no-benchmark-needed" title="Link to this heading"></a></h2>
+<p>These items were HIGH verified-REAL findings absent from the original M1.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M1-A1</p></td>
+<td><p>SCCT5/SCCT7 K-dropped copy-paste data fix</p></td>
+<td><p>pds F1-2 (<code class="docutils literal notranslate"><span class="pre">corpus.py:233–253</span></code>): SCCT5 copies CCCT3 and SCCT7 copies CCCT2 with K silently dropped</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Verify SCCT5/SCCT7 K weight-fraction against ChemCam published target compositions (Fabre 2011 or superseding reference); add <code class="docutils literal notranslate"><span class="pre">&quot;K&quot;:</span> <span class="pre">value</span></code> with citation comment; test asserts SCCT5[“K”] is present and non-zero (or explicitly documents why K below LOD for SuperCam).</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-A2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">instrument.convolution.apply_instrument_function</span></code> sigma=0 guard</p></td>
+<td><p>instrument F10 (<code class="docutils literal notranslate"><span class="pre">convolution.py:44</span></code>): sigma=0 → division by zero → NaN output; no guard</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Guard: <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">sigma_nm</span> <span class="pre">&lt;=</span> <span class="pre">0:</span> <span class="pre">return</span> <span class="pre">intensity.copy()</span></code> (matches <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code> guard at <code class="docutils literal notranslate"><span class="pre">spectrum_model.py:280</span></code>); test: <code class="docutils literal notranslate"><span class="pre">apply_instrument_function(wl,</span> <span class="pre">i,</span> <span class="pre">0.0)</span></code> returns <code class="docutils literal notranslate"><span class="pre">i</span></code> unchanged, no NaN.</p></td>
+<td><p>—</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-A3</p></td>
+<td><p>Evolution: wire or remove <code class="docutils literal notranslate"><span class="pre">enforcement_mode</span></code>; add <code class="docutils literal notranslate"><span class="pre">builtins.exec</span></code> scan</p></td>
+<td><p>evolution F2.1 (<code class="docutils literal notranslate"><span class="pre">config.py</span></code> <code class="docutils literal notranslate"><span class="pre">enforcement_mode</span></code> field has no driver consumer) + evolution NEW-A (<code class="docutils literal notranslate"><span class="pre">builtins.exec</span></code> attribute form bypasses scanner)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Either (a) remove <code class="docutils literal notranslate"><span class="pre">enforcement_mode</span></code> field from <code class="docutils literal notranslate"><span class="pre">EvolutionDriverConfig</span></code> (safe: no driver reads it); or (b) add a concrete <code class="docutils literal notranslate"><span class="pre">_check_enforcement_mode(config)</span></code> function that raises <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code> if <code class="docutils literal notranslate"><span class="pre">mode==&quot;warn&quot;</span></code> and no driver registers a callback — make the fiction explicit. Also add <code class="docutils literal notranslate"><span class="pre">builtins.exec</span></code> as attribute-chain pattern to <code class="docutils literal notranslate"><span class="pre">_scan_attribute</span></code> path; add test. Pairs with M1-20 (exec/eval/compile scanner).</p></td>
+<td><p>M1-20</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-A4</p></td>
+<td><p>HPC SBATCH heredoc: stop hardcoding bayesian import path</p></td>
+<td><p>hpc F4 (<code class="docutils literal notranslate"><span class="pre">slurm.py:655</span></code>): <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solve.bayesian</span> <span class="pre">import</span> <span class="pre">...</span></code> hardcoded as string literal in generated script</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Import path built from a module-level constant <code class="docutils literal notranslate"><span class="pre">_BAYESIAN_IMPORT_PATH</span> <span class="pre">=</span> <span class="pre">f&quot;{BayesianForwardModel.__module__}&quot;</span></code> resolved at generation time; test: generated script string contains the runtime-resolved import path, not a hardcoded literal; change is invisible to script consumers (same string today, auto-updates on refactor).</p></td>
+<td><p>M1-1</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M1-A5</p></td>
+<td><p>HPC: fix <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">cflibs.hpc.distributed_mcmc</span></code> dead CLI</p></td>
+<td><p>hpc NEW-A (<code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:11–14</span></code>): module docstring advertises <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span></code> usage; no <code class="docutils literal notranslate"><span class="pre">__main__</span></code> block exists</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">__name__</span> <span class="pre">==</span> <span class="pre">&quot;__main__&quot;:</span></code> block with <code class="docutils literal notranslate"><span class="pre">argparse</span></code> covering <code class="docutils literal notranslate"><span class="pre">--db-path</span></code>, <code class="docutils literal notranslate"><span class="pre">--elements</span></code>, <code class="docutils literal notranslate"><span class="pre">--wl-range</span></code>; or change docstring to remove the advertised usage and redirect to SLURM script generation. A SLURM job following the docstring currently exits silently with code 0. Test: <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">cflibs.hpc.distributed_mcmc</span> <span class="pre">--help</span></code> exits 0 and prints usage.</p></td>
+<td><p>—</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M1-A6</p></td>
+<td><p>NoiseModel: shot noise on clean signal; variance from params</p></td>
+<td><p>validation F3-revised (<code class="docutils literal notranslate"><span class="pre">round_trip.py:588–615</span></code>): shot noise applied to signal+background, variance from noise-contaminated realization</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Fix sequence: (1) compute <code class="docutils literal notranslate"><span class="pre">var_shot</span> <span class="pre">=</span> <span class="pre">max(clean_signal,</span> <span class="pre">0)</span></code>; (2) add background after variance is set; (3) use <code class="docutils literal notranslate"><span class="pre">var_from_model</span> <span class="pre">=</span> <span class="pre">var_shot</span> <span class="pre">+</span> <span class="pre">sigma_readout**2</span></code>, not the realized intensity, as uncertainty estimate. Parity test: <code class="docutils literal notranslate"><span class="pre">NoiseModel</span></code> with zero background and zero readout returns <code class="docutils literal notranslate"><span class="pre">intensity_uncertainty</span> <span class="pre">==</span> <span class="pre">sqrt(intensity)</span></code>. Pairs with M4-5 (hc/λ fix).</p></td>
+<td><p>M0-3</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="m2-additions-ipd-pf-truncation-consistency-audit-extends-m0-1">
+<h2>M2 Additions — IPD/PF truncation consistency audit (extends M0-1)<a class="headerlink" href="#m2-additions-ipd-pf-truncation-consistency-audit-extends-m0-1" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M2-A1</p></td>
+<td><p>IPD/PF truncation consistency invariant test + single compute_ipd()</p></td>
+<td><p>CRITIC GAP-12; saha-boltzmann-lte literature §P2 (CRITICAL pitfall); radiation F3 (two diverging population paths)</p></td>
+<td><p>AUDIT then SAFE-NOW</p></td>
+<td><p>Phase 1 (AUDIT): confirm <code class="docutils literal notranslate"><span class="pre">partition.py</span></code> truncation cutoff uses the same Δχ as <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py</span></code> Saha exponent. Run <code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">-n</span> <span class="pre">&quot;ipd|delta_chi|continuum_lower|chi_eff&quot;</span> <span class="pre">cflibs/</span></code> and read both sites. Phase 2 (SAFE-NOW if inconsistency confirmed): introduce <code class="docutils literal notranslate"><span class="pre">compute_ipd(n_e_cm3,</span> <span class="pre">T_eV,</span> <span class="pre">model)</span> <span class="pre">-&gt;</span> <span class="pre">float</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code> as the single call site; thread Δχ to both Saha exponent and PF truncation explicitly; invariant test: <code class="docutils literal notranslate"><span class="pre">pf_cutoff</span> <span class="pre">==</span> <span class="pre">chi</span> <span class="pre">-</span> <span class="pre">ipd(n_e,</span> <span class="pre">T)</span></code> for both polynomial and direct-sum paths across the two forward-physics paths (radiation F3).</p></td>
+<td><p>M0-1</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="m3-additions-molemass-accuracy-items">
+<h2>M3 Additions — Mole↔mass accuracy items<a class="headerlink" href="#m3-additions-molemass-accuracy-items" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M3-A1</p></td>
+<td><p>Clarify M3-2 baseline semantics: old baseline is known-wrong</p></td>
+<td><p>CRITIC GAP-14; benchmark F1 (CRITICAL: Völker 353% error); BLUEPRINT.md M3-2</p></td>
+<td><p>— (framing fix, not a code item)</p></td>
+<td><p>M3-2 acceptance must state explicitly: a moved composition number is the <strong>fix landing</strong>, not a regression. The benchmark gate compares against ground-truth (certified mass fractions), not against the old (wrong) number-fraction baseline. The old baseline must be retired when M3-2 lands. Document in the M3-2 PR description.</p></td>
+<td><p>M3-2</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="m4-additions-reliability-bayesian-noise">
+<h2>M4 Additions — Reliability + Bayesian noise<a class="headerlink" href="#m4-additions-reliability-bayesian-noise" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M4-A1</p></td>
+<td><p>Bayesian likelihood normalization + variance model audit</p></td>
+<td><p>CRITIC GAP-13; bayesian-oe literature §2.4/2.5</p></td>
+<td><p>AUDIT then BENCHMARK-GATED</p></td>
+<td><p>Audit <code class="docutils literal notranslate"><span class="pre">bayesian/likelihood.py</span></code>: (1) confirm <code class="docutils literal notranslate"><span class="pre">log(σ_k²)</span></code> normalization term is present or absent; (2) confirm variance is signal-dependent or fixed. <code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">-n</span> <span class="pre">&quot;log.*sigma|normali&quot;</span> <span class="pre">cflibs/inversion/solve/bayesian/</span></code>. If normalization is dropped for BIC/WAIC comparisons (model selection in <code class="docutils literal notranslate"><span class="pre">inv-identify</span></code>), flag as accuracy issue. Fold audit results into M5-9 acceptance criteria.</p></td>
+<td><p>M5-9</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M4-A2</p></td>
+<td><p>Benchmark A2: silent simplified-model fallback sets TruthType flag</p></td>
+<td><p>benchmark A2 (<code class="docutils literal notranslate"><span class="pre">synthetic.py:483–490</span></code>): silent <code class="docutils literal notranslate"><span class="pre">except</span> <span class="pre">Exception</span></code> falls through to simplified model with no <code class="docutils literal notranslate"><span class="pre">TruthType.SIMULATED_UNPHYSICAL</span></code> flag</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>On any exception in <code class="docutils literal notranslate"><span class="pre">_generate_with_forward_model</span></code>, set <code class="docutils literal notranslate"><span class="pre">truth_type=TruthType.SIMULATED_UNPHYSICAL</span></code> (or a new <code class="docutils literal notranslate"><span class="pre">SIMULATED_FALLBACK</span></code> variant) before calling <code class="docutils literal notranslate"><span class="pre">_generate_simplified</span></code>; benchmark harness must filter or warn on <code class="docutils literal notranslate"><span class="pre">SIMULATED_UNPHYSICAL</span></code> spectra; test asserts fallback sets the flag.</p></td>
+<td><p>M4-5</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="m5-additions-identifier-accuracy-nuts-warm-start-rust-comb">
+<h2>M5 Additions — Identifier accuracy + NUTS warm-start + Rust comb<a class="headerlink" href="#m5-additions-identifier-accuracy-nuts-warm-start-rust-comb" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M5-A1</p></td>
+<td><p>Warm-start NUTS from classical MAP at all 3 MCMC call sites</p></td>
+<td><p>hpc F1 (<code class="docutils literal notranslate"><span class="pre">distributed_mcmc.py:205</span></code>, <code class="docutils literal notranslate"><span class="pre">bayesian/samplers.py</span></code>, <code class="docutils literal notranslate"><span class="pre">two_zone.py</span></code>): all use <code class="docutils literal notranslate"><span class="pre">init_to_uniform(radius=0.5)</span></code></p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Replace <code class="docutils literal notranslate"><span class="pre">init_to_uniform</span></code> with <code class="docutils literal notranslate"><span class="pre">init_to_value(values=map_estimate)</span></code> at all 3 sites; <code class="docutils literal notranslate"><span class="pre">map_estimate</span></code> computed from <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolver</span></code> or passed in; flag-guarded (<code class="docutils literal notranslate"><span class="pre">CFLIBSConfig.nuts_init_strategy</span></code>); Bayesian convergence benchmark: R̂ &lt; 1.05 for ≥ 95% of test cases with warm-start vs. cold-start; benchmark JSON committed. Addresses literature mandate bayesian-oe §2.7.</p></td>
+<td><p>M0-A2, M5-9</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M5-A2</p></td>
+<td><p>Align Rust↔Python comb greedy orientation + tie-break epsilon</p></td>
+<td><p>native-rust Missed-A (<code class="docutils literal notranslate"><span class="pre">comb_matching.rs:14–52</span></code> peaks-outer vs. <code class="docutils literal notranslate"><span class="pre">line_detection.py:1950</span></code> transitions-outer); Missed-B (epsilon 1e-12 vs. np.isclose)</p></td>
+<td><p>BENCHMARK-GATED</p></td>
+<td><p>Fix Rust to use transitions-outer greedy (matching Python semantics); align F1 tie-break epsilon; ID benchmark (M0-A2) non-regression; flag-guarded during benchmark validation; M0-3 parity fixture flipped from xfail to assert (per GAP-15 rule).</p></td>
+<td><p>M0-3, M0-A2</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M5-A3</p></td>
+<td><p>inv-common: add <code class="docutils literal notranslate"><span class="pre">intensity_uncertainty</span></code> to <code class="docutils literal notranslate"><span class="pre">IdentifiedLine</span></code>; propagate through identifiers</p></td>
+<td><p>inv-common F12 (<code class="docutils literal notranslate"><span class="pre">element_id.py:24–62</span></code>: <code class="docutils literal notranslate"><span class="pre">IdentifiedLine</span></code> has no <code class="docutils literal notranslate"><span class="pre">intensity_uncertainty</span></code> field) + F2 (<code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> drops <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code>) + F3 (<code class="docutils literal notranslate"><span class="pre">y_uncertainty</span></code> incomplete)</p></td>
+<td><p>SAFE-NOW (slot addition) then BENCHMARK-GATED (uncertainty propagation)</p></td>
+<td><p>Phase 1 (SAFE-NOW): add <code class="docutils literal notranslate"><span class="pre">intensity_uncertainty:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.0</span></code> to <code class="docutils literal notranslate"><span class="pre">IdentifiedLine</span></code>; update <code class="docutils literal notranslate"><span class="pre">to_line_observations</span></code> to forward it + <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> (F2 fix); add test for F10 (currently zero coverage). Phase 2 (BENCHMARK-GATED): thread real σ_I from preprocessing noise estimate; benchmark uncertainty-accuracy metric (see M0-3 fixtures).</p></td>
+<td><p>M1-2</p></td>
+<td><p>M</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="m6-additions-manifold-and-forward-model-xfailassert-rule">
+<h2>M6 Additions — Manifold and forward model xfail→assert rule<a class="headerlink" href="#m6-additions-manifold-and-forward-model-xfailassert-rule" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M6-A1</p></td>
+<td><p>Standing rule: flip xfail→assert in M0-3 fixtures when fix lands</p></td>
+<td><p>CRITIC GAP-15: M0-3 xfail-marks known divergences; no item explicitly owns the flip</p></td>
+<td><p>— (process rule)</p></td>
+<td><p>Every fix item that resolves an M0-3 xfail (M6-2/M6-3/M6-4, M5-7, M5-A2) MUST include “flip xfail→assert” in its acceptance criteria. Add this as a comment to M0-3’s description in BLUEPRINT.md. Risk: a fix lands, the xfail silently keeps passing as xfail, and parity is never enforced.</p></td>
+<td><p>M0-3</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="m7-additions-housekeeping-sweep-lower-priority">
+<h2>M7 Additions — Housekeeping sweep (lower priority)<a class="headerlink" href="#m7-additions-housekeeping-sweep-lower-priority" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses (file:line)</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>M7-A1</p></td>
+<td><p>HPC housekeeping sweep</p></td>
+<td><p>hpc F5 (mutable default <code class="docutils literal notranslate"><span class="pre">DistributedMCMCConfig()</span></code> in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>), F6 (duplicate SBATCH header logic), F7 (<code class="docutils literal notranslate"><span class="pre">comm.gather</span></code> pickle), F8 (sequential int PRNG → <code class="docutils literal notranslate"><span class="pre">random.split</span></code>), F9 (hardcoded <code class="docutils literal notranslate"><span class="pre">XLA_PYTHON_CLIENT_MEM_FRACTION=0.9</span></code>), F10 (no <code class="docutils literal notranslate"><span class="pre">pin_to_device</span></code> test), F11 (no R-hat convergence test)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Address all in one PR: freeze config default; extract <code class="docutils literal notranslate"><span class="pre">_generate_sbatch_header()</span></code> helper; Gatherv for numpy arrays; <code class="docutils literal notranslate"><span class="pre">random.split</span></code> for PRNG; expose <code class="docutils literal notranslate"><span class="pre">gpu_memory_fraction</span></code> in config; add modulo-wrap + R-hat tests.</p></td>
+<td><p>M4-2, M4-4</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-odd"><td><p>M7-A2</p></td>
+<td><p>Evolution doc + config housekeeping</p></td>
+<td><p>evolution F1.2/2.2/4.1/4.2/5.2 (doc/config debt): CLAUDE.md contradiction, <code class="docutils literal notranslate"><span class="pre">fitness_weights</span></code> no aggregation formula, <code class="docutils literal notranslate"><span class="pre">evaluation_timeout_s=5.0</span></code>, <code class="docutils literal notranslate"><span class="pre">structural_mutation_cadence=10</span></code>, straggler test file</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Correct CLAUDE.md to “ML is allowed only in the external evolution driver that calls cflibs/evolution/”; add aggregation formula docstring; update <code class="docutils literal notranslate"><span class="pre">evaluation_timeout_s</span></code> default to 60.0 (matches minimum real inversion wall-clock); document cadence=10 citation or change; move straggler test file to <code class="docutils literal notranslate"><span class="pre">tests/evolution/</span></code>; add pytest marks.</p></td>
+<td><p>M1-A3</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-even"><td><p>M7-A3</p></td>
+<td><p>inv-common: <code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance</span></code> instrument FWHM fix + <code class="docutils literal notranslate"><span class="pre">y_uncertainty</span></code> doc</p></td>
+<td><p>inv-common F1 (<code class="docutils literal notranslate"><span class="pre">element_id.py:245–250</span></code>): fallback discards computed <code class="docutils literal notranslate"><span class="pre">fwhm_inst</span></code>; F3 (<code class="docutils literal notranslate"><span class="pre">y_uncertainty</span></code> underestimates; does not add <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code>)</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>F1: <code class="docutils literal notranslate"><span class="pre">return</span> <span class="pre">max(fwhm_inst,</span> <span class="pre">fallback)</span></code> (one line fix; function is test-utility only, not production). F3: add <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> in quadrature to <code class="docutils literal notranslate"><span class="pre">y_uncertainty</span></code> property and update docstring. Tests for both.</p></td>
+<td><p>M1-2</p></td>
+<td><p>S</p></td>
+</tr>
+<tr class="row-odd"><td><p>M7-A4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code> pytree round-trip fix</p></td>
+<td><p>instrument F11 (<code class="docutils literal notranslate"><span class="pre">jax_runtime.py:685</span></code>): unflatten reconstructs base <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>, not subclass; no round-trip test</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Register <code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code> separately in pytree; unflatten uses the correct class; add <code class="docutils literal notranslate"><span class="pre">__post_init__</span></code> call or store pre-staged arrays as leaves; round-trip parity test.</p></td>
+<td><p>M1-4, M1-16</p></td>
+<td><p>M</p></td>
+</tr>
+<tr class="row-even"><td><p>M7-A5</p></td>
+<td><p>Benchmark: consolidate <code class="docutils literal notranslate"><span class="pre">CFLIBS_FF_*</span></code> inline flags into <code class="docutils literal notranslate"><span class="pre">CFLIBSConfig</span></code></p></td>
+<td><p>benchmark F6 (<code class="docutils literal notranslate"><span class="pre">synthetic_eval.py:536–543</span></code>): 8 inline <code class="docutils literal notranslate"><span class="pre">os.environ.get()</span></code> calls</p></td>
+<td><p>SAFE-NOW</p></td>
+<td><p>Move 8 flags into <code class="docutils literal notranslate"><span class="pre">CalibrationOptions</span></code> dataclass or <code class="docutils literal notranslate"><span class="pre">CFLIBSConfig</span></code>; test: flags injectable without environment mutation.</p></td>
+<td><p>M7-7</p></td>
+<td><p>S</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="audit-items-literature-pitfalls-never-checked-against-code">
+<h2>Audit Items (literature pitfalls never checked against code)<a class="headerlink" href="#audit-items-literature-pitfalls-never-checked-against-code" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>class</p></th>
+<th class="head"><p>acceptance</p></th>
+<th class="head"><p>deps</p></th>
+<th class="head"><p>effort</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>AU-1</p></td>
+<td><p>Air↔vacuum wavelength convention audit</p></td>
+<td><p>CRITIC GAP-11; broadening-rt literature §1.1 (convention must be explicit); cflibs-method literature</p></td>
+<td><p>AUDIT</p></td>
+<td><p>Run `rg -ni “vacuum</p></td>
+<td><p>air.?wavelength</p></td>
+<td><p>n_air</p></td>
+</tr>
+<tr class="row-odd"><td><p>AU-2</p></td>
+<td><p>IPD/PF truncation consistency audit</p></td>
+<td><p>CRITIC GAP-12 (see M2-A1 above)</p></td>
+<td><p>AUDIT</p></td>
+<td><p>Subsumed into M2-A1 Phase 1.</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>AU-3</p></td>
+<td><p>Bayesian likelihood normalization + variance-model audit</p></td>
+<td><p>CRITIC GAP-13 (see M4-A1 above)</p></td>
+<td><p>AUDIT</p></td>
+<td><p>Subsumed into M4-A1.</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="classification-ordering-corrections-process-items-no-code">
+<h2>Classification / Ordering Corrections (process items, no code)<a class="headerlink" href="#classification-ordering-corrections-process-items-no-code" title="Link to this heading"></a></h2>
+<p>These are documentation or acceptance-criteria amendments to existing BLUEPRINT items.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>addresses</p></th>
+<th class="head"><p>note</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CO-1</p></td>
+<td><p>M3-2 framing: old baseline is known-wrong</p></td>
+<td><p>CRITIC GAP-14</p></td>
+<td><p>See M3-A1 above. The classification (BENCHMARK-GATED) is correct; only the acceptance framing needs the clarification.</p></td>
+</tr>
+<tr class="row-odd"><td><p>CO-2</p></td>
+<td><p>M0-3 standing xfail→assert rule</p></td>
+<td><p>CRITIC GAP-15</p></td>
+<td><p>See M6-A1 above. Add as comment to M0-3 in BLUEPRINT.md.</p></td>
+</tr>
+<tr class="row-even"><td><p>CO-3</p></td>
+<td><p>M0-2 must emit ID F1 benchmark</p></td>
+<td><p>CRITIC GAP-16</p></td>
+<td><p>See M0-A2 above. M0-2 extended or M0-A2 added as sibling.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="item-count-by-class">
+<h2>Item count by class<a class="headerlink" href="#item-count-by-class" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>class</p></th>
+<th class="head"><p>items</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>SAFE-NOW</p></td>
+<td><p>M0-A1, M1-A1, M1-A2, M1-A3, M1-A4, M1-A5, M1-A6, M2-A1 (phase 2), M4-A2, M5-A3 (phase 1), M7-A1, M7-A2, M7-A3, M7-A4, M7-A5</p></td>
+</tr>
+<tr class="row-odd"><td><p>BENCHMARK-GATED</p></td>
+<td><p>M0-A3 (option a), M3-A1 (framing), M4-A1 (if gap found), M5-A1, M5-A2, M5-A3 (phase 2)</p></td>
+</tr>
+<tr class="row-even"><td><p>DESIGN-DECISION</p></td>
+<td><p>M0-A3 (selecting LOD estimator), DA-1, DA-2, DA-3 (from ARCHITECTURE.md)</p></td>
+</tr>
+<tr class="row-odd"><td><p>AUDIT</p></td>
+<td><p>AU-1, M2-A1 (phase 1), M4-A1 (phase 1)</p></td>
+</tr>
+<tr class="row-even"><td><p>Process/framing</p></td>
+<td><p>CO-1, CO-2, CO-3, M6-A1, M3-A1 (note)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Total new items: <strong>28</strong> (including 5 process/framing items that require no separate PR).</p>
+</section>
+<hr class="docutils" />
+<section id="revised-first-12-items-to-execute">
+<h2>Revised First 12 Items to Execute<a class="headerlink" href="#revised-first-12-items-to-execute" title="Link to this heading"></a></h2>
+<p>This merges the addendum M0 additions (M0-A1, M0-A2) and the essential SAFE-NOW items (M1-A1,
+M1-A2) into the blueprint’s original first-10, with ordering adjusted by dependency and impact.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>rank</p></th>
+<th class="head"><p>id</p></th>
+<th class="head"><p>title</p></th>
+<th class="head"><p>rationale</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>M0-1</p></td>
+<td><p>Pin Saha/IPD/DH constants</p></td>
+<td><p>Unblocks plasma/core fixes; tiny, green now</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>M0-2</p></td>
+<td><p>Held-out composition benchmark wrapper + baseline</p></td>
+<td><p>Gate for all BENCHMARK-GATED accuracy items</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>M0-A2</p></td>
+<td><p>ID F1/recall benchmark harness</p></td>
+<td><p>Gate for all identifier-scoring items (M5-2/M5-3/M5-A2)</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>M0-A1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">RoundTripValidator</span></code> solver-injection seam</p></td>
+<td><p>Enables Bayesian/joint/closed-form regression gating; should be M0, not a late refactor</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>M0-3</p></td>
+<td><p>Add dual-path parity fixtures (forward/LDM/SB-graph/Rust-comb), xfail-marking divergences + add standing xfail→assert rule (CO-2)</p></td>
+<td><p>Foundation for all forward-model accuracy fixes</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>M1-A2</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sigma=0</span> <span class="pre">→</span> <span class="pre">NaN</span></code> guard in <code class="docutils literal notranslate"><span class="pre">apply_instrument_function</span></code></p></td>
+<td><p>One-line SAFE-NOW crash prevention; unblocks instrument tests</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>M1-8</p></td>
+<td><p>Fix <code class="docutils literal notranslate"><span class="pre">None</span></code>-sentinel cache miss</p></td>
+<td><p>High-value SAFE-NOW; removes silent DB re-query</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>M1-6</p></td>
+<td><p>Correct Olivero Voigt constants → single source of truth</p></td>
+<td><p>SAFE-NOW, parity-verified, unblocks M0-3 parity test</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>M1-1</p></td>
+<td><p>Move <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> to <code class="docutils literal notranslate"><span class="pre">inversion/common/</span></code> (or <code class="docutils literal notranslate"><span class="pre">domain/</span></code>)</p></td>
+<td><p>Unblocks M1-3, M7-3, M7-6 refactors</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>M1-2</p></td>
+<td><p>Redirect all <code class="docutils literal notranslate"><span class="pre">LineObservation</span></code> imports to canonical path</p></td>
+<td><p>Kills the shim cycle; unblocks M5-A3</p></td>
+</tr>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>M1-A1</p></td>
+<td><p>SCCT5/SCCT7 K-dropped data fix</p></td>
+<td><p>SAFE-NOW data truth; corrupts any benchmark using those targets</p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>M3-1</p></td>
+<td><p>Canonical number↔mass fraction converter</p></td>
+<td><p>SAFE-NOW; prerequisite for the top accuracy lever M3</p></td>
+</tr>
+</tbody>
+</table>
+<p>Items 13+ follow the original BLUEPRINT ordering (M1-20, M2-1, M2-2, …).</p>
+</section>
+<hr class="docutils" />
+<section id="traceability-gap-addendum-item">
+<h2>Traceability: GAP → Addendum item<a class="headerlink" href="#traceability-gap-addendum-item" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>GAP</p></th>
+<th class="head"><p>follow-up</p></th>
+<th class="head"><p>item(s)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>GAP-0</p></td>
+<td><p>ARCHITECTURE.md created</p></td>
+<td><p>ARCHITECTURE.md</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-1</p></td>
+<td><p>hpc F1 NUTS warm-start</p></td>
+<td><p>M5-A1</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-2</p></td>
+<td><p>validation F3-revised noise circularity</p></td>
+<td><p>M1-A6</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-3</p></td>
+<td><p>validation F5 solver-injection seam → M0</p></td>
+<td><p>M0-A1</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-4</p></td>
+<td><p>benchmark F2 LOD blank proxy</p></td>
+<td><p>M0-A3</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-5</p></td>
+<td><p>evolution F2.1 enforcement_mode footgun</p></td>
+<td><p>M1-A3</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-6a</p></td>
+<td><p>hpc F4 hardcoded import path</p></td>
+<td><p>M1-A4</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-6b</p></td>
+<td><p>hpc NEW-A dead CLI</p></td>
+<td><p>M1-A5</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-6c</p></td>
+<td><p>native-rust F2 dead kdet branch</p></td>
+<td><p>ARCHITECTURE.md §9 + M5-A2 (parity)</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-7</p></td>
+<td><p>inv-preprocess F5 monolith + F6 outliers</p></td>
+<td><p>ARCHITECTURE.md §7 (design); M1 split item deferred to M5 window</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-8</p></td>
+<td><p>radiation F2 LEGACY default + F4 resolving-power</p></td>
+<td><p>ARCHITECTURE.md §2.3 + DA-2</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-9</p></td>
+<td><p>pds F2-2 dead-end schema + F1-2 K-dropped</p></td>
+<td><p>ARCHITECTURE.md §8 + M1-A1</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-10</p></td>
+<td><p>native-rust Missed-A/B comb orientation</p></td>
+<td><p>ARCHITECTURE.md §9 + M5-A2</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-11</p></td>
+<td><p>air/vacuum wavelength convention</p></td>
+<td><p>ARCHITECTURE.md §6 + AU-1</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-12</p></td>
+<td><p>IPD/PF truncation consistency</p></td>
+<td><p>ARCHITECTURE.md §5 + M2-A1</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-13</p></td>
+<td><p>Bayesian likelihood normalization/variance</p></td>
+<td><p>ARCHITECTURE.md §4.1 + M4-A1</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-14</p></td>
+<td><p>M3-2 framing</p></td>
+<td><p>M3-A1 + CO-1</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-15</p></td>
+<td><p>xfail→assert standing rule</p></td>
+<td><p>M6-A1 + CO-2</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-16</p></td>
+<td><p>ID F1 benchmark missing from M0-2</p></td>
+<td><p>M0-A2 + CO-3</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-E (instrument F10)</p></td>
+<td><p>sigma=0 NaN</p></td>
+<td><p>M1-A2</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-E (inv-common F1/F2/F3)</p></td>
+<td><p>uncertainty propagation</p></td>
+<td><p>M5-A3 + M7-A3</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-E (benchmark A2)</p></td>
+<td><p>silent simplified fallback</p></td>
+<td><p>M4-A2</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-E (hpc housekeeping)</p></td>
+<td><p>F5–F11</p></td>
+<td><p>M7-A1</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-E (evolution housekeeping)</p></td>
+<td><p>F1.2/2.2/4.1/4.2/5.2</p></td>
+<td><p>M7-A2</p></td>
+</tr>
+<tr class="row-even"><td><p>GAP-E (instrument F5 response curves)</p></td>
+<td><p>3 impl consolidation</p></td>
+<td><p>ARCHITECTURE.md §2.2 + DA-1</p></td>
+</tr>
+<tr class="row-odd"><td><p>GAP-E (plasma F6)</p></td>
+<td><p>TwoRegionPlasma architecture</p></td>
+<td><p>ARCHITECTURE.md §10</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

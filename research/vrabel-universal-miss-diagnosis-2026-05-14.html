@@ -1,0 +1,506 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vrábel-2020 universal-miss root-cause diagnosis (2026-05-14) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Vrábel-2020 universal-miss root-cause diagnosis (2026-05-14)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/research/vrabel-universal-miss-diagnosis-2026-05-14.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="vrabel-2020-universal-miss-root-cause-diagnosis-2026-05-14">
+<h1>Vrábel-2020 universal-miss root-cause diagnosis (2026-05-14)<a class="headerlink" href="#vrabel-2020-universal-miss-root-cause-diagnosis-2026-05-14" title="Link to this heading"></a></h1>
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<p><strong>Root cause: the alias identifier’s <code class="docutils literal notranslate"><span class="pre">boltzmann_r2_min</span> <span class="pre">=</span> <span class="pre">0.85</span></code> consistency
+gate, driven by an unphysically cold plasma-temperature estimate
+(~4000 K) returned by <code class="docutils literal notranslate"><span class="pre">_estimate_plasma_temperature</span></code> on Vrábel’s
+high-resolution echelle spectra.</strong> A secondary contributor is the
+<code class="docutils literal notranslate"><span class="pre">relative_cl_threshold</span> <span class="pre">=</span> <span class="pre">0.1</span></code> element-floor gate, which removes Mg even
+when its Boltzmann fit survives.</p>
+<p>The five identifiers all share the same upstream pipeline (peak
+detection → DB line lookup → matching). The lines ARE detected. The DB
+DOES contain them. The matching DOES bind them to the right peaks. The
+universal misses come from a downstream physics-consistency gate that
+fires on every Vrábel spectrum but on essentially no BHVO-2 spectrum.</p>
+<p>Concretely on sample s019 (true elements: Al, Ca, Fe, <strong>Mg</strong>, Pb,
+<strong>Si</strong>; only Al detected by default):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>element</p></th>
+<th class="head"><p>true</p></th>
+<th class="head"><p>matched</p></th>
+<th class="head"><p>k_sim</p></th>
+<th class="head"><p>CL</p></th>
+<th class="head"><p>boltz_r²</p></th>
+<th class="head"><p>detected?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Mg</p></td>
+<td><p>yes</p></td>
+<td><p>10/13</p></td>
+<td><p>0.303</p></td>
+<td><p>0.026</p></td>
+<td><p><strong>0.372</strong></p></td>
+<td><p><strong>no</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Si</p></td>
+<td><p>yes</p></td>
+<td><p>6/7</p></td>
+<td><p>0.937</p></td>
+<td><p>0.043</p></td>
+<td><p><strong>0.007</strong></p></td>
+<td><p><strong>no</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Ti</p></td>
+<td><p>(no)</p></td>
+<td><p>7/17</p></td>
+<td><p>0.382</p></td>
+<td><p>0.005</p></td>
+<td><p>0.577</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>Al</p></td>
+<td><p>yes</p></td>
+<td><p>4/4</p></td>
+<td><p>0.942</p></td>
+<td><p>0.133</p></td>
+<td><p>0.956</p></td>
+<td><p><strong>yes</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Fe</p></td>
+<td><p>yes</p></td>
+<td><p>16/19</p></td>
+<td><p>0.877</p></td>
+<td><p>0.102</p></td>
+<td><p>0.724</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca</p></td>
+<td><p>yes</p></td>
+<td><p>19/20</p></td>
+<td><p>0.204</p></td>
+<td><p>0.191</p></td>
+<td><p>0.088</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>Pb</p></td>
+<td><p>yes</p></td>
+<td><p>8/9</p></td>
+<td><p>0.979</p></td>
+<td><p>0.130</p></td>
+<td><p>0.595</p></td>
+<td><p>no</p></td>
+</tr>
+</tbody>
+</table>
+<p>Si I 288.16 nm is detected at <strong>SNR=16</strong>, Mg II 279.55 nm at <strong>SNR=38</strong>,
+Mg I 285.21 nm at SNR=21. The peaks aren’t hidden — the Boltzmann fit
+slope is broken because the temperature estimate is wrong, the
+expected line intensities used in the R² test are therefore wrong,
+and the R² gate kills everything except Al (whose 4 matched lines
+happen to be in a narrow E_k range where the broken-T emissivities
+still roughly track observation).</p>
+</section>
+<section id="hypotheses-tested">
+<h2>Hypotheses tested<a class="headerlink" href="#hypotheses-tested" title="Link to this heading"></a></h2>
+<section id="h1-wavelength-coverage-falsified">
+<h3>H1 (wavelength coverage) — <strong>FALSIFIED</strong><a class="headerlink" href="#h1-wavelength-coverage-falsified" title="Link to this heading"></a></h3>
+<p>Vrábel’s echelle covers <strong>200.000 – 1000.020 nm</strong> uniformly at
+<strong>0.02 nm/px</strong> across <strong>40,002 channels</strong>, no gaps. All canonical
+LIBS resonance lines for the universally-missed elements are well
+inside this range:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Si</span> <span class="n">I</span> <span class="mf">251.611</span><span class="p">,</span> <span class="mf">288.158</span> <span class="n">nm</span>           <span class="n">IN</span> <span class="n">RANGE</span>
+<span class="n">Mg</span> <span class="n">II</span> <span class="mf">279.553</span><span class="p">,</span> <span class="mf">280.270</span> <span class="n">nm</span>          <span class="n">IN</span> <span class="n">RANGE</span>
+<span class="n">Mg</span> <span class="n">I</span> <span class="mf">285.213</span> <span class="n">nm</span>                    <span class="n">IN</span> <span class="n">RANGE</span>
+<span class="n">Al</span> <span class="n">I</span> <span class="mf">309.271</span><span class="p">,</span> <span class="mf">394.401</span><span class="p">,</span> <span class="mf">396.152</span> <span class="n">nm</span>  <span class="n">IN</span> <span class="n">RANGE</span>
+<span class="n">Ti</span> <span class="n">II</span> <span class="mf">334.940</span><span class="p">,</span> <span class="mf">336.121</span><span class="p">,</span> <span class="mf">337.280</span> <span class="n">nm</span> <span class="n">IN</span> <span class="n">RANGE</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">gaps</span> <span class="pre">&gt;</span> <span class="pre">0.1</span> <span class="pre">nm:</span> <span class="pre">0</span></code>. The spectrometer sees every line we would expect.</p>
+</section>
+<section id="h2-atomic-database-coverage-falsified">
+<h3>H2 (atomic-database coverage) — <strong>FALSIFIED</strong><a class="headerlink" href="#h2-atomic-database-coverage-falsified" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">AtomicDatabase.get_transitions(...)</span></code> over Vrábel’s 200–1000 nm range
+returns the full canonical line lists:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>element</p></th>
+<th class="head"><p>total lines (200–1000 nm)</p></th>
+<th class="head"><p>ion 1</p></th>
+<th class="head"><p>ion 2</p></th>
+<th class="head"><p>strongest by A_ki·g_k</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Si</p></td>
+<td><p>302</p></td>
+<td><p>131</p></td>
+<td><p>157</p></td>
+<td><p>Si I 251.61, 288.16, 252.41, 250.69 (all present)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mg</p></td>
+<td><p>364</p></td>
+<td><p>171</p></td>
+<td><p>189</p></td>
+<td><p>Mg II 279.55, 279.80, 280.27, Mg I 285.21 (all present)</p></td>
+</tr>
+<tr class="row-even"><td><p>Al</p></td>
+<td><p>319</p></td>
+<td><p>69</p></td>
+<td><p>242</p></td>
+<td><p>Al I 309.27, 394.40, 396.15 (all present); Al II 219.26</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti</p></td>
+<td><p>902</p></td>
+<td><p>432</p></td>
+<td><p>463</p></td>
+<td><p>Ti II 282.81, 334.94, 336.12, 337.28 (all present)</p></td>
+</tr>
+<tr class="row-even"><td><p>Cr</p></td>
+<td><p>628</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>full canonical</p></td>
+</tr>
+<tr class="row-odd"><td><p>P</p></td>
+<td><p>140</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>full canonical</p></td>
+</tr>
+<tr class="row-even"><td><p>Pb</p></td>
+<td><p>29</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>full canonical</p></td>
+</tr>
+<tr class="row-odd"><td><p>Cu</p></td>
+<td><p>435</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>full canonical</p></td>
+</tr>
+</tbody>
+</table>
+<p>The textbook resonance lines for every universally-missed element are
+in the DB with finite A_ki, g_k, E_k, and Stark parameters.</p>
+</section>
+<section id="h3-over-aggressive-baseline-subtraction-falsified">
+<h3>H3 (over-aggressive baseline subtraction) — <strong>FALSIFIED</strong><a class="headerlink" href="#h3-over-aggressive-baseline-subtraction-falsified" title="Link to this heading"></a></h3>
+<p>Running <code class="docutils literal notranslate"><span class="pre">detect_peaks_auto(...,</span> <span class="pre">baseline_method=MEDIAN,</span> <span class="pre">threshold_factor=3.0)</span></code> (exact bench config) on s019 returns <strong>643
+peaks</strong> at noise σ ≈ 66. Residual-above-baseline at the strong
+universally-missed-element lines:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Line                         I_peak    base   resid   SNR   peak&lt;0.1nm?
+Si I  288.158 (E_k=5.08 eV)   1063.6    -0.4  1064.0  16.1   1@288.180
+Si I  251.611 (E_k=4.95 eV)    298.0    10.0   288.1   4.3   1@251.620
+Mg II 279.553 (E_k=4.43 eV)   2558.9    25.9  2533.0  38.2   1@279.560
+Mg II 280.270 (E_k=4.42 eV)   2215.5    27.5  2188.0  33.0   1@280.280
+Mg I  285.213 (E_k=4.35 eV)   1413.8    11.7  1402.1  21.2   1@285.220
+Al I  396.152                 3827.5   358.1  3469.4  52.4   1@396.160
+Al I  394.401                 4023.2   374.8  3648.4  55.1   1@394.420
+Al I  309.271                 1338.3    47.2  1291.1  19.5   1@309.260
+Ti II 334.940                  719.7    60.8   658.9   9.9   1@334.940
+Ti II 336.121                  438.2    55.5   382.6   5.8   1@336.140
+</pre></div>
+</div>
+<p>The median baseline removes ~10–400 counts (the continuum) and leaves
+the line cores well above the 3-σ threshold for every strong resonance
+line. The peaks are present, the indices are matched, and they propagate
+all the way into <code class="docutils literal notranslate"><span class="pre">ElementIdentification.matched_lines</span></code>.</p>
+</section>
+<section id="h4-self-absorption-partially-true-but-downstream-of-h-root">
+<h3>H4 (self-absorption) — <strong>PARTIALLY TRUE</strong>, but downstream of H_root<a class="headerlink" href="#h4-self-absorption-partially-true-but-downstream-of-h-root" title="Link to this heading"></a></h3>
+<p>Self-absorption is plausibly real on s019 (Mg ~3 wt%, Al ~7 wt%, etc.)
+— <code class="docutils literal notranslate"><span class="pre">_estimate_plasma_temperature</span></code> warns
+<code class="docutils literal notranslate"><span class="pre">Positive</span> <span class="pre">or</span> <span class="pre">zero</span> <span class="pre">slope</span> <span class="pre">detected.</span> <span class="pre">Population</span> <span class="pre">inversion</span> <span class="pre">or</span> <span class="pre">error.</span> <span class="pre">T</span> <span class="pre">set</span> <span class="pre">to</span> <span class="pre">infinity.</span></code>
+which is exactly the signature of self-absorbed resonance lines
+biasing a Boltzmann fit (low-E_k lines artificially weak relative to
+high-E_k lines). The plasma-T estimator’s fallback when this happens
+is <code class="docutils literal notranslate"><span class="pre">self.reference_temperature</span> <span class="pre">=</span> <span class="pre">10,000</span> <span class="pre">K</span></code>, but the actual T returned
+for s019 is <strong>4,136 K</strong> — so the fallback isn’t kicking in either; the
+fit converges on a cold-plasma minimum that explains the
+narrow-line-strength range. Self-absorption is therefore the
+upstream cause of the wrong T, not a directly fixable layer.</p>
+</section>
+<section id="h-root-boltzmann-r2-min-gate-cold-t-misestimate-confirmed">
+<h3>H_root (boltzmann_r2_min gate × cold-T misestimate) — <strong>CONFIRMED</strong><a class="headerlink" href="#h-root-boltzmann-r2-min-gate-cold-t-misestimate-confirmed" title="Link to this heading"></a></h3>
+<p>The default <code class="docutils literal notranslate"><span class="pre">boltzmann_r2_min</span> <span class="pre">=</span> <span class="pre">0.85</span></code> requires that the matched lines
+of an element fall on a Boltzmann slope with R² ≥ 0.85, using the
+identifier’s <code class="docutils literal notranslate"><span class="pre">_estimated_T</span></code>. When <code class="docutils literal notranslate"><span class="pre">_estimated_T</span></code> is wrong (e.g.
+4136 K instead of the expected 7000–12000 K for soil LIBS plasma), the
+predicted emissivities <code class="docutils literal notranslate"><span class="pre">g_k</span> <span class="pre">*</span> <span class="pre">A_ki</span> <span class="pre">*</span> <span class="pre">exp(-E_k</span> <span class="pre">/</span> <span class="pre">kT)</span></code> are wildly wrong,
+the residuals are huge, and R² collapses. Almost every element fails
+this gate. Al survives only because its 4 matched lines (308.21, 309.27,
+394.40, 396.15 nm) all sit in a narrow E_k window (3.14–4.02 eV) where
+the broken-T emissivities happen to track the observed intensities
+closely (R² = 0.956).</p>
+<p>Empirical confirmation — running the alias identifier on s019 with the
+exact bench config except varying the two suspected gates:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Default (boltz_r2_min=0.85, rel_cl=0.1):    [&#39;Al&#39;]
+boltz_r2_min=0.0 (gate disabled):           [&#39;Ca&#39;, &#39;Na&#39;, &#39;Si&#39;, &#39;Pb&#39;, &#39;Cu&#39;, &#39;Al&#39;, &#39;Fe&#39;]
+boltz_r2_min=0.0 AND rel_cl_threshold=0.0:  [&#39;Ca&#39;, &#39;Mg&#39;, &#39;Na&#39;, &#39;Si&#39;, &#39;Pb&#39;, &#39;Cu&#39;, &#39;Al&#39;, &#39;Fe&#39;]
+rel_cl_threshold=0.0 only (boltz=0.85):     [&#39;Al&#39;]        ← Boltzmann gate dominates
+</pre></div>
+</div>
+<p>True elements on s019 = <code class="docutils literal notranslate"><span class="pre">{Al,</span> <span class="pre">Ca,</span> <span class="pre">Fe,</span> <span class="pre">Mg,</span> <span class="pre">Pb,</span> <span class="pre">Si}</span></code>. With both gates
+relaxed we recover all 6 true elements (plus 2 false positives, Na/Cu).
+<strong>Boltzmann is the dominant filter; relative-CL adds the Mg kill.</strong></p>
+</section>
+<section id="cross-dataset-signature">
+<h3>Cross-dataset signature<a class="headerlink" href="#cross-dataset-signature" title="Link to this heading"></a></h3>
+<p>Aggregating <code class="docutils literal notranslate"><span class="pre">estimated_T_K</span></code> and <code class="docutils literal notranslate"><span class="pre">effective_R</span></code> from the per-spectrum
+annotations across all three datasets:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>dataset</p></th>
+<th class="head"><p>rp_estimate</p></th>
+<th class="head"><p>median T_K</p></th>
+<th class="head"><p>T_K range</p></th>
+<th class="head"><p>median eff_R</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">aalto_libs</span></code></p></td>
+<td><p>541</p></td>
+<td><p>14,409</p></td>
+<td><p>14,409 fixed</p></td>
+<td><p>541</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bhvo2_usgs</span></code></p></td>
+<td><p>9,433</p></td>
+<td><p>6,595</p></td>
+<td><p>6,588–6,827</p></td>
+<td><p>5,837</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vrabel2020_soil_benchmark</span></code></p></td>
+<td><p>30,001</p></td>
+<td><p>4,257</p></td>
+<td><p>3,295–10,533</p></td>
+<td><p>7,092</p></td>
+</tr>
+</tbody>
+</table>
+<p>Vrábel’s plasma-T estimates cluster at ~4000 K — physically too cold
+for LIBS by a factor of 2. BHVO-2 sits at a defensible 6,500–6,800 K.
+The colder the T, the more sharply the gate fires.</p>
+<p>Of the 16 Vrábel spectra with Si in the ground truth, <strong>15 missed by
+all 5 identifiers</strong>. The one catch was s039, where the alias
+identifier estimated T=5045 K and effective_R=10771 — both higher than
+the typical Vrábel run — and <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> (NNLS-based, doesn’t use
+the Boltzmann R² gate) detected Si. The other four identifiers still
+missed it.</p>
+</section>
+</section>
+<section id="recommended-fixes">
+<h2>Recommended fixes<a class="headerlink" href="#recommended-fixes" title="Link to this heading"></a></h2>
+<p>In order of impact and tractability:</p>
+<ol class="arabic simple">
+<li><p><strong>Loosen / temperature-aware Boltzmann gate (highest impact).</strong>
+Either:</p>
+<ul class="simple">
+<li><p>Lower <code class="docutils literal notranslate"><span class="pre">boltzmann_r2_min</span></code> to ~0.5–0.6 by default (still rejects
+pure-noise matches without killing physically broken-T cases),
+OR</p></li>
+<li><p>Skip the R² check entirely when <code class="docutils literal notranslate"><span class="pre">_estimated_T</span></code> is flagged as
+unreliable (population-inversion warning fired, or T outside
+5,000–15,000 K), OR</p></li>
+<li><p>Fit T per element from the matched lines themselves and use
+the per-element R² rather than a globally-fixed T.</p></li>
+</ul>
+</li>
+<li><p><strong>Fix plasma-temperature estimation on high-R echelle data.</strong>
+The current <code class="docutils literal notranslate"><span class="pre">_estimate_plasma_temperature</span></code> is biased toward 3,000–
+5,000 K on dense Vrábel-class spectra because too many weakly-emitted
+high-E_k lines outweigh the (self-absorbed) strong low-E_k lines in
+the Boltzmann slope. Options:</p>
+<ul class="simple">
+<li><p>Restrict Boltzmann fit to lines with E_k spread &gt; 2 eV.</p></li>
+<li><p>Down-weight or exclude resonance lines (<code class="docutils literal notranslate"><span class="pre">is_resonance=1</span></code> in the
+DB) on samples where the species’ major-element wt% &gt; 1 %.</p></li>
+<li><p>Switch to a Saha-Boltzmann two-population fit using lines from
+both ionization stages.</p></li>
+</ul>
+</li>
+<li><p><strong>Self-absorption correction (orthogonal but useful).</strong> Once T is
+correct, multi-line self-absorption diagnostics
+(Karkare 2020, Aragón 2018) can flag optically-thick lines and
+correct their intensities before they enter the Boltzmann fit.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">relative_cl_threshold</span></code> is too aggressive when one element dominates.</strong>
+The Na CL=0.46 on s019 forces all other elements through a 0.046
+floor, dropping Mg (0.026). Consider:</p>
+<ul class="simple">
+<li><p>Disable when <code class="docutils literal notranslate"><span class="pre">max_CL</span> <span class="pre">&lt;</span> <span class="pre">0.3</span></code> (low overall confidence regime), or</p></li>
+<li><p>Apply per-ionization-stage instead of globally (Na I dominance
+shouldn’t suppress Si I detection).</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="beads-issues-filed">
+<h2>Beads issues filed<a class="headerlink" href="#beads-issues-filed" title="Link to this heading"></a></h2>
+<p>See <code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Filed</span> <span class="pre">bds</span></code> section below — three P1 items track the fixes.</p>
+</section>
+<section id="reproduce">
+<h2>Reproduce<a class="headerlink" href="#reproduce" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>-C<span class="w"> </span>/home/brian/code/CF-LIBS-improved<span class="w"> </span>worktree<span class="w"> </span>add<span class="w"> </span>/tmp/cf-libs-wt-vrabel-diag<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>chore/vrabel-coverage-diagnosis
+<span class="nb">cd</span><span class="w"> </span>/tmp/cf-libs-wt-vrabel-diag
+
+<span class="c1"># H1 + H2 + H3 + identifier reproduction (single self-contained script,</span>
+<span class="c1"># matches the harness exactly):</span>
+<span class="c1">#   - loads s019 / s064 / s039 from train.h5</span>
+<span class="c1">#   - dumps wavelength range, DB line counts, peak SNRs at canonical lines</span>
+<span class="c1">#   - runs ALIASIdentifier with default vs relaxed gates</span>
+<span class="c1">#   - prints CL / boltz_r² / matched_lines per element</span>
+</pre></div>
+</div>
+<p>All numerical evidence in this report is reproducible from
+<code class="docutils literal notranslate"><span class="pre">data/vrabel2020_soil_benchmark/train.h5</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>, and the alias identifier on the current
+<code class="docutils literal notranslate"><span class="pre">dev</span></code> head (<code class="docutils literal notranslate"><span class="pre">c196a2e</span></code>).</p>
+</section>
+<section id="filed-bds">
+<h2>Filed bds<a class="headerlink" href="#filed-bds" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>bd ID</p></th>
+<th class="head"><p>Priority</p></th>
+<th class="head"><p>Title</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-ftp1</span></code></p></td>
+<td><p>P1</p></td>
+<td><p>alias.boltzmann_r2_min=0.85 gate kills Si/Mg/Ti when plasma T mis-estimated on echelle data</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-762f</span></code></p></td>
+<td><p>P1</p></td>
+<td><p>_estimate_plasma_temperature returns ~4000 K on echelle soil spectra; expected 7000-12000 K</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-dj6y</span></code></p></td>
+<td><p>P1</p></td>
+<td><p>relative_cl_threshold=0.1 suppresses Mg when Na/Al dominate; should be per-ionization-stage or low-CL-regime aware</p></td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal notranslate"><span class="pre">ftp1</span></code> is the surface-level fix (raise the floor or skip the gate
+under cold-T conditions) and is the fastest path to recovering the
+49 missed (spectrum, element) pairs.
+<code class="docutils literal notranslate"><span class="pre">762f</span></code> is the deeper root cause (broken T estimate); fixing it makes
+<code class="docutils literal notranslate"><span class="pre">ftp1</span></code> self-resolving without lowering the gate.
+<code class="docutils literal notranslate"><span class="pre">dj6y</span></code> is the secondary Mg-only filter; without <code class="docutils literal notranslate"><span class="pre">ftp1</span></code> and <code class="docutils literal notranslate"><span class="pre">762f</span></code> it’s
+moot, but it should still be tightened.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

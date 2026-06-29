@@ -1,0 +1,328 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T1-5 Implementation Spec — Chunked lax.scan + Checkpoint Over Wavelength Grid &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">T1-5 Implementation Spec — Chunked <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> + Checkpoint Over Wavelength Grid</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/T1-5-chunked-scan-checkpoint.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="t1-5-implementation-spec-chunked-lax-scan-checkpoint-over-wavelength-grid">
+<h1>T1-5 Implementation Spec — Chunked <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> + Checkpoint Over Wavelength Grid<a class="headerlink" href="#t1-5-implementation-spec-chunked-lax-scan-checkpoint-over-wavelength-grid" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-ke4z</span></code> · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0001-radis-jaxrts-pattern-survey.html"><span class="std std-doc">ADR-0001</span></a> §5.2 C-P8, §5.5, §8.1 row T1-5 · <strong>Wave:</strong> 3 (parallel with T1-6) · <strong>Hard deps:</strong> T1-1 (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>) + T1-4 (<code class="docutils literal notranslate"><span class="pre">e5o8</span></code>) · <strong>Estimated effort:</strong> ~3 days · <strong>Reference:</strong> exojax <code class="docutils literal notranslate"><span class="pre">OpaPremodit.xsmatrix</span></code> + <code class="docutils literal notranslate"><span class="pre">exojax.signal.ola.overlap_and_add_matrix</span></code> · <strong>Revision:</strong> 2026-05-12 (cross-audit) — canonical field name <code class="docutils literal notranslate"><span class="pre">line_wavelengths_nm</span></code>; test paths nested under <code class="docutils literal notranslate"><span class="pre">tests/radiation/</span></code></p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Replace monolithic <code class="docutils literal notranslate"><span class="pre">jit(forward_model)</span></code> and <code class="docutils literal notranslate"><span class="pre">jit(vmap(single_spectrum_forward,</span> <span class="pre">...))</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py:400</span></code>) with a chunked variant that splits the wavelength axis into <code class="docutils literal notranslate"><span class="pre">nstitch</span></code> chunks, scans with <code class="docutils literal notranslate"><span class="pre">jax.lax.scan</span></code>, wraps the body in <code class="docutils literal notranslate"><span class="pre">jax.checkpoint</span></code> for gradient memory savings, and recombines via overlap-and-add (OLA). Mirrors exojax PreMODIT chunked-scan pattern.</p>
+</section>
+<section id="the-memory-problem">
+<h2>2. The memory problem<a class="headerlink" href="#the-memory-problem" title="Link to this heading"></a></h2>
+<p>Representative CF-LIBS call: <code class="docutils literal notranslate"><span class="pre">N_lines</span> <span class="pre">≈</span> <span class="pre">5000</span></code>, <code class="docutils literal notranslate"><span class="pre">N_λ</span> <span class="pre">≈</span> <span class="pre">30000</span></code>. Current <code class="docutils literal notranslate"><span class="pre">_compute_spectrum_snapshot</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py:572</span></code>) materializes <code class="docutils literal notranslate"><span class="pre">(N_wl,</span> <span class="pre">N_lines)</span> <span class="pre">=</span> <span class="pre">(30000,</span> <span class="pre">5000)</span></code> <code class="docutils literal notranslate"><span class="pre">diff</span></code> matrix at fp32 = <strong>600 MB</strong>. With <code class="docutils literal notranslate"><span class="pre">vmap</span></code> over 8192-point manifold, peak transient memory = 600 MB × parallel-degree; OOMs at modest parallelism even on V100S 32 GB. Wide-spectrum cases (220-900 nm at R=30000 → N_λ ≈ 150000) blow budget at single-spectrum scale.</p>
+<p>After T1-4 the per-call working set drops to <code class="docutils literal notranslate"><span class="pre">(N_σ,</span> <span class="pre">N_λ)</span> <span class="pre">≈</span> <span class="pre">(24,</span> <span class="pre">30000)</span> <span class="pre">=</span> <span class="pre">2.9</span> <span class="pre">MB</span></code> — so T1-5’s contribution is the activation/checkpoint memory along the wavelength axis for differentiation through the chunked forward (Bayesian inversion via NumPyro NUTS, manifold-trained surrogates with grad-through-forward).</p>
+</section>
+<section id="algorithm-overlap-and-add-ola-chunked-scan">
+<h2>3. Algorithm — overlap-and-add (OLA) chunked scan<a class="headerlink" href="#algorithm-overlap-and-add-ola-chunked-scan" title="Link to this heading"></a></h2>
+<p>Split <code class="docutils literal notranslate"><span class="pre">wavelength_grid</span> <span class="pre">(N_λ,)</span></code> into <code class="docutils literal notranslate"><span class="pre">nstitch</span></code> chunks of <code class="docutils literal notranslate"><span class="pre">div_length</span> <span class="pre">=</span> <span class="pre">ceil(N_λ</span> <span class="pre">/</span> <span class="pre">nstitch)</span></code> points, padded with <code class="docutils literal notranslate"><span class="pre">overlap</span> <span class="pre">=</span> <span class="pre">ceil(overlap_factor</span> <span class="pre">·</span> <span class="pre">max(σ_grid)</span> <span class="pre">/</span> <span class="pre">dlam)</span></code> samples per side (default <code class="docutils literal notranslate"><span class="pre">overlap_factor</span> <span class="pre">=</span> <span class="pre">4.0</span></code>).</p>
+<p>Per chunk: subset line catalog to lines within <code class="docutils literal notranslate"><span class="pre">wing_cutoff</span> <span class="pre">=</span> <span class="pre">overlap</span></code> of chunk’s wavelength range (numpy-side index, passed as padded mask for jit-stability).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@jit_if_available</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward_model_chunked</span><span class="p">(</span>
+    <span class="n">plasma_state</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">wavelength_grid</span><span class="p">,</span> <span class="n">sigma_grid</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">nstitch</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>       <span class="c1"># static</span>
+    <span class="n">overlap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>       <span class="c1"># static (samples per side)</span>
+    <span class="n">broadening_mode</span><span class="o">=</span><span class="n">BroadeningMode</span><span class="o">.</span><span class="n">LDM_GAUSSIAN</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="k">if</span> <span class="n">nstitch</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>        <span class="c1"># static dispatch — no scan overhead</span>
+        <span class="k">return</span> <span class="n">forward_model</span><span class="p">(</span><span class="n">plasma_state</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span>
+                             <span class="n">wavelength_grid</span><span class="p">,</span> <span class="n">sigma_grid</span><span class="p">,</span> <span class="n">broadening_mode</span><span class="o">=</span><span class="n">broadening_mode</span><span class="p">)</span>
+
+    <span class="n">chunks</span><span class="p">,</span> <span class="n">line_masks</span> <span class="o">=</span> <span class="n">_split_wavelength_grid</span><span class="p">(</span>
+        <span class="n">wavelength_grid</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="o">.</span><span class="n">line_wavelengths_nm</span><span class="p">,</span>
+        <span class="n">nstitch</span><span class="o">=</span><span class="n">nstitch</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">overlap</span><span class="p">,</span>
+    <span class="p">)</span>  <span class="c1"># chunks: (nstitch, div_length + 2*overlap); line_masks: (nstitch, N_lines)</span>
+
+    <span class="n">body</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">(</span>
+        <span class="n">_forward_model_per_chunk</span><span class="p">,</span>
+        <span class="n">policy</span><span class="o">=</span><span class="n">jax</span><span class="o">.</span><span class="n">checkpoint_policies</span><span class="o">.</span><span class="n">dots_with_no_batch_dims_saveable</span><span class="p">,</span>
+        <span class="n">static_argnames</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;broadening_mode&quot;</span><span class="p">,),</span>
+    <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">scan_step</span><span class="p">(</span><span class="n">carry</span><span class="p">,</span> <span class="n">inputs</span><span class="p">):</span>
+        <span class="n">chunk_wl</span><span class="p">,</span> <span class="n">chunk_mask</span> <span class="o">=</span> <span class="n">inputs</span>
+        <span class="n">partial</span> <span class="o">=</span> <span class="n">body</span><span class="p">(</span><span class="n">plasma_state</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span>
+                       <span class="n">chunk_wl</span><span class="p">,</span> <span class="n">sigma_grid</span><span class="p">,</span> <span class="n">chunk_mask</span><span class="p">,</span>
+                       <span class="n">broadening_mode</span><span class="o">=</span><span class="n">broadening_mode</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">carry</span><span class="p">,</span> <span class="n">partial</span>
+
+    <span class="n">_</span><span class="p">,</span> <span class="n">partials</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">scan_step</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">chunks</span><span class="p">,</span> <span class="n">line_masks</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">overlap_and_add</span><span class="p">(</span><span class="n">partials</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="n">overlap</span><span class="p">,</span> <span class="n">output_length</span><span class="o">=</span><span class="n">N_lambda</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">_forward_model_per_chunk</span></code> is identical to full forward except: (a) chunk-slice input grid; (b) lines outside mask have intensities zeroed before broadening; (c) σ_grid unchanged; (d) LDM scatter index <code class="docutils literal notranslate"><span class="pre">j_i</span></code> recomputed per chunk relative to chunk <code class="docutils literal notranslate"><span class="pre">wl_min</span></code>.</p>
+</section>
+<section id="ola-helper">
+<h2>4. OLA helper<a class="headerlink" href="#ola-helper" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/radiation/kernels.py</span>
+<span class="nd">@jit_if_available</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">overlap_and_add</span><span class="p">(</span>
+    <span class="n">partials</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>   <span class="c1"># (nstitch, div_length + 2*overlap)</span>
+    <span class="o">*</span><span class="p">,</span> <span class="n">overlap</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>       <span class="c1"># static</span>
+    <span class="n">output_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>    <span class="c1"># static</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>            <span class="c1"># (output_length,)</span>
+</pre></div>
+</div>
+<p>Mirrors <code class="docutils literal notranslate"><span class="pre">exojax.signal.ola.overlap_and_add_matrix</span></code>. Place each chunk at offset <code class="docutils literal notranslate"><span class="pre">chunk_idx</span> <span class="pre">·</span> <span class="pre">div_length</span> <span class="pre">−</span> <span class="pre">overlap</span></code> in output buffer of length <code class="docutils literal notranslate"><span class="pre">output_length</span> <span class="pre">+</span> <span class="pre">2*overlap</span></code>, sum with <code class="docutils literal notranslate"><span class="pre">lax.fori_loop</span></code> + <code class="docutils literal notranslate"><span class="pre">dynamic_update_slice</span></code> add, slice off padding.</p>
+<p>Algebraic identity: if unchunked is <code class="docutils literal notranslate"><span class="pre">S(λ)</span> <span class="pre">=</span> <span class="pre">Σ_i</span> <span class="pre">I_i</span> <span class="pre">·</span> <span class="pre">g(λ</span> <span class="pre">−</span> <span class="pre">λ_i;</span> <span class="pre">σ_i)</span></code>, chunked is exact (zero error) <strong>as long as every line <code class="docutils literal notranslate"><span class="pre">i</span></code> is in every chunk within <code class="docutils literal notranslate"><span class="pre">overlap</span> <span class="pre">·</span> <span class="pre">dlam</span></code> of <code class="docutils literal notranslate"><span class="pre">λ_i</span></code></strong> — line mask enforces. OLA “approximation” only when <code class="docutils literal notranslate"><span class="pre">overlap</span> <span class="pre">&lt;</span> <span class="pre">wing_extent</span></code> (testable via parity test).</p>
+</section>
+<section id="memory-policy-integration">
+<h2>5. Memory policy integration<a class="headerlink" href="#memory-policy-integration" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy</span></code> (from T1-1) already declares <code class="docutils literal notranslate"><span class="pre">nstitch:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">1</span></code> and <code class="docutils literal notranslate"><span class="pre">overlap_factor:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">4.0</span></code>. T1-5 wires their consumers.</p>
+<p>Auto-selection (CPU-side, no JIT trace):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/radiation/host.py</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">auto_nstitch</span><span class="p">(</span><span class="n">n_lines</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">n_lambda</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">available_bytes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+                 <span class="n">dtype_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="n">safety_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="n">needed</span> <span class="o">=</span> <span class="n">n_lines</span> <span class="o">*</span> <span class="n">n_lambda</span> <span class="o">*</span> <span class="n">dtype_bytes</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">needed</span> <span class="o">/</span> <span class="p">(</span><span class="n">safety_factor</span> <span class="o">*</span> <span class="n">available_bytes</span><span class="p">))))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">available_bytes</span></code>:</p>
+<ul class="simple">
+<li><p>CUDA: <code class="docutils literal notranslate"><span class="pre">jax.devices()[0].memory_stats()[&quot;bytes_limit&quot;]</span></code> minus reserved buffers.</p></li>
+<li><p>Metal: 0.5 × total system RAM (Apple unified memory).</p></li>
+<li><p>CPU: 0.25 × <code class="docutils literal notranslate"><span class="pre">psutil.virtual_memory().available</span></code> (psutil in dev extras; fall back to 4 GiB if missing).</p></li>
+</ul>
+<p>Called once at manifold init or solver setup; result baked into static <code class="docutils literal notranslate"><span class="pre">nstitch</span></code>.</p>
+</section>
+<section id="where-chunking-lives">
+<h2>6. Where chunking lives<a class="headerlink" href="#where-chunking-lives" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Kernel:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py::forward_model_chunked</span></code> and <code class="docutils literal notranslate"><span class="pre">::overlap_and_add</span></code> (new).</p></li>
+<li><p><strong>Host:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/host.py::auto_nstitch</span></code> and <code class="docutils literal notranslate"><span class="pre">::build_chunk_metadata</span></code> (CPU-side; builds static <code class="docutils literal notranslate"><span class="pre">(chunks,</span> <span class="pre">line_masks,</span> <span class="pre">overlap)</span></code> tuple).</p></li>
+<li><p><strong>Spectrum model:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py::SpectrumModel.compute_spectrum</span></code> adds <code class="docutils literal notranslate"><span class="pre">memory_policy</span></code> constructor arg; <code class="docutils literal notranslate"><span class="pre">memory_policy.nstitch</span> <span class="pre">&gt;</span> <span class="pre">1</span></code> dispatches to <code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code>.</p></li>
+<li><p><strong>Manifold:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py::batch_forward_model</span></code> (L400) becomes <code class="docutils literal notranslate"><span class="pre">jit(vmap(forward_model_chunked,</span> <span class="pre">in_axes=(0,</span> <span class="pre">0,</span> <span class="pre">0,</span> <span class="pre">None,</span> <span class="pre">None)))</span></code> with <code class="docutils literal notranslate"><span class="pre">nstitch</span></code> static. <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py::_time_integrated_spectrum</span></code> (L638-692) similarly substitutes. Default <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">=</span> <span class="pre">1</span></code> so existing manifold checksums bit-identical.</p></li>
+</ul>
+</section>
+<section id="combining-with-t1-4">
+<h2>7. Combining with T1-4<a class="headerlink" href="#combining-with-t1-4" title="Link to this heading"></a></h2>
+<p>T1-4 reduces effective line count (5000 → 24 σ-layers per chunk). T1-5 chunks the wavelength axis. They compose multiplicatively: per-chunk working set after both = <code class="docutils literal notranslate"><span class="pre">(N_σ,</span> <span class="pre">div_length</span> <span class="pre">+</span> <span class="pre">2·overlap)</span> <span class="pre">≈</span> <span class="pre">(24,</span> <span class="pre">8000)</span> <span class="pre">=</span> <span class="pre">0.75</span> <span class="pre">MB</span></code>, comfortably fitting V100S parallelism even at vmap-over-1024 grid points. The <code class="docutils literal notranslate"><span class="pre">checkpoint</span></code> policy cuts peak backward-pass memory ~50% — needed for NumPyro NUTS over wide spectra.</p>
+<p><code class="docutils literal notranslate"><span class="pre">broadening_mode</span></code> propagated through <code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code> — chunking works equally with <code class="docutils literal notranslate"><span class="pre">PHYSICAL_DOPPLER</span></code> and <code class="docutils literal notranslate"><span class="pre">LDM_GAUSSIAN</span></code>. <code class="docutils literal notranslate"><span class="pre">NIST_PARITY</span></code> not chunked (lines sparse, per-line Voigt cheap); assert <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">==</span> <span class="pre">1</span></code> if <code class="docutils literal notranslate"><span class="pre">mode</span> <span class="pre">is</span> <span class="pre">NIST_PARITY</span></code>.</p>
+</section>
+<section id="acceptance-criteria">
+<h2>8. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Memory:</strong> for <code class="docutils literal notranslate"><span class="pre">(N_lines=5000,</span> <span class="pre">N_λ=30000)</span></code>, <code class="docutils literal notranslate"><span class="pre">nstitch=4</span></code> reduces peak device memory ≥3× vs <code class="docutils literal notranslate"><span class="pre">nstitch=1</span></code> (CPU: <code class="docutils literal notranslate"><span class="pre">jax.profiler.memory_profile</span></code>; V100S: <code class="docutils literal notranslate"><span class="pre">nvidia-smi</span></code> sampling).</p></li>
+<li><p><strong>Parity:</strong> rtol=1e-5 between <code class="docutils literal notranslate"><span class="pre">nstitch=1</span></code> and <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">∈</span> <span class="pre">{2,</span> <span class="pre">4,</span> <span class="pre">8}</span></code> on synthetic 5000-line spectrum (algebraically exact when <code class="docutils literal notranslate"><span class="pre">overlap</span> <span class="pre">≥</span> <span class="pre">wing_extent</span></code>; near machine epsilon at fp64, ~1e-5 at fp32).</p></li>
+<li><p><strong>Differentiable:</strong> <code class="docutils literal notranslate"><span class="pre">jax.grad(loss)(T_eV)</span></code> finite and within rtol=1e-4 of unchecked gradient for <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">∈</span> <span class="pre">{1,</span> <span class="pre">4}</span></code>.</p></li>
+<li><p><strong>Backward-pass memory:</strong> with <code class="docutils literal notranslate"><span class="pre">checkpoint_policies.dots_with_no_batch_dims_saveable</span></code>, backward peak ≤50% of un-checkpointed peak (CPU <code class="docutils literal notranslate"><span class="pre">jax.profiler.memory_profile</span></code>).</p></li>
+<li><p><strong>Auto-selection:</strong> <code class="docutils literal notranslate"><span class="pre">auto_nstitch(5000,</span> <span class="pre">30000,</span> <span class="pre">8e9)</span></code> returns 1; <code class="docutils literal notranslate"><span class="pre">auto_nstitch(5000,</span> <span class="pre">30000,</span> <span class="pre">500e6)</span></code> returns ≥2.</p></li>
+<li><p><strong>jax-metal fp32:</strong> <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">∈</span> <span class="pre">{1,</span> <span class="pre">4}</span></code> match CPU fp32 within rtol=5e-4.</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>9. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><strong>New</strong> <code class="docutils literal notranslate"><span class="pre">tests/radiation/test_chunked_scan.py</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_parity_nstitch_1_vs_4</span></code> — rtol=1e-5 (fp64) / 1e-4 (fp32 Metal).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_parity_nstitch_sweep</span></code> — parametrize <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">∈</span> <span class="pre">{1,</span> <span class="pre">2,</span> <span class="pre">4,</span> <span class="pre">8,</span> <span class="pre">16}</span></code>; all match within tolerance.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_grad_finite_chunked</span></code> — <code class="docutils literal notranslate"><span class="pre">jax.grad</span></code> w.r.t. <code class="docutils literal notranslate"><span class="pre">T_eV</span></code> finite; numerical parity rtol=1e-4.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_overlap_factor</span></code> — <code class="docutils literal notranslate"><span class="pre">overlap_factor=2.0</span></code> introduces detectable edge ringing; <code class="docutils literal notranslate"><span class="pre">4.0</span></code> does not (validates default).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_auto_nstitch_logic</span></code> — mock <code class="docutils literal notranslate"><span class="pre">available_bytes</span></code>, sweep <code class="docutils literal notranslate"><span class="pre">(N_lines,</span> <span class="pre">N_λ)</span></code>, assert monotonic.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_chunked_with_ldm</span></code> — chunked × LDM stacked, rtol=1e-4 vs unchunked LDM and rtol=1e-3 vs unchunked PHYSICAL_DOPPLER (T1-4 tolerance compounds).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_nist_parity_rejects_chunking</span></code> — assertion error if <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">&gt;</span> <span class="pre">1</span></code> with NIST_PARITY.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_nlambda_not_divisible</span></code> — pad-and-mask last chunk; explicit case where <code class="docutils literal notranslate"><span class="pre">N_λ</span> <span class="pre">%</span> <span class="pre">nstitch</span> <span class="pre">≠</span> <span class="pre">0</span></code>.</p></li>
+</ul>
+<p><strong>New</strong> <code class="docutils literal notranslate"><span class="pre">tests/radiation/test_memory_bench.py</span></code> (<code class="docutils literal notranslate"><span class="pre">&#64;pytest.mark.slow</span></code>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_peak_memory_reduction</span></code> — <code class="docutils literal notranslate"><span class="pre">jax.profiler.memory_profile</span></code>, assert nstitch=4 peak ≤0.4× nstitch=1 peak on (5000, 30000).</p></li>
+</ul>
+<p><strong>Existing</strong> <code class="docutils literal notranslate"><span class="pre">tests/test_manifold.py</span></code>: golden checksums unchanged at <code class="docutils literal notranslate"><span class="pre">nstitch=1</span></code>; new parametrization with <code class="docutils literal notranslate"><span class="pre">nstitch=4</span></code> matches within rtol=1e-5. <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-m</span> <span class="pre">&quot;physics&quot;</span> <span class="pre">tests/test_radiation.py</span></code> identical at default <code class="docutils literal notranslate"><span class="pre">nstitch=1</span></code>.</p>
+</section>
+<section id="risks-rollback">
+<h2>10. Risks &amp; rollback<a class="headerlink" href="#risks-rollback" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>OLA edge ringing if <code class="docutils literal notranslate"><span class="pre">overlap</span> <span class="pre">&lt;</span> <span class="pre">3·max(σ)</span></code>.</strong> Mitigation: host-level assert <code class="docutils literal notranslate"><span class="pre">overlap</span> <span class="pre">≥</span> <span class="pre">ceil(3·max(σ_grid)/dlam)</span></code>; default <code class="docutils literal notranslate"><span class="pre">overlap_factor=4.0</span></code> enforces. <code class="docutils literal notranslate"><span class="pre">test_overlap_factor</span></code> is canary.</p></li>
+<li><p><strong>Heterogeneous last chunk</strong> (<code class="docutils literal notranslate"><span class="pre">N_λ</span></code> not divisible by <code class="docutils literal notranslate"><span class="pre">nstitch</span></code>). <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> requires homogeneous shapes. Mitigation: pad wavelength grid to <code class="docutils literal notranslate"><span class="pre">nstitch</span> <span class="pre">·</span> <span class="pre">div_length</span></code> with tail-mask; trim after OLA. Explicit test <code class="docutils literal notranslate"><span class="pre">test_nlambda_not_divisible</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">checkpoint_policies</span></code> API churn between JAX versions.</strong> Pin <code class="docutils literal notranslate"><span class="pre">jax</span> <span class="pre">&gt;=</span> <span class="pre">0.4.30</span></code> in <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>; guard with <code class="docutils literal notranslate"><span class="pre">hasattr(jax.checkpoint_policies,</span> <span class="pre">&quot;dots_with_no_batch_dims_saveable&quot;)</span></code> fallback to <code class="docutils literal notranslate"><span class="pre">everything_saveable</span></code> (slower, correct).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">jax.profiler.memory_profile</span></code> unavailable on jax-metal.</strong> Skip memory bench on Metal (<code class="docutils literal notranslate"><span class="pre">pytest.mark.skipif(jax.default_backend()</span> <span class="pre">==</span> <span class="pre">&quot;METAL&quot;)</span></code>).</p></li>
+<li><p><strong>Compile-time blow-up:</strong> mis-specifying <code class="docutils literal notranslate"><span class="pre">static_argnames</span></code> causes per-<code class="docutils literal notranslate"><span class="pre">nstitch</span></code> recompiles. Mitigation: <code class="docutils literal notranslate"><span class="pre">nstitch</span></code> and <code class="docutils literal notranslate"><span class="pre">overlap</span></code> are static_argnums on <code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code>; verified by <code class="docutils literal notranslate"><span class="pre">jax.make_jaxpr</span></code> snapshot test.</p></li>
+<li><p><strong>Rollback:</strong> set <code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy.nstitch</span> <span class="pre">=</span> <span class="pre">1</span></code> (default) — restores un-chunked path bitwise.</p></li>
+</ul>
+</section>
+<section id="landing-order-with-t1-4">
+<h2>11. Landing order with T1-4<a class="headerlink" href="#landing-order-with-t1-4" title="Link to this heading"></a></h2>
+<p>T1-4 (<code class="docutils literal notranslate"><span class="pre">e5o8</span></code>) lands first on its worktree. Acceptance gates (parity, manifold round-trip) must be green. T1-5 (<code class="docutils literal notranslate"><span class="pre">ke4z</span></code>) opens worktree against post-T1-4 tree; chunked kernel calls <code class="docutils literal notranslate"><span class="pre">ldm_broaden</span></code> directly. <code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code> signature is mode-agnostic — if T1-4 reverts, T1-5 still chunks <code class="docutils literal notranslate"><span class="pre">PHYSICAL_DOPPLER</span></code>.</p>
+<p>T1-5 not a dep of T1-2/T1-6, but they should adopt <code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code> once it lands (follow-up commits in their worktrees, not in this spec).</p>
+</section>
+<section id="files-touched-joint-with-t1-4">
+<h2>12. Files touched (joint with T1-4)<a class="headerlink" href="#files-touched-joint-with-t1-4" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>T1-4</p></th>
+<th class="head"><p>T1-5</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py</span></code></p></td>
+<td><p>+<code class="docutils literal notranslate"><span class="pre">ldm_broaden</span></code></p></td>
+<td><p>+<code class="docutils literal notranslate"><span class="pre">forward_model_chunked</span></code>, +<code class="docutils literal notranslate"><span class="pre">overlap_and_add</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/host.py</span></code></p></td>
+<td><p>+<code class="docutils literal notranslate"><span class="pre">broaden_lines_ldm</span></code></p></td>
+<td><p>+<code class="docutils literal notranslate"><span class="pre">auto_nstitch</span></code>, +<code class="docutils literal notranslate"><span class="pre">build_chunk_metadata</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code></p></td>
+<td><p>docstring “non-LDM fallback”</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code></p></td>
+<td><p>new <code class="docutils literal notranslate"><span class="pre">BroadeningMode.LDM_GAUSSIAN</span></code> dispatch</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">memory_policy</span></code> arg + chunked dispatch</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/generator.py</span></code></p></td>
+<td><p>replace inline Humlicek L572-628</p></td>
+<td><p>chunked variant in <code class="docutils literal notranslate"><span class="pre">_time_integrated_spectrum</span></code> (L638-692)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py</span></code></p></td>
+<td><p>swap <code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code> at L395</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">batch_forward_model</span></code> (L400) uses chunked forward</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cflibs/core/jax_policy.py</span></code></p></td>
+<td><p>—</p></td>
+<td><p>wire <code class="docutils literal notranslate"><span class="pre">nstitch</span></code> + <code class="docutils literal notranslate"><span class="pre">overlap_factor</span></code> consumers</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/test_ldm_broaden.py</span></code></p></td>
+<td><p>NEW</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_chunked_scan.py</span></code></p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_memory_bench.py</span></code></p></td>
+<td><p>—</p></td>
+<td><p>NEW</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="cross-cutting-verification">
+<h2>13. Cross-cutting verification<a class="headerlink" href="#cross-cutting-verification" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Physics-only ban:</strong> kernels use only <code class="docutils literal notranslate"><span class="pre">jax.numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.lax</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.fft</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.checkpoint</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.ops.segment_sum</span></code>. None of banned APIs. Ruff TID251 passes; AST scanner irrelevant (shipped, not evolved).</p></li>
+<li><p><strong>Swarm quality gates:</strong> <code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">check</span></code>, <code class="docutils literal notranslate"><span class="pre">black</span> <span class="pre">--check</span></code>, <code class="docutils literal notranslate"><span class="pre">mypy</span></code> (advisory), <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-x</span> <span class="pre">-q</span> <span class="pre">-m</span> <span class="pre">&quot;not</span> <span class="pre">slow</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">requires_db&quot;</span></code>. Memory bench is <code class="docutils literal notranslate"><span class="pre">&#64;pytest.mark.slow</span></code>.</p></li>
+<li><p><strong>NIST parity:</strong> <code class="docutils literal notranslate"><span class="pre">scripts/validate_nist_parity.py</span></code> and <code class="docutils literal notranslate"><span class="pre">scripts/run_nist_validation.py</span></code> unchanged reports when <code class="docutils literal notranslate"><span class="pre">BroadeningMode.NIST_PARITY</span></code> + <code class="docutils literal notranslate"><span class="pre">nstitch=1</span></code>.</p></li>
+<li><p><strong>Real-data validation:</strong> <code class="docutils literal notranslate"><span class="pre">scripts/validate_real_data.py</span> <span class="pre">--datasets</span> <span class="pre">steel_245nm</span> <span class="pre">FeNi_380nm</span></code> no regression in composition recovery RMSE.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

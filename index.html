@@ -1,0 +1,273 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Documentation &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quick Start for Scientists" href="Quick_Start_For_Scientists.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-documentation">
+<h1>CF-LIBS Documentation<a class="headerlink" href="#cf-libs-documentation" title="Link to this heading"></a></h1>
+<p><strong>CF-LIBS</strong> is a physics-based Python library for forward modeling and analysis of LIBS plasmas. The shipped algorithm is physics-only — see <a class="reference internal" href="Evolution_Framework.html"><span class="doc">Evolution Framework</span></a> for the constraint spec.</p>
+<section id="inversion-config">
+<h2>Inversion Config<a class="headerlink" href="#inversion-config" title="Link to this heading"></a></h2>
+<p>The classic CF-LIBS inversion uses an <cite>analysis</cite> section in your config file to control
+line detection, selection, and solver settings. See <a class="reference internal" href="User_Guide.html"><span class="doc">CF-LIBS User Guide</span></a> for the full schema
+and <a class="reference internal" href="API_Reference.html"><span class="doc">CF-LIBS API Reference</span></a> for CLI flags.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#what-you-can-do-first">What You Can Do First</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#check-your-setup">1. Check Your Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#generate-a-first-spectrum">2. Generate a First Spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#edit-the-scientific-inputs">3. Edit the Scientific Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#analyze-a-spectrum">4. Analyze a Spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#batch-process-a-folder">5. Batch-Process a Folder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#common-problems">Common Problems</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Quick_Start_For_Scientists.html#when-to-use-the-other-docs">When to Use the Other Docs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#quick-start">Quick Start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#forward-modeling">Forward Modeling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#echellogram-extraction">Echellogram Extraction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#configuration-files">Configuration Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#inversion-classic-cf-libs">Inversion (Classic CF-LIBS)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#troubleshooting">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#examples">Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="User_Guide.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#quick-start">Quick Start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#database-generation-process">Database Generation Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#usage-examples">Usage Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#database-structure">Database Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#troubleshooting">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#pre-generated-databases">Pre-Generated Databases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#updating-the-database">Updating the Database</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#integration-with-cf-libs">Integration with CF-LIBS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#performance-notes">Performance Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#future-improvements">Future Improvements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Database_Generation.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#what-is-a-manifold">What is a Manifold?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#usage">Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#physics-model">Physics Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#performance">Performance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#file-format">File Format</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#similarity-search-methods">Similarity Search Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#integration-with-inversion-phase-3">Integration with Inversion (Phase 3)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#limitations">Limitations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#troubleshooting">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#future-enhancements">Future Enhancements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Manifold_Generation_Guide.html#see-also">See Also</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#component-types">Component Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#hardware-manager">Hardware Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#factory-pattern">Factory Pattern</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#configuration-files">Configuration Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#custom-implementations">Custom Implementations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#status-monitoring">Status Monitoring</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#error-handling">Error Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#context-managers">Context Managers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#integration-with-gui">Integration with GUI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#placeholder-implementations">Placeholder Implementations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#future-enhancements">Future Enhancements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#examples">Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Hardware_Interfaces.html#api-reference">API Reference</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#the-problem">The Problem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#the-algorithm">The Algorithm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#usage">Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#calibration-procedure">Calibration Procedure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#integration-with-cf-libs-workflow">Integration with CF-LIBS Workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#performance-considerations">Performance Considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#limitations">Limitations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Echellogram_Processing_Guide.html#future-enhancements">Future Enhancements</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Deployment.html#environment-setup">Environment Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Deployment.html#installation-options-summary">Installation Options Summary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Deployment.html#verification">Verification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Deployment.html#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#core-module">Core Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#atomic-module">Atomic Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#plasma-module">Plasma Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#radiation-module">Radiation Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#instrument-module">Instrument Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#i-o-module">I/O Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#inversion-module">Inversion Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#cli-module">CLI Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#error-handling">Error Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="API_Reference.html#further-reading">Further Reading</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+</div>
+</section>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Quick_Start_For_Scientists.html" class="btn btn-neutral float-right" title="Quick Start for Scientists" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

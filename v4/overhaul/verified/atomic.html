@@ -1,0 +1,425 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cflibs/atomic — Adversarial Verification Report &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">cflibs/atomic — Adversarial Verification Report</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/atomic.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cflibs-atomic-adversarial-verification-report">
+<h1>cflibs/atomic — Adversarial Verification Report<a class="headerlink" href="#cflibs-atomic-adversarial-verification-report" title="Link to this heading"></a></h1>
+<p>Worktree: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5</span></code>
+Verifier: Adversarial re-read (ripgrep + Read)
+Date: 2026-06-25</p>
+<hr class="docutils" />
+<section id="verdict-summary">
+<h2>Verdict Summary<a class="headerlink" href="#verdict-summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Confirmed Severity</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1 — stark_w docstring 10^16</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>high</p></td>
+<td><p>Confirmed: structures.py:61 says 10^16; stark.py REF_NE = 1e17</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2 — log basis ambiguity</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed: structures.py:127 uses <code class="docutils literal notranslate"><span class="pre">log</span></code> not <code class="docutils literal notranslate"><span class="pre">ln</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>F3 — is_resonance threshold 0.01 eV</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>medium (not high)</p></td>
+<td><p>Confirmed present; impact partially mitigated by runtime fallback at 0.1 eV</p></td>
+</tr>
+<tr class="row-odd"><td><p>F4 — iterrows in get_energy_levels/get_available_elements</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed: database.py:518,521,842</p></td>
+</tr>
+<tr class="row-even"><td><p>F5 — LRUCache None not cached</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed: cache.py:149 <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">cached_value</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>F6 — migration on every <strong>init</strong></p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed: database.py:68, no version stamp</p></td>
+</tr>
+<tr class="row-even"><td><p>F7 — pickle self in cache key</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>low</p></td>
+<td><p>Confirmed: cache.py:45; <strong>getstate</strong> strips pool/conn but db_path still pickled every call</p></td>
+</tr>
+<tr class="row-odd"><td><p>F8 — PartitionFunction missing g0</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>low</p></td>
+<td><p>Confirmed: multiple direct callers of get_partition_coefficients; saha_boltzmann.py works around it but iterative.py/streaming.py do not</p></td>
+</tr>
+<tr class="row-even"><td><p>F9 — snapshot docstring wrong</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>low</p></td>
+<td><p>Confirmed: docstring says “non-NULL rel_int”; actual code includes NULL-rel_int lines</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10 — test gaps</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed: no is_resonance backfill test, no stark_w convention parity test</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: HIGH (F1)</strong></p>
+</section>
+<hr class="docutils" />
+<section id="per-finding-verification">
+<h2>Per-Finding Verification<a class="headerlink" href="#per-finding-verification" title="Link to this heading"></a></h2>
+<section id="f1-transition-stark-w-docstring-states-10-16-confirmed-true-high">
+<h3>F1 — <code class="docutils literal notranslate"><span class="pre">Transition.stark_w</span></code> docstring states 10^16 (CONFIRMED TRUE, HIGH)<a class="headerlink" href="#f1-transition-stark-w-docstring-states-10-16-confirmed-true-high" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">structures.py</span></code> line 61 reads:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Stark</span> <span class="n">width</span> <span class="n">at</span> <span class="n">reference</span> <span class="n">density</span> <span class="p">(</span><span class="mi">10</span><span class="o">^</span><span class="mi">16</span> <span class="n">cm</span><span class="o">^-</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/stark.py</span></code> declares <code class="docutils literal notranslate"><span class="pre">REF_NE</span> <span class="pre">=</span> <span class="pre">1.0e17</span></code> on line 33, with an extensive block comment
+(lines 17–40) explicitly documenting that this is the project-wide single source of truth:
+“The atomic database stores <code class="docutils literal notranslate"><span class="pre">lines.stark_w</span></code> as the electron-impact FWHM at n_e = 1e17 cm^-3,
+T = 10000 K.” The database.py <code class="docutils literal notranslate"><span class="pre">get_stark_parameters_with_source</span></code> docstring at line 803 also says
+“n_e = 1e17 cm^-3”. The discrepancy is unambiguous: the struct docstring is wrong by 10×. Any
+new contributor implementing their own Stark scaling from the struct docstring would produce Stark
+widths 10× too large, since <code class="docutils literal notranslate"><span class="pre">w_fwhm</span> <span class="pre">=</span> <span class="pre">stark_w_ref</span> <span class="pre">*</span> <span class="pre">(n_e</span> <span class="pre">/</span> <span class="pre">REF_NE)</span></code> is linear in the reference
+density. The radiation module is internally consistent and correct; the damage is confined to
+documentation misleading external readers of the struct. Severity confirmed HIGH.</p>
+</section>
+<section id="f2-partitionfunction-log-basis-ambiguity-confirmed-true-medium">
+<h3>F2 — <code class="docutils literal notranslate"><span class="pre">PartitionFunction</span></code> log basis ambiguity (CONFIRMED TRUE, MEDIUM)<a class="headerlink" href="#f2-partitionfunction-log-basis-ambiguity-confirmed-true-medium" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">structures.py</span></code> lines 126–128 use the ambiguous formula <code class="docutils literal notranslate"><span class="pre">log(U)</span> <span class="pre">=</span> <span class="pre">Σ</span> <span class="pre">a_n</span> <span class="pre">(log</span> <span class="pre">T)^n</span></code>. Confirmed
+via <code class="docutils literal notranslate"><span class="pre">plasma/partition.py</span></code>: <code class="docutils literal notranslate"><span class="pre">PartitionFunctionSpec</span></code> explicitly states the natural-log basis, and
+the <code class="docutils literal notranslate"><span class="pre">partition.py</span></code> pipeline uses <code class="docutils literal notranslate"><span class="pre">np.log</span></code> (natural log) throughout, consistent with the CLAUDE.md
+<code class="docutils literal notranslate"><span class="pre">partition</span> <span class="pre">function</span> <span class="pre">polynomial:</span> <span class="pre">log</span> <span class="pre">U</span> <span class="pre">=</span> <span class="pre">Σ</span> <span class="pre">aₙ(log</span> <span class="pre">T)ⁿ</span></code> notation (which also uses the ambiguous
+<code class="docutils literal notranslate"><span class="pre">log</span></code>). The <code class="docutils literal notranslate"><span class="pre">saha-boltzmann-lte.md</span></code> literature doc (P6) warns explicitly: “Historical confusion
+between log_10 and natural log polynomial fits. cflibs partition.py uses natural log.” The
+structures.py docstring should say <code class="docutils literal notranslate"><span class="pre">ln</span> <span class="pre">U(T)</span> <span class="pre">=</span> <span class="pre">Σ</span> <span class="pre">a_n</span> <span class="pre">(ln</span> <span class="pre">T)^n</span></code> to eliminate the ambiguity.
+Severity confirmed MEDIUM (documentation-only; the computation is correct).</p>
+</section>
+<section id="f3-is-resonance-backfill-threshold-0-01-ev-confirmed-true-downgraded-to-medium">
+<h3>F3 — <code class="docutils literal notranslate"><span class="pre">is_resonance</span></code> backfill threshold 0.01 eV (CONFIRMED TRUE, downgraded to MEDIUM)<a class="headerlink" href="#f3-is-resonance-backfill-threshold-0-01-ev-confirmed-true-downgraded-to-medium" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">database.py</span></code> lines 143–144 confirm the SQL:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">UPDATE</span><span class="w"> </span><span class="n">lines</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">is_resonance</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">ei_ev</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="mi">01</span>
+<span class="k">UPDATE</span><span class="w"> </span><span class="n">lines</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">is_resonance</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">ei_ev</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="mi">01</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="n">ei_ev</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span>
+</pre></div>
+</div>
+<p>This is physically imprecise: a resonance line should have E_i = 0 exactly (NIST ground-state
+convention). The 0.01 eV threshold will incorrectly flag fine-structure ground-state multiplet
+members and other very low-lying metastable levels of elements like Fe I (where several levels
+exist below 0.01 eV). The impact on the Stark n_e diagnostic is that flagged lines are
+<em>down-ranked</em> (not hard-excluded) by a factor of <code class="docutils literal notranslate"><span class="pre">RESONANCE_DOWNRANK</span></code> (stark.py:1031), which
+is a <code class="docutils literal notranslate"><span class="pre">0.5×</span></code> penalty. However, one mitigating factor not noted in the census: the runtime fallback
+in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:456</span></code> applies <code class="docutils literal notranslate"><span class="pre">E_i_ev</span> <span class="pre">&lt;</span> <span class="pre">ground_state_threshold_ev</span></code>
+where the default threshold is <strong>0.1 eV</strong> — <em>wider</em> than the DB backfill threshold. So lines
+with 0.01 eV &lt; E_i &lt; 0.1 eV are correctly NOT flagged in the DB but ARE caught by the fallback
+when the DB field is None. This partially compensates for the 0.01 eV threshold being too tight.
+The real harm is that lines with 0 &lt; E_i &lt; 0.01 eV (true metastables) ARE falsely marked
+<code class="docutils literal notranslate"><span class="pre">is_resonance=1</span></code> in the DB, causing them to be down-ranked when they may be valid Stark
+diagnostics. Severity confirmed MEDIUM (not high — the down-rank is 0.5×, not an exclusion;
+and the fallback uses a stricter resonance criterion only when the DB value is None/missing).</p>
+</section>
+<section id="f4-iterrows-in-get-energy-levels-and-get-available-elements-confirmed-true-medium">
+<h3>F4 — iterrows in <code class="docutils literal notranslate"><span class="pre">get_energy_levels</span></code> and <code class="docutils literal notranslate"><span class="pre">get_available_elements</span></code> (CONFIRMED TRUE, MEDIUM)<a class="headerlink" href="#f4-iterrows-in-get-energy-levels-and-get-available-elements-confirmed-true-medium" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">database.py:518,521</span></code> confirm <code class="docutils literal notranslate"><span class="pre">pd.read_sql_query</span></code> + <code class="docutils literal notranslate"><span class="pre">df.iterrows()</span></code> in <code class="docutils literal notranslate"><span class="pre">get_energy_levels</span></code>.
+<code class="docutils literal notranslate"><span class="pre">database.py:842</span></code> confirms <code class="docutils literal notranslate"><span class="pre">pd.read_sql_query</span></code> (no iterrows, but still a pandas round-trip) in
+<code class="docutils literal notranslate"><span class="pre">get_available_elements</span></code>. Line 413 contains the comment documenting the anti-pattern: “~100x
+faster than pd.Series scalar access”. The same anti-pattern remains in both methods. For
+<code class="docutils literal notranslate"><span class="pre">get_energy_levels</span></code>, this affects every <code class="docutils literal notranslate"><span class="pre">snapshot(include_levels=True)</span></code> call (2× per element
+for stage I and II) and the cold-cache partition function path. Severity confirmed MEDIUM.</p>
+</section>
+<section id="f5-lrucache-silently-fails-to-cache-none-returns-confirmed-true-medium">
+<h3>F5 — <code class="docutils literal notranslate"><span class="pre">LRUCache</span></code> silently fails to cache <code class="docutils literal notranslate"><span class="pre">None</span></code> returns (CONFIRMED TRUE, MEDIUM)<a class="headerlink" href="#f5-lrucache-silently-fails-to-cache-none-returns-confirmed-true-medium" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">core/cache.py:149</span></code> reads:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">cached_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">cached_value</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">cache.get</span></code> returns <code class="docutils literal notranslate"><span class="pre">None</span></code> for both a cache miss (line 64) and a stored <code class="docutils literal notranslate"><span class="pre">None</span></code> value. The
+decorator at line 148 cannot distinguish. <code class="docutils literal notranslate"><span class="pre">get_ionization_potential</span></code> (decorated with
+<code class="docutils literal notranslate"><span class="pre">&#64;cached_ionization</span></code>) returns <code class="docutils literal notranslate"><span class="pre">None</span></code> for missing species (database.py:559). Every call for
+a stage-III ion (commonly missing) re-queries the DB. For a 10-element inversion with 10 missing
+stage-III entries, this means 10 repeated DB round-trips on every call. Severity confirmed MEDIUM.</p>
+</section>
+<section id="f6-migration-runs-on-every-init-confirmed-true-medium">
+<h3>F6 — Migration runs on every <code class="docutils literal notranslate"><span class="pre">__init__</span></code> (CONFIRMED TRUE, MEDIUM)<a class="headerlink" href="#f6-migration-runs-on-every-init-confirmed-true-medium" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">database.py:68</span></code> unconditionally calls <code class="docutils literal notranslate"><span class="pre">self._check_and_migrate_schema()</span></code>. The migration method
+<code class="docutils literal notranslate"><span class="pre">_perform_migration</span></code> at lines 89–101 calls 7 sub-methods, each of which runs at minimum one
+<code class="docutils literal notranslate"><span class="pre">PRAGMA</span> <span class="pre">table_info</span></code>, <code class="docutils literal notranslate"><span class="pre">COUNT(*)</span></code>, or <code class="docutils literal notranslate"><span class="pre">sqlite_master</span></code> query regardless of whether the schema has
+already been migrated. There is no <code class="docutils literal notranslate"><span class="pre">cflibs_meta</span></code> version stamp or any fast-path. For cluster
+workers constructing a fresh <code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code> per task, this is 7+ SQLite round-trips of pure
+overhead at startup. Severity confirmed MEDIUM.</p>
+</section>
+<section id="f7-cache-key-pickles-the-full-atomicdatabase-instance-confirmed-true-low">
+<h3>F7 — Cache key pickles the full <code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code> instance (CONFIRMED TRUE, LOW)<a class="headerlink" href="#f7-cache-key-pickles-the-full-atomicdatabase-instance-confirmed-true-low" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">core/cache.py:45–46</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">key_data</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">((</span><span class="n">args</span><span class="p">,</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">())))</span>
+<span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">md5</span><span class="p">(</span><span class="n">key_data</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>When called as a method decorator, <code class="docutils literal notranslate"><span class="pre">args</span> <span class="pre">=</span> <span class="pre">(self,</span> <span class="pre">element,</span> <span class="pre">stage,</span> <span class="pre">...)</span></code>, so the entire
+<code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code> instance is passed to <code class="docutils literal notranslate"><span class="pre">pickle.dumps</span></code>. <code class="docutils literal notranslate"><span class="pre">__getstate__</span></code> at database.py:1336
+removes <code class="docutils literal notranslate"><span class="pre">_pool</span></code> and <code class="docutils literal notranslate"><span class="pre">conn</span></code>, but the remaining state (<code class="docutils literal notranslate"><span class="pre">db_path</span></code>, <code class="docutils literal notranslate"><span class="pre">_use_pool</span></code>) is still serialized
+on every cache call, including the hot <code class="docutils literal notranslate"><span class="pre">get_transitions</span></code> path. For the common case where all
+workers share the same DB path, this produces identical keys on every call — the key is correct
+but the key-generation cost (pickle + md5) includes the DB instance overhead on every potential
+cache miss check. Severity confirmed LOW (correct behavior but wasteful).</p>
+</section>
+<section id="f8-partitionfunction-dataclass-missing-g0-confirmed-true-low">
+<h3>F8 — <code class="docutils literal notranslate"><span class="pre">PartitionFunction</span></code> dataclass missing <code class="docutils literal notranslate"><span class="pre">g0</span></code> (CONFIRMED TRUE, LOW)<a class="headerlink" href="#f8-partitionfunction-dataclass-missing-g0-confirmed-true-low" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">structures.py:123–150</span></code> confirms the <code class="docutils literal notranslate"><span class="pre">PartitionFunction</span></code> dataclass has no <code class="docutils literal notranslate"><span class="pre">g0</span></code> field.
+<code class="docutils literal notranslate"><span class="pre">plasma/partition.py:358</span></code> confirms <code class="docutils literal notranslate"><span class="pre">PartitionFunctionSpec</span></code> carries <code class="docutils literal notranslate"><span class="pre">g0:</span> <span class="pre">float</span></code>. Direct callers
+of <code class="docutils literal notranslate"><span class="pre">get_partition_coefficients</span></code> that bypass <code class="docutils literal notranslate"><span class="pre">partition_spec_for</span></code> do not get the g0 floor:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:359</span></code> — uses raw <code class="docutils literal notranslate"><span class="pre">pf.coefficients</span></code>, no g0 lookup</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/streaming.py:681,1217</span></code> — same pattern</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/self_absorption_inputs.py:104</span></code> — same pattern</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/plasma/anderson_solver.py:143–144</span></code> — same pattern</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py:744–756</span></code> is the one caller that DOES correctly call <code class="docutils literal notranslate"><span class="pre">get_ground_state_g</span></code>
+separately and pass it as <code class="docutils literal notranslate"><span class="pre">g0=g0</span></code>. The other callers lose the g0 floor guarantee (U can fall
+below the ground-state degeneracy at low T). The partition function polynomial can return values
+below <code class="docutils literal notranslate"><span class="pre">g0</span></code> at low T where the polynomial is extrapolating; without the floor, temperatures near
+or below <code class="docutils literal notranslate"><span class="pre">t_min</span></code> produce physically incorrect partition functions. Severity confirmed LOW
+(only affects edge cases at T &lt; t_min, which is outside normal LIBS operating range of 5000–20000 K).</p>
+</section>
+<section id="f9-snapshot-docstring-says-non-null-rel-int-confirmed-true-low">
+<h3>F9 — <code class="docutils literal notranslate"><span class="pre">snapshot()</span></code> docstring says “non-NULL rel_int” (CONFIRMED TRUE, LOW)<a class="headerlink" href="#f9-snapshot-docstring-says-non-null-rel-int-confirmed-true-low" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">database.py:869–870</span></code> reads:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>min_relative_intensity : float, optional
+    Minimum relative intensity threshold; default 0.0 keeps all
+    lines that have a non-NULL ``rel_int`` entry.
+</pre></div>
+</div>
+<p>The actual code at line 1252–1254 passes <code class="docutils literal notranslate"><span class="pre">None</span></code> to <code class="docutils literal notranslate"><span class="pre">get_transitions</span></code> when <code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span> <span class="pre">&lt;=</span> <span class="pre">0</span></code>, which produces a SQL query with NO <code class="docutils literal notranslate"><span class="pre">rel_int</span></code> WHERE clause, including lines where
+<code class="docutils literal notranslate"><span class="pre">rel_int</span> <span class="pre">IS</span> <span class="pre">NULL</span></code>. The docstring description is incorrect: 0.0 keeps ALL lines regardless of
+whether they have rel_int data. Severity confirmed LOW (documentation only; code behavior is
+correct and sensible).</p>
+</section>
+<section id="f10-test-gaps-confirmed-true-medium">
+<h3>F10 — Test gaps (CONFIRMED TRUE, MEDIUM)<a class="headerlink" href="#f10-test-gaps-confirmed-true-medium" title="Link to this heading"></a></h3>
+<p>Verified by examining <code class="docutils literal notranslate"><span class="pre">tests/test_atomic.py</span></code>: the file covers basic round-trips but has no test
+for <code class="docutils literal notranslate"><span class="pre">is_resonance</span></code> backfill correctness, no assertion that the <code class="docutils literal notranslate"><span class="pre">stark_w</span></code> convention matches
+<code class="docutils literal notranslate"><span class="pre">radiation.stark.REF_NE</span></code>, no cache-None regression guard, and no <code class="docutils literal notranslate"><span class="pre">partition_spec_for</span></code> round-trip
+test. Severity confirmed MEDIUM.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="additional-findings-not-in-census">
+<h2>Additional Findings Not in Census<a class="headerlink" href="#additional-findings-not-in-census" title="Link to this heading"></a></h2>
+<section id="new-1-estimate-stark-parameter-hardcoded-fallback-calibrated-for-1e16-convention-low-physics">
+<h3>NEW-1 — <code class="docutils literal notranslate"><span class="pre">estimate_stark_parameter</span></code> hardcoded fallback calibrated for 1e16 convention (LOW — Physics)<a class="headerlink" href="#new-1-estimate-stark-parameter-hardcoded-fallback-calibrated-for-1e16-convention-low-physics" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/stark.py:308–310</span></code></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">ionization_potential_ev</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">upper_energy_ev</span> <span class="o">&gt;=</span> <span class="n">ionization_potential_ev</span><span class="p">:</span>
+    <span class="c1"># Default ~0.005 nm at 1e16 for typical lines</span>
+    <span class="k">return</span> <span class="mf">0.005</span>
+</pre></div>
+</div>
+<p>The function is documented (line 292–304) to return “FWHM at REF_NE = 1e17 cm^-3, matching the
+stored <code class="docutils literal notranslate"><span class="pre">lines.stark_w</span></code> convention.” However, the hardcoded fallback constant 0.005 nm is
+commented as “at 1e16”, meaning it was calibrated against the old (now-corrected) wrong
+convention. At the current 1e17 convention, this fallback should return ~0.0005 nm (10× smaller)
+for the same physical width, or conversely the returned 0.005 nm overstates the estimated
+Stark width 10× vs the stored convention. This inconsistency is a direct residue of the
+convention confusion documented in the stark.py module-level comment (lines 23–32: “Historically
+the runtime treated the column as HWHM at 1e16, which over-broadened every Stark line by a
+factor of 20”). The correction fixed the consumption path and the REF_NE constant but left the
+fallback literal. Impact: the semi-empirical fallback is a last resort used only when no DB
+Stark data exists; lines using it will have modestly overstated Stark widths. Severity: LOW
+(estimation path only; DB-backed lines are not affected).</p>
+</section>
+<section id="new-2-migrate-lines-columns-runs-unconditionally-even-after-is-resonance-is-populated-low-performance">
+<h3>NEW-2 — <code class="docutils literal notranslate"><span class="pre">_migrate_lines_columns</span></code> runs unconditionally even after <code class="docutils literal notranslate"><span class="pre">is_resonance</span></code> is populated (LOW — Performance)<a class="headerlink" href="#new-2-migrate-lines-columns-runs-unconditionally-even-after-is-resonance-is-populated-low-performance" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py:104–125</span></code></p>
+<p>The <code class="docutils literal notranslate"><span class="pre">_migrate_lines_columns</span></code> migration step at line 106 always issues <code class="docutils literal notranslate"><span class="pre">PRAGMA</span> <span class="pre">table_info(lines)</span></code>
+and fetches all column metadata. If all columns already exist (post-migration), the loop body
+(lines 124–125) is never entered, but the PRAGMA round-trip still occurs on every <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.
+This is a facet of F6, but it specifically means the <code class="docutils literal notranslate"><span class="pre">is_resonance</span></code> backfill at lines 143–144
+only runs once (on the migration that adds the column), which is correct — but the PRAGMA check
+still runs every time. No separate finding required; this is absorbed by F6’s fix (version stamp
+would skip all of <code class="docutils literal notranslate"><span class="pre">_perform_migration</span></code>).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="severity-table-confirmed">
+<h2>Severity Table (Confirmed)<a class="headerlink" href="#severity-table-confirmed" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>Severity</p></th>
+<th class="head"><p>Dimension</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1</p></td>
+<td><p><strong>HIGH</strong></p></td>
+<td><p>Physics-correctness (docstring)</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2</p></td>
+<td><p>medium</p></td>
+<td><p>Physics-correctness (docstring)</p></td>
+</tr>
+<tr class="row-even"><td><p>F3</p></td>
+<td><p>medium</p></td>
+<td><p>Physics-correctness (data quality)</p></td>
+</tr>
+<tr class="row-odd"><td><p>F4</p></td>
+<td><p>medium</p></td>
+<td><p>Performance</p></td>
+</tr>
+<tr class="row-even"><td><p>F5</p></td>
+<td><p>medium</p></td>
+<td><p>Performance / Correctness</p></td>
+</tr>
+<tr class="row-odd"><td><p>F6</p></td>
+<td><p>medium</p></td>
+<td><p>Performance</p></td>
+</tr>
+<tr class="row-even"><td><p>F7</p></td>
+<td><p>low</p></td>
+<td><p>Performance</p></td>
+</tr>
+<tr class="row-odd"><td><p>F8</p></td>
+<td><p>low</p></td>
+<td><p>Architecture</p></td>
+</tr>
+<tr class="row-even"><td><p>F9</p></td>
+<td><p>low</p></td>
+<td><p>Architecture (docstring)</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10</p></td>
+<td><p>medium</p></td>
+<td><p>Test-gaps</p></td>
+</tr>
+<tr class="row-even"><td><p>NEW-1</p></td>
+<td><p>low</p></td>
+<td><p>Physics-correctness (estimation fallback)</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: HIGH (F1)</strong></p>
+<p>No census finding was found to be FALSE. All 10 original findings are real.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

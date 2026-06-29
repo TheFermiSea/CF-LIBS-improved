@@ -1,0 +1,349 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J10 (o3be) — Forward-Fitting Identification: scope (2026-06-15) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J10 (o3be) — Forward-Fitting Identification: scope (2026-06-15)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jitpipe/J10-forward-id-scope.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j10-o3be-forward-fitting-identification-scope-2026-06-15">
+<h1>J10 (o3be) — Forward-Fitting Identification: scope (2026-06-15)<a class="headerlink" href="#j10-o3be-forward-fitting-identification-scope-2026-06-15" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> CF-LIBS-improved-o3be · <strong>Spec:</strong> docs/adr/specs/J10*.md · <strong>ADR:</strong> ADR-0004 §8.3</p>
+<blockquote>
+<div><p><strong>Corpus caveat (added 2026-06-16):</strong> the “AC1 PASS” results below were measured on the
+<code class="docutils literal notranslate"><span class="pre">ak3.1.3</span></code> corpus. The 2026-06-16 ALIAS-faithful audit
+(<code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-16-alias-faithful-fix.md</span></code>) subsequently found <code class="docutils literal notranslate"><span class="pre">ak3.1.3</span></code> (the 224–265 nm
+Fe-forest window) <strong>violates four of the ALIAS papers’ stated assumptions</strong> (injected ±1 nm
+shift, T up to ~20900 K, RP 700–1000, no Fe-separable lines) and re-validated the identifiers on
+a paper-aligned corpus (<code class="docutils literal notranslate"><span class="pre">w5_paper_v2</span></code>, 240–850 nm). The AC1 figures here are therefore valid only
+as a <em>same-corpus relative</em> ranking vs Comb on <code class="docutils literal notranslate"><span class="pre">ak3.1.3</span></code>; the absolute “AC1 cleared” claim must be
+re-measured on a paper-aligned corpus before it binds. Track via the <code class="docutils literal notranslate"><span class="pre">zfy2</span></code> corpus-validity bead.</p>
+</div></blockquote>
+<section id="headline">
+<h2>Headline<a class="headerlink" href="#headline" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/forward_id.py</span></code> is <strong>already ~1143 lines with NO stubs</strong> — the core algorithm
+<strong>and</strong> the gradient-polish layer are implemented and parity-tested (<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_j10.py</span></code>,
+670 lines, committed <code class="docutils literal notranslate"><span class="pre">3948d24</span></code>/<code class="docutils literal notranslate"><span class="pre">1600ecf</span></code>). J10 is <strong>not</strong> a cold start; the remaining work is
+<strong>wiring + acceptance evaluation + cost-function tuning</strong>, not core physics. This downgrades o3be
+from “XL research build” to “M wiring + L tuning.”</p>
+</section>
+<section id="what-s-already-done-do-not-rebuild">
+<h2>What’s already done (do not rebuild)<a class="headerlink" href="#what-s-already-done-do-not-rebuild" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Scoring core (pure jit/vmap): <code class="docutils literal notranslate"><span class="pre">evaluate_population</span></code> (vmaps the frozen <code class="docutils literal notranslate"><span class="pre">radiation.kernels.forward_model</span></code>),
+<code class="docutils literal notranslate"><span class="pre">correlation_cost</span></code> (continuum-removed weighted Pearson), <code class="docutils literal notranslate"><span class="pre">bic_cost</span></code> (mirrors <code class="docutils literal notranslate"><span class="pre">model_selection._compute_bic</span></code>),
+<code class="docutils literal notranslate"><span class="pre">forward_fit_presence_scores</span></code> (leave-one-element-out include−exclude correlation gap → present/absent).</p></li>
+<li><p>Gradient polish: fixed-K Levenberg-Marquardt (<code class="docutils literal notranslate"><span class="pre">jax.jacfwd</span></code> + <code class="docutils literal notranslate"><span class="pre">jnp.linalg.solve</span></code>, accept/reject by
+<code class="docutils literal notranslate"><span class="pre">jnp.where</span></code>) — core-JAX clean, no banned jaxopt/optimistix/lineax.</p></li>
+<li><p>Host seam: <code class="docutils literal notranslate"><span class="pre">build_candidate_population</span></code> (stratified T/n_e/composition + Bernoulli subset masks,
+counter-based RNG), <code class="docutils literal notranslate"><span class="pre">forward_fit_identify</span></code> orchestrator.</p></li>
+<li><p>Tests: forward-eval vmap==loop (rtol 1e-12), BIC parity, polish-recovers-truth-within-1%,
+determinism, the +0.03-F1 payoff mechanism (on a 4-spectrum unit panel — a proxy, not the real split).</p></li>
+<li><p>Physics-only clean (<code class="docutils literal notranslate"><span class="pre">test_no_sqlite_in_kernel</span></code>; softmax as explicit exp/normalize).</p></li>
+</ul>
+<p>It is <strong>isolated</strong> — referenced only by its own module, its test, and <code class="docutils literal notranslate"><span class="pre">scripts/jitpipe_gpu_bench.py</span></code>.
+Nothing in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code> imports it yet.</p>
+</section>
+<section id="remaining-work-ordered">
+<h2>Remaining work (ordered)<a class="headerlink" href="#remaining-work-ordered" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>(S) Adapter</strong> <code class="docutils literal notranslate"><span class="pre">ForwardFitResult</span> <span class="pre">→</span> <span class="pre">ElementIdentificationResult</span></code> — a host <code class="docutils literal notranslate"><span class="pre">ForwardFitIdentifier</span></code>
+with <code class="docutils literal notranslate"><span class="pre">.identify(wavelength,</span> <span class="pre">intensity)</span></code> (the <code class="docutils literal notranslate"><span class="pre">IdentifierProtocol</span></code>) mapping element-indexed arrays
+to detected/rejected entries. <strong>← the tractable first increment.</strong></p></li>
+<li><p><strong>(M) Register</strong> a <code class="docutils literal notranslate"><span class="pre">kind</span> <span class="pre">==</span> <span class="pre">&quot;forward_fit&quot;</span></code> branch in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py</span></code> (~L1400) +
+<code class="docutils literal notranslate"><span class="pre">--with-forward-fit</span></code> in <code class="docutils literal notranslate"><span class="pre">scripts/benchmark_synthetic_identifiers.py</span></code>. Makes it scoreboard-scorable.</p></li>
+<li><p><strong>(M) Acceptance evaluation</strong> on the real optimization split (holdout/vault policy) → micro-F1/precision
+delta vs the reference identifier → <code class="docutils literal notranslate"><span class="pre">SCOREBOARD-&lt;date&gt;-forward-fit-vs-reference.{md,json}</span></code>.</p></li>
+<li><p><strong>(L) Cost-function / population tuning</strong> to clear AC1 (the research-variance core; benchmark-gate
+every change — project rule). Levers: <code class="docutils literal notranslate"><span class="pre">element_weights</span></code> (currently uniform), <code class="docutils literal notranslate"><span class="pre">presence_threshold</span></code>,
+<code class="docutils literal notranslate"><span class="pre">n_configs</span></code>, polish on/off, T/n_e stratification ranges.</p></li>
+<li><p><strong>(S) V100S runtime</strong> (AC2 ≤1 s/spectrum) via <code class="docutils literal notranslate"><span class="pre">jitpipe_gpu_bench.py</span></code> unit (b) on the clean
+<code class="docutils literal notranslate"><span class="pre">cflibs-gpu2</span></code> env (else CPU fallback).</p></li>
+<li><p><strong>(S) Campaign-3 evaluator entry point</strong> (AC5) + (S) spec/test name reconciliation
+(<code class="docutils literal notranslate"><span class="pre">test_parity_j10.py</span></code> vs spec’s <code class="docutils literal notranslate"><span class="pre">test_forward_fitting.py</span></code>).</p></li>
+</ol>
+</section>
+<section id="first-gpu-ac1-measurement-2026-06-15">
+<h2>First GPU AC1 measurement (2026-06-15)<a class="headerlink" href="#first-gpu-ac1-measurement-2026-06-15" title="Link to this heading"></a></h2>
+<p>Wiring fixed (commit 7b82a25: <code class="docutils literal notranslate"><span class="pre">_run_forward_fit</span></code> passed a raw <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>; now
+converts to <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code>). Ran <code class="docutils literal notranslate"><span class="pre">benchmark_synthetic_identifiers</span> <span class="pre">--with-forward-fit</span></code>
+on the V100S (clean <code class="docutils literal notranslate"><span class="pre">cflibs-gpu2</span></code> env), corpus <code class="docutils literal notranslate"><span class="pre">ak3.1.3</span></code>, 40 spectra, <code class="docutils literal notranslate"><span class="pre">n_configs=1024</span></code>,
+<code class="docutils literal notranslate"><span class="pre">presence_threshold=0.05</span></code>, uniform <code class="docutils literal notranslate"><span class="pre">element_weights</span></code>, no tuning:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>identifier</p></th>
+<th class="head"><p>precision</p></th>
+<th class="head"><p>recall</p></th>
+<th class="head"><p>F1</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Comb</p></td>
+<td><p>0.459</p></td>
+<td><p>0.425</p></td>
+<td><p><strong>0.442</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>forward_fit</p></td>
+<td><p>0.444</p></td>
+<td><p><strong>0.250</strong></p></td>
+<td><p>0.320</p></td>
+</tr>
+<tr class="row-even"><td><p>Correlation</p></td>
+<td><p>0.246</p></td>
+<td><p>0.350</p></td>
+<td><p>0.289</p></td>
+</tr>
+<tr class="row-odd"><td><p>ALIAS</p></td>
+<td><p>0.383</p></td>
+<td><p>0.225</p></td>
+<td><p>0.283</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Untuned forward_fit does NOT clear AC1</strong> (F1 0.320 vs Comb 0.442; AC1 wants ref+0.03).
+Decisive pattern: <strong>recall is the LOWEST of all four (0.250)</strong> with fine precision (0.444)
+— the opposite of the intended recall advantage → the presence gate is <strong>over-conservative</strong>
+(too-high <code class="docutils literal notranslate"><span class="pre">presence_threshold</span></code> / too-strict leave-one-out correlation-gap), starving recall.
+This is a <em>tuning</em> problem, the research-variance core (task 4). CPU cannot run this
+(OOM at <code class="docutils literal notranslate"><span class="pre">n_configs=1024</span></code>) — the GPU is required.</p>
+<section id="threshold-sweep-recall-ceiling-presence-gate-confirmed-thesis-validated">
+<h3>Threshold sweep — recall ceiling (presence gate confirmed; thesis validated)<a class="headerlink" href="#threshold-sweep-recall-ceiling-presence-gate-confirmed-thesis-validated" title="Link to this heading"></a></h3>
+<p>Re-ran with <code class="docutils literal notranslate"><span class="pre">CFLIBS_FF_PRESENCE_THRESHOLD=0.0</span></code> (gate fully open; the knob added to
+<code class="docutils literal notranslate"><span class="pre">_run_forward_fit</span></code>), same 40 spectra:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">presence_threshold</span></code></p></th>
+<th class="head"><p>forward_fit P</p></th>
+<th class="head"><p>forward_fit R</p></th>
+<th class="head"><p>forward_fit F1</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0.05</p></td>
+<td><p>0.444</p></td>
+<td><p>0.250</p></td>
+<td><p>0.320</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>0.0</strong></p></td>
+<td><p>0.273</p></td>
+<td><p><strong>0.512</strong></p></td>
+<td><p>0.357</p></td>
+</tr>
+</tbody>
+</table>
+<p>Opening the gate <strong>more than doubled recall (0.250 → 0.512)</strong> — higher than <em>every</em>
+baseline (Comb R=0.425), confirming the recall-starved diagnosis AND <strong>validating the
+recall-play thesis</strong>: the recall headroom is real. But precision collapses to 0.273 at
+full recall, so forward_fit’s current <strong>precision-recall frontier</strong> (best F1 ≈ 0.357)
+still sits below Comb’s operating point (0.442). <strong>Conclusion:</strong> the threshold only trades
+P↔R along a mediocre frontier; clearing AC1 requires <strong>lifting the frontier itself</strong> —
+i.e. improving precision <em>at</em> high recall via cost-function tuning (<code class="docutils literal notranslate"><span class="pre">element_weights</span></code>
+calibration, the continuum-removed correlation cost, the BIC penalty), not a threshold
+tweak. <strong>Go/no-go (ADR §8.3): INVEST.</strong> The recall ceiling validates the thesis; J10 is
+worth the cost-function tuning effort (a research-variance multi-experiment effort, each
+benchmark-gated) rather than a descope. <strong>Caveats:</strong> 40-spectra subset; corpus validity
+is the open <code class="docutils literal notranslate"><span class="pre">zfy2</span></code> question (regenerate on the fixed forward model before trusting absolute
+numbers); the same-corpus relative ranking is the reliable signal.</p>
+</section>
+</section>
+<section id="round-2-diagnostic-per-wavelength-weights-ac1-pass-2026-06-15">
+<h2>Round 2 — diagnostic per-wavelength weights → AC1 PASS (2026-06-15)<a class="headerlink" href="#round-2-diagnostic-per-wavelength-weights-ac1-pass-2026-06-15" title="Link to this heading"></a></h2>
+<p>Implemented Rank-1 host-only diagnostic per-wavelength weights (<code class="docutils literal notranslate"><span class="pre">ForwardFitIdentifier._diagnostic_wavelength_weights</span></code>,
+passed via the existing-but-unused <code class="docutils literal notranslate"><span class="pre">element_weights</span></code> kwarg; frozen jit core untouched, <code class="docutils literal notranslate"><span class="pre">test_parity_j10</span></code> green).
+Weight <code class="docutils literal notranslate"><span class="pre">w</span> <span class="pre">=</span> <span class="pre">(base</span> <span class="pre">+</span> <span class="pre">total)</span> <span class="pre">*</span> <span class="pre">distinctness**gamma</span></code> where distinctness = dominant-element / total Boltzmann
+strength per wavelength bin — down-weights crowded/blended bins, up-weights isolated single-element bins.
+GPU sweep (V100S, ak3.1.3, 40 spectra, n_configs=1024) vs Comb (F1=0.442):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>config (diag weights ON)</p></th>
+<th class="head"><p>P</p></th>
+<th class="head"><p>R</p></th>
+<th class="head"><p>F1</p></th>
+<th class="head"><p>vs Comb</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>γ=1.0, thr=0.01</p></td>
+<td><p>0.424</p></td>
+<td><p>0.525</p></td>
+<td><p>0.469</p></td>
+<td><p>+0.027</p></td>
+</tr>
+<tr class="row-odd"><td><p>γ=2.0, thr=0.01</p></td>
+<td><p>0.429</p></td>
+<td><p>0.525</p></td>
+<td><p>0.472</p></td>
+<td><p>+0.030</p></td>
+</tr>
+<tr class="row-even"><td><p>γ=3.0, thr=0.01</p></td>
+<td><p>0.444</p></td>
+<td><p>0.500</p></td>
+<td><p>0.471</p></td>
+<td><p>+0.029</p></td>
+</tr>
+<tr class="row-odd"><td><p>γ=4.0, thr=0.01</p></td>
+<td><p>0.411</p></td>
+<td><p>0.463</p></td>
+<td><p>0.435</p></td>
+<td><p>−0.007</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>γ=2.0, thr=0.02</strong></p></td>
+<td><p><strong>0.514</strong></p></td>
+<td><p><strong>0.463</strong></p></td>
+<td><p><strong>0.487</strong></p></td>
+<td><p><strong>+0.045</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>(diag OFF baseline)</p></td>
+<td><p>0.384</p></td>
+<td><p>0.475</p></td>
+<td><p>0.4246</p></td>
+<td><p>−0.017</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>AC1 PASS</strong> at <strong>γ=2.0, thr=0.02, n_configs=1024, diagnostic weights ON</strong>: forward_fit F1=0.487 beats
+Comb 0.442 by <strong>+0.045</strong> (AC1 needs +0.03), and precision 0.514 &gt; Comb 0.459 — a precision <em>gain</em>, so the
+≤0.02-loss clause passes with margin. forward_fit beats the best baseline on <strong>all three</strong> metrics (P, R, F1).
+The diagnostic weights lifted the precision-recall <em>frontier</em> (precision rose 0.384→0.514 while recall stayed
+high), exactly the intended mechanism — the recall-play thesis is validated and AC1 is cleared on this corpus.
+These defaults are now the <code class="docutils literal notranslate"><span class="pre">_run_forward_fit</span></code> env defaults. Branch: <code class="docutils literal notranslate"><span class="pre">j10/diag-weights</span></code> (commits 80dc97/040b76).
+<strong>Confirmation pending:</strong> a 120-spectrum run at the winning config (de-risks the 40-spectrum margin) + the
+<code class="docutils literal notranslate"><span class="pre">zfy2</span></code> corpus-validity question; the same-corpus relative-vs-Comb dominance is the reliable signal.</p>
+</section>
+<section id="acceptance-ac1-binding">
+<h2>Acceptance (AC1 binding)<a class="headerlink" href="#acceptance-ac1-binding" title="Link to this heading"></a></h2>
+<p>micro-F1 ≥ <strong>+0.03</strong> vs the reference identifier on the <strong>optimization split</strong>, precision loss ≤ <strong>0.02</strong>
+(measured via <code class="docutils literal notranslate"><span class="pre">confusion_counts</span></code>+<code class="docutils literal notranslate"><span class="pre">compute_binary_metrics</span></code>, micro = pooled TP/FP/FN). If unmet → negative-result
+report; J10 descopes to the throughput/Campaign-3-evaluator role (J9/J11 stand alone, ADR §8.3).</p>
+</section>
+<section id="open-questions-need-a-decision-before-ac1-tuning">
+<h2>Open questions (need a decision before AC1 tuning)<a class="headerlink" href="#open-questions-need-a-decision-before-ac1-tuning" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Baseline comparator</strong> for “+0.03”: which reference identifier (strict ALIAS / hybrid_consensus /
+scoreboard default)? <code class="docutils literal notranslate"><span class="pre">docs/benchmarks/SCOREBOARD-2026-06-10-baseline.{md,json}</span></code> exists.</p></li>
+<li><p><strong>Score/confidence mapping</strong>: <code class="docutils literal notranslate"><span class="pre">presence_score</span></code> is an unbounded include−exclude correlation gap;
+map to the protocol’s 0–1 (sigmoid? min-max over valid elements?) for cross-identifier comparability.</p></li>
+<li><p><strong>Candidate element superset</strong> on real spectra + whether the host pre-filters candidates (cost scales with E).</p></li>
+<li><p><strong>Phase boundary</strong>: phase-1 (parity-adapter peaks) now vs phase-2 (J8 <code class="docutils literal notranslate"><span class="pre">ObservationBatch</span></code>) later? J12 needs “integrated.”</p></li>
+</ol>
+</section>
+<section id="risks">
+<h2>Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>Physics-only (the adapter must stay sklearn/torch/jax.nn-free; ruff TID251 + evolution AST scanner enforce);
+GPU fp64 / clean-env fallback; recall-vs-precision tradeoff lives in the single <code class="docutils literal notranslate"><span class="pre">presence_threshold</span></code> gate;
+benchmark-gate every scoring change (MEMORY: ALIAS Family-5 regressed F1 −0.041); AC1 may be unreachable
+(negative result is an allowed outcome).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

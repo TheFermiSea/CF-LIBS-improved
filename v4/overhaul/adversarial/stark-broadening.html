@@ -1,0 +1,298 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stark Broadening Audit: cflibs/radiation/stark.py + cflibs/inversion/physics/stark_ne.py &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Stark Broadening Audit: cflibs/radiation/stark.py + cflibs/inversion/physics/stark_ne.py</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/stark-broadening.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="stark-broadening-audit-cflibs-radiation-stark-py-cflibs-inversion-physics-stark-ne-py">
+<h1>Stark Broadening Audit: cflibs/radiation/stark.py + cflibs/inversion/physics/stark_ne.py<a class="headerlink" href="#stark-broadening-audit-cflibs-radiation-stark-py-cflibs-inversion-physics-stark-ne-py" title="Link to this heading"></a></h1>
+<section id="verdict">
+<h2>VERDICT<a class="headerlink" href="#verdict" title="Link to this heading"></a></h2>
+<p><strong>flawed</strong> — severity: <strong>critical</strong></p>
+<p>The non-hydrogenic electron-impact width law, Olivero–Longbothum deconvolution, and n_e inversion are mathematically correct and consistent with Griem 1974. However, the H-alpha reference width stored in the database is the <strong>electron-impact ONLY</strong> component (49 pm from Konjevic 2002 Tab 1), while the physically observable Stark FWHM for H-alpha is ~1300 pm at the same conditions (Gigosos 2003). Since H-alpha is simultaneously stored as <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> (literature-grade) provenance AND listed as the top-priority diagnostic line in <code class="docutils literal notranslate"><span class="pre">PREFERRED_DIAGNOSTIC_LINES</span></code>, when H-alpha appears in a spectrum it will be preferentially selected for the n_e inversion, producing a <strong>12–60× overestimate of n_e</strong> depending on the true density. The code acknowledges the H Balmer n_e^0.7 issue as a “known limitation” but does not guard against selecting H-alpha with the wrong w_ref for inversion.</p>
+</section>
+<hr class="docutils" />
+<section id="ground-truth">
+<h2>GROUND TRUTH<a class="headerlink" href="#ground-truth" title="Link to this heading"></a></h2>
+<section id="non-hydrogenic-lines-griem-semiclassical-formula">
+<h3>Non-hydrogenic lines: Griem semiclassical formula<a class="headerlink" href="#non-hydrogenic-lines-griem-semiclassical-formula" title="Link to this heading"></a></h3>
+<p><strong>Griem, H.R. (1974). <em>Spectral Line Broadening by Plasmas.</em> Academic Press, New York. (ISBN 0-12-302850-7)</strong></p>
+<p>Stark FWHM:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Δλ_S = 2·w(T)·(n_e/n_ref) + 3.5·A(T)·(n_e/n_ref)^(1/4)·[1 − 3/(4·N_D^(1/3))]·w(T)
+</pre></div>
+</div>
+<p>where w(T) is the electron-impact HALF-half-width at n_ref = 1×10¹⁷ cm⁻³ (singly-ionized lines). Stored FWHM convention in the code = 2w, so the linear factor of 2 is absorbed.</p>
+<p><strong>Olivero, J.J. &amp; Longbothum, R.L. (1977).</strong> <em>J. Quant. Spectrosc. Radiat. Transfer</em>, <strong>17</strong>, 233–236. DOI: 10.1016/0022-4073(77)90161-3</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>f_V = 0.5346·f_L + √(0.2166·f_L² + f_G²)
+</pre></div>
+</div>
+<p>Error &lt; 0.02%.</p>
+</section>
+<section id="h-alpha-reference-gigosos-et-al-full-ion-electron-simulation">
+<h3>H-alpha reference: Gigosos et al. (full ion+electron simulation)<a class="headerlink" href="#h-alpha-reference-gigosos-et-al-full-ion-electron-simulation" title="Link to this heading"></a></h3>
+<p><strong>Gigosos, M.A., González, M.Á., &amp; Cardeñoso, V. (2003).</strong> Computer-simulated Balmer-alpha, -beta and -gamma Stark line profiles for non-equilibrium plasma diagnostics. <em>Spectrochimica Acta Part B</em>, <strong>58</strong>, 1489–1504. DOI: 10.1016/S0584-8547(03)00097-1</p>
+<p>Power-law fit at T ~ 10,000 K:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Hα FWHM [nm] ≈ 1.3 · (n_e / 10¹⁷ cm⁻³)^0.64
+</pre></div>
+</div>
+<p>At n_e = 1×10¹⁷ cm⁻³, T = 10,000 K: <strong>FWHM = 1.30 nm</strong></p>
+<p><strong>Konjevic, N. et al. (2002).</strong> <em>J. Phys. Chem. Ref. Data</em>, <strong>31</strong>, 819–927. DOI: 10.1063/1.1486456
+Table 1 lists H I 656.279 nm electron-impact width: <strong>W_e = 0.490 Å = 49 pm = 0.049 nm</strong> at n_e = 1×10¹⁷ cm⁻³, T = 10,000 K. This is the <strong>electron-impact contribution alone</strong>; the total Stark width (including dominant ion broadening) is ~1.3 nm.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="code-value-numerical">
+<h2>CODE VALUE (numerical)<a class="headerlink" href="#code-value-numerical" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">PYTHONPATH</span><span class="o">=</span>/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5<span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<span class="s2">import cflibs; print(&#39;cflibs:&#39;, cflibs.__file__)</span>
+<span class="s2">from cflibs.radiation.stark import stark_width, deconvolve_stark_fwhm, estimate_ne_from_stark, REF_NE</span>
+
+<span class="s2"># Test 1: Non-hydrogenic law at reference conditions</span>
+<span class="s2">w = stark_width(1e17, 10000.0, 0.045, 0.5)</span>
+<span class="s2">print(&#39;stark_width at REF conditions (expect 0.045):&#39;, w)</span>
+
+<span class="s2"># Test 2: Olivero-Longbothum round-trip</span>
+<span class="s2">import numpy as np</span>
+<span class="s2">f_L, f_G = 0.1, 0.05</span>
+<span class="s2">f_V = 0.5346 * f_L + np.sqrt(0.2166 * f_L**2 + f_G**2)</span>
+<span class="s2">f_L_rec = deconvolve_stark_fwhm(f_V, f_G, 0.0)</span>
+<span class="s2">print(&#39;OL round-trip error:&#39;, abs(f_L_rec - f_L)/f_L*100, &#39;%&#39;)</span>
+
+<span class="s2"># Test 3: H-alpha inversion with stored 49 pm vs Gigosos 1300 pm</span>
+<span class="s2">w_stored = 0.049  # nm (stored in DB)</span>
+<span class="s2">for ne_true in [1e16, 1e17, 1e18]:</span>
+<span class="s2">    w_meas = 1.3 * (ne_true/1e17)**0.64  # Gigosos measured width</span>
+<span class="s2">    ne_inv = estimate_ne_from_stark(w_meas, 10000.0, w_stored, 0.5)</span>
+<span class="s2">    print(f&#39;n_e_true={ne_true:.0e}: w_meas={w_meas:.3f}nm, n_e_inverted={ne_inv:.2e}, factor={ne_inv/ne_true:.0f}x&#39;)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p><strong>Output:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cflibs</span><span class="p">:</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span><span class="o">/</span><span class="n">cflibs</span><span class="o">/</span><span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>
+<span class="n">stark_width</span> <span class="n">at</span> <span class="n">REF</span> <span class="n">conditions</span> <span class="p">(</span><span class="n">expect</span> <span class="mf">0.045</span><span class="p">):</span> <span class="mf">0.045</span>
+<span class="n">OL</span> <span class="nb">round</span><span class="o">-</span><span class="n">trip</span> <span class="n">error</span><span class="p">:</span> <span class="mf">0.0000</span> <span class="o">%</span>
+<span class="n">n_e_true</span><span class="o">=</span><span class="mf">1e+16</span><span class="p">:</span> <span class="n">w_meas</span><span class="o">=</span><span class="mf">0.298</span><span class="n">nm</span><span class="p">,</span> <span class="n">n_e_inverted</span><span class="o">=</span><span class="mf">6.08e+17</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">61</span><span class="n">x</span>
+<span class="n">n_e_true</span><span class="o">=</span><span class="mf">1e+17</span><span class="p">:</span> <span class="n">w_meas</span><span class="o">=</span><span class="mf">1.300</span><span class="n">nm</span><span class="p">,</span> <span class="n">n_e_inverted</span><span class="o">=</span><span class="mf">2.65e+18</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">27</span><span class="n">x</span>
+<span class="n">n_e_true</span><span class="o">=</span><span class="mf">1e+18</span><span class="p">:</span> <span class="n">w_meas</span><span class="o">=</span><span class="mf">5.675</span><span class="n">nm</span><span class="p">,</span> <span class="n">n_e_inverted</span><span class="o">=</span><span class="mf">1.16e+19</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">12</span><span class="n">x</span>
+</pre></div>
+</div>
+<p><strong>Stored H-alpha DB value (from <code class="docutils literal notranslate"><span class="pre">scripts/archive/migrations/ingest_stark_b.py</span></code> line 144):</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="s2">&quot;H&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">656.279</span><span class="p">,</span> <span class="mf">49.0</span><span class="p">,</span> <span class="mf">0.20</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;Konjevic 2002 H-alpha; Griem 1974 Tab 4-5&quot;</span><span class="p">),</span>
+</pre></div>
+</div>
+<p>= 49 pm = 0.049 nm (electron-impact FWHM only).</p>
+<p><strong>Literature (Gigosos 2003) at n_e = 1×10¹⁷ cm⁻³, T = 10,000 K:</strong> total FWHM = 1.30 nm.</p>
+</section>
+<hr class="docutils" />
+<section id="delta-interpretation">
+<h2>DELTA &amp; INTERPRETATION<a class="headerlink" href="#delta-interpretation" title="Link to this heading"></a></h2>
+<section id="what-is-correct">
+<h3>What is correct<a class="headerlink" href="#what-is-correct" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Component</p></th>
+<th class="head"><p>Code value</p></th>
+<th class="head"><p>Literature value</p></th>
+<th class="head"><p>Status</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Linear n_e scaling</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">w_ref*(n_e/REF_NE)</span></code></p></td>
+<td><p>Griem 1974: correct for non-H</p></td>
+<td><p>✓ CORRECT</p></td>
+</tr>
+<tr class="row-odd"><td><p>T-scaling exponent</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(T/T_ref)^(-0.5)</span></code> default</p></td>
+<td><p>T^(-0.25) to T^(-0.5) per line</p></td>
+<td><p>✓ ACCEPTABLE</p></td>
+</tr>
+<tr class="row-even"><td><p>OL constants</p></td>
+<td><p>a=0.5346, b=0.2166</p></td>
+<td><p>Olivero &amp; Longbothum 1977 exact values</p></td>
+<td><p>✓ CORRECT</p></td>
+</tr>
+<tr class="row-odd"><td><p>n_e inversion formula</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">=</span> <span class="pre">REF_NE*(w/w_ref)*(T/T_ref)^alpha</span></code></p></td>
+<td><p>Griem: correct inversion</p></td>
+<td><p>✓ CORRECT</p></td>
+</tr>
+<tr class="row-even"><td><p>Ion broadening factor 1.75</p></td>
+<td><p>Correct (Griem 3.5/2)</p></td>
+<td><p>✓ CORRECT</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p>Ion R_D hardcoded 0.5</p></td>
+<td><p>Varies 0.22–0.65 by conditions</p></td>
+<td><p>MINOR ERROR ~1-2% total width</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="critical-flaw-h-alpha-w-ref-is-27-too-small">
+<h3>Critical flaw: H-alpha w_ref is 27× too small<a class="headerlink" href="#critical-flaw-h-alpha-w-ref-is-27-too-small" title="Link to this heading"></a></h3>
+<p>The value stored for H I 656.28 nm (<code class="docutils literal notranslate"><span class="pre">stark_w</span></code> = 49 pm) is <strong>exclusively the electron-impact contribution</strong> extracted from Konjevic 2002, Table 1. For hydrogen Balmer lines, ion quasi-static broadening is <strong>comparable to or larger than</strong> the electron-impact term — the Gigosos 2003 simulations (the modern standard) give FWHM = 1300 pm at the same conditions, i.e. <strong>ions contribute ~96% of the total width</strong>.</p>
+<p>Because <code class="docutils literal notranslate"><span class="pre">H</span> <span class="pre">I</span> <span class="pre">656.28</span> <span class="pre">nm</span></code> is:</p>
+<ol class="arabic simple">
+<li><p>stored with <code class="docutils literal notranslate"><span class="pre">stark_w_source</span> <span class="pre">=</span> <span class="pre">'stark_b'</span></code> (= literature-grade), so it passes the <code class="docutils literal notranslate"><span class="pre">LITERATURE_STARK_SOURCES</span></code> gate in <code class="docutils literal notranslate"><span class="pre">measure_stark_ne()</span></code>, and</p></li>
+<li><p>listed as <code class="docutils literal notranslate"><span class="pre">PREFERRED_DIAGNOSTIC_LINES[0]</span></code> with a 2× ranking bonus,</p></li>
+</ol>
+<p>any spectrum containing H-alpha will preferentially select it for the n_e diagnostic and invert with the wrong 49 pm reference instead of the correct ~1300 pm total, overestimating n_e by <strong>12–60×</strong> across the typical LIBS density range 10¹⁶–10¹⁸ cm⁻³.</p>
+<p>The code comment in <code class="docutils literal notranslate"><span class="pre">stark_ne.py</span></code> line 46–50 acknowledges the H Balmer n_e^0.7 issue as a “known limitation / left for follow-up”, but this misidentifies the problem. The exponent correction is secondary; the primary bug is that the stored reference width is ~27× too small because it omits ion broadening. A correct Gigosos-based n_e^0.64 law anchored at w_ref = 1.3 nm would be self-consistent; using the electron-impact 49 pm width with any exponent gives catastrophically wrong n_e.</p>
+<p>For <strong>non-hydrogenic lines</strong> (Ca II, Mg II, Fe II, etc.), the code is internally self-consistent and numerically correct: the stored FWHM is the total Stark width (electron impact dominates for non-H), the inversion formula correctly recovers n_e, and round-trip tests pass to floating-point precision.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="fix">
+<h2>FIX<a class="headerlink" href="#fix" title="Link to this heading"></a></h2>
+<p><strong>File:</strong> <code class="docutils literal notranslate"><span class="pre">scripts/archive/migrations/ingest_stark_b.py</span></code>, line 144<br />
+<strong>File:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/stark_ne.py</span></code>, lines 46–50 and 82–88</p>
+<p><strong>Option A (minimum guard — recommended now):</strong> Remove H-alpha from <code class="docutils literal notranslate"><span class="pre">PREFERRED_DIAGNOSTIC_LINES</span></code> and exclude <code class="docutils literal notranslate"><span class="pre">H</span></code> from the diagnostic path until a dedicated Gigosos lookup is implemented. This prevents catastrophic misuse while keeping non-H diagnostics unaffected:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># In cflibs/inversion/physics/stark_ne.py, change:</span>
+<span class="n">PREFERRED_DIAGNOSTIC_LINES</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="p">(</span><span class="s2">&quot;H&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">656.28</span><span class="p">),</span>    <span class="c1"># &lt;-- REMOVE until Gigosos-based path exists</span>
+    <span class="p">(</span><span class="s2">&quot;Ca&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mf">393.37</span><span class="p">),</span>
+    <span class="o">...</span>
+<span class="p">)</span>
+
+<span class="c1"># And in measure_stark_ne(), add element exclusion:</span>
+<span class="k">if</span> <span class="n">obs</span><span class="o">.</span><span class="n">element</span> <span class="o">==</span> <span class="s2">&quot;H&quot;</span><span class="p">:</span>
+    <span class="n">_reject</span><span class="p">(</span><span class="s2">&quot;hydrogen_requires_gigosos_tables&quot;</span><span class="p">)</span>
+    <span class="k">continue</span>
+</pre></div>
+</div>
+<p><strong>Option B (correct fix):</strong> Replace the stored H-alpha <code class="docutils literal notranslate"><span class="pre">stark_w</span></code> with the Gigosos-anchored value (1.3 nm at 1×10¹⁷ cm⁻³, T = 10,000 K) and update the inversion to use the Gigosos power-law exponent (0.64) stored as <code class="docutils literal notranslate"><span class="pre">stark_alpha</span></code> for H I lines. This requires a new <code class="docutils literal notranslate"><span class="pre">stark_w_source</span> <span class="pre">=</span> <span class="pre">'gigosos'</span></code> provenance class and corresponding handling in <code class="docutils literal notranslate"><span class="pre">estimate_ne_from_stark</span></code> to use the non-unity exponent for both forward and inverse.</p>
+<p><strong>Option B DB entry:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="s2">&quot;H&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">656.279</span><span class="p">,</span> <span class="mf">1300.0</span><span class="p">,</span> <span class="mf">0.64</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;Gigosos 2003 FWHM total at 1e17/10kK; DOI:10.1016/S0584-8547(03)00097-1&quot;</span><span class="p">),</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="citations">
+<h2>CITATIONS<a class="headerlink" href="#citations" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Griem, H.R. (1974). <em>Spectral Line Broadening by Plasmas.</em> Academic Press.</p></li>
+<li><p>Gigosos, M.A., González, M.Á., &amp; Cardeñoso, V. (2003). <em>Spectrochim. Acta B</em>, 58, 1489–1504. DOI:10.1016/S0584-8547(03)00097-1</p></li>
+<li><p>Konjevic, N., Lesage, A., Fuhr, J.R., &amp; Wiese, W.L. (2002). <em>J. Phys. Chem. Ref. Data</em>, 31(3), 819–927. DOI:10.1063/1.1486456</p></li>
+<li><p>Olivero, J.J. &amp; Longbothum, R.L. (1977). <em>J. Quant. Spectrosc. Radiat. Transfer</em>, 17, 233–236. DOI:10.1016/0022-4073(77)90161-3</p></li>
+<li><p>Gigosos, M.A. (2014). Stark broadening models for plasma diagnostics. <em>J. Phys. D: Appl. Phys.</em>, 47(34), 343001. DOI:10.1088/0022-3727/47/34/343001</p></li>
+<li><p>Vidal, C.R., Cooper, J., &amp; Smith, E.W. (1973). Hydrogen Stark-broadening tables. <em>Astrophys. J. Suppl.</em>, 25, 37–136.</p></li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

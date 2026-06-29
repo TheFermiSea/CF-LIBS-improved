@@ -1,0 +1,606 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strict Single-Shot &lt;1 ms CF-LIBS Composition Pipeline — Plan v3 (structured-Jacobian-evaluated) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Strict Single-Shot &lt;1 ms CF-LIBS Composition Pipeline — Plan v3 (structured-Jacobian-evaluated)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/research/realtime/2026-06-20-realtime-plan-v3-structured-jacobian.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="strict-single-shot-1-ms-cf-libs-composition-pipeline-plan-v3-structured-jacobian-evaluated">
+<h1>Strict Single-Shot &lt;1 ms CF-LIBS Composition Pipeline — Plan v3 (structured-Jacobian-evaluated)<a class="headerlink" href="#strict-single-shot-1-ms-cf-libs-composition-pipeline-plan-v3-structured-jacobian-evaluated" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-20
+<strong>Supersedes:</strong> <code class="docutils literal notranslate"><span class="pre">/tmp/realtime_plan_v2.md</span></code> (v2, ExoJAX2-evaluated).
+<strong>New inputs folded in this revision:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/varpro_bench.json</span></code> — VarPro / structured-Jacobian / autodiff head-to-head, single-shot V100S GPU,
+float32, batch=1, 300 lines x 4000 ch, 17 params, 120 timed calls.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/varpro_sweep.csv</span></code> — 36-row sweep: method {autodiff, structured, varpro} x K {1,2,3} x ROI {500,
+1000, 2000, 4000} -&gt; latency_us, comp_rmse, T_err, ne_err.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/tmp/varpro_datavoyager.md</span></code> — DataVoyager analysis of the sweep, <strong>with verified-ground-truth
+correction notice</strong> (the agent’s narrative Pareto/best-config attribution is hallucinated; the
+CSV-direct “Verified findings” section is authoritative — that is what we use below).</p></li>
+<li><p>(carried) v2 inputs: ExoJAX2 latency/capability, asta literature, hand-rolled <code class="docutils literal notranslate"><span class="pre">rt_latency.json</span></code>.</p></li>
+</ul>
+<p><strong>One-line v3 verdict:</strong> <strong>&lt;1 ms at FULL 4000 ch is now ACHIEVED.</strong> The structured (analytic-block)
+Jacobian at <strong>K=1, full 4000 ch = 407.9 us</strong> with composition RMSE 0.0588 — identical accuracy to
+autodiff, <strong>3.7x faster than the 1.54 ms autodiff K=3 baseline</strong>, and no ROI windowing or CUDA-graph
+capture required. <strong>Recommended operating point: structured, K=1, ROI=2000 ch — 353.9 us, comp RMSE
+0.0578 (the global minimum across the whole sweep).</strong> VarPro is rejected for composition: it nails T/n_e
+but mis-apportions composition (RMSE ~0.23, ~4x worse) and NaNs out at 500-ch ROI.</p>
+<hr class="docutils" />
+<section id="executive-summary">
+<h2>0. Executive summary<a class="headerlink" href="#executive-summary" title="Link to this heading"></a></h2>
+<p>v2 concluded that <strong>full-spectrum K=3 &#64; 4000 ch (1.46-1.54 ms) was ~50% over budget</strong>, and that hitting
+strict &lt;1 ms at full resolution depended on either ROI windowing (684 us &#64; &lt;=1000 ch) or an unproven
+CUDA-graph stretch goal. <strong>The structured-Jacobian measurement overturns that.</strong> Two independent levers,
+both now measured on the same V100S, each independently clear the bar at full 4000 ch:</p>
+<ol class="arabic simple">
+<li><p><strong>Structured (analytic-block) Jacobian replaces autodiff <code class="docutils literal notranslate"><span class="pre">jacfwd</span></code>.</strong> Exploiting the known
+Saha/Boltzmann/emissivity block structure of <code class="docutils literal notranslate"><span class="pre">dS/dtheta</span></code> (instead of letting XLA trace a generic
+forward-mode AD graph) cuts the per-step Jacobian cost substantially: <strong>structured K=3 &#64; 4000 ch =
+1097 us vs autodiff 1509 us (1.38x), and structured K=1 &#64; 4000 ch = 408 us vs autodiff 588 us
+(1.44x).</strong> Accuracy is <strong>bit-for-bit identical</strong> to autodiff at every (K, ROI) — it is the same solve,
+computed faster.</p></li>
+<li><p><strong>K=1 is sufficient on this corpus.</strong> comp_rmse is <em>flat-to-slightly-better</em> at K=1 (0.0588 &#64; 4000 ch)
+vs K=3 (0.0651 &#64; 4000 ch). Across the entire sweep <strong>higher K never improves composition RMSE</strong> — it
+only raises latency. The v1/v2 worry that “K=1 may under-converge” is <strong>not borne out</strong> by the measured
+recovery error on this grid (manifold warm-start, already in the plan, is what makes the small-K start
+sound). So the demanding “K=3 &#64; 4000 ch” config v2 fought to fit under 1 ms is <strong>not the config we need
+to ship</strong> — K=1 is both faster and at least as accurate here.</p></li>
+</ol>
+<p>Combining the two: <strong>structured K=1 &#64; 4000 ch = 408 us</strong> is the fastest full-resolution sub-ms config, and
+<strong>structured K=1 &#64; 2000 ch = 354 us, comp_rmse 0.0578</strong> is the global accuracy optimum. Both are
+comfortably inside budget with <strong>no CUDA-graph capture and no aggressive ROI trimming</strong>, removing the v2
+load-bearing risk.</p>
+<p>The ExoJAX2 decision is unchanged and reinforced: <strong>ExoJAX stays offline.</strong> The structured Jacobian is
+the opposite design choice from ExoJAX’s OpaDirect (which materializes a 1.2M-element Voigt-Hjerting
+numatrix and pays ~9x on a 17-tangent AD Jacobian); CF-LIBS wins the hot path precisely by <em>not</em>
+materializing that matrix and by hand-writing the Jacobian blocks. <strong>VarPro is evaluated and rejected for
+the composition objective</strong> — it is the best method for plasma parameters (T_err 0.0083, ne_err 0.070 at
+K=3/4000 ch, the best in the sweep) but mis-apportions composition (RMSE stuck at ~0.23 regardless of
+K/ROI) and is numerically fragile at small ROI (NaN at 500 ch). It earns a narrow optional role as a
+T/n_e refinement stage, never as the composition solver.</p>
+</section>
+<hr class="docutils" />
+<section id="ms-feasibility-restated-with-the-new-measurements-the-headline-changed">
+<h2>1. &lt;1 ms FEASIBILITY — RESTATED with the new measurements (the headline changed)<a class="headerlink" href="#ms-feasibility-restated-with-the-new-measurements-the-headline-changed" title="Link to this heading"></a></h2>
+<p>Device: <strong>Tesla V100S-PCIE-32GB</strong>, JAX 0.9.2, <strong>float32</strong>, warm (compile-once, median of 120 per-call
+<code class="docutils literal notranslate"><span class="pre">block_until_ready</span></code>). Problem: 4000 channels, 300 lines, 15 elements, 17 params, peak-normalized target,
+GN/Marquardt damping lambda=0.01, VarPro mu=1e-4.</p>
+<section id="method-x-k-head-to-head-at-full-4000-ch-from-varpro-bench-json">
+<h3>1.1 Method x K head-to-head at FULL 4000 ch (from <code class="docutils literal notranslate"><span class="pre">varpro_bench.json</span></code>)<a class="headerlink" href="#method-x-k-head-to-head-at-full-4000-ch-from-varpro-bench-json" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head text-right"><p>K</p></th>
+<th class="head text-right"><p>Latency (us)</p></th>
+<th class="head text-right"><p>comp RMSE</p></th>
+<th class="head text-right"><p>T_err</p></th>
+<th class="head text-right"><p>ne_err</p></th>
+<th class="head text-center"><p>&lt;1 ms?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>structured</strong></p></td>
+<td class="text-right"><p><strong>1</strong></p></td>
+<td class="text-right"><p><strong>407.9</strong></p></td>
+<td class="text-right"><p><strong>0.0588</strong></p></td>
+<td class="text-right"><p>0.0497</p></td>
+<td class="text-right"><p>0.2268</p></td>
+<td class="text-center"><p><strong>PASS</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>autodiff</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>587.6</p></td>
+<td class="text-right"><p>0.0588</p></td>
+<td class="text-right"><p>0.0497</p></td>
+<td class="text-right"><p>0.2268</p></td>
+<td class="text-center"><p>PASS</p></td>
+</tr>
+<tr class="row-even"><td><p>structured</p></td>
+<td class="text-right"><p>2</p></td>
+<td class="text-right"><p>692.1</p></td>
+<td class="text-right"><p>0.0633</p></td>
+<td class="text-right"><p>0.0489</p></td>
+<td class="text-right"><p>0.2272</p></td>
+<td class="text-center"><p>PASS</p></td>
+</tr>
+<tr class="row-odd"><td><p>varpro</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>747.7</p></td>
+<td class="text-right"><p>0.2290</p></td>
+<td class="text-right"><p>0.0184</p></td>
+<td class="text-right"><p>0.2052</p></td>
+<td class="text-center"><p>PASS-time / FAIL-accuracy</p></td>
+</tr>
+<tr class="row-even"><td><p>structured</p></td>
+<td class="text-right"><p>3</p></td>
+<td class="text-right"><p>1097.3</p></td>
+<td class="text-right"><p>0.0651</p></td>
+<td class="text-right"><p>0.0482</p></td>
+<td class="text-right"><p>0.2282</p></td>
+<td class="text-center"><p>FAIL (97 us over)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>autodiff K=3 (v2 baseline)</strong></p></td>
+<td class="text-right"><p><strong>3</strong></p></td>
+<td class="text-right"><p><strong>1509.0</strong></p></td>
+<td class="text-right"><p><strong>0.0651</strong></p></td>
+<td class="text-right"><p>0.0482</p></td>
+<td class="text-right"><p>0.2282</p></td>
+<td class="text-center"><p><strong>FAIL (the baseline)</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>varpro</p></td>
+<td class="text-right"><p>3</p></td>
+<td class="text-right"><p>1711.7</p></td>
+<td class="text-right"><p>0.2301</p></td>
+<td class="text-right"><p>0.0083</p></td>
+<td class="text-right"><p>0.0705</p></td>
+<td class="text-center"><p>FAIL</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Four configs clear strict &lt;1 ms at full 4000 ch</strong> (from the benchmark’s own <code class="docutils literal notranslate"><span class="pre">sub1ms_full4000ch_configs</span></code>):
+structured K=1 (408 us), autodiff K=1 (588 us), structured K=2 (692 us), varpro K=1 (748 us, but accuracy
+fails). The benchmark records <code class="docutils literal notranslate"><span class="pre">structured_hits_sub1ms_full4000ch:</span> <span class="pre">true</span></code> and
+<code class="docutils literal notranslate"><span class="pre">best_sub1ms_full4000ch</span> <span class="pre">=</span> <span class="pre">structured</span> <span class="pre">K=1</span> <span class="pre">&#64;</span> <span class="pre">408</span> <span class="pre">us,</span> <span class="pre">RMSE</span> <span class="pre">0.0588</span></code>, <strong>speedup 3.7x vs the 1.54 ms baseline.</strong></p>
+</section>
+<section id="did-we-achieve-1-ms-at-full-4000-ch-yes">
+<h3>1.2 Did we achieve &lt;1 ms at full 4000 ch? — YES.<a class="headerlink" href="#did-we-achieve-1-ms-at-full-4000-ch-yes" title="Link to this heading"></a></h3>
+<p><strong>Answer to the standing v2 question: yes, definitively, and without the contingencies v2 listed.</strong></p>
+<ul class="simple">
+<li><p>The v2 target (“full config K=3 &#64; 4000 ch”) was the <em>wrong</em> target: K=3 buys no composition accuracy on
+this corpus and is the only structured config that misses (1097 us). <strong>The right full-resolution config
+is structured K=1 &#64; 408 us, which passes by a 2.4x margin and is more accurate than K=3.</strong></p></li>
+<li><p><strong>No ROI windowing required</strong> (full 4000 ch passes).</p></li>
+<li><p><strong>No CUDA-graph capture required</strong> (the v2 load-bearing-but-unproven assumption is now unnecessary for
+the shipping config — it moves to optional stretch-goal headroom).</p></li>
+<li><p>The autodiff K=3 &#64; 4000 ch path that anchored v2 at 1.54 ms is <strong>superseded as the baseline</strong>; we report
+speedups against it but no longer ship it.</p></li>
+</ul>
+</section>
+<section id="the-full-latency-vs-accuracy-sweep-from-varpro-sweep-csv-datavoyager-verified">
+<h3>1.3 The full latency-vs-accuracy sweep (from <code class="docutils literal notranslate"><span class="pre">varpro_sweep.csv</span></code>, DataVoyager-verified)<a class="headerlink" href="#the-full-latency-vs-accuracy-sweep-from-varpro-sweep-csv-datavoyager-verified" title="Link to this heading"></a></h3>
+<p>Pareto front (minimize latency AND comp_rmse) is <strong>entirely <code class="docutils literal notranslate"><span class="pre">structured,</span> <span class="pre">K=1</span></code></strong> (verified ground-truth
+section of <code class="docutils literal notranslate"><span class="pre">varpro_datavoyager.md</span></code>):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>method</p></th>
+<th class="head text-right"><p>K</p></th>
+<th class="head text-right"><p>ROI ch</p></th>
+<th class="head text-right"><p>latency_us</p></th>
+<th class="head text-right"><p>comp_rmse</p></th>
+<th class="head"><p>note</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>structured</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>500</p></td>
+<td class="text-right"><p>321.2</p></td>
+<td class="text-right"><p>0.05819</p></td>
+<td><p>fastest overall</p></td>
+</tr>
+<tr class="row-odd"><td><p>structured</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>1000</p></td>
+<td class="text-right"><p>353.5</p></td>
+<td class="text-right"><p>0.05811</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>structured</strong></p></td>
+<td class="text-right"><p><strong>1</strong></p></td>
+<td class="text-right"><p><strong>2000</strong></p></td>
+<td class="text-right"><p><strong>353.9</strong></p></td>
+<td class="text-right"><p><strong>0.05783</strong></p></td>
+<td><p><strong>global RMSE minimum</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>structured</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>4000</p></td>
+<td class="text-right"><p>407.9</p></td>
+<td class="text-right"><p>0.05882</p></td>
+<td><p>full-resolution sub-ms</p></td>
+</tr>
+</tbody>
+</table>
+<p>Reading of the sweep:</p>
+<ul class="simple">
+<li><p><strong>autodiff is Pareto-dominated by structured everywhere</strong> — identical RMSE at every (K, ROI), strictly
+higher latency (structured is the faster implementation of the same solve).</p></li>
+<li><p><strong>K&gt;1 is strictly dominated</strong> — raises both latency and comp_rmse; no accuracy benefit on this grid.</p></li>
+<li><p><strong>ROI 2000 -&gt; 4000 costs ~54 us for a tiny RMSE change (0.05783 -&gt; 0.05882)</strong>; 500 -&gt; 2000 ch is
+essentially free on accuracy and latency for structured K=1, so ROI 2000 is the sweet spot (full
+diagnostic-line coverage at the global-best RMSE).</p></li>
+<li><p>23 of 36 configs are &lt;1000 us; the binding constraint is accuracy/robustness, not latency.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="recommended-operating-point-decided-from-measurement">
+<h2>2. RECOMMENDED OPERATING POINT (decided from measurement)<a class="headerlink" href="#recommended-operating-point-decided-from-measurement" title="Link to this heading"></a></h2>
+<section id="ship-structured-jacobian-k-1-roi-2000-ch">
+<h3>2.1 Ship: structured Jacobian, K=1, ROI=2000 ch<a class="headerlink" href="#ship-structured-jacobian-k-1-roi-2000-ch" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Method</strong></p></td>
+<td><p><strong>Structured (analytic-block) Jacobian + damped GN</strong></p></td>
+<td><p>Pareto front; dominates autodiff</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>K (GN iterations)</strong></p></td>
+<td><p><strong>1</strong> (fixed), manifold warm-started</p></td>
+<td><p>K&gt;1 buys no accuracy on this corpus</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>ROI</strong></p></td>
+<td><p><strong>2000 channels</strong> (diagnostic-line window)</p></td>
+<td><p>global RMSE minimum, 354 us</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Latency</strong></p></td>
+<td><p><strong>353.9 us</strong> (median, single-shot, V100S)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">varpro_sweep.csv</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Composition RMSE</strong></p></td>
+<td><p><strong>0.05783</strong> (global minimum across all 36 configs)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">varpro_sweep.csv</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>T_err</strong></p></td>
+<td><p>0.0487</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>ne_err</strong></p></td>
+<td><p>0.2176</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Margin vs &lt;1 ms</strong></p></td>
+<td><p><strong>2.8x under budget</strong></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Speedup vs v2 baseline</strong></p></td>
+<td><p><strong>4.3x</strong> (1509 -&gt; 354 us)</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="full-resolution-variant-when-roi-selection-is-unavailable-unknown-element-set">
+<h3>2.2 Full-resolution variant (when ROI selection is unavailable / unknown element set)<a class="headerlink" href="#full-resolution-variant-when-roi-selection-is-unavailable-unknown-element-set" title="Link to this heading"></a></h3>
+<p><strong>Structured, K=1, ROI=4000 ch — 407.9 us, comp_rmse 0.0588.</strong> Use when the candidate element set is not
+yet known (no ID stage) so a diagnostic ROI cannot be chosen safely, or for an all-element super-window.
+Still 2.4x under budget; costs only ~54 us and a negligible RMSE delta vs the 2000-ch operating point.
+This is the configuration that <strong>answers “yes” to &lt;1 ms at full 4000 ch.</strong></p>
+</section>
+<section id="aggressive-latency-variant-latency-critical-accuracy-tolerant">
+<h3>2.3 Aggressive-latency variant (latency-critical, accuracy-tolerant)<a class="headerlink" href="#aggressive-latency-variant-latency-critical-accuracy-tolerant" title="Link to this heading"></a></h3>
+<p><strong>Structured, K=1, ROI=500 ch — 321.2 us, comp_rmse 0.0582.</strong> Marginally worse RMSE than ROI=2000;
+3.1x under budget. Only choose when a tight, known diagnostic window exists (risk: ROI drops diagnostic
+lines for unexpected elements -&gt; T/n_e bias; carry-over v2 risk 4.1).</p>
+</section>
+<section id="what-we-do-not-ship">
+<h3>2.4 What we do NOT ship<a class="headerlink" href="#what-we-do-not-ship" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>autodiff Jacobian</strong> — Pareto-dominated by structured (same accuracy, 1.4-1.4x slower). Keep it only as
+the <em>correctness oracle</em> the structured Jacobian is validated against (they must agree to ~1e-5).</p></li>
+<li><p><strong>K&gt;=2</strong> — no composition-accuracy gain on this corpus; pure latency cost. Keep K as a config knob with
+default 1; raise only if a future corpus shows under-convergence (gate on recovery error, not latency).</p></li>
+<li><p><strong>VarPro for composition</strong> — see Section 3.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="variable-projection-evaluated-characterized-and-scoped-not-the-composition-solver">
+<h2>3. VARIABLE PROJECTION — evaluated, characterized, and scoped (not the composition solver)<a class="headerlink" href="#variable-projection-evaluated-characterized-and-scoped-not-the-composition-solver" title="Link to this heading"></a></h2>
+<p>VarPro was the central hypothesis of this revision: separate the linear composition amplitudes from the
+nonlinear plasma params (T, n_e), project out the linear block, and Gauss-Newton only the 2-DOF nonlinear
+core. The measurement is decisive and <strong>two-sided</strong>:</p>
+<section id="where-varpro-wins-plasma-parameters">
+<h3>3.1 Where VarPro WINS (plasma parameters)<a class="headerlink" href="#where-varpro-wins-plasma-parameters" title="Link to this heading"></a></h3>
+<p>At high ROI it produces <strong>the best T/n_e errors in the entire sweep</strong>:</p>
+<ul class="simple">
+<li><p>K=3, ROI=4000: <strong>T_err 0.00829, ne_err 0.07047</strong> — vs structured/autodiff ~0.048 / ~0.227.</p></li>
+<li><p>T_err and ne_err improve monotonically with ROI (K=1: 0.0537-&gt;0.0184 as ROI 1000-&gt;4000; ne_err
+0.634-&gt;0.205). VarPro fits the nonlinear plasma core extremely well.</p></li>
+</ul>
+</section>
+<section id="where-varpro-breaks-composition-the-actual-objective">
+<h3>3.2 Where VarPro BREAKS (composition — the actual objective)<a class="headerlink" href="#where-varpro-breaks-composition-the-actual-objective" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>comp_rmse is stuck at ~0.23 at every K and ROI</strong> (best 0.22902 &#64; K=1/4000) — <strong>~4x worse than
+structured/autodiff’s 0.0578.</strong> VarPro fits T and n_e beautifully but <strong>mis-apportions composition</strong>:
+projecting out the linear amplitudes optimizes the <em>fit</em>, not the <em>closure-constrained composition</em>, so
+the recovered concentrations are wrong even when the plasma state is right.</p></li>
+<li><p><strong>Numerical fragility at small ROI:</strong> ROI=500 ch is <strong>NaN for comp_rmse at every K</strong> (3 missing rows).
+At K=1/ROI=500 the ionization-balance term <strong>diverges: ne_err = 523.5</strong> (vs ~0.2 elsewhere); K=2/3 at
+500 ch give NaN for T_err and ne_err too. The linear projection is ill-conditioned when the ROI doesn’t
+span enough independent line intensities.</p></li>
+<li><p><strong>It is also the slowest method</strong> (710-1712 us; K=1/4000 = 748 us is its fastest finite-accuracy point,
+still 2x the structured operating point).</p></li>
+</ul>
+</section>
+<section id="decision-varpro-is-not-the-composition-solver-optional-t-n-e-refinement-only">
+<h3>3.3 Decision: VarPro is NOT the composition solver; optional T/n_e refinement only<a class="headerlink" href="#decision-varpro-is-not-the-composition-solver-optional-t-n-e-refinement-only" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Do not ship VarPro on the composition hot path.</strong> ~4x worse comp_rmse fails the objective; small-ROI
+NaN fails robustness; it is also slower. This closes the VarPro-as-primary hypothesis with data.</p></li>
+<li><p><strong>Optional narrow role (flagged, off by default, benchmark-gated):</strong> because VarPro yields the best
+T/n_e, a <em>single</em> VarPro nonlinear step could serve as an <strong>offline / non-real-time T-n_e refinement</strong> to
+sharpen plasma diagnostics <em>after</em> the structured solver fixes composition — i.e. report structured’s
+composition with optionally VarPro-refined (T, n_e) for diagnostics. Only on ROI&gt;=1000 (never 500),
+only as a diagnostics add-on, never feeding the closure. <strong>Must be benchmark-gated</strong> before exposure;
+drop if it does not measurably improve T/n_e on the synthetic corpus end-to-end.</p></li>
+<li><p><strong>Data hygiene note:</strong> the DataVoyager narrative <em>hallucinated</em> a Pareto front (invented ROI=1500/2500
+rows and misattributed the 0.05783 minimum to varpro K=3/4000 — that point is actually 0.23005 &#64; 1712
+us). All conclusions above use the <strong>verified CSV-direct</strong> section, not the agent prose. Keep that
+correction in the record so the VarPro role is never re-litigated from the hallucinated summary.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="why-structured-wins-and-the-through-line-from-the-exojax-decision">
+<h2>4. WHY STRUCTURED WINS — and the through-line from the ExoJAX decision<a class="headerlink" href="#why-structured-wins-and-the-through-line-from-the-exojax-decision" title="Link to this heading"></a></h2>
+<p>The structured Jacobian is the <strong>same architectural bet</strong> that made the hand-rolled forward beat ExoJAX in
+v2, now applied to the Jacobian:</p>
+<ul class="simple">
+<li><p><strong>ExoJAX lost the hot path</strong> because OpaDirect materializes a (N_line x N_chan) = 1.2M-element
+Voigt-Hjerting numatrix, and forward-mode AD replicates it across 17 tangents (~9x blowup) -&gt; ~3.4 ms
+Jacobian, ~11.3 ms K=3.</p></li>
+<li><p><strong>Generic autodiff <code class="docutils literal notranslate"><span class="pre">jacfwd</span></code></strong> on our own fused forward is far better (520 us Jacobian, 1.54 ms K=3) but
+still pays for XLA tracing a <em>generic</em> forward-mode graph it cannot know is block-sparse.</p></li>
+<li><p><strong>The structured Jacobian</strong> hand-writes the analytic <code class="docutils literal notranslate"><span class="pre">dS/dtheta</span></code> blocks (Saha <code class="docutils literal notranslate"><span class="pre">d/dT,</span> <span class="pre">d/dn_e</span></code>; Boltzmann
+level-population derivatives; emissivity/composition-amplitude block; folded-Gaussian scatter), so XLA
+emits only the needed kernels. Result: <strong>identical numbers, 1.4x fewer launches/FLOPs per step</strong> -&gt;
+408 us K=1 / 1097 us K=3 &#64; 4000 ch. It is the launch-/compute-reduction principle of v2 Section 1
+(“fewer kernel launches”), executed in the Jacobian instead of (or in addition to) ROI/CUDA-graph.</p></li>
+</ul>
+<p><strong>Consistency check vs v2 numbers:</strong> v2’s autodiff <code class="docutils literal notranslate"><span class="pre">jacfwd</span></code> was 520 us and K=3 &#64; 4000 ch was 1543 us
+(blocking). This revision’s autodiff K=3 &#64; 4000 ch is 1509 us — same path, same machine, within run-to-run
+noise. The numbers are mutually consistent; structured is a real, reproducible improvement on top.</p>
+</section>
+<hr class="docutils" />
+<section id="next-build-step-concrete-gated">
+<h2>5. NEXT BUILD STEP (concrete, gated)<a class="headerlink" href="#next-build-step-concrete-gated" title="Link to this heading"></a></h2>
+<p>The v2 build sequence (Steps 0-7) stands; this revision <strong>re-points Step 2 from autodiff <code class="docutils literal notranslate"><span class="pre">jacfwd</span></code> to the
+structured Jacobian and changes the acceptance target from “K=3 &#64; 1000 ch &lt;1 ms” to the now-stronger
+“structured K=1 &#64; 4000 ch &lt;1 ms”</strong>, and demotes the CUDA-graph step from load-bearing to stretch.</p>
+<section id="the-next-build-step-do-this-first">
+<h3>5.1 THE NEXT BUILD STEP (do this first)<a class="headerlink" href="#the-next-build-step-do-this-first" title="Link to this heading"></a></h3>
+<p><strong>Implement and validate the structured (analytic-block) Jacobian as a drop-in replacement for <code class="docutils literal notranslate"><span class="pre">jacfwd</span></code>
+in the fused GN step</strong>, then wire it under the fixed-K=1 <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> GN loop. Concretely:</p>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/rt_kernel.py</span></code> (or extend the Step-1 float32 forward):</strong> add
+<code class="docutils literal notranslate"><span class="pre">structured_jacobian(theta,</span> <span class="pre">snapshot)</span> <span class="pre">-&gt;</span> <span class="pre">(4000</span> <span class="pre">x</span> <span class="pre">17)</span></code> that returns the analytic blocks:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dS/dT</span></code>, <code class="docutils literal notranslate"><span class="pre">dS/dn_e</span></code> via the Saha/Boltzmann/Stark analytic derivatives (T enters Boltzmann + U(T);
+n_e enters Saha ionization ratio + Stark width — both already differentiable closed forms),</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dS/dC_s</span></code> composition-amplitude block (linear in the per-species emissivity columns),
+all sharing the single folded-Gaussian scatter matmul (no Voigt-Hjerting numatrix).</p></li>
+</ul>
+</li>
+<li><p><strong>Correctness gate (MUST pass before anything else):</strong> assert <code class="docutils literal notranslate"><span class="pre">structured_jacobian</span></code> agrees with
+<code class="docutils literal notranslate"><span class="pre">jax.jacfwd(forward)</span></code> to &lt;=1e-5 (rtol) on golden spectra across the (T, n_e, C) grid. This is the
+non-negotiable oracle test — structured must reproduce autodiff numbers exactly (the sweep already
+shows identical RMSE, so this should pass; the test locks it).</p></li>
+<li><p><strong>Latency gate:</strong> reproduce <strong>structured K=1 &#64; 4000 ch = ~408 us</strong> and <strong>&#64; 2000 ch = ~354 us</strong>
+(compile-once, &gt;=120 per-call <code class="docutils literal notranslate"><span class="pre">block_until_ready</span></code>, median+min) in the strict single-shot harness in CI.</p></li>
+<li><p><strong>Wrap K=1 (config-default) GN in <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code></strong> mirroring <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/solve.py::scan_solve</span></code>, manual
+<code class="docutils literal notranslate"><span class="pre">softmax_closure</span></code>. Keep K a knob (default 1).</p></li>
+</ol>
+<p><em>Reuses:</em> <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/batch_forward.py::single_spectrum_forward</span></code> (float32 RT variant from Step 1),
+<code class="docutils literal notranslate"><span class="pre">pack_atomic_data</span></code> / <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/solve.scan_solve</span></code> pattern,
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/softmax_closure.py</span></code>.</p>
+<p><strong>Why this step first:</strong> it is the single change that converts the v2 “borderline/over-budget at full
+resolution” status into a <strong>measured 2.4-2.8x-margin pass at full and ROI-2000 resolution</strong>, and it is a
+self-contained, oracle-testable kernel swap that de-risks every downstream step (manifold warm-start,
+streaming SLA) by giving them a forward+Jacobian that is already inside budget at full 4000 ch.</p>
+</section>
+<section id="downstream-gates-re-pointed-from-v2">
+<h3>5.2 Downstream gates (re-pointed from v2)<a class="headerlink" href="#downstream-gates-re-pointed-from-v2" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Step 3 (manifold warm-start):</strong> confirm K stays =1 with warm start on the synthetic corpus (the sweep
+shows K=1 suffices; warm-start makes the single step land). Gate: warm-start lookup &lt;100 us; total
+&lt;1 ms (trivially met — operating point is 354 us).</p></li>
+<li><p><strong>Step 4 (CUDA-graph capture):</strong> <strong>DEMOTED to optional stretch/headroom.</strong> No longer load-bearing — the
+shipping config already passes at full 4000 ch without it. Use it only to push K=3 or batched-multi-shot
+throughput later. Removes the v2 Section 4.1 “load-bearing CUDA-graph” risk entirely.</p></li>
+<li><p><strong>Step 5 (accuracy gate):</strong> run structured K=1 &#64; ROI-2000 end-to-end on <code class="docutils literal notranslate"><span class="pre">output/synthetic_corpus</span></code> /
+golden spectra; confirm comp_rmse ~= 0.058 and T/n_e against ground truth. <strong>This is the gate that
+decides the Section 4.3 physics-only fork from v2 — and it now looks decisively favorable: a fully
+physics-only structured-GN pipeline meets &lt;1 ms with the best measured composition accuracy, so the
+constraint-revisit ADR stays closed.</strong></p></li>
+<li><p><strong>Step 6/7 (manifold-gen, streaming SLA):</strong> unchanged from v2; assert <code class="docutils literal notranslate"><span class="pre">LatencyStats</span></code> p99 &lt;1 ms (operating
+point gives ~2.8x headroom on p99).</p></li>
+<li><p><strong>Optional VarPro T/n_e refinement (Section 3.3):</strong> only if a flagged diagnostics-quality bead is
+opened; benchmark-gate; never on the composition path.</p></li>
+</ul>
+</section>
+<section id="carried-forward-decisions-unchanged">
+<h3>5.3 Carried-forward decisions (unchanged)<a class="headerlink" href="#carried-forward-decisions-unchanged" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>ExoJAX2 = OFFLINE</strong> for atomic-line ingestion (VALD3/Kurucz), partition functions (B&amp;C 2016 / Irwin),
+Voigt/H-/Rayleigh reference accuracy, PreMODIT manifold-gen pattern; physics-only, vendored offline
+DB-build tool, never a hot-path/shipped-runtime dependency (v2 Section 2-3).</p></li>
+<li><p><strong>Physics-only constraint holds</strong> with no tension: the entire shipping path (folded-Gaussian forward +
+structured analytic Jacobian + damped GN + manual softmax closure + manifold argmin warm-start) is
+pure physics + JAX, zero banned imports; no learned surrogate is needed because the bounded physics
+config meets both latency and accuracy (v2 Section 4.3).</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-numbers-one-table">
+<h2>6. KEY NUMBERS (one table)<a class="headerlink" href="#key-numbers-one-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Quantity</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>vs v2 baseline (autodiff K=3 &#64; 4000 ch, 1509 us / RMSE 0.0651)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Recommended operating point</strong></p></td>
+<td><p>structured, K=1, ROI=2000 ch</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>Operating-point latency</p></td>
+<td><p><strong>353.9 us</strong></p></td>
+<td><p><strong>4.3x faster</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Operating-point comp RMSE</p></td>
+<td><p><strong>0.05783</strong> (global min)</p></td>
+<td><p>11% lower error</p></td>
+</tr>
+<tr class="row-odd"><td><p>Full-4000-ch sub-ms config</p></td>
+<td><p>structured, K=1, 4000 ch</p></td>
+<td><p><strong>407.9 us, RMSE 0.0588, 3.7x faster</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>&lt;1 ms at full 4000 ch achieved?</p></td>
+<td><p><strong>YES</strong> (4 configs; best structured K=1)</p></td>
+<td><p>was NO in v2</p></td>
+</tr>
+<tr class="row-odd"><td><p>Best plasma params (T/n_e)</p></td>
+<td><p>varpro, K=3, 4000 ch: T_err 0.0083, ne_err 0.070</p></td>
+<td><p>(composition RMSE 0.23 — rejected)</p></td>
+</tr>
+<tr class="row-even"><td><p>VarPro best comp RMSE</p></td>
+<td><p>0.22902 (~4x worse; NaN at ROI=500)</p></td>
+<td><p><strong>rejected for composition</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>CUDA-graph capture needed for ship?</p></td>
+<td><p><strong>NO</strong> (demoted to stretch)</p></td>
+<td><p>was load-bearing risk in v2</p></td>
+</tr>
+<tr class="row-even"><td><p>ROI windowing needed for ship?</p></td>
+<td><p><strong>NO</strong> (full 4000 ch passes)</p></td>
+<td><p>was the v2 fallback</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="one-line-v3-verdict">
+<h2>One-line v3 verdict<a class="headerlink" href="#one-line-v3-verdict" title="Link to this heading"></a></h2>
+<p><strong>&lt;1 ms at full 4000 ch is ACHIEVED:</strong> ship the <strong>structured (analytic-block) Jacobian, K=1, ROI=2000 ch
+(353.9 us, comp RMSE 0.05783 — the global sweep minimum; full-4000-ch variant 407.9 us, 3.7x faster than
+the 1.54 ms autodiff baseline)</strong>, with K&gt;1 and CUDA-graph/ROI-windowing no longer needed; <strong>VarPro is
+rejected for composition</strong> (best RMSE ~0.23, ~4x worse, NaN at 500 ch) but optionally kept as a flagged
+T/n_e diagnostics refinement; <strong>next build step = implement + oracle-test (&lt;=1e-5 vs jacfwd) the structured
+Jacobian and wrap it in the fixed-K=1 <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> GN loop</strong>, then re-run the strict single-shot latency
+gate in CI.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

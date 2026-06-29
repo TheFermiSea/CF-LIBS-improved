@@ -1,0 +1,230 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Formalization-derived selection levers — head-to-head comparison (complete) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Formalization-derived selection levers — head-to-head comparison (complete)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/M-spec-lever-comparison.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="formalization-derived-selection-levers-head-to-head-comparison-complete">
+<h1>Formalization-derived selection levers — head-to-head comparison (complete)<a class="headerlink" href="#formalization-derived-selection-levers-head-to-head-comparison-complete" title="Link to this heading"></a></h1>
+<p>All formalization-optimization levers, built to completion and benchmarked on the SAME paired
+same-element-set conditioned-RMSE harness (<code class="docutils literal notranslate"><span class="pre">supercam_labcal</span></code>, n=20–30, seed 7, reference pipeline).
+This is the valid apples-to-apples comparison: each lever wired (gated, default-off) and measured.</p>
+<section id="the-levers-and-their-measured-effect">
+<h2>The levers and their measured effect<a class="headerlink" href="#the-levers-and-their-measured-effect" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Lever</p></th>
+<th class="head"><p>Theorem basis</p></th>
+<th class="head"><p>Default regime</p></th>
+<th class="head"><p>When it bites</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>target_sigma_t</strong> (derived SNR/spread/lines gates)</p></td>
+<td><p>ErrorBudget (olsSlope_stable_l2, …)</p></td>
+<td><p><strong>no-op</strong> (SNR~10⁶ ⇒ min_snr gate inert)</p></td>
+<td><p>low-SNR regimes where the gate binds</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>reliability_ranked_selection</strong> (max-energy-spread subset)</p></td>
+<td><p>twoLineBeta_stable_sharp (2/|ΔE|)</p></td>
+<td><p><strong>no-op</strong> at default cap (never binds; ≤16&lt;20 lines/el)</p></td>
+<td><p><strong>when the cap binds — and then it WINS</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>refuse_to_report</strong> (identifiability guards)</p></td>
+<td><p>Identifiability + selfAbsorption_breaks_identifiability</p></td>
+<td><p><strong>no-op</strong> (0/30 flagged; healthy spectra)</p></td>
+<td><p>degenerate/line-starved inputs</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="the-one-positive-result-reliability-ranking-wins-when-selection-binds">
+<h2>The one positive result: reliability ranking wins when selection binds<a class="headerlink" href="#the-one-positive-result-reliability-ranking-wins-when-selection-binds" title="Link to this heading"></a></h2>
+<p>Forcing a binding cap (<code class="docutils literal notranslate"><span class="pre">max_lines_per_element=6</span></code>) to test the selection <em>criterion</em> itself:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>comparison (conditioned RMSE, wt%)</p></th>
+<th class="head"><p>med A</p></th>
+<th class="head"><p>med B</p></th>
+<th class="head"><p>Δ(B−A)</p></th>
+<th class="head"><p>B wins</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>score_cap6 (A) vs <strong>reliability_cap6</strong> (B)</p></td>
+<td><p>4.923</p></td>
+<td><p><strong>4.401</strong></p></td>
+<td><p><strong>−0.522</strong></p></td>
+<td><p><strong>17/20</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>default20 (A) vs score_cap6 (B)</p></td>
+<td><p>3.762</p></td>
+<td><p>4.649</p></td>
+<td><p>+0.887</p></td>
+<td><p>0/20</p></td>
+</tr>
+<tr class="row-even"><td><p>default20 (A) vs reliability_cap6 (B)</p></td>
+<td><p>3.762</p></td>
+<td><p>4.401</p></td>
+<td><p>+0.639</p></td>
+<td><p>5/20</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>When you must choose a subset, picking the widest upper-level energy spread (the proven
+<code class="docutils literal notranslate"><span class="pre">2/|ΔE|</span></code> conditioning) beats picking the highest-SNR-score lines by 0.52 wt% (17/20 spectra).</strong>
+The formalization’s conditioning criterion is genuinely the better selection rule — validated, not
+assumed. (<code class="docutils literal notranslate"><span class="pre">reliability_cap6</span></code> closes 0.52 of the 0.89 wt% gap that capping opens.)</p>
+</section>
+<section id="the-honest-meta-finding">
+<h2>The honest meta-finding<a class="headerlink" href="#the-honest-meta-finding" title="Link to this heading"></a></h2>
+<p><strong>On high-SNR, multi-line lab data, the reference pipeline is not selection-constrained</strong>, so every
+selection/refuse lever is a no-op in the <em>default</em> regime:</p>
+<ul class="simple">
+<li><p>SNR ~10⁶ ⇒ the min_snr gate never rejects a line (target_sigma_t no-op, measured separately).</p></li>
+<li><p>≤16 lines/element &lt; the 20 cap ⇒ the cap never binds ⇒ every valid line is used (ranking no-op).</p></li>
+<li><p>every spectrum has a healthy ≥2-distinct-E T anchor ⇒ 0% flagged (refuse-to-report no-op).</p></li>
+</ul>
+<p>And <strong>capping at all costs accuracy here</strong> (more high-SNR lines = better statistics: 3.76 uncapped vs
+4.40–4.65 at cap 6). So on this data the right policy is: <strong>don’t cap, don’t gate</strong> — use every line.</p>
+</section>
+<section id="where-these-levers-are-the-right-tool-their-real-domain">
+<h2>Where these levers ARE the right tool (their real domain)<a class="headerlink" href="#where-these-levers-are-the-right-tool-their-real-domain" title="Link to this heading"></a></h2>
+<p>The reliability criterion provably wins <em>when selection is forced</em> — which is exactly the
+line-starved / capped / weak-signal regimes the default lab data never enters:</p>
+<ul class="simple">
+<li><p><strong>portable / handheld instruments</strong> (few resolvable lines per element → the cap or line count binds),</p></li>
+<li><p><strong>real-time / speed-limited</strong> inference (a deliberate small <code class="docutils literal notranslate"><span class="pre">max_lines</span></code> cap for latency),</p></li>
+<li><p><strong>low-SNR spectra</strong> (the min_snr gate binds; target_sigma_t adapts it principledly),</p></li>
+<li><p><strong>degenerate inputs</strong> (single-line species, single thick line + unknown τ → refuse_to_report flags
+what no estimator can recover).</p></li>
+</ul>
+<p>So the formalization levers are <strong>conditioning-aware tools for constrained regimes</strong>, conformance-pinned
+to proven theorems and default-off, not accuracy wins on healthy lab data. The accuracy bottleneck on
+healthy data remains elsewhere (atomic-data accuracy, wavelength calibration, the solver) — consistent
+with every prior M5 finding.</p>
+</section>
+<section id="disposition">
+<h2>Disposition<a class="headerlink" href="#disposition" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>All levers stay <strong>default-off</strong> (no default-regime win → no flip), available as opt-ins for the
+constrained regimes above. The reliability criterion’s cap-bound win is the one measured positive.</p></li>
+<li><p>Scripts: <code class="docutils literal notranslate"><span class="pre">scripts/benchmark_lever_comparison.py</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/analyze_refuse_to_report.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">scripts/benchmark_target_sigma.py</span></code>. Modules conformance-pinned via <code class="docutils literal notranslate"><span class="pre">tests/oracle/</span></code> + the unit tests.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

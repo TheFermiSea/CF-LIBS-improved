@@ -1,0 +1,421 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS-improved codebase audit — 2026-05-20 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS-improved codebase audit — 2026-05-20</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/codebase-audit-2026-05-20.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-improved-codebase-audit-2026-05-20">
+<h1>CF-LIBS-improved codebase audit — 2026-05-20<a class="headerlink" href="#cf-libs-improved-codebase-audit-2026-05-20" title="Link to this heading"></a></h1>
+<p>Companion to <a class="reference internal" href="codebase-audit-2026-05-19.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">codebase-audit-2026-05-19.md</span></code></span></a>.
+This pass covers the four dimensions the prior audit deliberately skipped:
+test coverage, type strictness, security/dependency hygiene, and
+deprecation/dead-code purge. Same four-parallel-agent format
+(feature-dev:code-explorer, code-reviewer, general-purpose, Explore).</p>
+<hr class="docutils" />
+<section id="top-10-actions">
+<h2>Top 10 actions<a class="headerlink" href="#top-10-actions" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Action</p></th>
+<th class="head"><p>Severity</p></th>
+<th class="head"><p>Effort</p></th>
+<th class="head"><p>Bead</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Remove 7 already-passing mypy <code class="docutils literal notranslate"><span class="pre">disable_error_code</span></code> entries (<code class="docutils literal notranslate"><span class="pre">assignment</span></code>, <code class="docutils literal notranslate"><span class="pre">arg-type</span></code>, <code class="docutils literal notranslate"><span class="pre">attr-defined</span></code>, <code class="docutils literal notranslate"><span class="pre">return-value</span></code>, <code class="docutils literal notranslate"><span class="pre">dict-item</span></code>, <code class="docutils literal notranslate"><span class="pre">operator</span></code>, <code class="docutils literal notranslate"><span class="pre">call-arg</span></code>) — pure config flip, zero source changes</p></td>
+<td><p>high</p></td>
+<td><p>XS</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">type-1</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-cclj</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Delete <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code> + its parity tests (deprecated per ADR-0001, ~488 LOC)</p></td>
+<td><p>high</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dead-1</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-bbng</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Add test coverage for <code class="docutils literal notranslate"><span class="pre">cflibs/hardware/</span></code> (entire package untested)</p></td>
+<td><p>high</p></td>
+<td><p>M</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test-1</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-sx1e</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Add direct tests for <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/{checkpoint,composition_eval}.py</span></code> (PR #189 module split, post-rescue logic)</p></td>
+<td><p>high</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test-2</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-2pxb</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Reactivate <code class="docutils literal notranslate"><span class="pre">tests/radiation/test_forward_model_parity.py</span></code> (skipped on a now-completed migration)</p></td>
+<td><p>high</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test-3</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-bmgq</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">__all__</span></code> to 15 high-signal public-API modules (hardware/, runtime/, profiles, metrics, …)</p></td>
+<td><p>medium</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">type-2</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-wkw1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Add return-type hints to ~50 public functions in top-10 files (unlocks <code class="docutils literal notranslate"><span class="pre">disallow_untyped_defs=true</span></code> later)</p></td>
+<td><p>medium</p></td>
+<td><p>M</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">type-3</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-ejsb</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Pin third-party GitHub Actions by SHA, not tag (peaceiris, benchmark-action)</p></td>
+<td><p>medium</p></td>
+<td><p>XS</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sec-1</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-y6b5</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">timeout=</span></code> to <code class="docutils literal notranslate"><span class="pre">scripts/beadhub-bootstrap.sh:64</span></code> <code class="docutils literal notranslate"><span class="pre">urlopen()</span></code> call (only one in the repo missing it)</p></td>
+<td><p>low</p></td>
+<td><p>XS</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sec-2</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-m8ar</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Replace <code class="docutils literal notranslate"><span class="pre">time.sleep</span></code>-based race tests in <code class="docutils literal notranslate"><span class="pre">tests/test_streaming.py</span></code> with <code class="docutils literal notranslate"><span class="pre">threading.Event</span></code> / <code class="docutils literal notranslate"><span class="pre">Queue</span></code> sync</p></td>
+<td><p>medium</p></td>
+<td><p>M</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test-4</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-b0y9</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Plus: <code class="docutils literal notranslate"><span class="pre">test-5</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-289x</span></code> (numpy-path Stark T-factor test) and
+<code class="docutils literal notranslate"><span class="pre">test-X-followups</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-8vav</span></code> (7 lower-priority untested
+modules + stale markers).</p>
+<p><strong>Combined LOC delta if items 1, 2, 6 land:</strong> roughly <strong>−500 source LOC</strong> (488 from solver-jax removal, plus the 7-line config change, plus 30 LOC of <code class="docutils literal notranslate"><span class="pre">__all__</span></code> additions which technically grow LOC but solidify the public surface).</p>
+<p><strong>CI risk surface if items 8 &amp; 9 land:</strong> the only two security-defensive items where the cost is one line each and the upside is real (supply-chain action-tag pinning, hung-bootstrap protection).</p>
+</section>
+<hr class="docutils" />
+<section id="test-coverage-tests">
+<h2>1. Test coverage (<code class="docutils literal notranslate"><span class="pre">tests/</span></code>)<a class="headerlink" href="#test-coverage-tests" title="Link to this heading"></a></h2>
+<section id="test-1-cflibs-hardware-entire-package-untested-high-m">
+<h3>test-1 — <code class="docutils literal notranslate"><span class="pre">cflibs/hardware/</span></code> entire package untested <strong>(HIGH / M)</strong><a class="headerlink" href="#test-1-cflibs-hardware-entire-package-untested-high-m" title="Link to this heading"></a></h3>
+<p>8 files: <code class="docutils literal notranslate"><span class="pre">abc.py</span></code>, <code class="docutils literal notranslate"><span class="pre">manager.py</span></code>, <code class="docutils literal notranslate"><span class="pre">factory.py</span></code>, <code class="docutils literal notranslate"><span class="pre">laser.py</span></code>, <code class="docutils literal notranslate"><span class="pre">spectrograph.py</span></code>, <code class="docutils literal notranslate"><span class="pre">stages.py</span></code>, <code class="docutils literal notranslate"><span class="pre">flow.py</span></code>. Public symbols: <code class="docutils literal notranslate"><span class="pre">HardwareManager</span></code>, <code class="docutils literal notranslate"><span class="pre">HardwareFactory</span></code>, <code class="docutils literal notranslate"><span class="pre">HardwareComponent</span></code> ABC, 4 protocol interfaces, 4 concrete <code class="docutils literal notranslate"><span class="pre">*Hardware</span></code> classes, <code class="docutils literal notranslate"><span class="pre">HardwareStatus</span></code> enum. The only <code class="docutils literal notranslate"><span class="pre">test_distributed_mcmc.py</span></code> mention is a comment about GPU hardware, not the package. Need unit tests with mock drivers.</p>
+</section>
+<section id="test-2-cflibs-benchmark-checkpoint-composition-eval-py-direct-coverage-missing-high-s">
+<h3>test-2 — <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/{checkpoint,composition_eval}.py</span></code> direct coverage missing <strong>(HIGH / S)</strong><a class="headerlink" href="#test-2-cflibs-benchmark-checkpoint-composition-eval-py-direct-coverage-missing-high-s" title="Link to this heading"></a></h3>
+<p>Both were extracted from <code class="docutils literal notranslate"><span class="pre">unified.py</span></code> in PR #189; both contain logic added in PR #186 (atomic write, run_id-in-filename, evaluate_composition_workflow). <code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_results_parquet.py</span></code> covers them only indirectly. Need: <code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_checkpoint.py</span></code> (atomic write, SIGKILL tolerance, seq increment) and <code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_composition_eval.py</span></code> (Aitchison/tier/posterior-diagnostics population).</p>
+</section>
+<section id="test-3-stale-pytest-skip-in-tests-radiation-test-forward-model-parity-py-174-high-s">
+<h3>test-3 — Stale <code class="docutils literal notranslate"><span class="pre">pytest.skip</span></code> in <code class="docutils literal notranslate"><span class="pre">tests/radiation/test_forward_model_parity.py:174</span></code> <strong>(HIGH / S)</strong><a class="headerlink" href="#test-3-stale-pytest-skip-in-tests-radiation-test-forward-model-parity-py-174-high-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">pytest.skip(&quot;Bayesian-vs-kernel</span> <span class="pre">parity</span> <span class="pre">is</span> <span class="pre">T1-6</span> <span class="pre">scope;</span> <span class="pre">bridge</span> <span class="pre">helper</span> <span class="pre">landed</span> <span class="pre">in</span> <span class="pre">T1-2.&quot;)</span></code> skips permanently. T1-6 is <strong>complete</strong> (the migration test in <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_bayesian_forward_model_kernel_migration.py</span></code> is the guard). Reactivate the body.</p>
+</section>
+<section id="test-4-tests-test-streaming-py-race-prone-sleep-patterns-med-m">
+<h3>test-4 — <code class="docutils literal notranslate"><span class="pre">tests/test_streaming.py</span></code> race-prone sleep patterns <strong>(MED / M)</strong><a class="headerlink" href="#test-4-tests-test-streaming-py-race-prone-sleep-patterns-med-m" title="Link to this heading"></a></h3>
+<p>13 <code class="docutils literal notranslate"><span class="pre">time.sleep</span></code> calls including a 1-second sleep at line 942 with downstream assertions like <code class="docutils literal notranslate"><span class="pre">len(results)</span> <span class="pre">&gt;=</span> <span class="pre">5</span></code>. Will be flaky on a loaded CI machine. Replace with <code class="docutils literal notranslate"><span class="pre">threading.Event</span></code> / <code class="docutils literal notranslate"><span class="pre">Queue</span></code> sync.</p>
+</section>
+<section id="test-5-stark-t-factor-regression-guard-is-jax-only-high-s">
+<h3>test-5 — Stark T-factor regression guard is JAX-only <strong>(HIGH / S)</strong><a class="headerlink" href="#test-5-stark-t-factor-regression-guard-is-jax-only-high-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_stark_t_factor_toggle.py</span></code> pins the <code class="docutils literal notranslate"><span class="pre">(T/T_ref)^(-alpha)</span></code> formula but only in the JAX path. The numpy <code class="docutils literal notranslate"><span class="pre">stark_hwhm</span></code> path used by the non-JAX solver gets no explicit T-dependence test. Add a numpy-only test in <code class="docutils literal notranslate"><span class="pre">tests/test_stark.py</span></code>.</p>
+</section>
+<section id="additional-findings-filed-as-one-p3-follow-up-bead-test-x">
+<h3>Additional findings (filed as one P3 follow-up bead <code class="docutils literal notranslate"><span class="pre">test-X</span></code>)<a class="headerlink" href="#additional-findings-filed-as-one-p3-follow-up-bead-test-x" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/spectral_refiner.py</span></code> tested only via the flat shim path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/bayesian_sparse_id.py</span></code> zero tests</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/core/cache.py</span></code> LRUCache untested</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/wavelength_calibration.py</span></code> zero tests</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/candidate_prefilter.py</span></code> untested despite “mandatory” CLAUDE.md note</p></li>
+<li><p>Stale xfail in <code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_jax_workflows.py:228</span></code> (Bayesian MCMC timeout, references closed bead <code class="docutils literal notranslate"><span class="pre">359q</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/test_pca.py:152</span></code> tolerance <code class="docutils literal notranslate"><span class="pre">rtol=0.15</span></code> too loose</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="type-strictness-pyproject-toml-tool-mypy">
+<h2>2. Type strictness (<code class="docutils literal notranslate"><span class="pre">pyproject.toml</span> <span class="pre">[tool.mypy]</span></code>)<a class="headerlink" href="#type-strictness-pyproject-toml-tool-mypy" title="Link to this heading"></a></h2>
+<section id="type-1-all-7-disabled-error-codes-on-cflibs-already-pass-high-xs">
+<h3>type-1 — All 7 disabled error codes on <code class="docutils literal notranslate"><span class="pre">cflibs.*</span></code> already pass <strong>(HIGH / XS)</strong><a class="headerlink" href="#type-1-all-7-disabled-error-codes-on-cflibs-already-pass-high-xs" title="Link to this heading"></a></h3>
+<p>Current override:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[[tool.mypy.overrides]]</span>
+<span class="n">module</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cflibs.*&quot;</span>
+<span class="n">disable_error_code</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;assignment&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;arg-type&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;attr-defined&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;return-value&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dict-item&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;operator&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;call-arg&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p><strong>Correction (2026-05-20 implementation pass):</strong> the type-strictness agent
+claimed this was zero-cost. Direct verification — removing the override
+and running <code class="docutils literal notranslate"><span class="pre">mypy</span> <span class="pre">cflibs/</span> <span class="pre">--no-incremental</span></code> — surfaces <strong>187 errors
+across 45 files</strong>. Top offenders: <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/unified.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/forward_models/</span></code>.
+The audit’s “zero-cost flip” framing was wrong; the override stays. The
+right shape of work is per-category: re-enable one code at a time, fix
+the resulting errors, drop that entry. <code class="docutils literal notranslate"><span class="pre">attr-defined</span></code> / <code class="docutils literal notranslate"><span class="pre">call-arg</span></code>
+likely the cheapest first; <code class="docutils literal notranslate"><span class="pre">arg-type</span></code> / <code class="docutils literal notranslate"><span class="pre">dict-item</span></code> are the bulk of the
+real work. Bead <code class="docutils literal notranslate"><span class="pre">cclj</span></code> updated accordingly.</p>
+</section>
+<section id="type-2-add-all-to-15-modules-with-3-public-symbols-med-s">
+<h3>type-2 — Add <code class="docutils literal notranslate"><span class="pre">__all__</span></code> to 15 modules with 3+ public symbols <strong>(MED / S)</strong><a class="headerlink" href="#type-2-add-all-to-15-modules-with-3-public-symbols-med-s" title="Link to this heading"></a></h3>
+<p>Top offenders by public-symbol count: <code class="docutils literal notranslate"><span class="pre">cflibs/hardware/abc.py</span></code> (42), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/streaming.py</span></code> (41), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/temporal.py</span></code> (33), <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> (29), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/outliers.py</span></code> (26), <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/metrics.py</span></code> (25). Concrete cleanup that signals stable API.</p>
+</section>
+<section id="type-3-add-return-type-hints-to-50-public-functions-med-m">
+<h3>type-3 — Add return-type hints to ~50 public functions <strong>(MED / M)</strong><a class="headerlink" href="#type-3-add-return-type-hints-to-50-public-functions-med-m" title="Link to this heading"></a></h3>
+<p>Top 10 files by missing-return-annotation count: <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> (11), <code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py</span></code> (10), <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/partition.py</span></code> (5), <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/{generator,loader}.py</span></code> (4 each), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/pca.py</span></code> (4), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/forward.py</span></code> (3). All single-line additions; unlocks <code class="docutils literal notranslate"><span class="pre">disallow_untyped_defs</span> <span class="pre">=</span> <span class="pre">true</span></code>.</p>
+</section>
+<section id="type-4-dict-str-any-typeddict-candidates-med-m">
+<h3>type-4 — <code class="docutils literal notranslate"><span class="pre">Dict[str,</span> <span class="pre">Any]</span></code> → <code class="docutils literal notranslate"><span class="pre">TypedDict</span></code> candidates <strong>(MED / M)</strong><a class="headerlink" href="#type-4-dict-str-any-typeddict-candidates-med-m" title="Link to this heading"></a></h3>
+<p>3 highest-impact files: <code class="docutils literal notranslate"><span class="pre">cflibs/core/jax_runtime.py</span></code> (27 <code class="docutils literal notranslate"><span class="pre">Any</span></code>), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/atomic.py</span></code> (21 <code class="docutils literal notranslate"><span class="pre">Any</span></code>), <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/forward_models/__init__.py</span></code> (19 <code class="docutils literal notranslate"><span class="pre">Any</span></code>). Define 3–5 Protocols/TypedDicts per file; rest follows.</p>
+</section>
+<section id="type-5-stub-packages-missing-from-dev-extra-low-xs">
+<h3>type-5 — Stub packages missing from <code class="docutils literal notranslate"><span class="pre">dev</span></code> extra <strong>(LOW / XS)</strong><a class="headerlink" href="#type-5-stub-packages-missing-from-dev-extra-low-xs" title="Link to this heading"></a></h3>
+<p>Only <code class="docutils literal notranslate"><span class="pre">types-PyYAML&gt;=6.0.0</span></code> declared. Direct codebase imports of <code class="docutils literal notranslate"><span class="pre">numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">scipy</span></code>, <code class="docutils literal notranslate"><span class="pre">pandas</span></code>, <code class="docutils literal notranslate"><span class="pre">matplotlib</span></code> would benefit from <code class="docutils literal notranslate"><span class="pre">types-numpy</span></code>, <code class="docutils literal notranslate"><span class="pre">types-scipy</span></code>, etc. — 4 one-line additions to <code class="docutils literal notranslate"><span class="pre">[project.optional-dependencies]</span> <span class="pre">dev</span></code>.</p>
+</section>
+<section id="ratchet-plan-next-2-prs">
+<h3>Ratchet plan (next 2 PRs)<a class="headerlink" href="#ratchet-plan-next-2-prs" title="Link to this heading"></a></h3>
+<p>PR A (2–3h, low risk): items 1, 5; add return types to 50 functions; add <code class="docutils literal notranslate"><span class="pre">__all__</span></code> to 15 modules.
+PR B (3–5h, medium risk): replace <code class="docutils literal notranslate"><span class="pre">Any</span></code> in <code class="docutils literal notranslate"><span class="pre">forward_models/</span></code>, <code class="docutils literal notranslate"><span class="pre">jax_runtime</span></code>, <code class="docutils literal notranslate"><span class="pre">bayesian/atomic</span></code> with Protocols/TypedDicts. Enable <code class="docutils literal notranslate"><span class="pre">disallow_untyped_defs</span> <span class="pre">=</span> <span class="pre">true</span></code> at the end.</p>
+<p>Defer: <code class="docutils literal notranslate"><span class="pre">jaxtyping</span></code> shape annotations (large surface, low immediate ROI).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="security-dependency-hygiene">
+<h2>3. Security &amp; dependency hygiene<a class="headerlink" href="#security-dependency-hygiene" title="Link to this heading"></a></h2>
+<section id="sec-1-third-party-github-actions-pinned-by-tag-not-sha-med-xs">
+<h3>sec-1 — Third-party GitHub Actions pinned by tag, not SHA <strong>(MED / XS)</strong><a class="headerlink" href="#sec-1-third-party-github-actions-pinned-by-tag-not-sha-med-xs" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">.github/workflows/docs.yml:36</span></code> → <code class="docutils literal notranslate"><span class="pre">peaceiris/actions-gh-pages&#64;v3</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.github/workflows/performance.yml:38</span></code> → <code class="docutils literal notranslate"><span class="pre">benchmark-action/github-action-benchmark&#64;v1</span></code> (with <code class="docutils literal notranslate"><span class="pre">auto-push:</span> <span class="pre">true</span></code>, explicit write permission)</p></li>
+</ul>
+<p>Both can be tag-hijacked. Pin to full commit SHAs.</p>
+</section>
+<section id="sec-2-urlopen-without-timeout-in-scripts-beadhub-bootstrap-sh-64-low-xs">
+<h3>sec-2 — <code class="docutils literal notranslate"><span class="pre">urlopen()</span></code> without <code class="docutils literal notranslate"><span class="pre">timeout=</span></code> in <code class="docutils literal notranslate"><span class="pre">scripts/beadhub-bootstrap.sh:64</span></code> <strong>(LOW / XS)</strong><a class="headerlink" href="#sec-2-urlopen-without-timeout-in-scripts-beadhub-bootstrap-sh-64-low-xs" title="Link to this heading"></a></h3>
+<p>The only <code class="docutils literal notranslate"><span class="pre">urlopen</span></code> in the entire repo lacking <code class="docutils literal notranslate"><span class="pre">timeout=</span></code>. Every other instance in <code class="docutils literal notranslate"><span class="pre">cflibs/pds/cache.py:117</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/fetch_nist_reference_spectra.py:75</span></code>, etc., is properly bounded. One-line fix.</p>
+</section>
+<section id="sec-3-numpyro-jax-extras-have-no-upper-bound-low-s-defensive">
+<h3>sec-3 — NumPyro / JAX extras have no upper bound <strong>(LOW / S, defensive)</strong><a class="headerlink" href="#sec-3-numpyro-jax-extras-have-no-upper-bound-low-s-defensive" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code> <code class="docutils literal notranslate"><span class="pre">bayesian</span></code> extra: <code class="docutils literal notranslate"><span class="pre">numpyro&gt;=0.14.0</span></code>, <code class="docutils literal notranslate"><span class="pre">arviz&gt;=0.17.0</span></code>; <code class="docutils literal notranslate"><span class="pre">jax-cpu</span></code> extra: <code class="docutils literal notranslate"><span class="pre">jax[cpu]&gt;=0.4.30</span></code>. A future major JAX/NumPyro release can silently break solver determinism. Run <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">pip-audit</span> <span class="pre">-r</span> <span class="pre">&lt;(uv</span> <span class="pre">pip</span> <span class="pre">compile</span> <span class="pre">pyproject.toml</span> <span class="pre">--all-extras)</span></code> in CI, and pin reasonable upper bounds based on the test matrix.</p>
+</section>
+<section id="sec-4-cflibs-bench-checkpoint-path-no-canonicalization-low-xs-document-only">
+<h3>sec-4 — <code class="docutils literal notranslate"><span class="pre">CFLIBS_BENCH_CHECKPOINT_PATH</span></code> no canonicalization <strong>(LOW / XS, document-only)</strong><a class="headerlink" href="#sec-4-cflibs-bench-checkpoint-path-no-canonicalization-low-xs-document-only" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/composition_eval.py:369-384</span></code> writes <code class="docutils literal notranslate"><span class="pre">&lt;env-supplied-path&gt;.parts/</span></code> with <code class="docutils literal notranslate"><span class="pre">mkdir(parents=True,</span> <span class="pre">exist_ok=True)</span></code>. Trusted-operator input — not a runtime hazard, but worth documenting that the path is <strong>not</strong> sanitized against <code class="docutils literal notranslate"><span class="pre">..</span></code> traversal.</p>
+</section>
+<section id="known-non-issues-verified-clean">
+<h3>Known non-issues (verified clean)<a class="headerlink" href="#known-non-issues-verified-clean" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">subprocess.*</span></code> calls: all list-form, no <code class="docutils literal notranslate"><span class="pre">shell=True</span></code> anywhere in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> or <code class="docutils literal notranslate"><span class="pre">scripts/</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ast.parse</span></code> / <code class="docutils literal notranslate"><span class="pre">ast.literal_eval</span></code>: all legitimate (evolution AST-blocklist, observability deserialization).</p></li>
+<li><p>CI workflows: no <code class="docutils literal notranslate"><span class="pre">pull_request_target</span></code> anywhere; <code class="docutils literal notranslate"><span class="pre">secrets.PYPI_API_TOKEN</span></code> only in <code class="docutils literal notranslate"><span class="pre">release.yml</span></code> (gated on release).</p></li>
+<li><p>No hardcoded credentials (grep clean for <code class="docutils literal notranslate"><span class="pre">sk-</span></code>, <code class="docutils literal notranslate"><span class="pre">AKIA</span></code>, <code class="docutils literal notranslate"><span class="pre">ghp_</span></code>, <code class="docutils literal notranslate"><span class="pre">xoxb-</span></code>, etc.).</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="deprecation-dead-code">
+<h2>4. Deprecation / dead code<a class="headerlink" href="#deprecation-dead-code" title="Link to this heading"></a></h2>
+<section id="dead-1-iterativecflibssolverjax-parity-tests-high-s-488-loc">
+<h3>dead-1 — <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code> + parity tests <strong>(HIGH / S, ~488 LOC)</strong><a class="headerlink" href="#dead-1-iterativecflibssolverjax-parity-tests-high-s-488-loc" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:1696-1905</span></code> (210 LOC class) + <code class="docutils literal notranslate"><span class="pre">tests/inversion/test_solver_jax_parity.py</span></code> (278 LOC). Class is <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code>-marked per ADR-0001; the fallback flag <code class="docutils literal notranslate"><span class="pre">HAS_JAX_ITERATIVE_SOLVER</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/workflows.py</span></code> already tolerates absence. Single highest-LOC, lowest-risk deletion.</p>
+</section>
+<section id="dead-2-cflibs-benchmarks-trailing-s-shim-package-med-xs-45-loc">
+<h3>dead-2 — <code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> (trailing-s) shim package <strong>(MED / XS, ~45 LOC)</strong><a class="headerlink" href="#dead-2-cflibs-benchmarks-trailing-s-shim-package-med-xs-45-loc" title="Link to this heading"></a></h3>
+<p>Already filed in the prior audit as <code class="docutils literal notranslate"><span class="pre">arch-4</span></code> / <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-4ig9</span></code>. Worth restating: 4 files, all pure re-exports from <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/</span></code>, deprecation note inside says “2026-04 cleanup”. Zero external callers.</p>
+</section>
+<section id="dead-3-inversion-flat-shim-files-low-xs-12-loc">
+<h3>dead-3 — Inversion flat-shim files <strong>(LOW / XS, ~12 LOC)</strong><a class="headerlink" href="#dead-3-inversion-flat-shim-files-low-xs-12-loc" title="Link to this heading"></a></h3>
+<p>Beyond the previously-noted 25+ shims, four are 3-line re-export stubs that have zero non-shim callers: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/closed_form_solver.py</span></code>, <code class="docutils literal notranslate"><span class="pre">hybrid.py</span></code>, <code class="docutils literal notranslate"><span class="pre">joint_optimizer.py</span></code>, <code class="docutils literal notranslate"><span class="pre">spectral_refiner.py</span></code>. Subsumed by the <code class="docutils literal notranslate"><span class="pre">arch-1</span></code> retarget bead — once internal code stops routing through shims, these can be deleted.</p>
+</section>
+<section id="dead-4-lazy-wrapper-sprawl-in-cflibs-benchmark-workflows-py-med-m">
+<h3>dead-4 — <code class="docutils literal notranslate"><span class="pre">_*_lazy</span></code> wrapper sprawl in <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/workflows.py</span></code> <strong>(MED / M)</strong><a class="headerlink" href="#dead-4-lazy-wrapper-sprawl-in-cflibs-benchmark-workflows-py-med-m" title="Link to this heading"></a></h3>
+<p>6+ functions: <code class="docutils literal notranslate"><span class="pre">_select_aalto_cases_lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">_estimate_effective_rp_lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">_load_real_spectra_lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">_run_boltzmann_pipeline_lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">_pipeline_joint_softmax_lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">_pipeline_hybrid_manifold_lazy</span></code>. Each is a 10-line crutch that reflectively loads a script from <code class="docutils literal notranslate"><span class="pre">scripts/</span></code>. This is the library-imports-scripts layering inversion flagged in the prior audit. Defer until the workflows.py split (covered by <code class="docutils literal notranslate"><span class="pre">arch-2</span></code>).</p>
+</section>
+<section id="dead-5-merged-branch-hygiene-housekeeping-0-loc">
+<h3>dead-5 — Merged-branch hygiene <strong>(housekeeping, 0 LOC)</strong><a class="headerlink" href="#dead-5-merged-branch-hygiene-housekeeping-0-loc" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">branch</span> <span class="pre">-r</span> <span class="pre">--merged</span> <span class="pre">origin/dev</span></code> returns 23 fully-merged feature branches on origin. Safe to prune.</p>
+</section>
+<section id="dead-6-stale-scripts-in-scripts-low-l-5001000-loc-needs-investigation">
+<h3>dead-6 — Stale scripts in <code class="docutils literal notranslate"><span class="pre">scripts/</span></code> <strong>(LOW / L, ~500–1000 LOC, needs investigation)</strong><a class="headerlink" href="#dead-6-stale-scripts-in-scripts-low-l-5001000-loc-needs-investigation" title="Link to this heading"></a></h3>
+<p>40 scripts with no edits in 6+ months, no references in active workflows/tests/CI. Needs per-script triage; not a single-PR move.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="out-of-scope-but-worth-flagging">
+<h2>Out-of-scope but worth flagging<a class="headerlink" href="#out-of-scope-but-worth-flagging" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cflibs/evolution/</span></code></strong>: LLM-driven algorithm-search tooling per CLAUDE.md. <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">--since</span> <span class="pre">&quot;3</span> <span class="pre">months</span> <span class="pre">ago&quot;</span> <span class="pre">--</span> <span class="pre">cflibs/evolution/</span></code> returns commits, so it’s not abandoned, but a focused review would clarify whether the AST blocklist still aligns with the physics-only constraint.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">docs/archive/legacy/</span></code></strong>: 15+ historical docs flagged in the prior audit (docs-8) as needing a DEPRECATED marker. Still open.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="bead-tag-real-id-mapping">
+<h2>Bead-tag → real-ID mapping<a class="headerlink" href="#bead-tag-real-id-mapping" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tag</p></th>
+<th class="head"><p>Bead ID</p></th>
+<th class="head"><p>Title</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">type-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-cclj</span></code></p></td>
+<td><p>remove 7 mypy disable_error_code entries</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">type-2</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-wkw1</span></code></p></td>
+<td><p>add <code class="docutils literal notranslate"><span class="pre">__all__</span></code> to 15 modules</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">type-3</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-ejsb</span></code></p></td>
+<td><p>add return types to ~50 public functions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-sx1e</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/hardware/</span></code> test coverage</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test-2</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-2pxb</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">checkpoint.py</span></code> + <code class="docutils literal notranslate"><span class="pre">composition_eval.py</span></code> direct tests</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test-3</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-bmgq</span></code></p></td>
+<td><p>reactivate <code class="docutils literal notranslate"><span class="pre">test_forward_model_parity.py</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test-4</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-b0y9</span></code></p></td>
+<td><p>replace <code class="docutils literal notranslate"><span class="pre">time.sleep</span></code> race patterns in <code class="docutils literal notranslate"><span class="pre">test_streaming.py</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test-5</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-289x</span></code></p></td>
+<td><p>numpy-path Stark T-factor test</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test-X</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-8vav</span></code></p></td>
+<td><p>7-module follow-up coverage backfill</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sec-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-y6b5</span></code></p></td>
+<td><p>pin third-party Actions by SHA</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sec-2</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-m8ar</span></code></p></td>
+<td><p>add <code class="docutils literal notranslate"><span class="pre">timeout=</span></code> to <code class="docutils literal notranslate"><span class="pre">beadhub-bootstrap.sh</span></code> urlopen</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dead-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-bbng</span></code></p></td>
+<td><p>delete <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code> + tests</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

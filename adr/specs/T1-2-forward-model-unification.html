@@ -1,0 +1,359 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T1-2 Implementation Spec — Unified Forward-Model Kernel &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">T1-2 Implementation Spec — Unified Forward-Model Kernel</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/T1-2-forward-model-unification.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="t1-2-implementation-spec-unified-forward-model-kernel">
+<h1>T1-2 Implementation Spec — Unified Forward-Model Kernel<a class="headerlink" href="#t1-2-implementation-spec-unified-forward-model-kernel" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-swgm</span></code> · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0001-radis-jaxrts-pattern-survey.html"><span class="std std-doc">ADR-0001</span></a> §8.1 row T1-2 · <strong>Wave:</strong> 2 (lands AFTER T1-4 in wave 2 — sequential ordering; both touch <code class="docutils literal notranslate"><span class="pre">spectrum_model.py</span></code> dispatch and <code class="docutils literal notranslate"><span class="pre">batch_forward.py:L395</span></code>) · <strong>Hard deps:</strong> T1-1 (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>) — requires the pytree registration + <code class="docutils literal notranslate"><span class="pre">AtomicDatabase.snapshot()</span></code> builder folded into T1-1 · <strong>Estimated effort:</strong> medium-high · <strong>Revision:</strong> 2026-05-12 (cross-audit) — adds <code class="docutils literal notranslate"><span class="pre">sigma_grid</span></code> parameter, clarifies NIST_PARITY per-line σ_inst handling, scopes <code class="docutils literal notranslate"><span class="pre">bayesian.py</span></code> adaptation to in-place edit</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Replace the three coexisting forward-model implementations with a single pure-JAX kernel that all three call sites (<code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>/<code class="docutils literal notranslate"><span class="pre">SpectrumModelJax</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_forward_model</span></code>, <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code>) dispatch into:</p>
+<ul class="simple">
+<li><p><strong>One source of truth</strong> for the forward physics. <code class="docutils literal notranslate"><span class="pre">kernels.py::forward_model</span></code> is the only place Saha-Boltzmann → broadened, instrument-convolved spectrum exists.</p></li>
+<li><p><strong>vmap-clean.</strong> Kernel accepts scalar/1-D plasma state and returns a 1-D intensity array; manifold batching = <code class="docutils literal notranslate"><span class="pre">jit(vmap(forward_model,</span> <span class="pre">...))</span></code>. No internal Python <code class="docutils literal notranslate"><span class="pre">for</span></code> over lines or elements.</p></li>
+<li><p><strong>Backend-portable.</strong> Runs unmodified on <code class="docutils literal notranslate"><span class="pre">jax-cpu</span></code>, <code class="docutils literal notranslate"><span class="pre">jax-cuda</span></code>, <code class="docutils literal notranslate"><span class="pre">jax-metal</span></code>. Precision via <code class="docutils literal notranslate"><span class="pre">JaxMemoryPolicy</span></code> from T1-1.</p></li>
+<li><p><strong>No regression.</strong> All three call paths produce numerically identical output to current code (rtol=1e-5, atol=1e-7).</p></li>
+<li><p><strong>Removes broadening-mode duplication.</strong> Reconciles three divergent broadening branches (<code class="docutils literal notranslate"><span class="pre">LEGACY</span></code>, <code class="docutils literal notranslate"><span class="pre">NIST_PARITY</span></code>, <code class="docutils literal notranslate"><span class="pre">PHYSICAL_DOPPLER</span></code>) plus <code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code>’s Voigt path plus <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel._compute_spectrum</span></code>’s Voigt-with-Stark path into one parameterized kernel.</p></li>
+</ul>
+</section>
+<section id="unified-kernel-api-contract">
+<h2>2. Unified kernel API contract<a class="headerlink" href="#unified-kernel-api-contract" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/radiation/kernels.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.core.jax_runtime</span><span class="w"> </span><span class="kn">import</span> <span class="n">jit_if_available</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.plasma.state</span><span class="w"> </span><span class="kn">import</span> <span class="n">SingleZoneLTEPlasma</span>          <span class="c1"># pytree-registered (T1-1)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.atomic.snapshot</span><span class="w"> </span><span class="kn">import</span> <span class="n">AtomicSnapshot</span>            <span class="c1"># frozen dataclass (T1-1)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.instrument.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstrumentModel</span>          <span class="c1"># pytree-registered (T1-1)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.radiation.profiles</span><span class="w"> </span><span class="kn">import</span> <span class="n">BroadeningMode</span>
+
+<span class="nd">@jit_if_available</span><span class="p">(</span><span class="n">static_argnames</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;broadening_mode&quot;</span><span class="p">,</span> <span class="s2">&quot;apply_self_absorption&quot;</span><span class="p">))</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward_model</span><span class="p">(</span>
+    <span class="n">plasma_state</span><span class="p">:</span> <span class="n">SingleZoneLTEPlasma</span><span class="p">,</span>
+    <span class="n">atomic_snapshot</span><span class="p">:</span> <span class="n">AtomicSnapshot</span><span class="p">,</span>
+    <span class="n">instrument</span><span class="p">:</span> <span class="n">InstrumentModel</span><span class="p">,</span>
+    <span class="n">wavelength_grid</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>            <span class="c1"># (N_wl,) policy.real_dtype</span>
+    <span class="n">sigma_grid</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>   <span class="c1"># (N_σ,) — REQUIRED for LDM_GAUSSIAN;</span>
+                                              <span class="c1"># None for PHYSICAL_DOPPLER/NIST_PARITY/LEGACY.</span>
+                                              <span class="c1"># Host builds via T1-4&#39;s broaden_lines_ldm</span>
+                                              <span class="c1"># path; threaded through here so T1-5&#39;s</span>
+                                              <span class="c1"># chunked variant can scan over chunks.</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">broadening_mode</span><span class="p">:</span> <span class="n">BroadeningMode</span><span class="p">,</span>         <span class="c1"># static (enum hashable)</span>
+    <span class="n">path_length_m</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>                    <span class="c1"># traced</span>
+    <span class="n">apply_self_absorption</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>     <span class="c1"># static</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>                            <span class="c1"># (N_wl,) same dtype as input</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Synthetic LIBS spectrum on wavelength_grid. W m^-2 nm^-1 sr^-1.</span>
+
+<span class="sd">    Composes:</span>
+<span class="sd">      1. Saha-Boltzmann populations (cflibs.plasma.kernels.saha_boltzmann)</span>
+<span class="sd">      2. Line emissivity ε_l = hc/(4π λ_l) · A_ki · n_k</span>
+<span class="sd">      3. Per-line profile (Gaussian Doppler+instrument, optional Lorentzian Stark)</span>
+<span class="sd">      4. Sum over lines via (N_wl, N_lines) outer-product reduction</span>
+<span class="sd">      5. Optional radiative transfer  I = B(λ,T) · (1 - exp(-κL))</span>
+<span class="sd">      6. Instrument convolution folded into per-line sigma (Voigt normalization preserving)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</pre></div>
+</div>
+<p><strong>JIT boundary lives entirely inside this function.</strong> Call sites do NOT wrap it again. Manifold batching applies <code class="docutils literal notranslate"><span class="pre">jit(vmap(...))</span></code> and the inner jit is a no-op (XLA fuses).</p>
+<p>Static vs. traced split:</p>
+<ul class="simple">
+<li><p><strong>Static</strong> (hashed into jit cache key): <code class="docutils literal notranslate"><span class="pre">broadening_mode</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_snapshot.n_elements</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_snapshot.n_stages</span></code>, shape of <code class="docutils literal notranslate"><span class="pre">wavelength_grid</span></code>, shape of <code class="docutils literal notranslate"><span class="pre">atomic_snapshot.line_*</span></code> arrays.</p></li>
+<li><p><strong>Traced</strong> (pytree leaves): <code class="docutils literal notranslate"><span class="pre">plasma_state.T_e_eV</span></code>, <code class="docutils literal notranslate"><span class="pre">.n_e_cm3</span></code>, <code class="docutils literal notranslate"><span class="pre">.composition_array</span></code>, all <code class="docutils literal notranslate"><span class="pre">line_*</span></code> arrays, instrument FWHM/R/sigma_array, <code class="docutils literal notranslate"><span class="pre">wavelength_grid</span></code>, <code class="docutils literal notranslate"><span class="pre">path_length_m</span></code>.</p></li>
+</ul>
+<p>Precision: respects <code class="docutils literal notranslate"><span class="pre">cflibs.core.jax_runtime.policy.real_dtype</span></code>. Output dtype matches <code class="docutils literal notranslate"><span class="pre">wavelength_grid.dtype</span></code>. Callers convert fp64→fp32 upstream on Metal; kernel does not silently downcast.</p>
+</section>
+<section id="three-call-sites-adaptation">
+<h2>3. Three call sites — adaptation<a class="headerlink" href="#three-call-sites-adaptation" title="Link to this heading"></a></h2>
+<section id="spectrummodel-compute-spectrum-thin-wrapper">
+<h3>3.1 <code class="docutils literal notranslate"><span class="pre">SpectrumModel.compute_spectrum</span></code> → thin wrapper<a class="headerlink" href="#spectrummodel-compute-spectrum-thin-wrapper" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">compute_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">plasma</span><span class="o">.</span><span class="n">validate</span><span class="p">()</span>
+    <span class="n">snapshot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">atomic_db</span><span class="o">.</span><span class="n">snapshot</span><span class="p">(</span>
+        <span class="n">elements</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plasma</span><span class="o">.</span><span class="n">species</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span>
+        <span class="n">wavelength_range</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lambda_min</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lambda_max</span><span class="p">),</span>
+        <span class="n">min_relative_intensity</span><span class="o">=</span><span class="mf">0.01</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">broadening_mode</span> <span class="o">==</span> <span class="n">BroadeningMode</span><span class="o">.</span><span class="n">NIST_PARITY</span> <span class="k">else</span> <span class="mf">10.0</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">wl</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jax_policy</span><span class="p">()</span><span class="o">.</span><span class="n">real_dtype</span><span class="p">)</span>
+    <span class="n">intensity</span> <span class="o">=</span> <span class="n">forward_model</span><span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plasma</span><span class="p">,</span> <span class="n">snapshot</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">,</span> <span class="n">wl</span><span class="p">,</span>
+        <span class="n">broadening_mode</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">broadening_mode</span><span class="p">,</span>
+        <span class="n">path_length_m</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">path_length_m</span><span class="p">,</span>
+        <span class="n">apply_self_absorption</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># legacy SpectrumModel behavior</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">intensity</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">SpectrumModelJax</span></code> becomes a deprecation alias of <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>.</p>
+</section>
+<section id="batch-forward-model-jit-vmap-forward-model">
+<h3>3.2 <code class="docutils literal notranslate"><span class="pre">batch_forward_model</span></code> → <code class="docutils literal notranslate"><span class="pre">jit(vmap(forward_model))</span></code><a class="headerlink" href="#batch-forward-model-jit-vmap-forward-model" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/manifold/batch_forward.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.radiation.kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">forward_model</span>
+
+<span class="nd">@partial</span><span class="p">(</span><span class="n">jit</span><span class="p">,</span> <span class="n">static_argnames</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;broadening_mode&quot;</span><span class="p">,</span> <span class="s2">&quot;apply_self_absorption&quot;</span><span class="p">))</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">batch_forward_model</span><span class="p">(</span>
+    <span class="n">plasma_states_batch</span><span class="p">:</span> <span class="n">SingleZoneLTEPlasma</span><span class="p">,</span>   <span class="c1"># leading batch axis</span>
+    <span class="n">atomic_snapshot</span><span class="p">:</span> <span class="n">AtomicSnapshot</span><span class="p">,</span>            <span class="c1"># shared</span>
+    <span class="n">instrument</span><span class="p">:</span> <span class="n">InstrumentModel</span><span class="p">,</span>                <span class="c1"># shared</span>
+    <span class="n">wavelength_grid</span><span class="p">:</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">broadening_mode</span><span class="p">:</span> <span class="n">BroadeningMode</span> <span class="o">=</span> <span class="n">BroadeningMode</span><span class="o">.</span><span class="n">PHYSICAL_DOPPLER</span><span class="p">,</span>
+    <span class="n">path_length_m</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.01</span><span class="p">,</span>
+    <span class="n">apply_self_absorption</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>        <span class="c1"># manifold default: thin</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>                                <span class="c1"># (batch, N_wl)</span>
+    <span class="k">return</span> <span class="n">vmap</span><span class="p">(</span><span class="n">forward_model</span><span class="p">,</span> <span class="n">in_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">))(</span>
+        <span class="n">plasma_states_batch</span><span class="p">,</span> <span class="n">atomic_snapshot</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">wavelength_grid</span><span class="p">,</span>
+        <span class="n">broadening_mode</span><span class="o">=</span><span class="n">broadening_mode</span><span class="p">,</span>
+        <span class="n">path_length_m</span><span class="o">=</span><span class="n">path_length_m</span><span class="p">,</span>
+        <span class="n">apply_self_absorption</span><span class="o">=</span><span class="n">apply_self_absorption</span><span class="p">,</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">BatchAtomicData</span></code> is renamed/aliased to <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>. <code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code> retired; existing callers import <code class="docutils literal notranslate"><span class="pre">forward_model</span></code> directly.</p>
+</section>
+<section id="bayesianforwardmodel-forward-in-place-import-not-a-new-file">
+<h3>3.3 <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel.forward</span></code> → in-place import (NOT a new file)<a class="headerlink" href="#bayesianforwardmodel-forward-in-place-import-not-a-new-file" title="Link to this heading"></a></h3>
+<p><strong>Important:</strong> T1-2 does <strong>not</strong> create <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/forward.py</span></code> — that directory doesn’t exist until T1-6 decomposes the monolith. Instead, T1-2 edits the <strong>existing</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian.py:1071</span></code> in place: replace the body of <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel._compute_spectrum</span></code> (and any Voigt/Saha-Boltzmann helpers it calls inline) with a single delegating call to <code class="docutils literal notranslate"><span class="pre">cflibs.radiation.kernels.forward_model</span></code>. T1-6 then carries this in-place edit over to <code class="docutils literal notranslate"><span class="pre">bayesian/forward.py</span></code> during its decomposition.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/inversion/solve/bayesian.py (in-place edit at the existing class)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.radiation.kernels</span><span class="w"> </span><span class="kn">import</span> <span class="n">forward_model</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">BayesianForwardModel</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_compute_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">T_eV</span><span class="p">,</span> <span class="n">log_ne</span><span class="p">,</span> <span class="n">concentrations</span><span class="p">,</span> <span class="n">total_species_density_cm3</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">plasma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pack_plasma</span><span class="p">(</span><span class="n">T_eV</span><span class="p">,</span> <span class="n">log_ne</span><span class="p">,</span> <span class="n">concentrations</span><span class="p">,</span> <span class="n">total_species_density_cm3</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">forward_model</span><span class="p">(</span>
+            <span class="n">plasma</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_snapshot</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instrument</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">wavelength</span><span class="p">,</span>
+            <span class="n">sigma_grid</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>                          <span class="c1"># PHYSICAL_DOPPLER path; no LDM</span>
+            <span class="n">broadening_mode</span><span class="o">=</span><span class="n">BroadeningMode</span><span class="o">.</span><span class="n">PHYSICAL_DOPPLER</span><span class="p">,</span>
+            <span class="n">path_length_m</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">path_length_m</span><span class="p">,</span>
+            <span class="n">apply_self_absorption</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">AtomicDataArrays</span></code> (existing at <code class="docutils literal notranslate"><span class="pre">bayesian.py:539</span></code>) gets a <code class="docutils literal notranslate"><span class="pre">&#64;classmethod</span> <span class="pre">from_snapshot(cls,</span> <span class="pre">snap:</span> <span class="pre">AtomicSnapshot)</span> <span class="pre">-&gt;</span> <span class="pre">AtomicDataArrays</span></code> adapter so legacy callers keep their interface; <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel.__init__</span></code> switches to storing <code class="docutils literal notranslate"><span class="pre">self._snapshot:</span> <span class="pre">AtomicSnapshot</span></code> directly. T1-6 will retire <code class="docutils literal notranslate"><span class="pre">AtomicDataArrays</span></code> if it proves unnecessary post-decomposition.</p>
+<p>Chebyshev baseline stays in <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code> as an additive post-step — sampler-level state, not physics.</p>
+</section>
+</section>
+<section id="where-the-kernel-lives">
+<h2>4. Where the kernel lives<a class="headerlink" href="#where-the-kernel-lives" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py::forward_model</span></code> — pure-kernel half of host/kernel split from T1-1. Host half handles SQLite I/O, validation, dtype coercion, instrument-mode guards, NumPy↔JAX boundary, logging.</p>
+<p>Public re-export: <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.radiation</span> <span class="pre">import</span> <span class="pre">forward_model</span></code>.</p>
+<p>Saha-Boltzmann delegated to <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/kernels.py::saha_boltzmann_populations</span></code> (T1-1’s plasma kernel half). Stark/Voigt/Doppler helpers in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code>.</p>
+</section>
+<section id="reconciliation-table-three-current-impls-unified-kernel">
+<h2>5. Reconciliation table — three current impls → unified kernel<a class="headerlink" href="#reconciliation-table-three-current-impls-unified-kernel" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Concern</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code></p></th>
+<th class="head"><p>Unified kernel</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">min_relative_intensity</span></code> filter (<code class="docutils literal notranslate"><span class="pre">spectrum_model.py:226-240</span></code>)</p></td>
+<td><p>0.01 if NIST_PARITY else 10.0</p></td>
+<td><p>n/a (snapshot pre-filtered)</p></td>
+<td><p>n/a (snapshot pre-filtered)</p></td>
+<td><p><strong>Moves out of kernel</strong> — host passes pre-filtered <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Per-line sigma fallback (<code class="docutils literal notranslate"><span class="pre">emissivity.py:123-130</span></code>)</p></td>
+<td><p>NumPy fallback</p></td>
+<td><p>per-line sigma natively</p></td>
+<td><p>per-line sigma natively</p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">single_spectrum_forward</span></code> form wins.</strong> Per-line sigma is canonical; scalar = degenerate case <code class="docutils literal notranslate"><span class="pre">jnp.full((N_lines,),</span> <span class="pre">σ)</span></code>. Fallback in <code class="docutils literal notranslate"><span class="pre">emissivity.py</span></code> deleted</p></td>
+</tr>
+<tr class="row-even"><td><p>BroadeningMode branches (<code class="docutils literal notranslate"><span class="pre">spectrum_model.py:247-250</span></code>)</p></td>
+<td><p>LEGACY/NIST_PARITY/PHYSICAL_DOPPLER</p></td>
+<td><p>Voigt via <code class="docutils literal notranslate"><span class="pre">voigt_spectrum_jax</span></code></p></td>
+<td><p>Voigt via Weideman Faddeeva</p></td>
+<td><p>Single function, branched on <code class="docutils literal notranslate"><span class="pre">broadening_mode</span></code> as <strong>static</strong> arg. LEGACY retained but emits <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> from host. Weideman path becomes canonical Voigt</p></td>
+</tr>
+<tr class="row-odd"><td><p>Radiative transfer</p></td>
+<td><p>Always applied</p></td>
+<td><p>Not applied</p></td>
+<td><p>Not applied</p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">apply_self_absorption:</span> <span class="pre">bool</span></code> static flag.</strong> Default <code class="docutils literal notranslate"><span class="pre">True</span></code> for <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>, <code class="docutils literal notranslate"><span class="pre">False</span></code> for manifold + Bayesian</p></td>
+</tr>
+<tr class="row-even"><td><p>Instrument convolution</p></td>
+<td><p>Separate scipy/JAX step (<code class="docutils literal notranslate"><span class="pre">spectrum_model.py:283-301</span></code>)</p></td>
+<td><p>Not applied</p></td>
+<td><p>Folded into per-line sigma (Voigt-normalization preserving)</p></td>
+<td><p><strong>Bayesian approach wins.</strong> Instrument σ added in quadrature to per-line Gaussian. For NIST_PARITY mode (resolving-power R, wavelength-dependent), kernel evaluates <code class="docutils literal notranslate"><span class="pre">σ_inst(λ_i)</span> <span class="pre">=</span> <span class="pre">λ_i</span> <span class="pre">/</span> <span class="pre">(R</span> <span class="pre">·</span> <span class="pre">2√(2</span> <span class="pre">ln</span> <span class="pre">2))</span></code> per-line inline from <code class="docutils literal notranslate"><span class="pre">instrument.resolving_power</span></code> + <code class="docutils literal notranslate"><span class="pre">atomic_snapshot.line_wavelengths_nm</span></code>. For fixed-FWHM mode, scalar σ broadcast. Separate convolution removed except for LEGACY back-compat.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Saha-Boltzmann</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">solve_plasma</span></code> dict per-element (NumPy)</p></td>
+<td><p>Inline scan over stages (JAX)</p></td>
+<td><p>Two-stage explicit</p></td>
+<td><p>Single helper <code class="docutils literal notranslate"><span class="pre">saha_boltzmann_populations(plasma,</span> <span class="pre">snapshot)</span></code> returning <code class="docutils literal notranslate"><span class="pre">(N_lines,)</span></code> upper-level array. <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> over stages canonical</p></td>
+</tr>
+<tr class="row-even"><td><p>Precision</p></td>
+<td><p>fp64 hardcoded (<code class="docutils literal notranslate"><span class="pre">spectrum_model.py:460</span></code>)</p></td>
+<td><p>fp64 hardcoded (<code class="docutils literal notranslate"><span class="pre">batch_forward.py:322-328</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_JAX_REAL_DTYPE</span></code> policy-aware</p></td>
+<td><p><strong>Bayesian approach wins.</strong> All casts through <code class="docutils literal notranslate"><span class="pre">jax_policy().real_dtype</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="acceptance-criteria">
+<h2>6. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>All three current call sites return numerically identical output to pre-refactor at rtol=1e-5, atol=1e-7.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">kernels.py::forward_model</span></code> is the only function in <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> computing a spectrum from <code class="docutils literal notranslate"><span class="pre">(plasma,</span> <span class="pre">snapshot,</span> <span class="pre">grid)</span></code>. Grep audit: no <code class="docutils literal notranslate"><span class="pre">epsilon</span> <span class="pre">=</span> <span class="pre">...</span> <span class="pre">*</span> <span class="pre">A_ki</span> <span class="pre">*</span> <span class="pre">n_k</span></code> outside <code class="docutils literal notranslate"><span class="pre">kernels.py</span></code>.</p></li>
+<li><p>Public API preserved: <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.radiation</span> <span class="pre">import</span> <span class="pre">SpectrumModel,</span> <span class="pre">SpectrumModelJax</span></code> and <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.manifold.batch_forward</span> <span class="pre">import</span> <span class="pre">batch_forward_model</span></code> resolve and produce same outputs.</p></li>
+<li><p>Physics-only constraint: no new imports of <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>, <code class="docutils literal notranslate"><span class="pre">flax</span></code>, <code class="docutils literal notranslate"><span class="pre">equinox</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.experimental.stax</span></code>. Ruff TID251 clean.</p></li>
+<li><p>Backend matrix: cpu (fp64), cuda (fp64), metal (fp32 with warning). Marker <code class="docutils literal notranslate"><span class="pre">requires_metal</span></code> (skip-if).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>7. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_forward_model_parity.py</span></code></strong> (new). Fixed <code class="docutils literal notranslate"><span class="pre">(SingleZoneLTEPlasma,</span> <span class="pre">AtomicSnapshot,</span> <span class="pre">InstrumentModel,</span> <span class="pre">wavelength_grid)</span></code>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectrumModel(...).compute_spectrum()</span></code> → <code class="docutils literal notranslate"><span class="pre">I1</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">batch_forward_model(batched_1,</span> <span class="pre">...)</span></code> → <code class="docutils literal notranslate"><span class="pre">I2[0]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BayesianForwardModel(...).forward(T,</span> <span class="pre">log_ne,</span> <span class="pre">conc)</span></code> → <code class="docutils literal notranslate"><span class="pre">I3</span></code> (sans baseline)</p></li>
+<li><p>Assert <code class="docutils literal notranslate"><span class="pre">np.allclose(I1,</span> <span class="pre">I2[0],</span> <span class="pre">rtol=1e-5,</span> <span class="pre">atol=1e-7)</span></code> and same for <code class="docutils literal notranslate"><span class="pre">I3</span></code> vs <code class="docutils literal notranslate"><span class="pre">I1</span></code>.</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tests/radiation/test_forward_model_vmap.py</span></code></strong> (new). Batch of 100 plasma states; <code class="docutils literal notranslate"><span class="pre">batch_forward_model</span></code> output <code class="docutils literal notranslate"><span class="pre">(100,</span> <span class="pre">N_wl)</span></code> matches Python loop within rtol=1e-5.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tests/test_round_trip.py</span></code></strong> (existing). <code class="docutils literal notranslate"><span class="pre">GoldenSpectrum</span></code> round-trip stays green.</p></li>
+<li><p><strong>Existing</strong>: <code class="docutils literal notranslate"><span class="pre">tests/test_spectrum_model.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/radiation/test_spectrum_model_jax.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/test_batch_forward.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/test_bayesian.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/validation/validation/accuracy/test_batch_forward_accuracy.py</span></code> unchanged.</p></li>
+<li><p><strong>Backend matrix.</strong> <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span> <span class="pre">pytest</span> <span class="pre">tests/</span></code>; on cluster CI a CUDA run. Apple Silicon: <code class="docutils literal notranslate"><span class="pre">skip_if_metal_no_fp64</span></code> marker with fp32 fallback at rtol=1e-3.</p></li>
+<li><p><strong>Benchmark.</strong> <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">--benchmark-only</span></code> — manifold throughput unchanged or improved.</p></li>
+</ul>
+</section>
+<section id="dependencies-sequence">
+<h2>8. Dependencies &amp; sequence<a class="headerlink" href="#dependencies-sequence" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Hard dep: T1-1</strong> (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>) — needs pytree-registered <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code>, <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code>, <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code>, host/kernel split for <code class="docutils literal notranslate"><span class="pre">plasma/</span></code> and <code class="docutils literal notranslate"><span class="pre">instrument/</span></code>, shared <code class="docutils literal notranslate"><span class="pre">jit_if_available</span></code> decorator.</p></li>
+<li><p><strong>Soft dep: T2-2</strong> (rich <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> population). T1-1 gives the carrier; full snapshot builder is T2-2.</p></li>
+<li><p><strong>Blocks: T1-6</strong> (<code class="docutils literal notranslate"><span class="pre">0mor</span></code>). T1-6’s <code class="docutils literal notranslate"><span class="pre">bayesian/forward.py</span></code> imports <code class="docutils literal notranslate"><span class="pre">forward_model</span></code>. T1-6 priors/samplers can begin in parallel.</p></li>
+<li><p><strong>Merge order:</strong> T1-1 → T1-2 → T1-6. If T1-1 lands partially (e.g., plasma pytree done but instrument not), gate T1-2 PR behind both.</p></li>
+</ul>
+</section>
+<section id="risks-rollback">
+<h2>9. Risks &amp; rollback<a class="headerlink" href="#risks-rollback" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Numerical drift in NIST_PARITY mode</strong> when collapsing the separate instrument convolution into per-line sigma. Mitigation: explicit parity test with <code class="docutils literal notranslate"><span class="pre">min_ri=0.01</span></code> snapshot; rtol=1e-5 against current <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code> output for a NIST_PARITY benchmark.</p></li>
+<li><p><strong>vmap compilation cost.</strong> Different element counts in <code class="docutils literal notranslate"><span class="pre">atomic_snapshot.species</span></code> trigger recompiles. Mitigation: standardize on a padded snapshot at construction time (pad to <code class="docutils literal notranslate"><span class="pre">N_elements_max=20</span></code>).</p></li>
+<li><p><strong>Rollback:</strong> revert the kernel commit; the three call sites individually retain their fallback paths until T1-2 merges to integration.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

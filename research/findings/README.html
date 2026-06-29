@@ -1,0 +1,490 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Research Findings &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Research Findings</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/research/findings/README.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-research-findings">
+<h1>CF-LIBS Research Findings<a class="headerlink" href="#cf-libs-research-findings" title="Link to this heading"></a></h1>
+<p>A structured database of investigation outcomes — every hypothesis we tried,
+what we learned, and what to do next. The goal of this directory is to make
+<strong>forward progress</strong> across sessions instead of re-deriving the same
+conclusions.</p>
+<p>If you are reading this with no context: start with the
+<a class="reference internal" href="#top-open-questions--what-to-work-on-next"><span class="xref myst">“Top open questions / what to work on next”</span></a>
+section below. Each open question links to the supporting findings.</p>
+<hr class="docutils" />
+<section id="tl-dr-the-most-consequential-findings-2026-05-14">
+<h2>TL;DR — the most consequential findings (2026-05-14)<a class="headerlink" href="#tl-dr-the-most-consequential-findings-2026-05-14" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ID</p></th>
+<th class="head"><p>Status</p></th>
+<th class="head text-right"><p>Surprise</p></th>
+<th class="head"><p>Headline</p></th>
+<th class="head"><p>What it implies</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><a class="reference internal" href="2026-05-14-empirical-05-silicon-is-the-headline-miss-789-of-si-containing-spectra-miss-si-under-all.html"><span class="std std-doc">empirical-05</span></a></p></td>
+<td><p>confirmed</p></td>
+<td class="text-right"><p>n/a</p></td>
+<td><p><strong>Si is missed in 15/19 spectra by ALL 5 identifiers</strong></p></td>
+<td><p>Single largest recall residual. Forensic on <code class="docutils literal notranslate"><span class="pre">vrabel_s039</span></code> (the 1 Vrabel spectrum that catches Si) is the highest-leverage next step.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="2026-05-14-empirical-01-universal-misses-53-pairs-53174-true-spectrum-element-pairs-universally-missed-by.html"><span class="std std-doc">empirical-01</span></a></p></td>
+<td><p>confirmed</p></td>
+<td class="text-right"><p>n/a</p></td>
+<td><p><strong>53/174 true (spectrum, element) pairs missed by every identifier</strong></p></td>
+<td><p>Algorithmic combination of current 5 cannot reach literature ceiling on this corpus.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="2026-05-14-asta-28-the-016-macro-f1-gap-to-the-literature-ceiling.html"><span class="std std-doc">asta-28</span></a></p></td>
+<td><p>confirmed</p></td>
+<td class="text-right"><p>+0.28</p></td>
+<td><p><strong>Super-union of all 5 identifiers caps at recall 0.667 (literature target 0.85)</strong></p></td>
+<td><p>The 0.16 macro-F1 gap is a hard physical/basis-line ceiling, not an algorithm-combining problem.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="2026-05-14-empirical-02-top-missed-elements-top-universally-missed-elements-si-15-mg-11-al.html"><span class="std std-doc">empirical-02</span></a></p></td>
+<td><p>confirmed</p></td>
+<td class="text-right"><p>n/a</p></td>
+<td><p><strong>Universally-missed elements: Si:15, Mg:11, Al:9, Ti:7</strong></p></td>
+<td><p>Misses are <strong>major rock-forming</strong> elements, not trace/REE. Kills “fix the long tail” strategy.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="2026-05-14-empirical-03-vrabel-rp-confound-4953-universal-misses-are-on-vrabel2020_soil_benchmark-rp30000.html"><span class="std std-doc">empirical-03</span></a></p></td>
+<td><p>confirmed</p></td>
+<td class="text-right"><p>n/a</p></td>
+<td><p><strong>49/53 universal misses are on Vrabel soil (rp=30000)</strong></p></td>
+<td><p>The ‘universal miss’ signal is almost entirely rp=30000.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="2026-05-14-asta-24-the-extremely-low-f1-score-of-the-comb.html"><span class="std std-doc">asta-24</span></a></p></td>
+<td><p>confirmed</p></td>
+<td class="text-right"><p>+0.32</p></td>
+<td><p><strong>comb F1=0.03 is FN-dominated (mean FN=7.06, FP=0.36)</strong></p></td>
+<td><p>Threshold is globally too strict. Loosening comb’s thresholds is the least controversial fix on the board.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="2026-05-14-asta-08-the-macro-f1-gap-from-spectral_nnls-044-to-hybrid_union.html"><span class="std std-doc">asta-08</span></a></p></td>
+<td><p>weakly_confirmed</p></td>
+<td class="text-right"><p>+0.04</p></td>
+<td><p><strong>hybrid_union cuts FPs 5.72→1.48 AND raises recall 0.55→0.65</strong></p></td>
+<td><p>Consensus voting is paying off on both axes. Strongest argument for keeping <code class="docutils literal notranslate"><span class="pre">hybrid_union</span></code> as default.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="2026-05-14-asta-20-the-performance-of-pure-line-matching-algorithms-comb-and.html"><span class="std std-doc">asta-20</span></a></p></td>
+<td><p>refuted</p></td>
+<td class="text-right"><p>-0.45</p></td>
+<td><p><strong>comb performance is NEGATIVELY correlated with rp (Spearman -0.59, p=0.0003)</strong></p></td>
+<td><p>Finer rp overloads peak-matching. Counter-intuitive; suggests rp-aware threshold coupling.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="2026-05-14-asta-10-the-current-macro_f1-ceiling-of-069-for-hybrid_union.html"><span class="std std-doc">asta-10</span></a></p></td>
+<td><p>refuted</p></td>
+<td class="text-right"><p>-0.59</p></td>
+<td><p><strong>hybrid_union precision (0.75) ≈ recall (0.70), no significant gap</strong></p></td>
+<td><p>The “just push recall” strategy is dead. Both metrics must improve in lockstep.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="2026-05-14-asta-06-the-alias-algorithms-strict-precision-constraint-precision10-results.html"><span class="std std-doc">asta-06</span></a></p></td>
+<td><p>confirmed</p></td>
+<td class="text-right"><p>+0.28</p></td>
+<td><p><strong>alias recall 10.5% on matrix vs 1.4% on trace metals (chi² p=0.029)</strong></p></td>
+<td><p>alias high_recall mode (PR #159) is the right direction; question is whether FP rejection (#166) keeps precision high enough.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="top-open-questions-what-to-work-on-next">
+<h2>Top open questions / what to work on next<a class="headerlink" href="#top-open-questions-what-to-work-on-next" title="Link to this heading"></a></h2>
+<p>These are the prioritized next steps as of 2026-05-14, derived from the
+findings above. <strong>Pick the highest-numbered one you can make progress on
+and stop the inner-loop swarm if it’s grinding low-value work.</strong></p>
+<section id="forensic-why-does-vrabel-s039-catch-si-when-14-other-vrabel-spectra-don-t">
+<h3>1. Forensic: why does <code class="docutils literal notranslate"><span class="pre">vrabel_s039</span></code> catch Si when 14 other Vrabel spectra don’t?<a class="headerlink" href="#forensic-why-does-vrabel-s039-catch-si-when-14-other-vrabel-spectra-don-t" title="Link to this heading"></a></h3>
+<p>Si is present in 19 spectra. Only 4 catch Si under any identifier (3 BHVO-2,
+1 Vrabel — <code class="docutils literal notranslate"><span class="pre">s039</span></code>). The 14 Vrabel spectra that miss Si are at the <em>same</em> rp
+and similar matrix as <code class="docutils literal notranslate"><span class="pre">s039</span></code>. If we can identify what’s different about
+<code class="docutils literal notranslate"><span class="pre">s039</span></code> — peak SNR, concentration, neighbor-line crowding, baseline behavior
+— we may unlock the largest single block of recall in the corpus (15 pairs,
+~9% of all true pairs).</p>
+<p><strong>Concrete next step:</strong> load the 4 Si-catching spectra and the 15 missing
+ones, plot Si I 288.16nm and Si I 251.61nm regions, diff annotations. Should
+take &lt;1 hour. See <a class="reference internal" href="2026-05-14-empirical-05-silicon-is-the-headline-miss-789-of-si-containing-spectra-miss-si-under-all.html"><span class="std std-doc">empirical-05</span></a>.</p>
+</section>
+<section id="decide-whether-the-comb-threshold-loosening-is-on-the-roadmap">
+<h3>2. Decide whether the comb threshold loosening is on the roadmap<a class="headerlink" href="#decide-whether-the-comb-threshold-loosening-is-on-the-roadmap" title="Link to this heading"></a></h3>
+<p><a class="reference internal" href="2026-05-14-asta-24-the-extremely-low-f1-score-of-the-comb.html"><span class="std std-doc">asta-24</span></a> is
+the strongest single confirmed signal (+0.32 surprise). Mean FN per
+spectrum is 7.06 vs FP 0.36 — comb is leaving an enormous amount of recall
+on the table.</p>
+<p>But PR #166 went the <em>opposite</em> direction (tighter FP rejection for tier-2
+Mn/Na/K). Before doing anything: confirm that #166 was scoped to the
+<em>ensemble</em>’s tier-2 stage and not to comb’s own threshold floor. If PR #166
+did NOT touch comb’s <code class="docutils literal notranslate"><span class="pre">threshold_percentile=85</span></code> / <code class="docutils literal notranslate"><span class="pre">min_correlation=0.7</span></code>, then
+loosening those is independent and orthogonal — schedule it.</p>
+<p><strong>Concrete next step:</strong> scan the codebase for where comb’s
+<code class="docutils literal notranslate"><span class="pre">threshold_percentile</span></code> is set; if it’s a constant, propose an opt-in
+<code class="docutils literal notranslate"><span class="pre">high_recall</span></code> flag mirroring <a class="reference external" href="https://github.com/.../pull/159">PR #159</a>’s
+pattern for alias. See <a class="reference internal" href="2026-05-14-asta-24-the-extremely-low-f1-score-of-the-comb.html"><span class="std std-doc">asta-24</span></a>
+and <a class="reference internal" href="2026-05-14-asta-19-the-combinatorial-line-matching-algorithm-comb-experiences-combinatorial-candidate.html"><span class="std std-doc">asta-19</span></a>.</p>
+</section>
+<section id="run-the-next-asta-autodiscovery-iteration-with-a-corpus-that-has-rp-variance">
+<h3>3. Run the next Asta autodiscovery iteration with a corpus that has rp variance<a class="headerlink" href="#run-the-next-asta-autodiscovery-iteration-with-a-corpus-that-has-rp-variance" title="Link to this heading"></a></h3>
+<p>Three of the 30 experiments (asta-04, asta-11, asta-22, asta-29) were
+<em>untestable</em> because the n=33 corpus has no rp variance worth speaking of
+(essentially two values: 9433 BHVO-2, 30000 Vrabel). Several more (asta-15,
+asta-17) were untestable because <code class="docutils literal notranslate"><span class="pre">aa1100_substrate</span></code> isn’t in the corpus.</p>
+<p>Before running another autodiscovery, either:</p>
+<ul class="simple">
+<li><p>(a) curate a benchmark with at least 5 distinct rp buckets, OR</p></li>
+<li><p>(b) explicitly scope hypotheses to be testable on the n=33 corpus.</p></li>
+</ul>
+<p>Without one of these, every “rp dependency” or “aa1100 self-absorption”
+hypothesis Asta proposes will get a null result. See
+<a class="reference internal" href="2026-05-14-asta-22-spectra-with-lower-estimated-resolving-power-rp_estimate-cause.html"><span class="std std-doc">asta-22</span></a>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="directory-layout">
+<h2>Directory layout<a class="headerlink" href="#directory-layout" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>docs/research/findings/
+├── README.md                                  ← you are here
+├── 2026-05-14-asta-01-…md                     ← per-finding markdown (one file each)
+├── 2026-05-14-asta-02-…md
+├── …
+├── 2026-05-14-asta-30-…md
+├── 2026-05-14-empirical-01-…md                ← empirical (non-Asta) findings
+├── 2026-05-14-empirical-02-…md
+└── …
+docs/research/findings.jsonl                   ← machine-queryable index
+                                                  (one finding per line)
+</pre></div>
+</div>
+<p>Markdown is for humans. The JSONL is for querying:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Find all &quot;refuted&quot; hypotheses</span>
+jq<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;select(.status == &quot;refuted&quot;) | {id, hypothesis: .hypothesis[:80]}&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>docs/research/findings.jsonl
+
+<span class="c1"># Find findings cross-linked to PR #166</span>
+jq<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;select(.relates_to_prs | tostring | contains(&quot;166&quot;))&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>docs/research/findings.jsonl
+
+<span class="c1"># Find everything tagged &quot;silicon&quot;</span>
+jq<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;select(.tags | contains([&quot;silicon&quot;]))&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>docs/research/findings.jsonl
+
+<span class="c1"># Sort Asta findings by surprise magnitude (most informative first)</span>
+jq<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;sort_by(.surprise // 0 | fabs) | reverse | .[:5]&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>docs/research/findings.jsonl
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="status-legend">
+<h2>Status legend<a class="headerlink" href="#status-legend" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Status</p></th>
+<th class="head"><p>Surprise range</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">confirmed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">+0.25</span></code> and above</p></td>
+<td><p>Strong posterior shift toward TRUE. Treat as a working assumption; future experiments should be built ON this.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">weakly_confirmed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">+0.10</span></code> to <code class="docutils literal notranslate"><span class="pre">+0.25</span></code></p></td>
+<td><p>Mild posterior shift. Interesting but not decisive.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">neutral</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-0.10</span></code> to <code class="docutils literal notranslate"><span class="pre">+0.10</span></code></p></td>
+<td><p>No update. Often means the experiment was untestable on the available data.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">weakly_refuted</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-0.10</span></code> to <code class="docutils literal notranslate"><span class="pre">-0.40</span></code> (with caveats)</p></td>
+<td><p>Mild posterior shift toward FALSE. Worth investigating an alternative formulation.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">refuted</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">-0.40</span></code> and below</p></td>
+<td><p>Strong posterior shift toward FALSE. Stop pursuing this exact hypothesis; reformulate.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Asta’s own <code class="docutils literal notranslate"><span class="pre">is_surprising</span></code> flag is a separate signal — it tracks whether
+the posterior was <em>outside</em> the prior’s likely range, irrespective of
+direction. We record it in the frontmatter but use surprise magnitude for
+status because it’s directionally informative.</p>
+</section>
+<hr class="docutils" />
+<section id="how-to-add-a-new-finding">
+<h2>How to add a new finding<a class="headerlink" href="#how-to-add-a-new-finding" title="Link to this heading"></a></h2>
+<section id="when-to-add-one">
+<h3>When to add one<a class="headerlink" href="#when-to-add-one" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Any time an Asta autodiscovery run completes — document EVERY experiment,
+even neutral ones, because “neutral” is itself a finding (often: corpus
+doesn’t have the data to test it).</p></li>
+<li><p>Any time a manual empirical analysis (e.g. a bd issue’s investigation
+produces a quantitative claim) yields a result that future work would
+benefit from knowing.</p></li>
+<li><p>Any time a PR closes that <em>aligns with</em> an existing finding — update that
+finding’s <code class="docutils literal notranslate"><span class="pre">relates_to_prs</span></code> list.</p></li>
+</ul>
+</section>
+<section id="how-to-add-one">
+<h3>How to add one<a class="headerlink" href="#how-to-add-one" title="Link to this heading"></a></h3>
+<ol class="arabic">
+<li><p>Create a new file with the naming convention:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">YYYY</span><span class="o">-</span><span class="n">MM</span><span class="o">-</span><span class="n">DD</span><span class="o">-</span><span class="p">{</span><span class="n">asta</span><span class="o">|</span><span class="n">empirical</span><span class="o">|</span><span class="n">investigation</span><span class="p">}</span><span class="o">-</span><span class="n">NN</span><span class="o">-</span><span class="n">short</span><span class="o">-</span><span class="n">slug</span><span class="o">.</span><span class="n">md</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">NN</span></code> is a 2-digit ordinal within that day/source.</p>
+</li>
+<li><p>Use the YAML frontmatter schema (see existing files for examples):</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nn">---</span>
+<span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2026-05-14-asta-31</span>
+<span class="nt">date</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2026-05-14</span>
+<span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">asta-autodiscovery-&lt;run-id&gt;</span><span class="w">     </span><span class="c1"># OR empirical-analysis-&lt;date&gt;</span>
+<span class="nt">experiment_node</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node_31_0</span><span class="w">              </span><span class="c1"># Asta only</span>
+<span class="nt">status</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">refuted | weakly_refuted | neutral | weakly_confirmed | confirmed</span>
+<span class="nt">surprise</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-0.69</span><span class="w">                         </span><span class="c1"># Asta only</span>
+<span class="nt">prior</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.71</span><span class="w">                             </span><span class="c1"># Asta only</span>
+<span class="nt">posterior</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.27</span><span class="w">                         </span><span class="c1"># Asta only</span>
+<span class="nt">is_surprising</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                     </span><span class="c1"># Asta only</span>
+<span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">tag1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">tag2</span><span class="p p-Indicator">]</span>
+<span class="nt">relates_to_prs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="c1">#166, #168]</span>
+<span class="nv">---</span>
+</pre></div>
+</div>
+</li>
+<li><p>Body sections (in order):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Hypothesis</span></code> (or <code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Claim</span></code> for empirical)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Asta</span> <span class="pre">result</span></code> (or <code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Source</span></code> for empirical)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Asta</span> <span class="pre">analysis</span></code> (verbatim from Asta) — Asta only</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">What</span> <span class="pre">this</span> <span class="pre">means</span> <span class="pre">for</span> <span class="pre">us</span></code> (the <strong>reflection</strong> — what to actually do)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Cross-references</span></code> — PRs, related findings, bd issues</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Pull</span> <span class="pre">full</span> <span class="pre">code/output</span> <span class="pre">from</span> <span class="pre">Asta</span></code> (with the <code class="docutils literal notranslate"><span class="pre">asta</span> <span class="pre">autodiscovery</span> <span class="pre">experiment</span> <span class="pre">&lt;run-id&gt;</span> <span class="pre">node_&lt;i&gt;_0</span></code> command) — Asta only</p></li>
+</ul>
+</li>
+<li><p>Append a one-line JSON record to <code class="docutils literal notranslate"><span class="pre">docs/research/findings.jsonl</span></code> with at
+minimum: <code class="docutils literal notranslate"><span class="pre">id</span></code>, <code class="docutils literal notranslate"><span class="pre">date</span></code>, <code class="docutils literal notranslate"><span class="pre">source</span></code>, <code class="docutils literal notranslate"><span class="pre">status</span></code>, <code class="docutils literal notranslate"><span class="pre">tags</span></code>, <code class="docutils literal notranslate"><span class="pre">relates_to_prs</span></code>,
+<code class="docutils literal notranslate"><span class="pre">file</span></code>. Asta records should also include <code class="docutils literal notranslate"><span class="pre">surprise</span></code>, <code class="docutils literal notranslate"><span class="pre">prior</span></code>, <code class="docutils literal notranslate"><span class="pre">posterior</span></code>,
+<code class="docutils literal notranslate"><span class="pre">is_surprising</span></code>, <code class="docutils literal notranslate"><span class="pre">hypothesis</span></code>. Empirical records should include <code class="docutils literal notranslate"><span class="pre">title</span></code>,
+<code class="docutils literal notranslate"><span class="pre">claim</span></code>, <code class="docutils literal notranslate"><span class="pre">what_to_do_next</span></code>.</p></li>
+<li><p>If the new finding makes the TL;DR table at the top of this README more
+useful, update the table. Keep the table to ~10 rows.</p></li>
+</ol>
+</section>
+<section id="how-to-update-an-existing-finding">
+<h3>How to update an existing finding<a class="headerlink" href="#how-to-update-an-existing-finding" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Re-running a refuted hypothesis with different framing:</strong> create a NEW
+finding, link to the original in <code class="docutils literal notranslate"><span class="pre">relates_to</span></code>. Don’t edit history.</p></li>
+<li><p><strong>New PR closes a related issue:</strong> add the PR to the existing finding’s
+<code class="docutils literal notranslate"><span class="pre">relates_to_prs</span></code> list, both in the frontmatter and in the cross-references
+body section, AND in <code class="docutils literal notranslate"><span class="pre">findings.jsonl</span></code>.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="catalog-auto-pinned-high-value-findings">
+<h2>Catalog (auto-pinned high-value findings)<a class="headerlink" href="#catalog-auto-pinned-high-value-findings" title="Link to this heading"></a></h2>
+<section id="confirmed-these-are-working-assumptions-now">
+<h3>Confirmed (these are working assumptions now)<a class="headerlink" href="#confirmed-these-are-working-assumptions-now" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="2026-05-14-asta-06-the-alias-algorithms-strict-precision-constraint-precision10-results.html"><span class="std std-doc">asta-06</span></a>: alias has a 7.8× recall gap between matrix and trace metals</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-07-the-f1-performance-gap-between-hybrid_union-and-spectral_nnls.html"><span class="std std-doc">asta-07</span></a>: hybrid_union recovers alkali/alkaline-earth FNs from spectral_nnls</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-09-the-low-recall-ceiling-of-the-precision-dominant-alias.html"><span class="std std-doc">asta-09</span></a>: alias FN rate 97.9% on Na/K/Ca/Mg vs 88.5% on others</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-24-the-extremely-low-f1-score-of-the-comb.html"><span class="std std-doc">asta-24</span></a>: comb F1=0.03 is FN-bound; threshold globally too strict</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-28-the-016-macro-f1-gap-to-the-literature-ceiling.html"><span class="std std-doc">asta-28</span></a>: super-union recall ceiling is 0.667, not 0.85</p></li>
+<li><p><a class="reference internal" href="#."><span class="xref myst">empirical-01..06</span></a>: the n=33 universal-miss pattern (53 pairs, Si-heavy, Vrabel-dominated)</p></li>
+</ul>
+</section>
+<section id="refuted-stop-pursuing-these-specific-framings">
+<h3>Refuted (stop pursuing these specific framings)<a class="headerlink" href="#refuted-stop-pursuing-these-specific-framings" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="2026-05-14-asta-01-the-spectral_nnls-identifier-exhibits-significantly-lower-f1-scores.html"><span class="std std-doc">asta-01</span></a>: “spectral_nnls degrades on Vrabel soils” — actually performs better</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-10-the-current-macro_f1-ceiling-of-069-for-hybrid_union.html"><span class="std std-doc">asta-10</span></a>: “hybrid_union is recall-bound” — precision ≈ recall, no gap</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-13-the-correlation-identifier-sacrifices-the-perfect-precision-of.html"><span class="std std-doc">asta-13</span></a>: “correlation trades precision for recall” — both algorithms are near noise floor</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-18-the-hybrid_union-algorithm-suffers-a-significant-degradation-in.html"><span class="std std-doc">asta-18</span></a>: “hybrid_union degrades on Vrabel” — actually improves</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-19-the-combinatorial-line-matching-algorithm-comb-experiences-combinatorial-candidate.html"><span class="std std-doc">asta-19</span></a>: “BHVO-2 is uniquely hard for comb” — comb fails everywhere</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-21-the-hybrid_union-algorithm-is-robust-to-matrix-complexity.html"><span class="std std-doc">asta-21</span></a>: “spectral_nnls is matrix-sensitive” — no identifier×dataset interaction</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-25-the-physical-presence-of-iron-fe-in-a.html"><span class="std std-doc">asta-25</span></a>: “Fe-dense spectra confuse spectral_nnls” — actually helps it</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-26-the-high-failure-rate-of-aa1100_substrate-identifications-under.html"><span class="std std-doc">asta-26</span></a>: “alias failures correlate with low rp” — opposite direction</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-27-spectral_nnls-exhibits-a-severe-lack-of-cross-dataset-stability.html"><span class="std std-doc">asta-27</span></a>: “spectral_nnls is unstable on complex matrices” — worst on simplest dataset</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-30-alkali-and-alkaline-earth-metals-eg-na-k-li.html"><span class="std std-doc">asta-30</span></a>: “hybrid_union misses alkalis” — it actually recovers them well</p></li>
+</ul>
+</section>
+<section id="neutral-untestable-on-n-33-need-different-corpus">
+<h3>Neutral / untestable on n=33 (need different corpus)<a class="headerlink" href="#neutral-untestable-on-n-33-need-different-corpus" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="2026-05-14-asta-04-identification-failures-in-the-alias-algorithm-such-as.html"><span class="std std-doc">asta-04</span></a>, <a class="reference internal" href="2026-05-14-asta-11-identification-failures-via-physical-mechanisms-spectra-that-trigger.html"><span class="std std-doc">asta-11</span></a>, <a class="reference internal" href="2026-05-14-asta-15-the-high-failure-rate-of-alias-on-the.html"><span class="std std-doc">asta-15</span></a>, <a class="reference internal" href="2026-05-14-asta-17-the-strict-precision-of-alias-leads-to-aa1100_substrate.html"><span class="std std-doc">asta-17</span></a>, <a class="reference internal" href="2026-05-14-asta-22-spectra-with-lower-estimated-resolving-power-rp_estimate-cause.html"><span class="std std-doc">asta-22</span></a>, <a class="reference internal" href="2026-05-14-asta-29-tunable-threshold-floors-vs-physical-limits-spectrum-level-identification.html"><span class="std std-doc">asta-29</span></a>: all need a corpus with rp variance or aa1100_substrate spectra to test.</p></li>
+<li><p><a class="reference internal" href="2026-05-14-asta-03-the-correlation-identifiers-superior-f1-score-over-the.html"><span class="std std-doc">asta-03</span></a>: needs <code class="docutils literal notranslate"><span class="pre">basis_fwhm_mismatch_nm</span></code> logged into annotations.</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="cross-reference-prs-closed-this-session">
+<h2>Cross-reference: PRs closed this session<a class="headerlink" href="#cross-reference-prs-closed-this-session" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>PR</p></th>
+<th class="head"><p>Title (short)</p></th>
+<th class="head"><p>Related findings</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>#151, #153, #154</p></td>
+<td><p>wire <code class="docutils literal notranslate"><span class="pre">get_wavelength_tolerance</span></code> into alias / comb / correlation</p></td>
+<td><p><a class="reference internal" href="2026-05-14-asta-03-the-correlation-identifiers-superior-f1-score-over-the.html"><span class="std std-doc">asta-03</span></a> (FWHM annotations)</p></td>
+</tr>
+<tr class="row-odd"><td><p>#159</p></td>
+<td><p>opt-in <code class="docutils literal notranslate"><span class="pre">alias</span></code> high-recall mode</p></td>
+<td><p><a class="reference internal" href="2026-05-14-asta-06-the-alias-algorithms-strict-precision-constraint-precision10-results.html"><span class="std std-doc">asta-06</span></a>, <a class="reference internal" href="2026-05-14-asta-09-the-low-recall-ceiling-of-the-precision-dominant-alias.html"><span class="std std-doc">asta-09</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>#164</p></td>
+<td><p>opt-in hybrid 2-of-3 majority consensus</p></td>
+<td><p><a class="reference internal" href="2026-05-14-asta-07-the-f1-performance-gap-between-hybrid_union-and-spectral_nnls.html"><span class="std std-doc">asta-07</span></a>, <a class="reference internal" href="2026-05-14-asta-08-the-macro-f1-gap-from-spectral_nnls-044-to-hybrid_union.html"><span class="std std-doc">asta-08</span></a>, <a class="reference internal" href="2026-05-14-asta-12-certain-trace-and-alkali-elements-eg-na-k.html"><span class="std std-doc">asta-12</span></a>, <a class="reference internal" href="2026-05-14-asta-14-constructing-a-strict-pure-line-matching-ensemble-by-taking-the.html"><span class="std std-doc">asta-14</span></a>, <a class="reference internal" href="2026-05-14-empirical-06-zero-caught-by-all-5-zero-spectrum-element-pairs-caught-by-all-5.html"><span class="std std-doc">empirical-06</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>#166</p></td>
+<td><p>tighter Tier-2 FP rejection for Mn/Na/K</p></td>
+<td><p><a class="reference internal" href="2026-05-14-asta-06-the-alias-algorithms-strict-precision-constraint-precision10-results.html"><span class="std std-doc">asta-06</span></a>, <a class="reference internal" href="2026-05-14-asta-12-certain-trace-and-alkali-elements-eg-na-k.html"><span class="std std-doc">asta-12</span></a>, <a class="reference internal" href="2026-05-14-asta-19-the-combinatorial-line-matching-algorithm-comb-experiences-combinatorial-candidate.html"><span class="std std-doc">asta-19</span></a>, <a class="reference internal" href="2026-05-14-asta-24-the-extremely-low-f1-score-of-the-comb.html"><span class="std std-doc">asta-24</span></a> — <strong>tension</strong>: asta-24 argues for <em>looser</em> comb thresholds; verify scope of #166.</p></td>
+</tr>
+<tr class="row-even"><td><p>#168</p></td>
+<td><p>partition-function kernel basis (log10→natural log) — 18-OOM fix</p></td>
+<td><p><a class="reference internal" href="2026-05-14-asta-28-the-016-macro-f1-gap-to-the-literature-ceiling.html"><span class="std std-doc">asta-28</span></a>, <a class="reference internal" href="2026-05-14-empirical-01-universal-misses-53-pairs-53174-true-spectrum-element-pairs-universally-missed-by.html"><span class="std std-doc">empirical-01</span></a>, <a class="reference internal" href="2026-05-14-empirical-02-top-missed-elements-top-universally-missed-elements-si-15-mg-11-al.html"><span class="std std-doc">empirical-02</span></a> — physical modeling improvement; may close part of the 0.16 macro-F1 gap</p></td>
+</tr>
+<tr class="row-odd"><td><p>#169</p></td>
+<td><p>multi-metric F1 gate (schema v2)</p></td>
+<td><p><a class="reference internal" href="2026-05-14-empirical-03-vrabel-rp-confound-4953-universal-misses-are-on-vrabel2020_soil_benchmark-rp30000.html"><span class="std std-doc">empirical-03</span></a> — partway to per-rp-bucket reporting</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="provenance">
+<h2>Provenance<a class="headerlink" href="#provenance" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Asta autodiscovery run: <code class="docutils literal notranslate"><span class="pre">1f79815f-78b6-4f74-9c06-27127067c326</span></code></p></li>
+<li><p>30 experiments, 18 marked <code class="docutils literal notranslate"><span class="pre">is_surprising</span></code> by Asta, 5 strongly confirmed
+(surprise ≥ +0.25), 13 refuted (surprise ≤ -0.49), 12 neutral / weakly
+signal’d.</p></li>
+<li><p>Empirical n=33 analysis: derived from the verifier benchmark export
+used by PR #169’s schema-v2 gate.</p></li>
+<li><p>Generation date: 2026-05-14.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

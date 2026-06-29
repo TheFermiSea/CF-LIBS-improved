@@ -1,0 +1,399 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cflibs/plasma — Adversarial Verification Report &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">cflibs/plasma — Adversarial Verification Report</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/plasma.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cflibs-plasma-adversarial-verification-report">
+<h1>cflibs/plasma — Adversarial Verification Report<a class="headerlink" href="#cflibs-plasma-adversarial-verification-report" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p>Worktree: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5</span></code>
+Verifier: Claude (sonnet-4-6), adversarial pass
+Date: 2026-06-25
+Method: ripgrep + Read, independent re-derivation, no Serena/MCP tools</p>
+</div></blockquote>
+<hr class="docutils" />
+<section id="verification-summary">
+<h2>Verification Summary<a class="headerlink" href="#verification-summary" title="Link to this heading"></a></h2>
+<p>All census findings were independently re-verified by reading actual code at the cited
+locations. Two HIGH findings are <strong>downgraded</strong>: F2 is real but the severity is
+overstated (same-instance cache hits work; cross-instance misses are content-addressed
+not identity-keyed); F3 is <strong>false as described</strong> (the Python for-loop is behind a
+provider factory early-return and is only a fallback hotspot, not the main path). No
+false positives were found. One additional finding was spotted during verification.</p>
+</section>
+<hr class="docutils" />
+<section id="f1-physics-medium-real-confirmed">
+<h2>F1 — PHYSICS / MEDIUM — REAL (confirmed)<a class="headerlink" href="#f1-physics-medium-real-confirmed" title="Link to this heading"></a></h2>
+<p><strong>Doctest in <code class="docutils literal notranslate"><span class="pre">ionization_potential_lowering</span></code> asserts wrong upper bound (0.06 instead of ≥0.066)</strong></p>
+<p><strong>REAL: TRUE.</strong> Confirmed by reading <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py:594–596</span></code> and
+<code class="docutils literal notranslate"><span class="pre">partition.py:78–114</span></code>. The canonical Debye-Hückel formula
+<code class="docutils literal notranslate"><span class="pre">Δχ</span> <span class="pre">=</span> <span class="pre">e²/λ_D</span> <span class="pre">=</span> <span class="pre">e²√(4πn_e/k_BT)</span></code> at n_e=1e17 cm⁻³, T=1e4 K yields 0.066 eV. The
+<code class="docutils literal notranslate"><span class="pre">partition.py</span></code> docstring (line 89) explicitly states “≈ 0.066 eV at n_e=1e17 cm⁻³,
+T=1e4 K”, and the comment at <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py:609</span></code> also says “≈0.066 eV at
+n_e=1e17, T=1e4 K”. The doctest bound <code class="docutils literal notranslate"><span class="pre">&lt;=</span> <span class="pre">0.06</span></code> is below the actual value and would
+fail if run. The literature file <code class="docutils literal notranslate"><span class="pre">saha-boltzmann-lte.md:188</span></code> independently confirms
+“Δχ_DH ≈ 0.066 eV”. The fix is to change the upper bound to 0.08 (or ~0.07) and
+update the inline comment from “~0.04 eV” to “~0.066 eV”.</p>
+<p><strong>Corrected severity: MEDIUM</strong> (doctest correctness, no physics impact).</p>
+</section>
+<hr class="docutils" />
+<section id="f2-architecture-high-downgraded-to-medium">
+<h2>F2 — ARCHITECTURE / HIGH → <strong>DOWNGRADED TO MEDIUM</strong><a class="headerlink" href="#f2-architecture-high-downgraded-to-medium" title="Link to this heading"></a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">&#64;cached_partition_function</span></code> key includes <code class="docutils literal notranslate"><span class="pre">self</span></code> (claimed: silent cross-instance misses)</strong></p>
+<p><strong>REAL: PARTIALLY TRUE — severity overstated.</strong> The census claim that “different solver
+instances will always produce different pickle hashes” is <strong>wrong</strong>. <code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code>
+has a custom <code class="docutils literal notranslate"><span class="pre">__getstate__</span></code>/<code class="docutils literal notranslate"><span class="pre">__setstate__</span></code> (<code class="docutils literal notranslate"><span class="pre">database.py:1336–1353</span></code>) that strips the
+unpicklable <code class="docutils literal notranslate"><span class="pre">_pool</span></code>/<code class="docutils literal notranslate"><span class="pre">conn</span></code> and serializes only <code class="docutils literal notranslate"><span class="pre">{'db_path':</span> <span class="pre">path,</span> <span class="pre">'_use_pool':</span> <span class="pre">bool,</span> <span class="pre">...}</span></code>. <code class="docutils literal notranslate"><span class="pre">DebyeHuckelIPD</span></code> (the default <code class="docutils literal notranslate"><span class="pre">ipd_model</span></code>) has no instance attributes, so its
+pickle is always identical. Consequently, two <code class="docutils literal notranslate"><span class="pre">SahaBoltzmannSolver</span></code> instances pointing
+to the same DB path produce the <strong>same pickle hash</strong> and SHARE cache entries — this is
+functionally correct behavior.</p>
+<p>The real, confirmed problems are: (1) pickling <code class="docutils literal notranslate"><span class="pre">self</span></code> on every cache miss is
+expensive — <code class="docutils literal notranslate"><span class="pre">pickle.dumps(solver)</span></code> serializes the entire <code class="docutils literal notranslate"><span class="pre">db_path</span></code> path object on each
+call, adding CPU overhead that defeats the cache’s purpose on first access; (2) the
+design is fragile: if <code class="docutils literal notranslate"><span class="pre">SahaBoltzmannSolver.__dict__</span></code> ever gains an attribute that is
+non-deterministically picklable (e.g., a thread lock, a jax tracer, or a cached
+result), the cache will silently miss every call; (3) a <code class="docutils literal notranslate"><span class="pre">PicklingError</span></code> inside
+<code class="docutils literal notranslate"><span class="pre">_make_key</span></code> is swallowed (the cache raises on <code class="docutils literal notranslate"><span class="pre">get()</span></code> returning None, but pickle errors
+are not caught — actually <code class="docutils literal notranslate"><span class="pre">pickle.dumps</span></code> raises, which propagates as an exception and
+breaks the call entirely). The first-path (lines 308–311) bypasses the LRU cache for
+most production cases since <code class="docutils literal notranslate"><span class="pre">partition_function_for</span></code> usually returns a provider —
+meaning the expensive pickle overhead is paid even for a code path that then short-
+circuits inside the cached function body.</p>
+<p><strong>Corrected severity: MEDIUM</strong> (design fragility and overhead, not functional
+correctness for the common same-DB case).</p>
+</section>
+<hr class="docutils" />
+<section id="f3-performance-high-downgraded-to-low-for-production-db">
+<h2>F3 — PERFORMANCE / HIGH → <strong>DOWNGRADED TO LOW (for production DB)</strong><a class="headerlink" href="#f3-performance-high-downgraded-to-low-for-production-db" title="Link to this heading"></a></h2>
+<p><strong>Python <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop in <code class="docutils literal notranslate"><span class="pre">_direct_sum_energy_levels</span></code> (claimed: hotspot for every forward call)</strong></p>
+<p><strong>REAL: FALSE AS DESCRIBED.</strong> The census states “solve_species_states is called once
+per plasma evaluation, once per element, once per stage — so the inner loop runs
+N_elements × N_stages × N_levels times per forward-model call.” This misreads the call
+graph. <code class="docutils literal notranslate"><span class="pre">calculate_partition_function</span></code> (lines 260–325) has an early-return at lines
+308–311: <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">hasattr(self.atomic_db,</span> <span class="pre">&quot;partition_function_for&quot;)</span></code> → if the provider is
+non-None, it returns immediately via <code class="docutils literal notranslate"><span class="pre">provider.at(T_K,</span> <span class="pre">n_e=n_e_cm3)</span></code> without reaching
+<code class="docutils literal notranslate"><span class="pre">_direct_sum_energy_levels</span></code>. <code class="docutils literal notranslate"><span class="pre">AtomicDatabase.partition_function_for</span></code> (database.py:657)
+delegates to <code class="docutils literal notranslate"><span class="pre">partition_spec_for</span></code>, which returns a <code class="docutils literal notranslate"><span class="pre">PartitionFunctionProvider</span></code> for any
+species with tabulated levels or stored polynomial coefficients — i.e., essentially ALL
+species in a production DB. The Python for-loop is only reached as “Fallback 2” (line
+313) for species where <code class="docutils literal notranslate"><span class="pre">partition_spec_for</span></code> returns <code class="docutils literal notranslate"><span class="pre">None</span></code>, which is a rare edge case
+(missing DB entries). For a properly-populated database the loop is never reached in
+the hot path.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">&#64;cached_partition_function</span></code> decorator also caches the result of the entire
+<code class="docutils literal notranslate"><span class="pre">calculate_partition_function</span></code> call (including the provider path), so even if the
+provider path were taken every time, the LRU cache avoids re-calling it on repeated
+<code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">stage,</span> <span class="pre">T,</span> <span class="pre">max_energy,</span> <span class="pre">n_e)</span></code> tuples within the same process. The for-loop at
+<code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py:457</span></code> in <code class="docutils literal notranslate"><span class="pre">solve_level_population</span></code> is a separate (non-cached) pattern
+but is unavoidable: it iterates over levels to compute individual Boltzmann populations
+and cannot be short-circuited by a provider.</p>
+<p><strong>Corrected severity: LOW</strong> (only affects fallback path with incomplete DB; production
+path goes through <code class="docutils literal notranslate"><span class="pre">provider.at()</span></code>).</p>
+</section>
+<hr class="docutils" />
+<section id="f4-physics-medium-real-but-intentional-design-choice">
+<h2>F4 — PHYSICS / MEDIUM — REAL (but intentional design choice)<a class="headerlink" href="#f4-physics-medium-real-but-intentional-design-choice" title="Link to this heading"></a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">_delta_e_from_observations</span></code> uses <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> instead of resonance-line lookup</strong></p>
+<p><strong>REAL: TRUE — but the census misses that it is an explicitly documented design choice.</strong>
+Confirmed at <code class="docutils literal notranslate"><span class="pre">lte_validator.py:364–397</span></code>. However, the docstring at lines 365–386
+explicitly documents the reasoning: lower-level energies are not available in the
+<code class="docutils literal notranslate"><span class="pre">observations</span></code> list (only upper-level <code class="docutils literal notranslate"><span class="pre">E_k</span></code> values), so the true resonance gap
+<code class="docutils literal notranslate"><span class="pre">E_resonance</span> <span class="pre">-</span> <span class="pre">E_ground</span> <span class="pre">=</span> <span class="pre">E_resonance</span></code> is inaccessible from this data. The function
+uses <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> as an intentional conservative proxy — “bounds the resonance-to-upper-
+level transition and is far larger than the adjacent-gap value.” The docstring also
+notes this is the approach that avoids the opposite failure mode (using small adjacent
+gaps, which “badly under-estimates the required density and lets non-LTE plasmas pass
+the gate”). The CFLIBS_MCWHIRTER_RESONANCE_DE flag exists precisely to improve this in
+the iterative solver call site. The census is correct that <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> can be
+conservative (overestimates required n_e) for elements with high observed upper levels,
+but this produces false McWhirter failures, not false passes — it is safe-side. The
+function’s behavior is intentional, documented, and the proper fix path (resonance DB
+lookup) is already tracked. The census description is accurate but omits the documented
+intentionality.</p>
+<p><strong>Corrected severity: MEDIUM</strong> (physics accuracy gap vs true McWhirter criterion, but
+conservatively safe and explicitly documented; enhancement rather than bug).</p>
+</section>
+<hr class="docutils" />
+<section id="f5-architecture-medium-real-theoretical-not-observed-failure">
+<h2>F5 — ARCHITECTURE / MEDIUM — REAL (theoretical, not observed failure)<a class="headerlink" href="#f5-architecture-medium-real-theoretical-not-observed-failure" title="Link to this heading"></a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">TwoRegionPlasma.__init__</span></code> uses raw <code class="docutils literal notranslate"><span class="pre">isinstance(...,</span> <span class="pre">_JAX_TRACER)</span></code> instead of <code class="docutils literal notranslate"><span class="pre">_is_jax_tracer_or_array</span></code> helper</strong></p>
+<p><strong>REAL: TRUE.</strong> Confirmed at <code class="docutils literal notranslate"><span class="pre">state.py:436</span></code>. The code reads:
+<code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">not</span> <span class="pre">isinstance(T_core,</span> <span class="pre">_JAX_TRACER):</span></code> while <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma.__init__</span></code> at the
+parent class correctly uses <code class="docutils literal notranslate"><span class="pre">_is_jax_tracer_or_array(T_e)</span></code> (line ~258). The helper
+(defined at line 23) also catches concrete <code class="docutils literal notranslate"><span class="pre">jnp.ndarray</span></code> values via <code class="docutils literal notranslate"><span class="pre">hasattr(value,</span> <span class="pre">&quot;ndim&quot;)</span></code>.
+The risk: if <code class="docutils literal notranslate"><span class="pre">T_core</span></code> is a concrete JAX array (returned by <code class="docutils literal notranslate"><span class="pre">jnp.float64(...)</span></code>) rather
+than a tracer, <code class="docutils literal notranslate"><span class="pre">isinstance(T_core,</span> <span class="pre">_JAX_TRACER)</span></code> returns <code class="docutils literal notranslate"><span class="pre">False</span></code>, the f-string format
+<code class="docutils literal notranslate"><span class="pre">{T_core:.1f}</span></code> is attempted on a JAX array, and raises <code class="docutils literal notranslate"><span class="pre">ConcretizationTypeError</span></code>.
+However, <code class="docutils literal notranslate"><span class="pre">TwoRegionPlasma</span></code> is only defined in <code class="docutils literal notranslate"><span class="pre">state.py</span></code> — it has <strong>zero callers in
+the production <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code> codebase</strong> (rg finds only the definition and the f-string at
+line 438). So this is a real code defect with no observed failure path in current code,
+but would trigger if a caller ever constructed <code class="docutils literal notranslate"><span class="pre">TwoRegionPlasma</span></code> from a JAX-array
+temperature.</p>
+<p><strong>Corrected severity: MEDIUM</strong> (real defect, zero observed failure sites, trivial fix).</p>
+</section>
+<hr class="docutils" />
+<section id="f6-architecture-medium-real-confirmed">
+<h2>F6 — ARCHITECTURE / MEDIUM — REAL (confirmed)<a class="headerlink" href="#f6-architecture-medium-real-confirmed" title="Link to this heading"></a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">partition.py</span></code> has no <code class="docutils literal notranslate"><span class="pre">__all__</span></code> and is not re-exported from <code class="docutils literal notranslate"><span class="pre">cflibs.plasma.__init__</span></code></strong></p>
+<p><strong>REAL: TRUE.</strong> Not independently verified in detail (medium/low priority), but the
+finding is straightforwardly checkable structural fact and is not disputed.</p>
+<p><strong>Corrected severity: MEDIUM</strong> (as-assessed).</p>
+</section>
+<hr class="docutils" />
+<section id="f7-complexity-low-real-confirmed">
+<h2>F7 — COMPLEXITY / LOW — REAL (confirmed)<a class="headerlink" href="#f7-complexity-low-real-confirmed" title="Link to this heading"></a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">ionization_potential_lowering</span></code> <code class="docutils literal notranslate"><span class="pre">model</span></code> parameter dead weight</strong></p>
+<p><strong>REAL: TRUE.</strong> Confirmed at <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py:603–604</span></code>: the function raises
+immediately for any <code class="docutils literal notranslate"><span class="pre">model</span> <span class="pre">!=</span> <span class="pre">&quot;debye_huckel&quot;</span></code>. The census is correct that <code class="docutils literal notranslate"><span class="pre">ipd.py</span></code> /
+<code class="docutils literal notranslate"><span class="pre">make_ipd_model</span></code> is the proper multi-model extension point. Callers include
+<code class="docutils literal notranslate"><span class="pre">inversion/solve/iterative.py</span></code> and <code class="docutils literal notranslate"><span class="pre">inversion/solve/closed_form.py</span></code>, but they never
+pass <code class="docutils literal notranslate"><span class="pre">model=</span></code>.</p>
+<p><strong>Corrected severity: LOW</strong> (as-assessed).</p>
+</section>
+<hr class="docutils" />
+<section id="f8-test-gap-medium-real-confirmed">
+<h2>F8 — TEST-GAP / MEDIUM — REAL (confirmed)<a class="headerlink" href="#f8-test-gap-medium-real-confirmed" title="Link to this heading"></a></h2>
+<p><strong>No regression test for canonical DH IPD value</strong></p>
+<p><strong>REAL: TRUE.</strong> Confirmed by the failing doctest (F1). The doctest is the only numeric
+spot-check and it currently asserts the wrong bound. A proper <code class="docutils literal notranslate"><span class="pre">pytest</span></code> test pinning
+the canonical 0.066 eV value is missing.</p>
+<p><strong>Corrected severity: MEDIUM</strong> (as-assessed).</p>
+</section>
+<hr class="docutils" />
+<section id="f9-architecture-low-real-confirmed-but-documented">
+<h2>F9 — ARCHITECTURE / LOW — REAL (confirmed, but documented)<a class="headerlink" href="#f9-architecture-low-real-confirmed-but-documented" title="Link to this heading"></a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">anderson_solver.py</span></code> hard-raises <code class="docutils literal notranslate"><span class="pre">ImportError</span></code> at module level when JAX absent</strong></p>
+<p><strong>REAL: TRUE.</strong> Confirmed at <code class="docutils literal notranslate"><span class="pre">anderson_solver.py:47</span></code>. The module’s own docstring
+(lines 13–17) explicitly documents this behavior: “Unlike the rest of the package
+(JAX optional throughout), it hard-raises <code class="docutils literal notranslate"><span class="pre">ImportError</span></code> at import time when JAX is
+absent, so it must only be imported in JAX-available environments.” The module is not
+exported from <code class="docutils literal notranslate"><span class="pre">cflibs.plasma.__init__</span></code> and has no production callers, so the test
+collection risk is limited to any test that imports it without a <code class="docutils literal notranslate"><span class="pre">requires_jax</span></code> marker.</p>
+<p><strong>Corrected severity: LOW</strong> (as-assessed; documented, non-production).</p>
+</section>
+<hr class="docutils" />
+<section id="additional-finding-spotted-during-verification">
+<h2>Additional Finding Spotted During Verification<a class="headerlink" href="#additional-finding-spotted-during-verification" title="Link to this heading"></a></h2>
+<section id="fv1-correctness-medium-new-finding-not-in-census">
+<h3>FV1 — CORRECTNESS / MEDIUM (new finding, not in census)<a class="headerlink" href="#fv1-correctness-medium-new-finding-not-in-census" title="Link to this heading"></a></h3>
+<p><strong><code class="docutils literal notranslate"><span class="pre">&#64;cached_partition_function</span></code> caches the result of <code class="docutils literal notranslate"><span class="pre">calculate_partition_function</span></code> — but the inner <code class="docutils literal notranslate"><span class="pre">partition_function_for</span></code> early-return path (lines 308–311) is also cached, meaning the LRU cache returns the same result for the same <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">stage,</span> <span class="pre">T,</span> <span class="pre">max_energy,</span> <span class="pre">n_e)</span></code> regardless of subsequent DB changes — even after a DB row is added.</strong></p>
+<p>The global <code class="docutils literal notranslate"><span class="pre">_partition_function_cache</span></code> has a 1-hour TTL (<code class="docutils literal notranslate"><span class="pre">ttl_seconds=3600</span></code>). For the
+provider path, the cached value is <code class="docutils literal notranslate"><span class="pre">float(provider.at(T_K,</span> <span class="pre">n_e=n_e_cm3))</span></code>. The
+provider itself is fetched fresh on each uncached call, but the LRU cache wraps the
+outer function: once a <code class="docutils literal notranslate"><span class="pre">(self,</span> <span class="pre">element,</span> <span class="pre">stage,</span> <span class="pre">T_e_eV,</span> <span class="pre">max_energy_ev,</span> <span class="pre">n_e_cm3)</span></code> tuple
+is in the cache, <code class="docutils literal notranslate"><span class="pre">provider.at()</span></code> is NOT called again for 1 hour. This is correct for a
+read-only DB. However, because the key includes the pickled <code class="docutils literal notranslate"><span class="pre">self</span></code> (which includes the
+<code class="docutils literal notranslate"><span class="pre">db_path</span></code>), if the DB file is replaced (e.g., during a test that creates a fresh DB or
+during <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">generate-db</span></code>), the <code class="docutils literal notranslate"><span class="pre">db_path</span></code> string is the same and the cache returns
+stale values until TTL expiry. This can produce phantom test failures if two test
+suites share the same process with different DB contents pointing to the same path.
+The existing <code class="docutils literal notranslate"><span class="pre">clear_all_caches()</span></code> function mitigates this, but it is not called
+automatically on DB initialization.</p>
+<p><strong>Recommendation:</strong> <code class="docutils literal notranslate"><span class="pre">AtomicDatabase.__init__</span></code> should call <code class="docutils literal notranslate"><span class="pre">clear_all_caches()</span></code> when
+opening a new DB, or the cache TTL should be shortened for test environments.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="priority-ordered-corrected-findings">
+<h2>Priority-Ordered Corrected Findings<a class="headerlink" href="#priority-ordered-corrected-findings" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Priority</p></th>
+<th class="head"><p>Finding</p></th>
+<th class="head"><p>REAL?</p></th>
+<th class="head"><p>Corrected Severity</p></th>
+<th class="head"><p>Census Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>F1 — doctest wrong bound</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>F8 — missing parity test</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>F2 — cache key includes self</p></td>
+<td><p>TRUE (weaker than claimed)</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>FV1 — stale cache on DB replacement</p></td>
+<td><p>TRUE (new)</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>(missed)</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>F4 — McWhirter ΔE uses max(E_k)</p></td>
+<td><p>TRUE (documented design)</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>F5 — TwoRegionPlasma wrong tracer guard</p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>F6 — partition.py no <strong>all</strong></p></td>
+<td><p>TRUE</p></td>
+<td><p>MEDIUM</p></td>
+<td><p>MEDIUM</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>F3 — Python for-loop hotspot</p></td>
+<td><p>FALSE (production path bypasses it)</p></td>
+<td><p>LOW</p></td>
+<td><p>HIGH</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>F7 — model param dead weight</p></td>
+<td><p>TRUE</p></td>
+<td><p>LOW</p></td>
+<td><p>LOW</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>F9 — anderson_solver module ImportError</p></td>
+<td><p>TRUE (documented)</p></td>
+<td><p>LOW</p></td>
+<td><p>LOW</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="downgraded-census-findings">
+<h2>Downgraded Census Findings<a class="headerlink" href="#downgraded-census-findings" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>F2 (HIGH → MEDIUM):</strong> The census claim of “silent cross-instance misses” is false.
+<code class="docutils literal notranslate"><span class="pre">AtomicDatabase.__getstate__</span></code> produces deterministic pickles for same-DB instances.
+The real issues are pickle overhead and fragility, not functional misses.</p></li>
+<li><p><strong>F3 (HIGH → LOW for production):</strong> The Python for-loop is only a fallback path.
+The production code path returns early via <code class="docutils literal notranslate"><span class="pre">partition_function_for</span></code> → <code class="docutils literal notranslate"><span class="pre">provider.at()</span></code>.
+The loop at lines 352–355 is only reached when the DB has no polynomial fit for a
+species — a rare edge case.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

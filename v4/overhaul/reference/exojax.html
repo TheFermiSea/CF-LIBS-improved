@@ -1,0 +1,533 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ExoJAX Reference: Patterns for CF-LIBS JAX Forward Model Overhaul &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ExoJAX Reference: Patterns for CF-LIBS JAX Forward Model Overhaul</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/reference/exojax.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="exojax-reference-patterns-for-cf-libs-jax-forward-model-overhaul">
+<h1>ExoJAX Reference: Patterns for CF-LIBS JAX Forward Model Overhaul<a class="headerlink" href="#exojax-reference-patterns-for-cf-libs-jax-forward-model-overhaul" title="Link to this heading"></a></h1>
+<p>Sources:</p>
+<ul class="simple">
+<li><p>Paper I: Kawahara et al. 2022, ApJS 258, 31 (arXiv:2105.14782) — “Auto-Differentiable Spectrum Model”</p></li>
+<li><p>Paper II: Kawahara et al. 2025, ApJ 985, 263 (arXiv:2410.06900) — “ExoJAX2”</p></li>
+<li><p>Docs: https://secondearths.sakura.ne.jp/exojax/</p></li>
+<li><p>GitHub: https://github.com/HajimeKawahara/exojax (MIT license)</p></li>
+</ul>
+<hr class="docutils" />
+<section id="how-exojax-structures-the-computation">
+<h2>1. How ExoJAX Structures the Computation<a class="headerlink" href="#how-exojax-structures-the-computation" title="Link to this heading"></a></h2>
+<section id="module-hierarchy-v2-x">
+<h3>1.1 Module Hierarchy (v2.x)<a class="headerlink" href="#module-hierarchy-v2-x" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">exojax</span><span class="o">/</span>
+  <span class="n">database</span><span class="o">/</span>          <span class="c1"># line-list ingest and atomic data</span>
+    <span class="n">core_atom</span><span class="o">/</span>       <span class="c1"># shared atom primitives</span>
+      <span class="n">broadening</span><span class="o">.</span><span class="n">py</span>  <span class="c1"># gamma_vald3, gamma_uns, gamma_KA3/4</span>
+      <span class="n">line_strength</span><span class="o">.</span><span class="n">py</span>   <span class="c1"># S0 at Tref (Einstein A formulation)</span>
+      <span class="n">pf</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># partition function interpolation</span>
+    <span class="n">kurucz</span><span class="o">/</span><span class="n">api</span><span class="o">.</span><span class="n">py</span>    <span class="c1"># AdbKurucz class</span>
+    <span class="n">vald</span><span class="o">/</span><span class="n">api</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># AdbVald / AdbSepVald classes</span>
+  <span class="n">opacity</span><span class="o">/</span>           <span class="c1"># cross-section computation</span>
+    <span class="n">lpf</span><span class="o">/</span><span class="n">lpf</span><span class="o">.</span><span class="n">py</span>       <span class="c1"># direct Voigt line-profile (LPF)</span>
+    <span class="n">modit</span><span class="o">/</span>           <span class="c1"># Modified Discrete Integral Transform</span>
+    <span class="n">premodit</span><span class="o">/</span>        <span class="c1"># pre-computed LBD variant (memory-efficient)</span>
+    <span class="n">initspec</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># init_lpf / init_modit / init_premodit</span>
+    <span class="n">policies</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># MemoryPolicy frozen dataclass</span>
+  <span class="n">rt</span><span class="o">/</span>                <span class="c1"># radiative transfer (ArtEmisPure, etc.)</span>
+  <span class="n">postproc</span><span class="o">/</span>          <span class="c1"># instrumental broadening, rotation kernels</span>
+</pre></div>
+</div>
+<p><strong>Design principle:</strong> loose coupling between layers. The database (Adb*) objects are separate from opacity calculators (Opa*). In v2.2, <code class="docutils literal notranslate"><span class="pre">OpaPremodit</span></code> gained <code class="docutils literal notranslate"><span class="pre">from_mdb()</span></code> and <code class="docutils literal notranslate"><span class="pre">from_snapshot()</span></code> constructors so opacity can be computed without holding the full line-list in GPU memory simultaneously.</p>
+</section>
+<section id="forward-model-data-flow">
+<h3>1.2 Forward Model Data Flow<a class="headerlink" href="#forward-model-data-flow" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">AdbKurucz</span><span class="o">/</span><span class="n">AdbVald</span>  <span class="p">(</span><span class="n">load</span> <span class="n">line</span> <span class="n">data</span> <span class="n">to</span> <span class="n">CPU</span> <span class="n">numpy</span><span class="p">)</span>
+   <span class="o">|</span>
+   <span class="o">|</span> <span class="n">generate_jnp_arrays</span><span class="p">()</span>   <span class="o">--</span> <span class="n">transfers</span> <span class="n">selected</span> <span class="n">lines</span> <span class="n">to</span> <span class="n">JAX</span> <span class="n">arrays</span>
+   <span class="n">v</span>
+<span class="n">line_strength_atom</span><span class="p">()</span>          <span class="o">--</span> <span class="n">compute</span> <span class="n">S0</span> <span class="n">at</span> <span class="n">Tref</span> <span class="p">(</span><span class="n">once</span><span class="p">,</span> <span class="n">on</span> <span class="n">CPU</span><span class="o">/</span><span class="n">JAX</span><span class="p">)</span>
+   <span class="o">|</span>
+   <span class="n">v</span>  <span class="p">[</span><span class="n">per</span><span class="o">-</span><span class="n">T</span> <span class="n">evaluation</span><span class="p">,</span> <span class="n">vmapped</span> <span class="n">over</span> <span class="n">atmosphere</span> <span class="n">layers</span><span class="p">]</span>
+<span class="n">line_strength</span><span class="p">(</span><span class="n">Tarr</span><span class="p">,</span> <span class="n">logsij0</span><span class="p">,</span> <span class="n">nu_lines</span><span class="p">,</span> <span class="n">elower</span><span class="p">,</span> <span class="n">qr</span><span class="p">,</span> <span class="n">Tref</span><span class="p">)</span>
+<span class="n">sigmaDM</span>  <span class="o">=</span> <span class="n">doppler_sigma</span><span class="p">(</span><span class="n">nu_lines</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">atomicmass</span><span class="p">)</span>          <span class="o">--</span> <span class="n">Gaussian</span> <span class="n">width</span>
+<span class="n">gammaLM</span>  <span class="o">=</span> <span class="n">gamma_vald3</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">PH</span><span class="p">,</span> <span class="n">PHH</span><span class="p">,</span> <span class="n">PHe</span><span class="p">,</span> <span class="n">ielem</span><span class="p">,</span> <span class="n">iion</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span> <span class="o">--</span> <span class="n">Lorentz</span> <span class="n">width</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">numatrix</span> <span class="o">=</span> <span class="n">init_lpf</span><span class="p">(</span><span class="n">nu_lines</span><span class="p">,</span> <span class="n">nu_grid</span><span class="p">)</span>  <span class="o">--</span> <span class="p">(</span><span class="n">Nline</span> <span class="n">x</span> <span class="n">Nwav</span><span class="p">)</span> <span class="n">offset</span> <span class="n">matrix</span>
+<span class="n">xsm</span>      <span class="o">=</span> <span class="n">xsmatrix</span><span class="p">(</span><span class="n">numatrix</span><span class="p">,</span> <span class="n">sigmaDM</span><span class="p">,</span> <span class="n">gammaLM</span><span class="p">,</span> <span class="n">SijM</span><span class="p">)</span>     <span class="o">--</span> <span class="p">(</span><span class="n">Nlayer</span> <span class="n">x</span> <span class="n">Nwav</span><span class="p">)</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">dtau</span>     <span class="o">=</span> <span class="n">layer_optical_depth</span><span class="p">(</span><span class="n">dParr</span><span class="p">,</span> <span class="n">xsm</span><span class="p">,</span> <span class="n">VMR</span><span class="p">,</span> <span class="n">mmw</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
+<span class="n">F0</span>       <span class="o">=</span> <span class="n">art</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">dtau</span><span class="p">,</span> <span class="n">Tarr</span><span class="p">)</span>          <span class="o">--</span> <span class="n">radiative</span> <span class="n">transfer</span> <span class="p">(</span><span class="n">linear</span> <span class="n">algebra</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="three-opacity-strategies-lpf-modit-premodit">
+<h3>1.3 Three Opacity Strategies (LPF / MODIT / PreMODIT)<a class="headerlink" href="#three-opacity-strategies-lpf-modit-premodit" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>When to use</p></th>
+<th class="head"><p>Memory scaling</p></th>
+<th class="head"><p>Accuracy</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>LPF (direct)</p></td>
+<td><p>N_line &lt; 10^3</p></td>
+<td><p>O(N_line * N_wav) per layer — impractical for large N</p></td>
+<td><p>~1% vs scipy.wofz</p></td>
+</tr>
+<tr class="row-odd"><td><p>MODIT</p></td>
+<td><p>10^3 &lt; N_line &lt; 10^5</p></td>
+<td><p>O(N_wav * N_par * N_line) grid-based, nearly independent of N_line until ~10^5</p></td>
+<td><p>F64: &lt;1%; F32: breaks below 10^-25 cm^2</p></td>
+</tr>
+<tr class="row-even"><td><p>PreMODIT</p></td>
+<td><p>N_line &gt; 10^5, or GPU-memory-limited</p></td>
+<td><p>Pre-computes LBD (Line Basis Density) at Tref; decouples DB from GPU</p></td>
+<td><p>Best; enables native-resolution JWST</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The LPF cross-section formula</strong> (Paper I, Eq. 1–2):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sigma(nu) = S * V(nu - nu_hat, beta, gamma_L)
+          = S / (sqrt(2pi) * beta) * H((nu - nu_hat)/(sqrt(2)*beta), gamma_L/(sqrt(2)*beta))
+</pre></div>
+</div>
+<p>where H(x,a) is the Voigt-Hjerting function.</p>
+<p><strong>MODIT</strong> converts the sum over lines into a 2D lineshape distribution matrix S_jk in (q, gamma_L) space on a log-wavenumber grid, then uses FFT convolution (Paper I, Eq. 18–19):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sigma(q_i) = sum_{jk} S_jk * V(q_i - q_j; beta_k, gamma_L,k)
+           = sum_k  FFT^{-1}[ FFT(S_jk) * FFT(V(q_j; beta_k, gamma_L,k)) ]
+</pre></div>
+</div>
+<p>This reduces N_convolutions from one-per-line to one-per-point on the lineshape distribution grid.</p>
+<p><strong>PreMODIT</strong> pre-computes a Line Basis Density L(nu, E, b) at a reference T_wp, then recovers S at any T analytically via Boltzmann weighting — never materializing per-line arrays on device.</p>
+<p><strong>Opart (ExoJAX2):</strong> layer-by-layer opacity (one layer at a time) cuts GPU memory from O(N_layer * N_wav * N_brd) to O(N_wav * N_brd), at the cost of losing reverse-mode autodiff (forward-mode or finite diff must be used instead).</p>
+<p><strong>nu-stitching (ExoJAX2):</strong> splits the wavenumber grid into segments, computes opacity per segment, then recombines via Overlap-and-Add (OLA) in the Fourier domain — differentiably. Applicable to transmission (where Opart cannot be used).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="specific-apis-patterns-numerical-techniques-worth-adopting">
+<h2>2. Specific APIs / Patterns / Numerical Techniques Worth Adopting<a class="headerlink" href="#specific-apis-patterns-numerical-techniques-worth-adopting" title="Link to this heading"></a></h2>
+<section id="voigt-hjerting-via-faddeeva-with-custom-jvp">
+<h3>2.1 Voigt-Hjerting via Faddeeva with Custom JVP<a class="headerlink" href="#voigt-hjerting-via-faddeeva-with-custom-jvp" title="Link to this heading"></a></h3>
+<p>The core Voigt function <code class="docutils literal notranslate"><span class="pre">hjert(x,</span> <span class="pre">a)</span></code> = Re[w(x + ia)] where w is the Faddeeva function.</p>
+<p><strong>Two-region implementation</strong> (Paper I, Eq. 6, 10–12):</p>
+<ul class="simple">
+<li><p>For |z|^2 = x^2 + a^2 &lt; 111: use “Algorithm 916” (Zaghloul &amp; Ali 2011) with fixed M=27 terms.</p>
+<ul>
+<li><p>Algorithm 916 expansion: H_M(x,a) = e^{-x^2} erfcx(a) cos(2xa) + (2<em>eta</em>x*sin(ax)/pi)<em>e^{-x^2}<em>sinc(ax/pi) + (2</em>eta/pi)</em>{…Sigma_1, Sigma_2, Sigma_3 terms}</p></li>
+<li><p>erfcx(a) = e^{a^2} erfc(a) is the <em>scaled</em> complementary error function — computed via Chebyshev approximation (Shepherd &amp; Laframboise 1981) to avoid overflow at large a.</p></li>
+</ul>
+</li>
+<li><p>For |z|^2 &gt;= 111: asymptotic w^{asy}(z) = i/(z<em>sqrt(pi)) * (1 + tilde_alpha</em>(s_0 + tilde_alpha*(s_1 + …))) where s_k = (2k+1)!!</p></li>
+</ul>
+<p><strong>Why not scipy.special.wofz:</strong> scipy’s wofz is not JAX-compatible (not traceable, no JVP).</p>
+<p><strong>Custom JVP</strong> defined analytically (Paper I, Eq. 13–14):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>d/dx H(x,a) = 2a * L(x,a) - 2x * H(x,a)
+d/da H(x,a) = 2x * L(x,a) + 2a * H(x,a) - 2/sqrt(pi)
+</pre></div>
+</div>
+<p>where L(x,a) = Im[w(x+ia)]. This avoids AD through the conditionals and sums, giving clean gradients for HMC.</p>
+<p><strong>Accuracy:</strong> absolute difference from scipy.special.wofz &lt; 10^-6 for 10^-3 &lt; a &lt; 10^5 and 10^-3 &lt; x &lt; 10^5.</p>
+<p><strong>cflibs adoption:</strong> Replace any current Voigt/pseudo-Voigt with hjert-style implementation. Define <code class="docutils literal notranslate"><span class="pre">&#64;jax.custom_jvp</span></code> with the analytic d/dx and d/da rules. Use Chebyshev erfcx to avoid overflow at large a (relevant for pressure-broadened LIBS lines).</p>
+<p>Reference: <code class="docutils literal notranslate"><span class="pre">src/exojax/opacity/lpf/lpf.py</span></code> — functions <code class="docutils literal notranslate"><span class="pre">hjert</span></code>, <code class="docutils literal notranslate"><span class="pre">hjert_jvp</span></code>, <code class="docutils literal notranslate"><span class="pre">ljert</span></code>, <code class="docutils literal notranslate"><span class="pre">rewofz</span></code>, <code class="docutils literal notranslate"><span class="pre">asymptotic_wofz</span></code>.</p>
+</section>
+<section id="line-strength-temperature-scaling">
+<h3>2.2 Line Strength Temperature Scaling<a class="headerlink" href="#line-strength-temperature-scaling" title="Link to this heading"></a></h3>
+<p><strong>Two-step approach</strong> separates a one-time CPU computation (S0 at Tref) from a per-T JAX computation:</p>
+<p><strong>Step 1 — Reference line strength S0</strong> (once, <code class="docutils literal notranslate"><span class="pre">line_strength_atom</span></code>, Paper I equivalent):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>S0 = (-A * g_upper * exp(-hc/kB * E_lower / Tref) * expm1(-hc/kB * nu / Tref))
+     / (8*pi*c_cgs * nu^2 * Q(Tref))
+</pre></div>
+</div>
+<p>Note <code class="docutils literal notranslate"><span class="pre">expm1</span></code> instead of <code class="docutils literal notranslate"><span class="pre">exp(...)</span> <span class="pre">-</span> <span class="pre">1</span></code> for numerical stability at small arguments. The negative sign arises from the convention; the result is a positive absorption cross-section per molecule.</p>
+<p><strong>Step 2 — Temperature-dependent scaling</strong> (per layer, vmapped):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>S(T) = S0 * (Q(Tref)/Q(T)) * exp[-hc/kB * E_lower * (1/T - 1/Tref)]
+           * (1 - exp(-hc/kB * nu / T)) / (1 - exp(-hc/kB * nu / Tref))
+</pre></div>
+</div>
+<p>Equivalently (Paper I, Eq. 27–28), using log-domain to avoid float32 overflow:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>log S(T) = s0 - c2 * E_lower * (T^{-1} - Tref^{-1}) + log(1 - e^{-c2*nu/T}) - log(1 - e^{-c2*nu/Tref}) - log(q_r(T))
+</pre></div>
+</div>
+<p>where s0 = log_e S0, q_r(T) = Q(T)/Q(Tref), c2 = hc/kB = 1.4387773 cm*K.</p>
+<p><strong>ExoMol variant</strong> (Paper I, Eq. 31) uses Einstein A + state energies directly:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>S(T) = (g_up/Q(T)) * (A / (8*pi*c*nu^2)) * exp(-c2*E_low/T) * (1 - e^{-c2*nu/T})
+</pre></div>
+</div>
+<p><strong>cflibs adoption:</strong> The current <code class="docutils literal notranslate"><span class="pre">calculate_line_emissivity</span></code> in cflibs uses emissivity (intensity units). For a JAX forward model that needs autodiff: implement S(T) in log-domain with <code class="docutils literal notranslate"><span class="pre">jnp.expm1</span></code> and <code class="docutils literal notranslate"><span class="pre">jnp.log1p</span></code>, vmap over temperature, keep logsij0 (log reference S) as the stored per-line quantity. This is numerically stable even at float32.</p>
+</section>
+<section id="partition-function-interpolation">
+<h3>2.3 Partition Function Interpolation<a class="headerlink" href="#partition-function-interpolation" title="Link to this heading"></a></h3>
+<p>ExoJAX uses a pre-tabulated 284-species grid from Barklem &amp; Collet (2016) stored at fixed temperature nodes. At runtime:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>QT_interp_284(T, T_gQT, gQT_284species)  -- jnp.interp across all 284 species
+</pre></div>
+</div>
+<p>Per-line mapping uses <code class="docutils literal notranslate"><span class="pre">QTmask[i]</span></code> = index of species i in the 284-species table. This mapping is computed once from (ielem, iion) pairs.</p>
+<p>For neutral iron specifically, Irwin (1981) polynomial is available as an alternative:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>ln Q_Fe(T) = a0 + a1*ln(T) + a2*(ln T)^2 + ... + a5*(ln T)^5   (6 coefficients)
+</pre></div>
+</div>
+<p><strong>cflibs adoption:</strong> The existing polynomial partition function <code class="docutils literal notranslate"><span class="pre">log</span> <span class="pre">U</span> <span class="pre">=</span> <span class="pre">sum_n</span> <span class="pre">a_n</span> <span class="pre">(log</span> <span class="pre">T)^n</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code> is already the right form. For multi-species JAX computation, build a per-element array of polynomial coefficients and use <code class="docutils literal notranslate"><span class="pre">jnp.polyval</span></code> with vmap — avoids the 284-species table overhead if you only have a handful of LIBS elements.</p>
+</section>
+<section id="pressure-broadening-gamma-vald3">
+<h3>2.4 Pressure Broadening (gamma_vald3)<a class="headerlink" href="#pressure-broadening-gamma-vald3" title="Link to this heading"></a></h3>
+<p>Five methods available (broadening.py), each JAX-vmappable:</p>
+<ol class="arabic simple">
+<li><p><strong>gamma_vald3</strong> (recommended): uses tabulated vdW damping constant when vdWdamp &lt; 0 (Barklem et al. 1998/2000 ABO theory); falls back to Unsöld (1955) C6 estimate when vdWdamp &gt;= 0.</p>
+<ul class="simple">
+<li><p>C6 = 0.3e-30 * [1/(ionE - chi - chi_lambda)^2 - 1/(ionE - chi)^2]</p></li>
+<li><p>Stark contribution: gamStark = 10^gamSta * N_e * (T/10000)^(1/6)</p></li>
+<li><p>Van der Waals: uses P_H, P_HH (H2), P_He partial pressures separately</p></li>
+</ul>
+</li>
+<li><p><strong>gamma_KA3</strong>: Kurucz &amp; Avrett (1981) quantum-defect method, T^0.3 dependence</p></li>
+<li><p><strong>gamma_uns</strong>: Classical Unsöld, T^{-0.7}</p></li>
+<li><p><strong>gamma_KA4</strong>: Simplified KA, large-mass limit</p></li>
+</ol>
+<p><strong>cflibs LIBS context:</strong> In LIBS plasmas, pressure broadening is from electron collisions (Stark), not van der Waals. The gamSta parameter maps directly. ExoJAX’s gamma_vald3 Stark term is directly adoptable; the vdW terms are irrelevant for LIBS.</p>
+</section>
+<section id="doppler-broadening">
+<h3>2.5 Doppler Broadening<a class="headerlink" href="#doppler-broadening" title="Link to this heading"></a></h3>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sigma_D(nu, T, M) = (nu/c) * sqrt(k_B * T / (M * m_u))     [cm^{-1}]
+</pre></div>
+</div>
+<p>where M is atomic mass in amu, m_u is the atomic mass unit. This is the 1-sigma Gaussian width. ExoJAX uses this exact formula via <code class="docutils literal notranslate"><span class="pre">doppler_sigma</span></code> in <code class="docutils literal notranslate"><span class="pre">exojax.database.hitran</span></code>.</p>
+<p>On a log-wavenumber (q = R0 * log nu) grid, the Doppler width in q-space is <strong>independent of nu</strong> for a given (T, M):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>beta_hat = R0 * beta_T / nu_hat = sqrt(k_B*T/(M*m_u)) * R0/c     (Paper I, Eq. 22)
+</pre></div>
+</div>
+<p>This is the key reason MODIT is efficient: all lines of a given isotopologue share one Doppler width, collapsing a dimension.</p>
+</section>
+<section id="radiative-transfer-as-linear-algebra">
+<h3>2.6 Radiative Transfer as Linear Algebra<a class="headerlink" href="#radiative-transfer-as-linear-algebra" title="Link to this heading"></a></h3>
+<p>ExoJAX avoids iterative RT (which has high autodiff cost via <code class="docutils literal notranslate"><span class="pre">jax.lax.scan</span></code>) by expressing flux as a linear-algebraic dot product (Paper I, Eq. 48):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>F0 = (Phi * Q)^T u
+</pre></div>
+</div>
+<p>where Phi = cumulative-product of transmission T_n(nu_j), Q = transmitted source terms, u = ones vector. This is implemented as <code class="docutils literal notranslate"><span class="pre">jax.numpy.sum(Q</span> <span class="pre">*</span> <span class="pre">jax.numpy.cumprod(T,</span> <span class="pre">axis=0),</span> <span class="pre">axis=0)</span></code>.</p>
+<p><strong>cflibs relevance:</strong> CF-LIBS uses optically thin LTE (no atmospheric RT layers). But the pattern of expressing multi-step computations as JAX-native reductions (cumprod, cumsum) rather than Python loops is essential for JIT compilation.</p>
+</section>
+<section id="memorypolicy-and-decoupled-opacity">
+<h3>2.7 MemoryPolicy and Decoupled Opacity<a class="headerlink" href="#memorypolicy-and-decoupled-opacity" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">MemoryPolicy(allow_32bit=True,</span> <span class="pre">nstitch=4,</span> <span class="pre">cutwing=20.0)</span></code> is a frozen dataclass passed to <code class="docutils literal notranslate"><span class="pre">OpaPremodit</span></code> at construction time, centralizing precision/memory knobs. This prevents parameter proliferation across function signatures.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">from_snapshot()</span></code> constructor loads a pre-serialized LBD coefficient file, decoupling the database lookup from the inference step. This is crucial for HMC: you serialize once, then load the compact representation for each posterior evaluation.</p>
+<p><strong>cflibs adoption:</strong> A <code class="docutils literal notranslate"><span class="pre">ForwardModelConfig(float32=True,</span> <span class="pre">wing_cutoff=100.0,</span> <span class="pre">...)</span></code> dataclass passed to the forward model factory would provide the same benefit.</p>
+</section>
+<section id="wavenumber-wavelength-grid-design">
+<h3>2.8 Wavenumber / Wavelength Grid Design<a class="headerlink" href="#wavenumber-wavelength-grid-design" title="Link to this heading"></a></h3>
+<p>ExoJAX uses a log-wavenumber grid (q = R0 * log nu) as the native coordinate for two reasons:</p>
+<ol class="arabic simple">
+<li><p>Doppler widths are constant in q-space (a single beta for all lines of a species at given T).</p></li>
+<li><p>Efficient FFT convolution in MODIT (uniform spacing required).</p></li>
+</ol>
+<p>Grid utility: <code class="docutils literal notranslate"><span class="pre">wavenumber_grid(wl_min,</span> <span class="pre">wl_max,</span> <span class="pre">N,</span> <span class="pre">xsmode,</span> <span class="pre">unit,</span> <span class="pre">wavelength_order)</span></code> returns (nu_grid, wav, resolution).</p>
+<p>For LIBS (small wavelength range, fixed resolution): a linear wavelength grid may be simpler. But if adopting MODIT for CF-LIBS, log-nu is required.</p>
+</section>
+<section id="nu-matrix-numatrix-for-lpf">
+<h3>2.9 nu-Matrix (numatrix) for LPF<a class="headerlink" href="#nu-matrix-numatrix-for-lpf" title="Link to this heading"></a></h3>
+<p>For the direct LPF, ExoJAX precomputes a (N_line x N_wav) matrix of offsets:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>numatrix[l, j] = nu_j - nu_lines[l]
+</pre></div>
+</div>
+<p>This is computed once (<code class="docutils literal notranslate"><span class="pre">init_lpf</span></code>) before the JIT loop, so the inner <code class="docutils literal notranslate"><span class="pre">xsmatrix</span></code> call is a pure function of (numatrix, sigmaD, gammaL, Sij) — all arrays. This structure is JIT-friendly: no Python-side loops inside the compiled function.</p>
+<p><strong>cflibs adoption:</strong> Precompute the offset matrix for the set of identified lines once before the iterative solver runs. Inside the jitted forward model, only array operations occur.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="pitfalls-documented-by-exojax">
+<h2>3. Pitfalls Documented by ExoJAX<a class="headerlink" href="#pitfalls-documented-by-exojax" title="Link to this heading"></a></h2>
+<section id="float32-precision-in-modit">
+<h3>3.1 Float32 Precision in MODIT<a class="headerlink" href="#float32-precision-in-modit" title="Link to this heading"></a></h3>
+<p>MODIT with F32 produces errors larger than 10^{-25} cm^2 in the cross-section (Fig. 3, Paper I). This is a known limitation of single-precision FFT accumulation. The paper recommends F64 for MODIT when absolute cross-section accuracy matters. For HMC (relative comparison), F32 may be acceptable.</p>
+<p><strong>For CF-LIBS:</strong> line strengths span many orders of magnitude; weak-line errors at 10^{-25} cm^2 are innocuous since they fall far below the photosphere. But if Boltzmann plot residuals are sensitive to weak-line tails, use F64 or apply a line strength threshold (<code class="docutils literal notranslate"><span class="pre">crit</span></code> parameter in AdbKurucz).</p>
+</section>
+<section id="scipy-special-wofz-is-not-jax-compatible">
+<h3>3.2 scipy.special.wofz is Not JAX-Compatible<a class="headerlink" href="#scipy-special-wofz-is-not-jax-compatible" title="Link to this heading"></a></h3>
+<p>Do not use <code class="docutils literal notranslate"><span class="pre">scipy.special.wofz</span></code> inside any JAX-traced function. It is not traceable and has no gradient. ExoJAX implements <code class="docutils literal notranslate"><span class="pre">rewofz</span></code> (real part) and <code class="docutils literal notranslate"><span class="pre">imwofz</span></code> (imaginary part) as pure JAX functions.</p>
+</section>
+<section id="iterative-rt-is-expensive-for-autodiff">
+<h3>3.3 Iterative RT is Expensive for Autodiff<a class="headerlink" href="#iterative-rt-is-expensive-for-autodiff" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">jax.lax.scan</span></code> through atmospheric layers accumulates a deep computation graph. ExoJAX replaced iterative RT with a closed-form matrix expression. For CF-LIBS (no RT), this is not directly relevant, but the same principle applies to iterative solvers: if you want HMC gradients through the CF-LIBS iterative loop, reformulate as a differentiable fixed-point or use the implicit function theorem.</p>
+</section>
+<section id="hitran-air-broadening-vs-target-atmosphere">
+<h3>3.4 HITRAN “Air” Broadening vs. Target Atmosphere<a class="headerlink" href="#hitran-air-broadening-vs-target-atmosphere" title="Link to this heading"></a></h3>
+<p>Paper I explicitly warns: HITRAN pressure-broadening coefficients assume N2 (“air”). For H2 atmospheres (brown dwarfs), the actual gammaL is 1–1.5x different. Always match the broadening model to the actual collision partner.</p>
+<p><strong>For CF-LIBS:</strong> plasma broadening is electron-impact (Stark). Never use air-broadening HITRAN parameters for LIBS Lorentz widths. Use the gamSta column from VALD/Kurucz plus n_e scaling.</p>
+</section>
+<section id="petradtrans-interpolation-error-1030">
+<h3>3.5 petRADTRANS Interpolation Error (~10–30%)<a class="headerlink" href="#petradtrans-interpolation-error-1030" title="Link to this heading"></a></h3>
+<p>When opacity is computed on a pre-gridded (T, P) table and interpolated, errors up to 30% can occur for non-linear T profiles. The paper measured ~10% deviation for general T-P profiles when the grid spacing is coarse (666 K, 900 K, 1215 K grid points).</p>
+<p><strong>cflibs relevance:</strong> If a manifold-based pre-computation is used for fast inference, the interpolation error in (T, n_e, composition) space must be characterized. Consider finer grids near physically important regimes (e.g., 5000–15000 K for LIBS).</p>
+</section>
+<section id="weak-lines-below-photosphere">
+<h3>3.6 Weak Lines Below Photosphere<a class="headerlink" href="#weak-lines-below-photosphere" title="Link to this heading"></a></h3>
+<p>For direct LPF with many lines, ExoJAX excludes weak lines that do not contribute to the emission by finding the layer where each line contributes most and checking if it is below the CIA photosphere. This prevents N_line from growing with the database size.</p>
+<p><strong>cflibs adoption:</strong> Apply a line strength threshold (<code class="docutils literal notranslate"><span class="pre">crit</span></code>) filtered to the expected T, n_e range when loading lines. Do not include every line in the database — only those contributing &gt;= some fraction of the peak emissivity.</p>
+</section>
+<section id="line-vald-extraction-limit">
+<h3>3.7 1000-Line VALD Extraction Limit<a class="headerlink" href="#line-vald-extraction-limit" title="Link to this heading"></a></h3>
+<p>VALD3 limits a single extraction request to 1000 lines. For broad spectral ranges, multiple requests are needed and results must be concatenated.</p>
+</section>
+<section id="atomic-lines-opa-framework-cannot-be-used-directly">
+<h3>3.8 Atomic Lines: “opa framework” Cannot Be Used Directly<a class="headerlink" href="#atomic-lines-opa-framework-cannot-be-used-directly" title="Link to this heading"></a></h3>
+<p>As of ExoJAX 2.2, the standard <code class="docutils literal notranslate"><span class="pre">OpaPremodit</span></code> / <code class="docutils literal notranslate"><span class="pre">OpaModit</span></code> opacity calculators do not yet fully support atomic lines. The tutorials for Kurucz/VALD lines use manual computation (explicit vmaps over gamma_vald3, line_strength, xsmatrix). This is an acknowledged limitation.</p>
+<p><strong>cflibs implication:</strong> CF-LIBS is entirely atomic, so it must follow the “manual” path (explicit vmap over broadening + xsmatrix). This is fine and well-tested in ExoJAX tutorials for Fe I.</p>
+</section>
+<section id="numatrix-memory">
+<h3>3.9 numatrix Memory<a class="headerlink" href="#numatrix-memory" title="Link to this heading"></a></h3>
+<p>The (N_line x N_wav) numatrix for direct LPF requires N_line * N_wav floats. For N_line=10^4 and N_wav=10^4, this is 400 MB at float32 — impractical. ExoJAX’s solution is to switch to MODIT above N_line ~10^3 or use wavenumber masking to limit N_wav per spectral segment.</p>
+<p><strong>cflibs:</strong> For a typical LIBS spectrum (1000–10000 lines, ~10^4 wavelength bins), LPF may be feasible if masking is applied. Partition into spectral windows if needed.</p>
+</section>
+<section id="vjp-not-supported-only-jvp">
+<h3>3.10 VJP Not Supported (Only JVP)<a class="headerlink" href="#vjp-not-supported-only-jvp" title="Link to this heading"></a></h3>
+<p>ExoJAX’s custom Voigt derivative is implemented as a <strong>JVP (Jacobian-vector product)</strong>, not a VJP (vector-Jacobian product). NumPy &gt;=0.6.0 supports JVP via <code class="docutils literal notranslate"><span class="pre">jax.custom_jvp</span></code>. NumPyro and HMC use forward-mode AD or rely on JVP composition — this works. But if reverse-mode AD (<code class="docutils literal notranslate"><span class="pre">jax.grad</span></code>) is needed through the Voigt function in a complex compute graph, the JVP-only definition may require additional care.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="concrete-cflibs-should-consider-x-recommendations">
+<h2>4. Concrete “cflibs Should Consider X” Recommendations<a class="headerlink" href="#concrete-cflibs-should-consider-x-recommendations" title="Link to this heading"></a></h2>
+<section id="adopt-hjert-for-all-voigt-computations">
+<h3>4.1 Adopt hjert for All Voigt Computations<a class="headerlink" href="#adopt-hjert-for-all-voigt-computations" title="Link to this heading"></a></h3>
+<p>Replace cflibs’s current <code class="docutils literal notranslate"><span class="pre">voigt_profile</span></code> with an <code class="docutils literal notranslate"><span class="pre">hjert</span></code>-style implementation:</p>
+<ul class="simple">
+<li><p>Algorithm 916 (M=27) for |z|^2 &lt; 111</p></li>
+<li><p>Asymptotic expansion for |z|^2 &gt;= 111</p></li>
+<li><p>Chebyshev erfcx to avoid overflow</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;jax.custom_jvp</span></code> with analytic dH/dx and dH/da rules</p></li>
+</ul>
+<p>This gives &lt;10^-6 error vs. scipy and full autodiff compatibility.</p>
+<p>Reference implementation: https://github.com/HajimeKawahara/exojax/blob/master/src/exojax/opacity/lpf/lpf.py</p>
+</section>
+<section id="log-domain-line-strength-scaling">
+<h3>4.2 Log-Domain Line Strength Scaling<a class="headerlink" href="#log-domain-line-strength-scaling" title="Link to this heading"></a></h3>
+<p>Store <code class="docutils literal notranslate"><span class="pre">logsij0</span> <span class="pre">=</span> <span class="pre">log(S0)</span></code> per line (computed once). At runtime, scale to temperature T using the Boltzmann formula in log-domain with <code class="docutils literal notranslate"><span class="pre">jnp.expm1</span></code> for the stimulated-emission correction. This avoids float32 overflow for weak lines at low T.</p>
+<p>The ExoJAX formula (Paper I, Eq. 27–28) should be translated directly into <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/</span></code> or a new <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/line_strength.py</span></code>.</p>
+</section>
+<section id="qtmask-pattern-for-multi-species-partition-functions">
+<h3>4.3 QTmask Pattern for Multi-Species Partition Functions<a class="headerlink" href="#qtmask-pattern-for-multi-species-partition-functions" title="Link to this heading"></a></h3>
+<p>Build a <code class="docutils literal notranslate"><span class="pre">QTmask</span></code> array once: for each line l, <code class="docutils literal notranslate"><span class="pre">QTmask[l]</span></code> indexes into a (N_species x N_Tgrid) partition function table. Then <code class="docutils literal notranslate"><span class="pre">jnp.interp</span></code> the whole table at temperature T in one call, index with <code class="docutils literal notranslate"><span class="pre">QTmask</span></code>. This is O(1) JAX operations regardless of number of species.</p>
+<p>For CF-LIBS with polynomial PF: precompute a (N_species x N_coeffs) coefficient array, use <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> over species with <code class="docutils literal notranslate"><span class="pre">jnp.polyval</span></code> to get Q(T) for all species at once.</p>
+</section>
+<section id="memorypolicy-forwardconfig-dataclass">
+<h3>4.4 MemoryPolicy / ForwardConfig Dataclass<a class="headerlink" href="#memorypolicy-forwardconfig-dataclass" title="Link to this heading"></a></h3>
+<p>Introduce a frozen <code class="docutils literal notranslate"><span class="pre">ForwardModelConfig</span></code> (or add to existing config system):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ForwardModelConfig</span><span class="p">:</span>
+    <span class="n">float32</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">wing_cutoff_hwhm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">100.0</span>  <span class="c1"># cut Voigt wings beyond N half-widths</span>
+    <span class="n">line_strength_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-30</span>  <span class="c1"># discard lines weaker than this at Tref</span>
+    <span class="n">nu_stitch_segments</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>Pass to <code class="docutils literal notranslate"><span class="pre">build_forward_model()</span></code>. This mirrors ExoJAX’s <code class="docutils literal notranslate"><span class="pre">MemoryPolicy</span></code>.</p>
+</section>
+<section id="precompute-numatrix-outside-jit-scope">
+<h3>4.5 Precompute numatrix Outside JIT Scope<a class="headerlink" href="#precompute-numatrix-outside-jit-scope" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">init_lpf(nu_lines,</span> <span class="pre">nu_grid)</span></code> — the offset matrix — should be computed once and stored as a static array. The jitted forward function signature should be <code class="docutils literal notranslate"><span class="pre">forward(numatrix,</span> <span class="pre">logsij0,</span> <span class="pre">T,</span> <span class="pre">n_e,</span> <span class="pre">composition)</span></code> with <code class="docutils literal notranslate"><span class="pre">numatrix</span></code> as a static (non-traced) input via <code class="docutils literal notranslate"><span class="pre">jax.pure_callback</span></code> or simply recomputed only when the line selection changes.</p>
+<p>Reference: https://secondearths.sakura.ne.jp/exojax/tutorials/Forward_modeling_for_Fe_I_lines_of_Kurucz.html</p>
+</section>
+<section id="adopt-opart-pattern-for-memory-constrained-inference">
+<h3>4.6 Adopt Opart Pattern for Memory-Constrained Inference<a class="headerlink" href="#adopt-opart-pattern-for-memory-constrained-inference" title="Link to this heading"></a></h3>
+<p>For the manifold generator (many (T, n_e, composition) points), the Opart pattern (process one parameter point at a time, not one layer) is directly analogous: <code class="docutils literal notranslate"><span class="pre">jax.vmap</span></code> over the parameter grid with a function that computes a single spectrum. ExoJAX demonstrated this reduces GPU memory from O(N_batch * N_wav * N_brd) to O(N_wav * N_brd).</p>
+<p>Reference: ExoJAX2, Section 5.3 (arXiv:2410.06900).</p>
+</section>
+<section id="linear-algebraic-rt-spectrum-accumulation">
+<h3>4.7 Linear-Algebraic RT / Spectrum Accumulation<a class="headerlink" href="#linear-algebraic-rt-spectrum-accumulation" title="Link to this heading"></a></h3>
+<p>For optically-thick LIBS spectra (self-absorption), if cflibs ever implements layer integration, use ExoJAX’s linear-algebra formulation:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>F = (Phi * Q)^T @ u  =  jnp.sum(Q * jnp.cumprod(T, axis=0), axis=0)
+</pre></div>
+</div>
+<p>rather than a Python loop or <code class="docutils literal notranslate"><span class="pre">lax.scan</span></code>. This is fully differentiable and XLA-efficient.</p>
+</section>
+<section id="instrumental-broadening-as-post-process-convolution">
+<h3>4.8 Instrumental Broadening as Post-Process Convolution<a class="headerlink" href="#instrumental-broadening-as-post-process-convolution" title="Link to this heading"></a></h3>
+<p>ExoJAX applies all instrument effects (Gaussian IP, rotation kernel) as post-processing on the high-resolution spectrum via kernel convolution (Eq. 53–54). The key: compute at native high resolution (R &gt;= 500,000 for line profiles), then convolve to observed resolution. Do not truncate the internal grid to observed resolution before convolution.</p>
+<p>For CF-LIBS: keep the forward model on a fine wavelength grid (e.g., 0.01 Å/pixel), apply Gaussian instrument broadening as a final <code class="docutils literal notranslate"><span class="pre">jnp.convolve</span></code>, then sample at observed pixels.</p>
+</section>
+<section id="use-jnp-interp-for-differentiable-partition-functions">
+<h3>4.9 Use jnp.interp for Differentiable Partition Functions<a class="headerlink" href="#use-jnp-interp-for-differentiable-partition-functions" title="Link to this heading"></a></h3>
+<p>1D interpolation via <code class="docutils literal notranslate"><span class="pre">jnp.interp</span></code> is JAX-native and differentiable. ExoJAX uses it for all partition function temperature lookups. For cflibs polynomial PF, <code class="docutils literal notranslate"><span class="pre">jnp.polyval</span></code> is preferable (exact, no grid needed), but for empirically-tabulated PF (e.g., from NIST or Barklem &amp; Collet 2016), <code class="docutils literal notranslate"><span class="pre">jnp.interp</span></code> is the right tool.</p>
+</section>
+<section id="benchmark-modit-for-libs-line-counts">
+<h3>4.10 Benchmark MODIT for LIBS Line Counts<a class="headerlink" href="#benchmark-modit-for-libs-line-counts" title="Link to this heading"></a></h3>
+<p>At typical LIBS line counts (100–5000 lines per element), Figure 4 of Paper I shows:</p>
+<ul class="simple">
+<li><p>LPF: ~0.1 ns/line/wav_bin, scales linearly — feasible for N_line &lt; 10^3</p></li>
+<li><p>MODIT: nearly flat until N_line ~10^5, then linear — far superior for large databases</p></li>
+</ul>
+<p>For multi-element LIBS (e.g., Fe + Ni + Cu + Cr simultaneously = potentially 10^4 lines), MODIT is the right choice. For single-element identification with a handful of lines, LPF is simpler and lower overhead.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="key-citations">
+<h2>5. Key Citations<a class="headerlink" href="#key-citations" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Kawahara et al. 2022 (ExoJAX1): https://doi.org/10.3847/1538-4365/ac3b4d</p></li>
+<li><p>Kawahara et al. 2025 (ExoJAX2): https://doi.org/10.3847/1538-4357/adcba2</p></li>
+<li><p>van den Bekerom &amp; Pannier 2021 (DIT): the foundation of MODIT</p></li>
+<li><p>Zaghloul &amp; Ali 2011: Algorithm 916 for Faddeeva (the Voigt inner loop)</p></li>
+<li><p>Barklem &amp; Collet 2016: 284-species partition function table used in AdbKurucz/AdbVald</p></li>
+<li><p>Barklem et al. 1998/2000: ABO theory for van der Waals damping (gamma_vald3)</p></li>
+<li><p>Shepherd &amp; Laframboise 1981: Chebyshev erfcx implementation</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="summary-table-exojax-cflibs-mapping">
+<h2>6. Summary Table: ExoJAX → cflibs Mapping<a class="headerlink" href="#summary-table-exojax-cflibs-mapping" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ExoJAX component</p></th>
+<th class="head"><p>cflibs equivalent / target</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hjert</span></code> (Faddeeva, custom JVP)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">voigt_profile</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/profiles.py</span></code> — replace</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">line_strength_atom</span></code> + <code class="docutils literal notranslate"><span class="pre">line_strength</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">calculate_line_emissivity</span></code> — split into Tref step + T-scaling step</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">QTmask</span></code> + <code class="docutils literal notranslate"><span class="pre">QT_interp_284</span></code></p></td>
+<td><p>Polynomial PF in <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/</span></code> — add vmap, optionally tabulate</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gamma_vald3</span></code> (Stark term)</p></td>
+<td><p>Stark broadening in <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">doppler_sigma</span></code></p></td>
+<td><p>Thermal (Doppler) width — already in cflibs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">init_lpf</span></code> + <code class="docutils literal notranslate"><span class="pre">xsmatrix</span></code></p></td>
+<td><p>New <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> forward model core</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MemoryPolicy</span></code></p></td>
+<td><p>New <code class="docutils literal notranslate"><span class="pre">ForwardModelConfig</span></code> dataclass</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">OpaPremodit.from_snapshot()</span></code></p></td>
+<td><p>Manifold snapshot loading in <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Log-wavenumber grid</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/core/</span></code> grid utilities — add log-nu option for MODIT</p></td>
+</tr>
+<tr class="row-odd"><td><p>Opart (layer-by-layer)</p></td>
+<td><p>Manifold batch generator in <code class="docutils literal notranslate"><span class="pre">cflibs/manifold/</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

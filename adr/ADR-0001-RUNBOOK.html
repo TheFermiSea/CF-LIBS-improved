@@ -1,0 +1,447 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADR-0001 Implementation Runbook &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ADR-0001 Implementation Runbook</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/adr/ADR-0001-RUNBOOK.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adr-0001-implementation-runbook">
+<h1>ADR-0001 Implementation Runbook<a class="headerlink" href="#adr-0001-implementation-runbook" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p>Operational protocol for landing Tier-1 candidates <strong>T1-1 through T1-6</strong> on integration branch <code class="docutils literal notranslate"><span class="pre">feat/adr-0001-pattern-survey-impl</span></code>.
+Authoritative spec: <a class="reference internal" href="ADR-0001-radis-jaxrts-pattern-survey.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">ADR-0001-radis-jaxrts-pattern-survey.md</span></code></span></a> §8.1.
+Per-bead implementation details: <a class="reference internal" href="specs/T1-1-host-kernel-split.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-1-host-kernel-split.md</span></code></span></a> … <a class="reference internal" href="specs/T1-6-bayesian-decomposition.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-6-bayesian-decomposition.md</span></code></span></a>. Each bead’s <code class="docutils literal notranslate"><span class="pre">--design</span></code> field points at its spec file.</p>
+</div></blockquote>
+<hr class="docutils" />
+<section id="branch-topology">
+<h2>1. Branch topology<a class="headerlink" href="#branch-topology" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>dev
+ └── feat/adr-0001-pattern-survey-impl              (integration)
+      ├── feat/adr-0001/T1-1-host-kernel-split
+      ├── feat/adr-0001/T1-2-forward-model-unify
+      ├── feat/adr-0001/T1-3-lax-while-iterative
+      ├── feat/adr-0001/T1-4-ldm-broadening
+      ├── feat/adr-0001/T1-5-chunked-scan-checkpoint
+      └── feat/adr-0001/T1-6-retrieval-decomposition
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Integration branch</strong> <code class="docutils literal notranslate"><span class="pre">feat/adr-0001-pattern-survey-impl</span></code> is branched off <code class="docutils literal notranslate"><span class="pre">dev</span></code> once and lives until all six T1 beads merged. Already created on <code class="docutils literal notranslate"><span class="pre">origin</span></code> (commit <code class="docutils literal notranslate"><span class="pre">e97fd64</span></code>).</p></li>
+<li><p><strong>Sub-branches</strong> <code class="docutils literal notranslate"><span class="pre">feat/adr-0001/&lt;bead-id&gt;-&lt;short-name&gt;</span></code> branched off the current tip of the integration branch when work begins (so wave-2 branches inherit T1-1 mechanically).</p></li>
+<li><p><strong>Worktrees</strong> live at <code class="docutils literal notranslate"><span class="pre">.worktrees/&lt;bead-id&gt;/</span></code> (already gitignored).</p></li>
+<li><p><strong>Merge protocol:</strong> sub-branch → integration uses <code class="docutils literal notranslate"><span class="pre">--no-ff</span></code> (preserves bead boundaries for <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">log</span> <span class="pre">--first-parent</span></code>). Integration → <code class="docutils literal notranslate"><span class="pre">dev</span></code> is single <code class="docutils literal notranslate"><span class="pre">--no-ff</span></code> once all T1 gate checks (§6) pass.</p></li>
+</ul>
+</section>
+<section id="bead-landing-order">
+<h2>2. Bead landing order<a class="headerlink" href="#bead-landing-order" title="Link to this heading"></a></h2>
+<p>Dependency DAG (← means “depends on”):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>T1-1 ──┬──► T1-2 ──► T1-6
+       ├──► T1-4 ──► T1-5
+       │
+T1-3 ◄┘ (parallel-safe with T1-1; cflibs/inversion/solve/ is in T1-1 carve-out)
+</pre></div>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Wave</p></th>
+<th class="head"><p>Beads</p></th>
+<th class="head"><p>Parallel?</p></th>
+<th class="head"><p>Pre-condition</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>0</strong></p></td>
+<td><p>wave-0 baseline + CI gate fix + JAX pin bump + spec test-path fixups (see §11)</p></td>
+<td><p>yes (file-disjoint)</p></td>
+<td><p>branched off <code class="docutils literal notranslate"><span class="pre">dev</span></code>; <strong>must merge to integration before any T1 starts</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>T1-1 (<code class="docutils literal notranslate"><span class="pre">5oar</span></code>) + T1-3 (<code class="docutils literal notranslate"><span class="pre">14p6</span></code>)</p></td>
+<td><p>yes (disjoint files: T1-1 carves out <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/</span></code>)</p></td>
+<td><p>wave-0 merged</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>T1-4 (<code class="docutils literal notranslate"><span class="pre">e5o8</span></code>) <strong>first</strong>, then T1-2 (<code class="docutils literal notranslate"><span class="pre">swgm</span></code>) — <strong>sequential within wave</strong></p></td>
+<td><p>NO — both touch <code class="docutils literal notranslate"><span class="pre">spectrum_model.py</span></code> dispatch (L243-253) and <code class="docutils literal notranslate"><span class="pre">batch_forward.py:L395</span></code></p></td>
+<td><p>T1-1 merged to integration; T1-3 may still be in flight</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>T1-5 (<code class="docutils literal notranslate"><span class="pre">ke4z</span></code>) + T1-6 (<code class="docutils literal notranslate"><span class="pre">0mor</span></code>)</p></td>
+<td><p>yes (file-disjoint)</p></td>
+<td><p>T1-2 (for T1-6) + T1-4 (for T1-5) merged</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tier-2 (T2-1..T2-8) deferred</strong> to a follow-up integration cycle. <strong>Tier-3</strong> polish folds into routine cleanup beads. <strong>Tier-4</strong> (<code class="docutils literal notranslate"><span class="pre">lax.custom_root</span></code>) needs its own research bead with literature precursor.</p>
+<p><strong>Key parallelism notes:</strong></p>
+<ul class="simple">
+<li><p><strong>T1-3 in wave 1:</strong> Stream A’s T1-1 spec §5 explicitly carves <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/</span></code> out of T1-1 scope, so T1-3 owns the host/kernel split of <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> itself. T1-3 has only a soft dep on T1-1 (for the shared <code class="docutils literal notranslate"><span class="pre">jit_if_available</span></code> decorator); it can copy the decorator inline if it lands before T1-1 merges. Recommend starting T1-3 ~1 day after T1-1 so the decorator is available.</p></li>
+<li><p><strong>T1-2 and T1-4 are file-disjoint</strong> in wave 2: T1-2 owns <code class="docutils literal notranslate"><span class="pre">spectrum_model.py</span></code> (kernel-side), <code class="docutils literal notranslate"><span class="pre">batch_forward.py</span></code>, <code class="docutils literal notranslate"><span class="pre">bayesian.py</span></code> (forward layer only). T1-4 owns <code class="docutils literal notranslate"><span class="pre">profiles.py</span></code> (LDM kernel), <code class="docutils literal notranslate"><span class="pre">manifold/generator.py</span></code> broadening assembly. Both touch <code class="docutils literal notranslate"><span class="pre">spectrum_model.py::compute_spectrum</span></code> dispatch (T1-2 unifies, T1-4 adds enum branch) — coordinate via a single merge order (T1-4 first, then T1-2 rebases).</p></li>
+<li><p><strong>T1-5 strictly depends on T1-4</strong> because the chunked scan wraps the LDM kernel.</p></li>
+<li><p><strong>T1-6 strictly depends on T1-2</strong> because <code class="docutils literal notranslate"><span class="pre">bayesian/forward.py</span></code> imports the unified <code class="docutils literal notranslate"><span class="pre">forward_model</span></code>.</p></li>
+</ul>
+</section>
+<section id="subagent-prompt-template">
+<h2>3. Subagent prompt template<a class="headerlink" href="#subagent-prompt-template" title="Link to this heading"></a></h2>
+<p>Spawn the implementing subagent (Opus 4.7, 1M context) with this template. Assumes the bead’s <code class="docutils literal notranslate"><span class="pre">--design</span></code> and <code class="docutils literal notranslate"><span class="pre">--notes</span></code> are populated.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>You are implementing CF-LIBS-improved bead {BEAD_ID} in worktree
+  /home/brian/code/CF-LIBS-improved/.worktrees/{BEAD_ID}/
+on branch
+  feat/adr-0001/{BEAD_ID}-{SHORT_NAME}
+
+Authoritative specs:
+  1. ADR-0001 § 8.1 row {ROW}                docs/adr/ADR-0001-radis-jaxrts-pattern-survey.md
+  2. Implementation spec                     docs/adr/specs/{T1-N}-{name}.md
+  3. ADR-0001 implementation runbook         docs/adr/ADR-0001-RUNBOOK.md
+  4. Bead state                              bd show {BEAD_ID}    (fields: --description, --notes, --design)
+
+Project hard constraints (NON-NEGOTIABLE):
+  - Physics-only ban (CLAUDE.md): no sklearn / torch / tensorflow / keras / flax / equinox /
+    transformers / jax.nn / jax.experimental.stax in cflibs/ (allowed only under cflibs/evolution/).
+  - JAX is optional; every JAX-importing file must degrade gracefully when JAX is missing.
+  - JAX-metal has no fp64; new kernels must accept fp32 and document precision behaviour.
+
+Workflow:
+  0. BOOTSTRAP (mandatory before reading anything else, also on resume after compaction):
+     a. `bd memories adr-0001` — surfaces the integration-branch state memory.
+     b. `bd show {BEAD_ID}` — recovers --description, --notes, --design fields.
+     c. `mcp__serena__list_memories` then `mcp__serena__read_memory(&quot;architecture_and_data_flow&quot;)`
+        and any project memories with &quot;jax&quot; or &quot;convention&quot; in the name.
+  1. `bd update {BEAD_ID} --status in_progress`.
+  2. Read the spec file (docs/adr/specs/{T1-N}-*.md) end-to-end before any code.
+     Stop and ask if anything is unclear — never expand scope (see runbook § 7).
+  3. Use Serena MCP for symbol-level operations (find_symbol, replace_symbol_body,
+     find_referencing_symbols, rename_symbol). Default `relative_path=&quot;cflibs/&quot;`.
+     Do NOT use Read+Edit for whole-symbol rewrites.
+  4. Add or update tests per the spec&#39;s &quot;Test plan&quot; section.
+  5. Run local gate checks (runbook § 5) until green.
+  6. Push the sub-branch (`git push -u origin feat/adr-0001/{BEAD_ID}-{SHORT_NAME}`).
+  7. `bd comment {BEAD_ID} &quot;Pushed sub-branch; ready for merge to integration&quot;` and
+     `bd update {BEAD_ID} --status inreview`.
+  8. STOP. Do NOT merge to integration. The orchestrator handles the merge after
+     reviewing the diff against the spec.
+
+Conflict-avoidance rules: § 7 of the runbook is binding. If you discover a file
+outside the spec&#39;s &quot;Files touched&quot; list needs modification, file a new bead and
+stop — do not expand scope.
+
+Quality bar: zero new ruff/black/mypy warnings, zero test regressions, new tests
+for new behaviour. Behavioural parity with the NumPy reference must hold to
+rtol=1e-5 unless the spec explicitly relaxes it (T1-4 LDM at 1e-4 is the only
+documented relaxation).
+</pre></div>
+</div>
+</section>
+<section id="worktree-commands-copy-pasteable">
+<h2>4. Worktree commands (copy-pasteable)<a class="headerlink" href="#worktree-commands-copy-pasteable" title="Link to this heading"></a></h2>
+<p>Per-bead lifecycle (substitute bead ID and short name):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 4.1 Integration branch already exists. Orchestrator (NOT subagents) verifies:</span>
+git<span class="w"> </span>fetch<span class="w"> </span>origin
+git<span class="w"> </span>checkout<span class="w"> </span>feat/adr-0001-pattern-survey-impl
+git<span class="w"> </span>pull<span class="w"> </span>--ff-only
+
+<span class="c1"># 4.2 Spawn a wave-N bead in a worktree (orchestrator):</span>
+git<span class="w"> </span>worktree<span class="w"> </span>add<span class="w"> </span>.worktrees/T1-1<span class="w"> </span>-b<span class="w"> </span>feat/adr-0001/T1-1-host-kernel-split<span class="w"> </span><span class="se">\</span>
+<span class="w">                                     </span>origin/feat/adr-0001-pattern-survey-impl
+
+<span class="c1"># Share the main .venv to avoid 6-12 GiB redundant installs across 6 worktrees.</span>
+<span class="c1"># Sub-branches MUST NOT mutate this venv -- any pyproject.toml dep change goes</span>
+<span class="c1"># through a separate PR against the integration branch first.</span>
+ln<span class="w"> </span>-s<span class="w"> </span>../../.venv<span class="w"> </span>.worktrees/T1-1/.venv
+
+<span class="c1"># Flip bench-pause flag on shared GPU nodes so the post-merge benchmark from a</span>
+<span class="c1"># prior dev push does not race the manual gate runs in this worktree.</span>
+bash<span class="w"> </span>scripts/bench-pause.sh<span class="w"> </span>--remote<span class="w"> </span>slurm-ctl<span class="w">   </span><span class="c1"># released in §4.5</span>
+
+<span class="nb">cd</span><span class="w"> </span>.worktrees/T1-1
+bd<span class="w"> </span>update<span class="w"> </span>CF-LIBS-improved-5oar<span class="w"> </span>--status<span class="w"> </span>in_progress
+
+<span class="c1"># 4.3 (Subagent works here.)</span>
+<span class="c1">#     Edits, tests, commits, push:</span>
+git<span class="w"> </span>push<span class="w"> </span>-u<span class="w"> </span>origin<span class="w"> </span>feat/adr-0001/T1-1-host-kernel-split
+bd<span class="w"> </span>update<span class="w"> </span>CF-LIBS-improved-5oar<span class="w"> </span>--status<span class="w"> </span>inreview
+
+<span class="c1"># 4.4 Merge sub-branch to integration (orchestrator, after gate checks § 5 pass):</span>
+git<span class="w"> </span>-C<span class="w"> </span>/home/brian/code/CF-LIBS-improved<span class="w"> </span>checkout<span class="w"> </span>feat/adr-0001-pattern-survey-impl
+git<span class="w"> </span>-C<span class="w"> </span>/home/brian/code/CF-LIBS-improved<span class="w"> </span>pull<span class="w"> </span>--ff-only
+git<span class="w"> </span>-C<span class="w"> </span>/home/brian/code/CF-LIBS-improved<span class="w"> </span>merge<span class="w"> </span>--no-ff<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>feat/adr-0001/T1-1-host-kernel-split<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-m<span class="w"> </span><span class="s2">&quot;Merge T1-1 host/kernel split into ADR-0001 integration&quot;</span>
+git<span class="w"> </span>-C<span class="w"> </span>/home/brian/code/CF-LIBS-improved<span class="w"> </span>push
+
+<span class="c1"># 4.5 Clean up worktree:</span>
+git<span class="w"> </span>-C<span class="w"> </span>/home/brian/code/CF-LIBS-improved<span class="w"> </span>worktree<span class="w"> </span>remove<span class="w"> </span>.worktrees/T1-1
+bd<span class="w"> </span>close<span class="w"> </span>CF-LIBS-improved-5oar
+<span class="c1"># Release bench-pause once the wave&#39;s last bead has merged:</span>
+bash<span class="w"> </span>scripts/bench-resume.sh<span class="w"> </span>--remote<span class="w"> </span>slurm-ctl
+</pre></div>
+</div>
+</section>
+<section id="gate-checks-before-merging-a-sub-branch-to-integration">
+<h2>5. Gate checks before merging a sub-branch to integration<a class="headerlink" href="#gate-checks-before-merging-a-sub-branch-to-integration" title="Link to this heading"></a></h2>
+<p>All must pass on the sub-branch tip:</p>
+<ul class="simple">
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">check</span> <span class="pre">cflibs/</span> <span class="pre">tests/</span></code> clean</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">black</span> <span class="pre">--check</span> <span class="pre">cflibs/</span></code> clean</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">mypy</span> <span class="pre">cflibs/</span></code> no new errors vs <code class="docutils literal notranslate"><span class="pre">dev</span></code> baseline</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span> <span class="pre">pytest</span> <span class="pre">tests/</span> <span class="pre">-x</span> <span class="pre">-q</span> <span class="pre">-m</span> <span class="pre">&quot;not</span> <span class="pre">slow</span> <span class="pre">and</span> <span class="pre">not</span> <span class="pre">requires_db&quot;</span></code> green</p></li>
+<li><p>[ ] New tests present matching the spec’s “Test plan”</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">show</span> <span class="pre">&lt;id&gt;</span></code> reflects <code class="docutils literal notranslate"><span class="pre">inreview</span></code> status with comment summarizing the change</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">push</span></code> of the sub-branch succeeded</p></li>
+<li><p>[ ] Self-review diff: <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">diff</span> <span class="pre">feat/adr-0001-pattern-survey-impl...HEAD</span> <span class="pre">--stat</span></code> matches spec’s “Files touched” — no scope creep</p></li>
+<li><p>[ ] Behavioural parity check: NumPy→JAX kernel ports include rtol=1e-5 parity test (rtol=1e-4 for T1-4 LDM)</p></li>
+</ul>
+</section>
+<section id="gate-checks-before-merging-integration-to-dev">
+<h2>6. Gate checks before merging integration to dev<a class="headerlink" href="#gate-checks-before-merging-integration-to-dev" title="Link to this heading"></a></h2>
+<p>Run from integration branch tip; all must pass:</p>
+<ul class="simple">
+<li><p>[ ] All six Tier-1 beads closed</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/</span> <span class="pre">-v</span></code> green (full suite)</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/</span> <span class="pre">--cov=cflibs</span> <span class="pre">--cov-report=term-missing</span></code> coverage ≥ pre-ADR baseline (capture before T1-1 lands, stash in <code class="docutils literal notranslate"><span class="pre">.adr-0001-baseline.txt</span></code>)</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">scripts/validate_real_data.py</span> <span class="pre">--datasets</span> <span class="pre">steel_245nm</span> <span class="pre">FeNi_380nm</span> <span class="pre">--no-plots</span></code> passes</p></li>
+<li><p>[ ] Manifold round-trip: <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">generate-manifold</span> <span class="pre">examples/manifold_config_example.yaml</span> <span class="pre">--progress</span></code> completes and result loads via <code class="docutils literal notranslate"><span class="pre">cflibs.manifold.loader</span></code></p></li>
+<li><p>[ ] Benchmark parity: <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">scripts/benchmark_synthetic_identifiers.py</span> <span class="pre">--dataset-path</span> <span class="pre">output/synthetic_corpus/ak3_1_3_corpus_v1/corpus.json</span> <span class="pre">--db-path</span> <span class="pre">ASD_da/libs_production.db</span> <span class="pre">--output-dir</span> <span class="pre">output/synthetic_benchmark/adr-0001-postmerge</span></code> within 5% of pre-ADR baseline on every metric (Aitchison distance, ILR error, top-K recall)</p></li>
+<li><p>[ ] Physics-only constraint: <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">cflibs.evolution</span> <span class="pre">cflibs/</span></code> returns clean (AST blocklist smoke-test against shipped code)</p></li>
+<li><p>[ ] CLAUDE.md unchanged or updated only with new module-map entries</p></li>
+</ul>
+</section>
+<section id="conflict-avoidance-rules">
+<h2>7. Conflict-avoidance rules<a class="headerlink" href="#conflict-avoidance-rules" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>One sub-branch per file at a time.</strong> Track file ownership in a pinned comment on a tracking bead. Wave-2 branches <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">rebase</span> <span class="pre">origin/feat/adr-0001-pattern-survey-impl</span></code> after T1-1 merges.</p></li>
+<li><p><strong>No scope expansion.</strong> If a wave-N agent finds it needs to touch a file outside its spec’s “Files touched” list, it <strong>stops</strong>, files a follow-up bead (<code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">create</span> <span class="pre">--type</span> <span class="pre">bug-or-chore</span> <span class="pre">...</span></code>), records the discovery as a comment on its own bead, and resumes only after orchestrator confirms the scope decision.</p></li>
+<li><p><strong>Document scope changes.</strong> <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">update</span> <span class="pre">&lt;id&gt;</span> <span class="pre">--notes</span> <span class="pre">&quot;Conflicts</span> <span class="pre">with</span> <span class="pre">&lt;other-bead&gt;:</span> <span class="pre">&lt;file&gt;;</span> <span class="pre">deferred</span> <span class="pre">to</span> <span class="pre">&lt;new-bead&gt;&quot;</span></code>.</p></li>
+<li><p><strong>Wave gate.</strong> A wave-N bead may not start until every wave-(N-1) bead has merged to integration and integration is green per §5. <strong>Exception: T1-3 in wave 1</strong> runs concurrently with T1-1 because <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/</span></code> is in T1-1’s carve-out (<code class="docutils literal notranslate"><span class="pre">specs/T1-1-host-kernel-split.md</span></code> §5).</p></li>
+<li><p><strong>No force-pushes</strong> to integration or <code class="docutils literal notranslate"><span class="pre">dev</span></code>. Sub-branches may be force-pushed up until merge to integration.</p></li>
+<li><p><strong>Rebase forward, don’t merge back.</strong> Stale sub-branches rebase forward with <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">rebase</span> <span class="pre">origin/feat/adr-0001-pattern-survey-impl</span></code>, never merge back from integration.</p></li>
+</ol>
+</section>
+<section id="rollback">
+<h2>8. Rollback<a class="headerlink" href="#rollback" title="Link to this heading"></a></h2>
+<p><strong>Per-bead rollback</strong> (sub-branch broke at gate check):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bd<span class="w"> </span>update<span class="w"> </span>CF-LIBS-improved-&lt;id&gt;<span class="w"> </span>--status<span class="w"> </span>open<span class="w"> </span>--notes<span class="w"> </span><span class="s2">&quot;Rolled back: &lt;reason&gt;&quot;</span>
+git<span class="w"> </span>branch<span class="w"> </span>-D<span class="w"> </span>feat/adr-0001/&lt;bead-id&gt;-&lt;short-name&gt;
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>--delete<span class="w"> </span>feat/adr-0001/&lt;bead-id&gt;-&lt;short-name&gt;<span class="w">   </span><span class="c1"># only if pushed</span>
+git<span class="w"> </span>worktree<span class="w"> </span>remove<span class="w"> </span>.worktrees/&lt;bead-id&gt;
+</pre></div>
+</div>
+<p><strong>Whole-integration rollback</strong> (ADR direction proves wrong mid-cycle):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>checkout<span class="w"> </span>dev
+git<span class="w"> </span>branch<span class="w"> </span>-D<span class="w"> </span>feat/adr-0001-pattern-survey-impl
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>--delete<span class="w"> </span>feat/adr-0001-pattern-survey-impl
+<span class="c1"># ADR-0001 itself stays committed — it is documentation, not code.</span>
+<span class="c1"># All T1 beads reopened: bd reopen &lt;each&gt;</span>
+</pre></div>
+</div>
+<p><strong>Post-merge rollback</strong> (integration landed on <code class="docutils literal notranslate"><span class="pre">dev</span></code> but a regression surfaces):
+Prefer <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">revert</span> <span class="pre">-m</span> <span class="pre">1</span> <span class="pre">&lt;merge-commit&gt;</span></code> over hard-reset. Open a follow-up bead documenting the regression and the revert reason. Do not force-push <code class="docutils literal notranslate"><span class="pre">dev</span></code>.</p>
+</section>
+<section id="done-ness-for-the-whole-adr">
+<h2>9. Done-ness for the whole ADR<a class="headerlink" href="#done-ness-for-the-whole-adr" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>[ ] All six Tier-1 beads closed</p></li>
+<li><p>[ ] Integration branch merged to <code class="docutils literal notranslate"><span class="pre">dev</span></code> (single <code class="docutils literal notranslate"><span class="pre">--no-ff</span></code> merge commit)</p></li>
+<li><p>[ ] <code class="docutils literal notranslate"><span class="pre">dev</span></code> pushed to <code class="docutils literal notranslate"><span class="pre">origin/dev</span></code> (per CLAUDE.md “Landing the Plane”)</p></li>
+<li><p>[ ] §6 gate checks all passed on post-merge <code class="docutils literal notranslate"><span class="pre">dev</span></code> tip</p></li>
+<li><p>[ ] Tier-2 beads (T2-1..T2-8) filed as separate beads, ready for next-cycle runbook</p></li>
+<li><p>[ ] Tier-3 polish routed into existing or new cleanup beads</p></li>
+<li><p>[ ] Tier-4 (T4-1 <code class="docutils literal notranslate"><span class="pre">lax.custom_root</span></code> implicit-diff) filed as research bead with literature-review precursor</p></li>
+<li><p>[ ] Session-end hand-off note posted: short summary + commit SHA + list of follow-up beads</p></li>
+</ul>
+</section>
+<section id="wave-0-prerequisite-work-file-disjoint-must-merge-before-t1-begins">
+<h2>10. Wave-0 prerequisite work (file-disjoint, must merge before T1 begins)<a class="headerlink" href="#wave-0-prerequisite-work-file-disjoint-must-merge-before-t1-begins" title="Link to this heading"></a></h2>
+<p>Auditor I (infrastructure-gap pass, 2026-05-12) identified five must-land items before any T1 sub-branch opens. These are filed as separate beads blocking the T1 set:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Bead</p></th>
+<th class="head"><p>Title</p></th>
+<th class="head"><p>Why it must land first</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>(file)</p></td>
+<td><p>Wave-0: capture ADR-0001 baseline (<code class="docutils literal notranslate"><span class="pre">.adr-0001-baseline.txt</span></code> + <code class="docutils literal notranslate"><span class="pre">.adr-0001-baseline-{cov,bench}.json</span></code>) on dev tip</p></td>
+<td><p>Runbook §6 gates (”≥ pre-ADR baseline”, “within 5%”) are unenforceable without this anchor</p></td>
+</tr>
+<tr class="row-odd"><td><p>(file)</p></td>
+<td><p>CI workflow: trigger <code class="docutils literal notranslate"><span class="pre">ci.yml</span></code> on <code class="docutils literal notranslate"><span class="pre">dev</span></code> + integration branch; add <code class="docutils literal notranslate"><span class="pre">black</span> <span class="pre">--check</span></code>; drop <code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">requires_jax</span></code> filter; set <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span></code></p></td>
+<td><p>Sub-branch PRs currently land without CI signal; runbook §5 gates not enforced</p></td>
+</tr>
+<tr class="row-even"><td><p>(file)</p></td>
+<td><p>Bump JAX floor to <code class="docutils literal notranslate"><span class="pre">&gt;=0.4.30</span></code> + add <code class="docutils literal notranslate"><span class="pre">psutil&gt;=5.9</span></code> to <code class="docutils literal notranslate"><span class="pre">dev</span></code>/<code class="docutils literal notranslate"><span class="pre">ci</span></code>/<code class="docutils literal notranslate"><span class="pre">local</span></code> extras</p></td>
+<td><p>T1-5 §10 requires <code class="docutils literal notranslate"><span class="pre">jax&gt;=0.4.30</span></code> for stable <code class="docutils literal notranslate"><span class="pre">checkpoint_policies</span></code> API; T1-5 §5 references <code class="docutils literal notranslate"><span class="pre">psutil</span></code> with no pin</p></td>
+</tr>
+<tr class="row-odd"><td><p>(file)</p></td>
+<td><p>Codify shared <code class="docutils literal notranslate"><span class="pre">.venv</span></code> symlink + forbid in-worktree pip installs (runbook §4 already updated; bead tracks pyproject sanity)</p></td>
+<td><p>Avoids 6-12 GiB redundant installs across 6 worktrees</p></td>
+</tr>
+<tr class="row-even"><td><p>(file)</p></td>
+<td><p>Refresh <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">remember</span> <span class="pre">adr-0001-integration-branch</span></code> to point at runbook §3 spawn template + bootstrap sequence</p></td>
+<td><p>Subagent cold-start needs the bootstrap path explicit</p></td>
+</tr>
+</tbody>
+</table>
+<p>All five run in parallel (file-disjoint). Block all six T1 beads on their union.</p>
+</section>
+<section id="recent-merge-interactions-audited-2026-05-12">
+<h2>11. Recent-merge interactions (audited 2026-05-12)<a class="headerlink" href="#recent-merge-interactions-audited-2026-05-12" title="Link to this heading"></a></h2>
+<p>Three commits landed on <code class="docutils literal notranslate"><span class="pre">origin/dev</span></code> between ADR-0001 draft and tightening:</p>
+<ul class="simple">
+<li><p><strong>1df84df</strong> (NFS-share <code class="docutils literal notranslate"><span class="pre">/data</span></code>): zero impact on Tier-1; pure cluster deployment.</p></li>
+<li><p><strong>4d83f25</strong> (JAX persistent compile cache + bench-pause): T1-1 perf criterion (AC #8) requires <strong>warm-cache measurement</strong> — run twice, compare second invocation. Runbook §4.2 now flips the bench-pause flag during worktree work to avoid race with post-merge benchmarks (<code class="docutils literal notranslate"><span class="pre">scripts/bench-pause.sh</span></code>).</p></li>
+<li><p><strong>ba1f043</strong> (Parquet result schema): no impact on Tier-1 — runbook §6 benchmark-parity gate uses <code class="docutils literal notranslate"><span class="pre">scripts/benchmark_synthetic_identifiers.py</span></code> (legacy JSON output), not the new <code class="docutils literal notranslate"><span class="pre">UnifiedBenchmarkRunner.write_outputs</span></code> Parquet path.</p></li>
+</ul>
+</section>
+<section id="quick-reference-spec-files">
+<h2>12. Quick reference — spec files<a class="headerlink" href="#quick-reference-spec-files" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Bead ID</p></th>
+<th class="head"><p>Short name</p></th>
+<th class="head"><p>Spec file</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-5oar</span></code></p></td>
+<td><p>host-kernel-split</p></td>
+<td><p><a class="reference internal" href="specs/T1-1-host-kernel-split.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-1-host-kernel-split.md</span></code></span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-swgm</span></code></p></td>
+<td><p>forward-model-unify</p></td>
+<td><p><a class="reference internal" href="specs/T1-2-forward-model-unification.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-2-forward-model-unification.md</span></code></span></a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-14p6</span></code></p></td>
+<td><p>lax-while-iterative</p></td>
+<td><p><a class="reference internal" href="specs/T1-3-lax-while-iterative.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-3-lax-while-iterative.md</span></code></span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-e5o8</span></code></p></td>
+<td><p>ldm-broadening</p></td>
+<td><p><a class="reference internal" href="specs/T1-4-ldm-broadening.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-4-ldm-broadening.md</span></code></span></a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-ke4z</span></code></p></td>
+<td><p>chunked-scan-checkpoint</p></td>
+<td><p><a class="reference internal" href="specs/T1-5-chunked-scan-checkpoint.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-5-chunked-scan-checkpoint.md</span></code></span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-0mor</span></code></p></td>
+<td><p>retrieval-decomposition</p></td>
+<td><p><a class="reference internal" href="specs/T1-6-bayesian-decomposition.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/T1-6-bayesian-decomposition.md</span></code></span></a></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

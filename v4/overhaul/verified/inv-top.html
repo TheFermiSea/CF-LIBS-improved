@@ -1,0 +1,351 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/inversion/ Top-Level Modules &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/</span></code> Top-Level Modules</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/inv-top.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-inversion-top-level-modules">
+<h1>Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/</span></code> Top-Level Modules<a class="headerlink" href="#adversarial-verification-cflibs-inversion-top-level-modules" title="Link to this heading"></a></h1>
+<p><strong>Verifier:</strong> Adversarial second pass against census <code class="docutils literal notranslate"><span class="pre">inv-top.md</span></code>
+<strong>Code revision:</strong> v4-m5 main (2026-06-25)
+<strong>Method:</strong> Independent ripgrep + Read at cited line numbers; re-derivation against
+<code class="docutils literal notranslate"><span class="pre">full_spectrum.py</span></code> internals where the census made claims about data flow.</p>
+<hr class="docutils" />
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<p>Of the 4 critical/high findings (F1, F2, F3, F4), two are confirmed real bugs (F2, F3,
+F4), one is a <strong>false positive</strong> (F1 — the conversion IS done inside
+<code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code> before the return value; the census misread the data flow), and
+one (F8, test-gaps) is confirmed. The highest confirmed severity is <strong>critical</strong> (F2).</p>
+</section>
+<hr class="docutils" />
+<section id="f1-physics-correctness-originally-high">
+<h2>F1 — PHYSICS-CORRECTNESS — originally HIGH<a class="headerlink" href="#f1-physics-correctness-originally-high" title="Link to this heading"></a></h2>
+<p><strong>Title:</strong> Full-spectrum solver adopts number-fractions as mass-fractions when the
+iterative warm-start is superseded</p>
+<p><strong>REAL: FALSE</strong></p>
+<p><strong>Reasoning:</strong> The census claimed that <code class="docutils literal notranslate"><span class="pre">concentrations=dict(fs.concentrations)</span></code> at
+<code class="docutils literal notranslate"><span class="pre">pipeline.py:1219</span></code> passes raw number fractions. Independent re-reading of
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/full_spectrum.py</span></code> refutes this.</p>
+<ul class="simple">
+<li><p>Line 647: <code class="docutils literal notranslate"><span class="pre">fit_mass</span> <span class="pre">=</span> <span class="pre">_number_to_mass_fractions(fit_numfrac)</span></code> — the number fractions
+from the JAX optimizer are converted to mass fractions inside <code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code>.</p></li>
+<li><p>Line 677–684: the adoption branch sets <code class="docutils literal notranslate"><span class="pre">adopted_conc</span> <span class="pre">=</span> <span class="pre">fit_mass</span></code> (mass fractions);
+the non-adoption fall-back sets <code class="docutils literal notranslate"><span class="pre">adopted_conc</span> <span class="pre">=</span> <span class="pre">dict(warm_mass)</span></code> where <code class="docutils literal notranslate"><span class="pre">warm_mass</span></code>
+comes from <code class="docutils literal notranslate"><span class="pre">warm_start_concentrations</span></code>, documented at line 405 as “MASS fractions (the
+iterative-solver / scoreboard convention).”</p></li>
+<li><p>Line 689: <code class="docutils literal notranslate"><span class="pre">concentrations=adopted_conc</span></code> — the <code class="docutils literal notranslate"><span class="pre">FullSpectrumResult.concentrations</span></code>
+field is therefore always mass fractions, regardless of whether the converged fit is
+adopted.</p></li>
+</ul>
+<p>The census also incorrectly stated that <code class="docutils literal notranslate"><span class="pre">_number_to_mass_fractions</span></code> at “pipeline.py
+line 949-971” is invoked for the “pure joint/bayesian path” but not the adopted branch.
+In reality <code class="docutils literal notranslate"><span class="pre">_number_to_mass_fractions</span></code> in <code class="docutils literal notranslate"><span class="pre">pipeline.py</span></code> (line 949) is a helper used
+only within <code class="docutils literal notranslate"><span class="pre">pipeline.py</span></code> for its own internal conversions; the full-spectrum solver
+has its own copy in <code class="docutils literal notranslate"><span class="pre">full_spectrum.py</span></code> (line 131) and calls it before constructing
+<code class="docutils literal notranslate"><span class="pre">FullSpectrumResult</span></code>. The adopted branch in <code class="docutils literal notranslate"><span class="pre">pipeline.py:1215-1227</span></code> correctly receives
+and passes mass fractions through.</p>
+<p><strong>Corrected severity: none</strong> (not a bug).</p>
+</section>
+<hr class="docutils" />
+<section id="f2-architecture-design-originally-critical">
+<h2>F2 — ARCHITECTURE/DESIGN — originally CRITICAL<a class="headerlink" href="#f2-architecture-design-originally-critical" title="Link to this heading"></a></h2>
+<p><strong>Title:</strong> <code class="docutils literal notranslate"><span class="pre">ransac_early_exit</span></code> default in <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code> but the
+dataclass field documents and defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code> — hidden accuracy regression</p>
+<p><strong>REAL: TRUE</strong></p>
+<p><strong>Reasoning:</strong> Independently verified at the cited lines.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pipeline.py:261</span></code>: <code class="docutils literal notranslate"><span class="pre">ransac_early_exit:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></code> — dataclass field default is
+<code class="docutils literal notranslate"><span class="pre">False</span></code>. The inline docstring (lines 251-261) explicitly states “PARITY-AFFECTING on
+hard low-inlier cases” and “Default <code class="docutils literal notranslate"><span class="pre">False</span></code> reproduces the legacy loop.”</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pipeline.py:455</span></code>: <code class="docutils literal notranslate"><span class="pre">ransac_early_exit=bool(knob(&quot;ransac_early_exit&quot;,</span> <span class="pre">None,</span> <span class="pre">True))</span></code> —
+the <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code> fallback value is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">knob()</span></code> helper resolves as: <code class="docutils literal notranslate"><span class="pre">config_overrides</span> <span class="pre">&gt;</span> <span class="pre">config_yaml</span> <span class="pre">&gt;</span> <span class="pre">default</span></code>. When
+neither <code class="docutils literal notranslate"><span class="pre">config_overrides</span></code> nor the YAML provides a value, the third argument (<code class="docutils literal notranslate"><span class="pre">True</span></code>)
+is used. This means every caller who goes through <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code> without
+explicitly setting <code class="docutils literal notranslate"><span class="pre">ransac_early_exit</span></code> gets <code class="docutils literal notranslate"><span class="pre">True</span></code>, not the dataclass <code class="docutils literal notranslate"><span class="pre">False</span></code>. All
+three entry points (<code class="docutils literal notranslate"><span class="pre">analyze</span></code>, <code class="docutils literal notranslate"><span class="pre">invert</span></code>, <code class="docutils literal notranslate"><span class="pre">batch</span></code>) go through <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code>.
+The benchmark comment says this is “benchmark-gated” and parity-affecting, making this
+a silent accuracy regression in production. The discrepancy cannot be caught at runtime
+because both values are valid booleans.</p>
+<p>No test exists for this consistency (confirmed: <code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">ransac_early_exit</span> <span class="pre">tests/</span></code> returned
+no results).</p>
+<p><strong>Corrected severity: critical</strong> (confirmed).</p>
+</section>
+<hr class="docutils" />
+<section id="f3-architecture-design-originally-high">
+<h2>F3 — ARCHITECTURE/DESIGN — originally HIGH<a class="headerlink" href="#f3-architecture-design-originally-high" title="Link to this heading"></a></h2>
+<p><strong>Title:</strong> <code class="docutils literal notranslate"><span class="pre">joint</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> dispatch passes a fresh empty <code class="docutils literal notranslate"><span class="pre">diagnostics={}</span></code> dict to
+<code class="docutils literal notranslate"><span class="pre">_run_full_spectrum_solver</span></code> — full-spectrum diagnostics are silently discarded</p>
+<p><strong>REAL: TRUE</strong></p>
+<p><strong>Reasoning:</strong> Independently verified.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pipeline.py:1263-1264</span></code>: <code class="docutils literal notranslate"><span class="pre">_run_full_spectrum_solver(wavelength,</span> <span class="pre">intensity,</span> <span class="pre">atomic_db,</span> <span class="pre">pipeline,</span> <span class="pre">warm_start=warm,</span> <span class="pre">diagnostics={})</span></code> — the ephemeral <code class="docutils literal notranslate"><span class="pre">{}</span></code> is not connected to
+anything.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pipeline.py:1174-1188</span></code>: <code class="docutils literal notranslate"><span class="pre">_run_full_spectrum_solver</span></code> writes rich diagnostics
+(<code class="docutils literal notranslate"><span class="pre">full_spectrum_converged</span></code>, <code class="docutils literal notranslate"><span class="pre">fit_T_K</span></code>, <code class="docutils literal notranslate"><span class="pre">fit_ne_cm3</span></code>, <code class="docutils literal notranslate"><span class="pre">warm_start_concentrations</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fit_concentrations</span></code>, all <code class="docutils literal notranslate"><span class="pre">diag_*</span></code> entries) into the <code class="docutils literal notranslate"><span class="pre">diagnostics</span></code> parameter it
+receives.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pipeline.py:1422</span></code>: <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> calls <code class="docutils literal notranslate"><span class="pre">_dispatch_solver</span></code> without passing its own
+<code class="docutils literal notranslate"><span class="pre">diagnostics</span></code> dict as a parameter to <code class="docutils literal notranslate"><span class="pre">_dispatch_solver</span></code>. The function signature of
+<code class="docutils literal notranslate"><span class="pre">_dispatch_solver</span></code> (line 1230) has no <code class="docutils literal notranslate"><span class="pre">diagnostics</span></code> parameter.</p></li>
+<li><p>For iterative/closed_form paths the diagnostics flow correctly because
+<code class="docutils literal notranslate"><span class="pre">_run_peak_based_solver</span></code> does not write into a passed diagnostics dict; all
+diagnostics are accumulated in the <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code>-scope <code class="docutils literal notranslate"><span class="pre">diagnostics</span></code> dict directly
+(Stark results, observation counts, etc.). But for <code class="docutils literal notranslate"><span class="pre">joint</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> the
+full-spectrum-specific entries (<code class="docutils literal notranslate"><span class="pre">fit_T_K</span></code>, <code class="docutils literal notranslate"><span class="pre">fit_ne_cm3</span></code>, convergence flags) are
+permanently lost.</p></li>
+</ul>
+<p>The scoreboard and trust-report for <code class="docutils literal notranslate"><span class="pre">joint</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> runs are completely blind to
+whether the full-spectrum optimiser converged, what T/n_e it found, and whether the fit
+was adopted. This is a real observability bug — not a correctness bug, but it makes
+diagnosing poor joint/bayesian fits impossible from the returned diagnostics.</p>
+<p><strong>Corrected severity: high</strong> (confirmed).</p>
+</section>
+<hr class="docutils" />
+<section id="f4-architecture-design-originally-high">
+<h2>F4 — ARCHITECTURE/DESIGN — originally HIGH<a class="headerlink" href="#f4-architecture-design-originally-high" title="Link to this heading"></a></h2>
+<p><strong>Title:</strong> <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code> <code class="docutils literal notranslate"><span class="pre">_ALIASED_EXPORTS</span></code> registers <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code> pointing to
+the Bayesian sub-package, silently shadowing the same name from <code class="docutils literal notranslate"><span class="pre">solve.joint_optimizer</span></code></p>
+<p><strong>REAL: TRUE</strong> (partially — the census description of the mechanism is slightly
+inaccurate but the net effect is real)</p>
+<p><strong>Reasoning:</strong></p>
+<p>Two separate <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code> enums confirmed:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/joint_optimizer.py:67</span></code>: <code class="docutils literal notranslate"><span class="pre">class</span> <span class="pre">ConvergenceStatus(Enum)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/priors.py:170</span></code>: <code class="docutils literal notranslate"><span class="pre">class</span> <span class="pre">ConvergenceStatus(Enum)</span></code></p></li>
+</ul>
+<p>Mechanism (corrected vs. census): <code class="docutils literal notranslate"><span class="pre">_ATTRIBUTE_EXPORT_GROUPS</span></code> at line 183-190 registers
+<code class="docutils literal notranslate"><span class="pre">&quot;ConvergenceStatus&quot;</span></code> from <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve.joint_optimizer</span></code>. Then
+<code class="docutils literal notranslate"><span class="pre">_ALIASED_EXPORTS</span></code> at line 217 registers <code class="docutils literal notranslate"><span class="pre">&quot;ConvergenceStatus&quot;</span></code> pointing to
+<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.solve.bayesian</span></code>. The <code class="docutils literal notranslate"><span class="pre">_MODULE_EXPORTS.update(_ALIASED_EXPORTS)</span></code> call
+at line 225 <strong>overwrites</strong> the joint-optimizer entry with the bayesian one. Result:
+<code class="docutils literal notranslate"><span class="pre">cflibs.inversion.ConvergenceStatus</span></code> resolves to the bayesian <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code>
+(from <code class="docutils literal notranslate"><span class="pre">priors.py</span></code>), while the joint optimizer’s <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code> is accessible only
+as <code class="docutils literal notranslate"><span class="pre">JointConvergenceStatus</span></code> via the alias at line 216. The <code class="docutils literal notranslate"><span class="pre">__all__</span></code> list at line 351
+includes <code class="docutils literal notranslate"><span class="pre">ConvergenceStatus</span></code> (bayesian) and <code class="docutils literal notranslate"><span class="pre">JointConvergenceStatus</span></code> (joint) with no
+disambiguation comment.</p>
+<p>The census claim that “the lazy loader races” is not quite accurate — this is a
+deterministic dict overwrite, not a race. The real issue is the public-API ambiguity:
+<code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion</span> <span class="pre">import</span> <span class="pre">ConvergenceStatus</span></code> silently gives the Bayesian enum;
+callers checking <code class="docutils literal notranslate"><span class="pre">result.convergence_status</span></code> from a <code class="docutils literal notranslate"><span class="pre">JointOptimizationResult</span></code> get a
+type they cannot directly compare against.</p>
+<p><strong>Corrected severity: high</strong> (confirmed; mechanism clarified).</p>
+</section>
+<hr class="docutils" />
+<section id="f8-test-gaps-originally-high">
+<h2>F8 — TEST-GAPS — originally HIGH<a class="headerlink" href="#f8-test-gaps-originally-high" title="Link to this heading"></a></h2>
+<p><strong>Title:</strong> No unit test for <code class="docutils literal notranslate"><span class="pre">ransac_early_exit</span></code> default-value consistency; no regression
+guard for the mole→mass conversion in the adopted full-spectrum path</p>
+<p><strong>REAL: TRUE</strong> (partially — F1 is a false positive, so the second test guard is
+unnecessary; the first is still missing)</p>
+<p><strong>Reasoning:</strong> <code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">ransac_early_exit</span> <span class="pre">tests/</span></code> returns no matches. The test
+<code class="docutils literal notranslate"><span class="pre">tests/cli/test_pipeline_defaults.py</span></code> exists but does not check
+<code class="docutils literal notranslate"><span class="pre">ransac_early_exit</span></code> consistency between <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig()</span></code> and
+<code class="docutils literal notranslate"><span class="pre">build_pipeline_config([])</span></code>.</p>
+<p>The second guard (mole→mass regression for adopted full-spectrum path) is unnecessary
+because F1 is false — <code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code> already returns mass fractions. However, a
+test asserting that <code class="docutils literal notranslate"><span class="pre">build_pipeline_config</span></code> defaults match the dataclass defaults
+(catching exactly the F2 regression) remains absent.</p>
+<p><strong>Corrected severity: high</strong> (confirmed for the ransac_early_exit consistency gap; the
+mass-fraction round-trip test is unnecessary).</p>
+</section>
+<hr class="docutils" />
+<section id="findings-the-census-missed">
+<h2>Findings the Census MISSED<a class="headerlink" href="#findings-the-census-missed" title="Link to this heading"></a></h2>
+<section id="m1-correctness-medium">
+<h3>M1 — CORRECTNESS — MEDIUM<a class="headerlink" href="#m1-correctness-medium" title="Link to this heading"></a></h3>
+<p><strong>Title:</strong> <code class="docutils literal notranslate"><span class="pre">_run_full_spectrum_solver</span></code> calls <code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code> with
+<code class="docutils literal notranslate"><span class="pre">warm_start_concentrations=warm_concentrations</span></code> (line 1156), but <code class="docutils literal notranslate"><span class="pre">warm_concentrations</span></code>
+is built at line 1143-1145 by directly iterating <code class="docutils literal notranslate"><span class="pre">warm_start.concentrations</span></code> — which is
+a <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> from the iterative solver. The iterative solver stores MASS fractions
+in <code class="docutils literal notranslate"><span class="pre">concentrations</span></code>. Then <code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code> documents (line 405) that
+<code class="docutils literal notranslate"><span class="pre">warm_start_concentrations</span></code> should be mass fractions. The round-trip is consistent.
+However: <code class="docutils literal notranslate"><span class="pre">warm_concentrations</span></code> at line 1144 filters out <code class="docutils literal notranslate"><span class="pre">c</span> <span class="pre">&lt;=</span> <span class="pre">0.0</span></code> entries. If an
+element has a zero mass fraction in the warm start but IS in <code class="docutils literal notranslate"><span class="pre">fit_elements</span></code> (line 1146),
+it is excluded from <code class="docutils literal notranslate"><span class="pre">warm_concentrations</span></code> but included in the fit. Inside
+<code class="docutils literal notranslate"><span class="pre">solve_full_spectrum</span></code>, <code class="docutils literal notranslate"><span class="pre">_mass_to_number_fractions</span></code> at line 159 uses
+<code class="docutils literal notranslate"><span class="pre">max(float(mass_fractions.get(el,</span> <span class="pre">0.0)),</span> <span class="pre">1e-6)</span></code> for each element in the <code class="docutils literal notranslate"><span class="pre">elements</span></code>
+list — so missing elements get a floor of <code class="docutils literal notranslate"><span class="pre">1e-6</span></code>. This is defensively correct but
+means a zero-concentration warm start for one element biases the initial number-fraction
+simplex point. Not a crash but a subtle warm-start quality degradation. Severity: low.</p>
+</section>
+<section id="m2-architecture-low">
+<h3>M2 — ARCHITECTURE — LOW<a class="headerlink" href="#m2-architecture-low" title="Link to this heading"></a></h3>
+<p><strong>Title:</strong> <code class="docutils literal notranslate"><span class="pre">_dispatch_solver</span></code> passes <code class="docutils literal notranslate"><span class="pre">uncertainty_mode</span></code> to <code class="docutils literal notranslate"><span class="pre">_run_peak_based_solver</span></code>
+(line 1249) but does not pass it through to <code class="docutils literal notranslate"><span class="pre">_run_full_spectrum_solver</span></code> for
+<code class="docutils literal notranslate"><span class="pre">joint</span></code>/<code class="docutils literal notranslate"><span class="pre">bayesian</span></code> solvers (line 1263). The full-spectrum result therefore always has
+no uncertainty estimates, regardless of what <code class="docutils literal notranslate"><span class="pre">uncertainty_mode</span></code> was requested. Since
+the full-spectrum solver does not currently compute uncertainties (it only provides
+optimizer convergence diagnostics), this is not currently observable, but when
+uncertainty support is added to the full-spectrum path the parameter-threading will
+need to be added too. Severity: low (forward-compatibility note only).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dimension-summary">
+<h2>Dimension Summary<a class="headerlink" href="#dimension-summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>Originally</p></th>
+<th class="head"><p>Confirmed Real</p></th>
+<th class="head"><p>Corrected Severity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1 — mole/mass in adopted path</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>FALSE</strong></p></td>
+<td><p><strong>none</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>F2 — ransac_early_exit default mismatch</p></td>
+<td><p>CRITICAL</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p><strong>critical</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>F3 — lost full-spectrum diagnostics</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p><strong>high</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>F4 — ConvergenceStatus name collision</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>TRUE</strong></p></td>
+<td><p><strong>high</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>F8 — test gaps (default consistency)</p></td>
+<td><p>HIGH</p></td>
+<td><p><strong>TRUE (partial)</strong></p></td>
+<td><p><strong>high</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>M1 — zero-element warm-start floor</p></td>
+<td><p>(missed)</p></td>
+<td><p>new</p></td>
+<td><p>low</p></td>
+</tr>
+<tr class="row-even"><td><p>M2 — uncertainty_mode not threaded</p></td>
+<td><p>(missed)</p></td>
+<td><p>new</p></td>
+<td><p>low</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Highest confirmed severity: critical (F2)</strong></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

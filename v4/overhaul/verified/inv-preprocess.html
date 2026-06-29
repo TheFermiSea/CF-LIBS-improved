@@ -1,0 +1,314 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Verification: cflibs/inversion/preprocess &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/inv-preprocess.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-verification-cflibs-inversion-preprocess">
+<h1>Adversarial Verification: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess</span></code><a class="headerlink" href="#adversarial-verification-cflibs-inversion-preprocess" title="Link to this heading"></a></h1>
+<p>Verifier: Claude Sonnet 4.6, 2026-06-25
+Source: <code class="docutils literal notranslate"><span class="pre">.worktrees/v4-m5/cflibs/inversion/preprocess/</span></code>
+Method: independent rg+Read traversal of cited lines; re-deriving against <code class="docutils literal notranslate"><span class="pre">literature/wavelength-calibration.md</span></code></p>
+<hr class="docutils" />
+<section id="finding-1-quadratic-ransac-fits-un-normalized-wavelength-coordinates">
+<h2>Finding 1 — Quadratic RANSAC fits un-normalized wavelength coordinates<a class="headerlink" href="#finding-1-quadratic-ransac-fits-un-normalized-wavelength-coordinates" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: high</strong> (confirmed)</p>
+<p>Code at <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:192–195</span></code> constructs <code class="docutils literal notranslate"><span class="pre">X</span> <span class="pre">=</span> <span class="pre">np.column_stack([x</span> <span class="pre">*</span> <span class="pre">x,</span> <span class="pre">x,</span> <span class="pre">np.ones_like(x)])</span></code> where <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">cand_x</span> <span class="pre">=</span> <span class="pre">peak_wl</span></code> — observed wavelength in nm, range ~200–900 nm for typical LIBS. Column 1 has values ∼4×10⁴–8×10⁵, column 2 ∼200–900, column 3 = 1. This multi-decade scale disparity between columns produces a poorly conditioned system matrix whose condition number scales with the ratio of the largest to smallest singular values. The literature (<code class="docutils literal notranslate"><span class="pre">wavelength-calibration.md</span> <span class="pre">§2.2</span></code>) mandates normalization to [−1, +1] before fitting any polynomial basis. The census’s claimed condition number of ~3×10⁶ is plausible for this value range, though the worst-case pixel-space problem (0–4096 range) is more severe. The core finding is unambiguously real: the quadratic model is fit in raw nm coordinates without normalization, which is an established numerical pitfall. The affine model is less severely affected (its column ratio is ~200:900:1 — more manageable), consistent with the census’s note. Note that in the segmented calibration path (<code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis_segmented</span></code>, default <code class="docutils literal notranslate"><span class="pre">candidate_models=(&quot;shift&quot;,</span> <span class="pre">&quot;affine&quot;)</span></code>), the quadratic model is excluded by default, so the worst-case conditioning only applies to the non-segmented path.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-2-no-sub-pixel-centroiding">
+<h2>Finding 2 — No sub-pixel centroiding<a class="headerlink" href="#finding-2-no-sub-pixel-centroiding" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: high</strong> (confirmed)</p>
+<p><code class="docutils literal notranslate"><span class="pre">detect_peaks</span></code> at <code class="docutils literal notranslate"><span class="pre">preprocessing.py:617</span></code> returns <code class="docutils literal notranslate"><span class="pre">[(int(idx),</span> <span class="pre">float(wavelength[idx]))</span> <span class="pre">for</span> <span class="pre">idx</span> <span class="pre">in</span> <span class="pre">peak_indices]</span></code> — the wavelength grid value at the integer argmax index from <code class="docutils literal notranslate"><span class="pre">scipy.signal.find_peaks</span></code>, with no Gaussian or parabolic sub-pixel fit applied. <code class="docutils literal notranslate"><span class="pre">_filter_peaks_by_fwhm</span></code> (line 453) uses <code class="docutils literal notranslate"><span class="pre">peak_widths</span></code> to compute FWHM for cosmic-ray rejection but does not extract a sub-pixel center. <code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis</span></code> at line 1127 assigns <code class="docutils literal notranslate"><span class="pre">peak_wl</span> <span class="pre">=</span> <span class="pre">np.asarray([p[1]</span> <span class="pre">for</span> <span class="pre">p</span> <span class="pre">in</span> <span class="pre">peaks],</span> <span class="pre">dtype=float)</span></code> — these are discrete grid wavelengths, not interpolated centers. The literature (<code class="docutils literal notranslate"><span class="pre">wavelength-calibration.md</span> <span class="pre">§2.4</span></code>) is unambiguous: “using the raw peak pixel index instead of a sub-pixel centroid introduces ~0.5 pixel systematic error.” At LIBS dispersions of 0.06–0.1 nm/px, this is 0.03–0.05 nm RMS per anchor, which is comparable to the RANSAC inlier tolerance (<code class="docutils literal notranslate"><span class="pre">inlier_tolerance_nm=0.08</span></code> nm default). The infrastructure (FWHM data from <code class="docutils literal notranslate"><span class="pre">peak_widths</span></code>, baseline-subtracted array) is already present to support a 3-point parabolic centroid with minimal code change. Finding is confirmed as written.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-3-min-intensity-floor-semantics-inverted">
+<h2>Finding 3 — <code class="docutils literal notranslate"><span class="pre">min_intensity_floor</span></code> semantics inverted<a class="headerlink" href="#finding-3-min-intensity-floor-semantics-inverted" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE (with nuance)</strong>
+<strong>Corrected severity: medium</strong> (confirmed)</p>
+<p>Code at <code class="docutils literal notranslate"><span class="pre">preprocessing.py:586–589</span></code>: <code class="docutils literal notranslate"><span class="pre">threshold</span> <span class="pre">=</span> <span class="pre">min(threshold,</span> <span class="pre">min_intensity_floor)</span></code> — when <code class="docutils literal notranslate"><span class="pre">min_intensity_floor</span> <span class="pre">&lt;</span> <span class="pre">noise</span> <span class="pre">*</span> <span class="pre">threshold_factor</span></code>, this lowers the detection threshold, enabling detection of peaks that would have been rejected by the noise criterion. The census’s description is correct: a “floor” parameter that can lower (not raise) the threshold is inverted semantics. The docstring at line 573–577 says “peaks above this floor will be detected even if they fall below the noise-derived threshold” which accurately describes the behavior but does not guard against pathological cases. Specifically, if <code class="docutils literal notranslate"><span class="pre">min_intensity_floor=5.0</span></code> and <code class="docutils literal notranslate"><span class="pre">noise=4.0</span></code> (threshold_factor=4 → threshold=16), the result threshold is 5.0 — below the 4σ criterion but above the 1σ noise level; this isn’t below the noise floor in the strict sense but is below the standard CF-LIBS 4σ criterion. The default <code class="docutils literal notranslate"><span class="pre">min_intensity_floor=0.0</span></code> means the branch is never triggered unless a caller explicitly passes a positive value. In the wavelength-calibration caller at line 1107, <code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code> is called without <code class="docutils literal notranslate"><span class="pre">min_intensity_floor</span></code>, so the calibration path is unaffected. The risk is in other callers (e.g., identification algorithms) that might pass a non-zero floor. The census’s characterization of “inverted semantics” is accurate; severity is medium because it requires non-default usage to trigger.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-4-detect-ccd-seams-pure-python-rolling-median">
+<h2>Finding 4 — <code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code> pure-Python rolling median<a class="headerlink" href="#finding-4-detect-ccd-seams-pure-python-rolling-median" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: high</strong> (confirmed)</p>
+<p>Code at <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:1302–1305</span></code> is a Python <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n)</span></code> loop computing <code class="docutils literal notranslate"><span class="pre">np.median(dl[lo:hi])</span></code> at each sample. The default window is 51 (half-width, line 1253), so the actual window size is 103 samples. For n=5000 pixels (typical multi-channel LIBS), this is ~5000 <code class="docutils literal notranslate"><span class="pre">np.median</span></code> calls on windows of up to 103 elements — pure Python overhead plus NumPy call overhead per iteration. The census’s performance comparison to <code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code> is valid: the C-level <code class="docutils literal notranslate"><span class="pre">median_filter</span></code> function processes the entire array in a single C loop. <code class="docutils literal notranslate"><span class="pre">scipy.ndimage.median_filter</span></code> is imported in <code class="docutils literal notranslate"><span class="pre">preprocessing.py</span></code> (line 18) but NOT in <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py</span></code> (no <code class="docutils literal notranslate"><span class="pre">scipy.ndimage</span></code> import in that file). The function is called once per <code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis_segmented</span></code> invocation (line 1951), which is on the hot path for real-data inversion. The finding is confirmed as written. Note: the census claim that <code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code> “feeds” RANSAC (which is the profiled 73% bottleneck) is accurate in the sense that seam detection must complete before the segmented RANSAC runs, but seam detection’s own cost is additional latency, not the dominant one.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-5-wavelength-calibration-py-is-a-2119-line-monolith">
+<h2>Finding 5 — <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py</span></code> is a 2119-line monolith<a class="headerlink" href="#finding-5-wavelength-calibration-py-is-a-2119-line-monolith" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: high</strong> (confirmed, but subjective severity)</p>
+<p><code class="docutils literal notranslate"><span class="pre">wc</span> <span class="pre">-l</span></code> confirms exactly 2119 lines. All six subsystems cited in the census are verified present at the stated line numbers: <code class="docutils literal notranslate"><span class="pre">_quality_gate_check</span></code> (98), Hough functions (273–369), <code class="docutils literal notranslate"><span class="pre">_ransac_search</span></code>/<code class="docutils literal notranslate"><span class="pre">_ransac_fit</span></code>/<code class="docutils literal notranslate"><span class="pre">_refine_robust_inliers</span></code> (431–643), line pool construction (646–815), <code class="docutils literal notranslate"><span class="pre">_build_candidate_pairs</span></code> (818–853), quality/coverage gates (1331–1500), segmented orchestration (1503–1748). The finding is accurate. Severity “high” for an architecture issue is defensible given the file’s centrality to the calibration hot path and the documented history of coverage-gate bugs. A reasonable position is that this is “high” architecture debt but not a correctness or physics error — marking high-as-architecture rather than downgrading severity.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-6-outliers-py-belongs-in-common">
+<h2>Finding 6 — <code class="docutils literal notranslate"><span class="pre">outliers.py</span></code> belongs in <code class="docutils literal notranslate"><span class="pre">common/</span></code><a class="headerlink" href="#finding-6-outliers-py-belongs-in-common" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE (with important nuance)</strong>
+<strong>Corrected severity: medium</strong> (confirmed)</p>
+<p><code class="docutils literal notranslate"><span class="pre">preprocessing.py:23</span></code> imports only <code class="docutils literal notranslate"><span class="pre">MAD_SCALE_FACTOR</span></code> from <code class="docutils literal notranslate"><span class="pre">outliers.py</span></code>. However, the census claim that <code class="docutils literal notranslate"><span class="pre">outliers.py</span></code> is “coupled to the package only through one constant” is an understatement: the module exports a full public API (<code class="docutils literal notranslate"><span class="pre">SAMOutlierDetector</span></code>, <code class="docutils literal notranslate"><span class="pre">MADOutlierDetector</span></code>, <code class="docutils literal notranslate"><span class="pre">mad_outliers_1d</span></code>, <code class="docutils literal notranslate"><span class="pre">mad_outliers_spectra</span></code>) re-exported at <code class="docutils literal notranslate"><span class="pre">cflibs.inversion</span></code> level (lines 114–122 of <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/__init__.py</span></code>) and tested directly via <code class="docutils literal notranslate"><span class="pre">tests/test_outliers.py</span></code>. The census’s architectural recommendation (move to <code class="docutils literal notranslate"><span class="pre">common/</span></code>) is sound and the functional mismatch (replicate-stack operations vs single-spectrum operations) is real, but the framing that the module is <em>only</em> coupled via one constant is misleading. The actual coupling is broader: any user calling <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.MADOutlierDetector</span></code> or <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.mad_outliers_spectra</span></code> is using it. The finding is real as an architectural observation but overstates the isolation. No physics or correctness impact.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-7-three-env-var-flag-resolvers-with-inconsistent-patterns">
+<h2>Finding 7 — Three env-var flag resolvers with inconsistent patterns<a class="headerlink" href="#finding-7-three-env-var-flag-resolvers-with-inconsistent-patterns" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: medium</strong> (confirmed)</p>
+<p>Three resolver functions confirmed at stated locations: <code class="docutils literal notranslate"><span class="pre">_hough_calib_enabled</span></code> (line 258), <code class="docutils literal notranslate"><span class="pre">_ransac_early_exit_config</span></code> (line 392), <code class="docutils literal notranslate"><span class="pre">calib_pool_cache_enabled</span></code> (line 698). All three check the same env-var truthy values (<code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;true&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;yes&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;on&quot;</span></code>) but use different patterns: <code class="docutils literal notranslate"><span class="pre">_hough_calib_enabled</span></code> takes <code class="docutils literal notranslate"><span class="pre">Optional[bool]</span></code> and returns <code class="docutils literal notranslate"><span class="pre">bool</span></code>; <code class="docutils literal notranslate"><span class="pre">_ransac_early_exit_config</span></code> returns a dataclass; <code class="docutils literal notranslate"><span class="pre">calib_pool_cache_enabled</span></code> is public (no leading underscore) while the others are private. The inconsistency is confirmed. The finding is accurate and the proposed fix (shared <code class="docutils literal notranslate"><span class="pre">_feature_flag</span></code> helper in <code class="docutils literal notranslate"><span class="pre">cflibs/core/</span></code>) is architecturally sound. No physics impact; medium severity is appropriate.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-8-benchmark-gated-flags-lack-activation-documentation">
+<h2>Finding 8 — Benchmark-gated flags lack activation documentation<a class="headerlink" href="#finding-8-benchmark-gated-flags-lack-activation-documentation" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: medium</strong> (confirmed)</p>
+<p>Both <code class="docutils literal notranslate"><span class="pre">CFLIBS_HOUGH_CALIB</span></code> and <code class="docutils literal notranslate"><span class="pre">CFLIBS_RANSAC_EARLY_EXIT</span></code> are confirmed as default-OFF at lines 268–270 and 399–401, with explicit “parity-AFFECTING: benchmark-gated” comments in the surrounding docstrings. A <code class="docutils literal notranslate"><span class="pre">grep</span></code> across <code class="docutils literal notranslate"><span class="pre">examples/</span></code>, <code class="docutils literal notranslate"><span class="pre">CLAUDE.md</span></code>, and <code class="docutils literal notranslate"><span class="pre">docs/</span></code> finds no benchmark result table for these flags. The Hough warm-start itself is well-implemented (vectorized Hough accumulator at lines 273–320, RASCAL-style) and the census’s claim that it has no RNG dependency and should be promotable to default-ON after benchmark graduation is accurate — the code confirms <code class="docutils literal notranslate"><span class="pre">_HOUGH_SEEDED_RANSAC_ITERATIONS</span> <span class="pre">=</span> <span class="pre">80</span></code> vs the cold-start default of 600, which is the referenced speedup. The gap between the quality of the implementation and the absence of recorded benchmark results is real.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-9-build-candidate-pairs-python-inner-loop">
+<h2>Finding 9 — <code class="docutils literal notranslate"><span class="pre">_build_candidate_pairs</span></code> Python inner loop<a class="headerlink" href="#finding-9-build-candidate-pairs-python-inner-loop" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: medium</strong> (confirmed)</p>
+<p>Code at <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:835–845</span></code> confirmed: outer loop over peaks (line 835), inner <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">l_i</span> <span class="pre">in</span> <span class="pre">hit</span></code> loop (line 838) appending to Python lists. The outer loop uses <code class="docutils literal notranslate"><span class="pre">np.abs(line_wl</span> <span class="pre">-</span> <span class="pre">pw)</span></code> (vectorized) and <code class="docutils literal notranslate"><span class="pre">np.where</span></code> to find hits, so only the inner hit-appending loop is pure Python. The <code class="docutils literal notranslate"><span class="pre">np.searchsorted</span></code> optimization proposed by the census is valid since <code class="docutils literal notranslate"><span class="pre">line_wl</span></code> is built in sorted order (constructed by <code class="docutils literal notranslate"><span class="pre">_build_reference_line_pool</span></code>). For typical LIBS spectra (100–500 peaks, 1000–5000 reference lines, sparse hit windows), the per-call cost is sub-100ms, not a dominant bottleneck relative to the RANSAC loop itself. However, in the segmented path with N=5 segments, this runs 5 times per spectrum. The finding is confirmed; the severity is medium (not high) because <code class="docutils literal notranslate"><span class="pre">_build_candidate_pairs</span></code> is not the dominant cost.</p>
+</section>
+<hr class="docutils" />
+<section id="finding-10-zero-tests-for-flag-gated-paths">
+<h2>Finding 10 — Zero tests for flag-gated paths<a class="headerlink" href="#finding-10-zero-tests-for-flag-gated-paths" title="Link to this heading"></a></h2>
+<p><strong>REAL: TRUE</strong>
+<strong>Corrected severity: medium</strong> (confirmed)</p>
+<p><code class="docutils literal notranslate"><span class="pre">grep</span> <span class="pre">-rn</span> <span class="pre">&quot;hough_calib_seed|_hough_coarse|_hough_seed|ransac_early_exit|CFLIBS_HOUGH_CALIB|CFLIBS_RANSAC_EARLY_EXIT&quot;</span> <span class="pre">tests/</span></code> returns zero hits. Neither the Hough seed path nor the early-exit path has any dedicated unit test. Both are material code paths with distinct logic: the Hough accumulator (<code class="docutils literal notranslate"><span class="pre">_hough_coarse_dispersion</span></code>, lines 273–320) is a full 2D histogram-vote algorithm; the early-exit logic (<code class="docutils literal notranslate"><span class="pre">_ransac_required_iters</span></code>, <code class="docutils literal notranslate"><span class="pre">_ransac_search</span></code> break conditions, lines 497–509) is a non-trivial confidence-bound computation. The finding is confirmed as written.</p>
+</section>
+<hr class="docutils" />
+<section id="missed-findings-spotted-during-verification">
+<h2>Missed Findings (Spotted During Verification)<a class="headerlink" href="#missed-findings-spotted-during-verification" title="Link to this heading"></a></h2>
+<section id="missed-a-dedupe-one-to-one-uses-a-python-set-iteration-loop-on-every-ransac-iteration">
+<h3>Missed A — <code class="docutils literal notranslate"><span class="pre">_dedupe_one_to_one</span></code> uses a Python <code class="docutils literal notranslate"><span class="pre">set</span></code> iteration loop on every RANSAC iteration<a class="headerlink" href="#missed-a-dedupe-one-to-one-uses-a-python-set-iteration-loop-on-every-ransac-iteration" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:211–232</span></code>
+<strong>Severity: low</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">_dedupe_one_to_one</span></code> is called inside <code class="docutils literal notranslate"><span class="pre">_ransac_search</span></code> at every RANSAC iteration (line 485), once per candidate model per segment. The function sorts by residual, then iterates over candidates in a Python loop with <code class="docutils literal notranslate"><span class="pre">set</span></code> membership checks. For a typical inlier set (50–200 candidates), this is fast, but it runs 600 × (n_segments + 1) × n_models times total. A vectorized NumPy implementation using <code class="docutils literal notranslate"><span class="pre">np.unique</span></code>-style index tricks is possible. Not a correctness issue; low severity.</p>
+</section>
+<section id="missed-b-calib-pool-cache-enabled-public-naming-inconsistency">
+<h3>Missed B — <code class="docutils literal notranslate"><span class="pre">calib_pool_cache_enabled</span></code> public naming inconsistency<a class="headerlink" href="#missed-b-calib-pool-cache-enabled-public-naming-inconsistency" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:698</span></code>
+<strong>Severity: low</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">calib_pool_cache_enabled</span></code> is a public function (no leading underscore) re-exported via the package <code class="docutils literal notranslate"><span class="pre">__init__</span></code>. The other two flag resolvers (<code class="docutils literal notranslate"><span class="pre">_hough_calib_enabled</span></code>, <code class="docutils literal notranslate"><span class="pre">_ransac_early_exit_config</span></code>) are private. This inconsistency was partially captured in Finding 7 but not specifically flagged as an API surface issue. The function is documented as public to allow callers to test whether caching is active, but it introduces a non-obvious entry point in the public API.</p>
+</section>
+<section id="missed-c-select-sample-indices-retry-loop-may-return-none-silently">
+<h3>Missed C — <code class="docutils literal notranslate"><span class="pre">_select_sample_indices</span></code> retry loop may return None silently<a class="headerlink" href="#missed-c-select-sample-indices-retry-loop-may-return-none-silently" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:242–255</span></code>
+<strong>Severity: low</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">_select_sample_indices</span></code> attempts 25 draws trying to select <code class="docutils literal notranslate"><span class="pre">n_needed</span></code> points with unique <code class="docutils literal notranslate"><span class="pre">x_vals</span></code>. If all 25 attempts fail (can happen with highly degenerate <code class="docutils literal notranslate"><span class="pre">x_vals</span></code> arrays, e.g., many peaks at the same nominal wavelength due to bad input), it returns <code class="docutils literal notranslate"><span class="pre">None</span></code>. The <code class="docutils literal notranslate"><span class="pre">_ransac_search</span></code> caller at line 476 silently <code class="docutils literal notranslate"><span class="pre">continue</span></code>s. This is a correctness-safe design (RANSAC degrades gracefully), but there is no warning emitted, and the iteration counter advances, potentially exhausting all iterations on degenerate data without producing a valid model. Low severity because it only affects pathological inputs.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary-table">
+<h2>Summary Table<a class="headerlink" href="#summary-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Title</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Corrected Severity</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Quadratic RANSAC un-normalized coordinates</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>high</strong></p></td>
+<td><p>Confirmed; applies to non-segmented path’s quadratic model</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>No sub-pixel centroiding</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>high</strong></p></td>
+<td><p>Confirmed; integer grid lookup, 0.03–0.05 nm RMS error</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">min_intensity_floor</span></code> inverted semantics</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed; only triggered by non-default callers</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">detect_ccd_seams</span></code> pure-Python rolling median</p></td>
+<td><p>TRUE</p></td>
+<td><p><strong>high</strong></p></td>
+<td><p>Confirmed; scipy.ndimage drop-in available</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>2119-line monolith</p></td>
+<td><p>TRUE</p></td>
+<td><p>high (arch)</p></td>
+<td><p>Confirmed; function locations verified exact</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">outliers.py</span></code> belongs in <code class="docutils literal notranslate"><span class="pre">common/</span></code></p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Census understates actual public API; finding still valid</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Three env-var resolvers inconsistent</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Benchmark flags lack documented pass criteria</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed; no recorded results found</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_build_candidate_pairs</span></code> inner Python loop</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed; not dominant cost, vectorizable</p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Zero tests for flag-gated Hough/early-exit paths</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed</p></td>
+</tr>
+<tr class="row-even"><td><p>A</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_dedupe_one_to_one</span></code> Python loop in RANSAC hot path</p></td>
+<td><p>NEW</p></td>
+<td><p>low</p></td>
+<td><p>Missed by census</p></td>
+</tr>
+<tr class="row-odd"><td><p>B</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">calib_pool_cache_enabled</span></code> public API inconsistency</p></td>
+<td><p>NEW</p></td>
+<td><p>low</p></td>
+<td><p>Partially covered in Finding 7</p></td>
+</tr>
+<tr class="row-even"><td><p>C</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_select_sample_indices</span></code> silent None on degenerate input</p></td>
+<td><p>NEW</p></td>
+<td><p>low</p></td>
+<td><p>Missed by census</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>All 10 census findings confirmed REAL.</strong> Highest confirmed severity: <strong>high</strong> (Findings 1, 2, 4, 5).
+No false positives detected. Three additional low-severity findings identified during verification.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

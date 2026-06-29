@@ -1,0 +1,262 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Making Comb &amp; ALIAS faithful to the literature — fix + validation &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Making Comb &amp; ALIAS faithful to the literature — fix + validation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/audit/2026-06-16-alias-faithful-fix.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="making-comb-alias-faithful-to-the-literature-fix-validation">
+<h1>Making Comb &amp; ALIAS faithful to the literature — fix + validation<a class="headerlink" href="#making-comb-alias-faithful-to-the-literature-fix-validation" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-16 · <strong>Branch:</strong> <code class="docutils literal notranslate"><span class="pre">id-benchmark-overhaul</span></code>
+<strong>Trigger:</strong> identification F1 &lt; 0.5 for every identifier; user: “these algorithms are
+documented in the literature — reproduce them as closely as possible.” Suspected a DB error.</p>
+<section id="headline">
+<h2>Headline<a class="headerlink" href="#headline" title="Link to this heading"></a></h2>
+<p>The low F1 was <strong>not</strong> the atomic database. It was (a) the identifiers <strong>deviating from their
+source papers</strong> in their decision/scoring logic, and (b) the benchmark <strong>corpus violating the
+papers’ own stated assumptions</strong>. Fixing both makes ALIAS behave as published: <strong>high precision</strong>.</p>
+<p>Final validation on a paper-aligned corpus (<code class="docutils literal notranslate"><span class="pre">w5_paper_v2</span></code>, 92 spectra, 11 candidates, 2% detection
+floor with 3-way scoring):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>identifier</p></th>
+<th class="head"><p>precision</p></th>
+<th class="head"><p>recall</p></th>
+<th class="head"><p>F1</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>ALIAS</strong></p></td>
+<td><p><strong>0.844</strong></p></td>
+<td><p>0.434</p></td>
+<td><p>0.573</p></td>
+</tr>
+<tr class="row-odd"><td><p>Correlation</p></td>
+<td><p>0.980</p></td>
+<td><p>0.458</p></td>
+<td><p>0.624</p></td>
+</tr>
+<tr class="row-even"><td><p>Comb</p></td>
+<td><p>0.241</p></td>
+<td><p>1.000</p></td>
+<td><p>0.389</p></td>
+</tr>
+</tbody>
+</table>
+<p>ALIAS precision went from ~0.3 (broken) to <strong>0.844</strong> — its documented signature. Comb floods FPs
+(P=0.24) — exactly what Gajarska et al. warn about (their method is semi-supervised).</p>
+</section>
+<section id="source-papers-verified-against-the-actual-pdfs">
+<h2>Source papers (verified against the actual PDFs)<a class="headerlink" href="#source-papers-verified-against-the-actual-pdfs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Comb</strong> — Gajarska et al. (2024), <em>J. Anal. At. Spectrom.</em> 39, 3151, DOI 10.1039/D4JA00247D.</p></li>
+<li><p><strong>ALIAS</strong> — Noël et al. (2025), <em>Spectrochim. Acta B</em> 231:107255, DOI 10.1016/j.sab.2025.107255
+(HAL hal-05560478; PDF at <code class="docutils literal notranslate"><span class="pre">docs/refs_noel2025_alias.pdf</span></code>). The code had cited the WRONG arXiv id
+(<code class="docutils literal notranslate"><span class="pre">2501.01057</span></code> = an unrelated HPC paper) — fixed.</p></li>
+</ul>
+</section>
+<section id="database-suspicion-refuted-with-evidence">
+<h2>Database suspicion — REFUTED with evidence<a class="headerlink" href="#database-suspicion-refuted-with-evidence" title="Link to this heading"></a></h2>
+<p>NIST cross-check exact (Fe I 248.327/404.581/373.49 nm — right λ, gA); partition functions correct
+(U_FeI(9000K)=50.0, U_FeII=61.5); a from-scratch eq-1 emissivity reproduces the corpus’s own Fe
+spectrum at <strong>cosine 0.92–0.96</strong>. The atomic data + Saha-Boltzmann formula are faithful.</p>
+</section>
+<section id="code-fixes-committed-paper-grounded">
+<h2>Code fixes (committed, paper-grounded)<a class="headerlink" href="#code-fixes-committed-paper-grounded" title="Link to this heading"></a></h2>
+<p><strong>Comb</strong> (<code class="docutils literal notranslate"><span class="pre">comb.py</span></code>):</p>
+<ul class="simple">
+<li><p>removed the homegrown <code class="docutils literal notranslate"><span class="pre">relative_threshold</span> <span class="pre">=</span> <span class="pre">min(1,</span> <span class="pre">scale·median(scores))</span></code> gate (not in the paper —
+it can demand a score &gt; 1.0 and rejected even the top true element; root cause of “detects nothing”).</p></li>
+<li><p>fingerprint = <strong>mean over ACTIVE lines</strong> (paper §2.2.3), not <code class="docutils literal notranslate"><span class="pre">sum(top)/min(total,10)</span></code>.</p></li>
+<li><p>→ pure-element floor test 0/6 → 6/6; new-corpus Comb F1 0.033 → 0.529.</p></li>
+</ul>
+<p><strong>ALIAS</strong> (<code class="docutils literal notranslate"><span class="pre">alias.py</span></code>):</p>
+<ul class="simple">
+<li><p>decision = <strong><code class="docutils literal notranslate"><span class="pre">k_det</span> <span class="pre">&gt;</span> <span class="pre">C_th</span></code></strong> (paper §3.8, eq 6), not the CL product. Removed from the decision:
+crustal-abundance <code class="docutils literal notranslate"><span class="pre">P_ab</span></code> prior, Boltzmann-R² gate, NNLS-ownership gates, winner-relative-CL gate,
+hard <code class="docutils literal notranslate"><span class="pre">N_matched≥3</span></code> (paper supports One-Line/Sparse-Line elements). <code class="docutils literal notranslate"><span class="pre">P_ab</span></code> etc. remain only in the
+optional display CL (“not essential for the proper ALIAS functioning”).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">k_det</span></code> = paper eq 6 exactly (removed homegrown <code class="docutils literal notranslate"><span class="pre">sqrt(·P_cov)</span></code> blend + <code class="docutils literal notranslate"><span class="pre">N_penalty</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">k_sim</span></code> = <strong>bare cosine</strong> (paper eq 3): removed self-absorption damping (×0.3 on resonance lines)
+and the <code class="docutils literal notranslate"><span class="pre">uniqueness_factor</span></code> — both crushed the dominant element.</p></li>
+<li><p>removed the <code class="docutils literal notranslate"><span class="pre">max_lines_per_element</span></code> pre-cap that fired before fusion/threshold and starved
+line-rich elements (Fe saw ~23 of 2189 lines); the emissivity threshold (§3.6) is the paper’s
+line-reduction mechanism.</p></li>
+<li><p>fixed the wrong-paper citation.</p></li>
+</ul>
+<p><strong>Harness</strong> (<code class="docutils literal notranslate"><span class="pre">synthetic_eval.py</span></code>):</p>
+<ul class="simple">
+<li><p>3-way detection-floor scoring: in-recipe constituents below the floor are <strong>don’t-care</strong> (dropped
+from the scoring panel; identifiers still search the full panel). Fixes the artifact where
+detecting a real sub-detection-limit trace counted as a false positive. Legacy 1e-4 default =&gt;
+empty band =&gt; no behaviour change.</p></li>
+</ul>
+</section>
+<section id="corpus-the-paper-s-assumptions-the-old-corpus-broke">
+<h2>Corpus: the paper’s assumptions the old corpus broke<a class="headerlink" href="#corpus-the-paper-s-assumptions-the-old-corpus-broke" title="Link to this heading"></a></h2>
+<p>The ak3.1.3 / w3 corpora violated four ALIAS assumptions, which is why even a faithful ALIAS failed:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>assumption (paper)</p></th>
+<th class="head"><p>old corpus</p></th>
+<th class="head"><p>fix (w4/w5 builds)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>“spectra perfectly calibrated”</p></td>
+<td><p>±1 nm shift injected</p></td>
+<td><p>shift = 0</p></td>
+</tr>
+<tr class="row-odd"><td><p>T ≈ 8000–12000 K</p></td>
+<td><p>up to ~20900 K</p></td>
+<td><p>T 8000–11600 K (<code class="docutils literal notranslate"><span class="pre">--temperature-range-eV</span> <span class="pre">0.7,1.0</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>RP ≈ 2500–6500</p></td>
+<td><p>700–1000</p></td>
+<td><p>RP 2500–5000</p></td>
+</tr>
+<tr class="row-odd"><td><p>detectable concentrations</p></td>
+<td><p>traces to 0.1%</p></td>
+<td><p>3-way floor at 2% (eval-side)</p></td>
+</tr>
+<tr class="row-even"><td><p>window with Fe-separable lines</p></td>
+<td><p>224–265 nm Fe forest</p></td>
+<td><p>240–850 nm</p></td>
+</tr>
+</tbody>
+</table>
+<p>Build: <code class="docutils literal notranslate"><span class="pre">scripts/build_synthetic_id_corpus.py</span> <span class="pre">--recipe-set</span> <span class="pre">diagnostic</span> <span class="pre">--lambda-min</span> <span class="pre">240</span> <span class="pre">--lambda-max</span> <span class="pre">850</span> <span class="pre">--temperature-range-eV</span> <span class="pre">0.7,1.0</span> <span class="pre">--resolving-power</span> <span class="pre">2500,5000</span> <span class="pre">--shift-nm</span> <span class="pre">0.0</span></code> → <code class="docutils literal notranslate"><span class="pre">w5_paper_v2</span></code> (92 spectra,
+untracked/gitignored, regenerable).</p>
+</section>
+<section id="negative-result-benchmark-gated-reverted">
+<h2>Negative result (benchmark-gated, reverted)<a class="headerlink" href="#negative-result-benchmark-gated-reverted" title="Link to this heading"></a></h2>
+<p>The literal paper §3.4 fusion (intensity-seeded ±Δλ/2 bins) <strong>regressed</strong> ALIAS recall on w5
+(F1 0.573 → 0.444). The repo’s chain-fusion at full Δλ empirically performs better here, so it was
+kept (reverted the change). Recorded so it isn’t re-attempted blindly.</p>
+</section>
+<section id="remaining-work">
+<h2>Remaining work<a class="headerlink" href="#remaining-work" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Recall (0.43)</strong> is the gap, not precision. Likely levers (each must be benchmark-gated):
+per-element emissivity <code class="docutils literal notranslate"><span class="pre">(T,nₑ)</span></code> selection for borderline elements (Al/Ti sit at k_det≈0.5);
+multi-element blending. The conservative paper default <code class="docutils literal notranslate"><span class="pre">C_th=0.5</span></code> trades recall for precision.</p></li>
+<li><p>Calibration robustness (for shifted corpora) — the paper assumes calibrated input, so this is a
+repo extra; the auto-calibration fails to find ±1 nm shifts (per-target-element cross-correlation
+would fix it).</p></li>
+<li><p>Fold a proper <code class="docutils literal notranslate"><span class="pre">--detection-floor</span></code> flag (separate from <code class="docutils literal notranslate"><span class="pre">presence_threshold</span></code>) into the CLI.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

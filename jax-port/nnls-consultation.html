@@ -1,0 +1,259 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JAX NNLS Port — Cloud Consultation Synthesis &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">JAX NNLS Port — Cloud Consultation Synthesis</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jax-port/nnls-consultation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="jax-nnls-port-cloud-consultation-synthesis">
+<h1>JAX NNLS Port — Cloud Consultation Synthesis<a class="headerlink" href="#jax-nnls-port-cloud-consultation-synthesis" title="Link to this heading"></a></h1>
+<blockquote>
+<div><p><strong>SUPERSEDED (historical):</strong> This 2026-05-12 consultation is kept as design
+provenance only. The JAX/jittable inversion effort was subsequently
+re-scoped by <a class="reference internal" href="../adr/ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> and
+implemented in the shipped <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> package; some conclusions below
+were revised by that decision. Do not treat this as current guidance.</p>
+</div></blockquote>
+<p>Date: 2026-05-12
+Branch: <code class="docutils literal notranslate"><span class="pre">feat/jax-nnls-model-selection</span></code>
+Issue: <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-wstf</span></code></p>
+<section id="question">
+<h2>Question<a class="headerlink" href="#question" title="Link to this heading"></a></h2>
+<p>Port <code class="docutils literal notranslate"><span class="pre">scipy.optimize.nnls</span></code> (Lawson–Hanson active-set NNLS) to JAX for
+GPU batching. Targets:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/spectral_nnls.py</span></code> — single call per identify()</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/model_selection.py</span></code> — backward elimination
+inside <code class="docutils literal notranslate"><span class="pre">bic_prune_elements</span></code> does ~<code class="docutils literal notranslate"><span class="pre">n_elements</span></code> re-solves on row-masked
+subsets of the basis matrix.</p></li>
+</ul>
+<p>Matrix sizes: <code class="docutils literal notranslate"><span class="pre">A:</span> <span class="pre">(n_pixels=1000-10000,</span> <span class="pre">n_components=30-100)</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">jaxopt</span></code> is <strong>not</strong> installed in the project venv, so the port is
+hand-rolled.</p>
+</section>
+<section id="codex-gpt-5-3-codex-recommendations">
+<h2>Codex (gpt-5.3-codex) recommendations<a class="headerlink" href="#codex-gpt-5-3-codex-recommendations" title="Link to this heading"></a></h2>
+<ol class="arabic">
+<li><p><strong>Algorithm: projected gradient (PGD)</strong> in JAX is strictly better than
+active-set (Lawson–Hanson). Active-set has irregular branching that
+defeats <code class="docutils literal notranslate"><span class="pre">jit</span></code>/<code class="docutils literal notranslate"><span class="pre">vmap</span></code>; first-order methods are jit-friendly and dominate
+for <code class="docutils literal notranslate"><span class="pre">n_components</span> <span class="pre">≤</span> <span class="pre">100</span></code>.</p></li>
+<li><p><strong>Use Gram form</strong>: precompute <code class="docutils literal notranslate"><span class="pre">G</span> <span class="pre">=</span> <span class="pre">A^T</span> <span class="pre">A</span></code>, <code class="docutils literal notranslate"><span class="pre">c</span> <span class="pre">=</span> <span class="pre">A^T</span> <span class="pre">b</span></code>, run PGD on
+the (n_components, n_components) system. Cheap when <code class="docutils literal notranslate"><span class="pre">n_components</span></code> is
+small; matmul <code class="docutils literal notranslate"><span class="pre">(n_pix,</span> <span class="pre">n_comp)</span> <span class="pre">&#64;</span> <span class="pre">(n_comp,</span> <span class="pre">n_pix)</span></code> is the only
+dependence on n_pix.</p></li>
+<li><p><strong>Step size</strong>: <code class="docutils literal notranslate"><span class="pre">alpha</span> <span class="pre">=</span> <span class="pre">1/L</span></code>, <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">=</span> <span class="pre">max(jnp.sum(jnp.abs(G),</span> <span class="pre">axis=-1))</span></code>
+(cheap row-sum upper bound) OR <code class="docutils literal notranslate"><span class="pre">jnp.linalg.norm(G,</span> <span class="pre">2)</span></code> (exact spectral
+norm, ~microseconds at this size).</p></li>
+<li><p><strong>Batched subsets</strong> (BIC backward elim): pre-build a <code class="docutils literal notranslate"><span class="pre">(B,</span> <span class="pre">m)</span></code> row mask
+<code class="docutils literal notranslate"><span class="pre">W</span></code>, then</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">G</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;bm,mi,mj-&gt;bij&#39;</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">A</span><span class="p">)</span>   <span class="c1"># (B, n, n)</span>
+<span class="n">c</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s1">&#39;bm,mi,m-&gt;bi&#39;</span><span class="p">,</span>  <span class="n">W</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>    <span class="c1"># (B, n)</span>
+</pre></div>
+</div>
+<p>and <code class="docutils literal notranslate"><span class="pre">vmap(nnls_pgd_gram)</span></code> over the leading batch axis. Static shapes
+throughout, no dynamic_slice.</p>
+</li>
+<li><p><strong>Convergence</strong>: match on KKT/residual norm, <strong>not</strong> the solution
+vector — Lawson–Hanson and PGD can converge to different points on
+rank-deficient problems (multiple minimizers).</p>
+<ul class="simple">
+<li><p>Primal residual: <code class="docutils literal notranslate"><span class="pre">||Ax-b||/||b||</span> <span class="pre">~</span> <span class="pre">1e-6</span> <span class="pre">..</span> <span class="pre">1e-4</span></code></p></li>
+<li><p>Projected gradient: <code class="docutils literal notranslate"><span class="pre">||min(x,</span> <span class="pre">grad)||_inf</span> <span class="pre">~</span> <span class="pre">1e-6</span> <span class="pre">..</span> <span class="pre">1e-5</span></code> (float64)</p></li>
+</ul>
+</li>
+<li><p><strong>Add tiny ridge</strong> <code class="docutils literal notranslate"><span class="pre">G</span> <span class="pre">+</span> <span class="pre">λI</span></code>, <code class="docutils literal notranslate"><span class="pre">λ</span> <span class="pre">~</span> <span class="pre">1e-10..1e-6</span></code> for stability on
+ill-conditioned basis matrices.</p></li>
+<li><p><strong>Warm-start</strong> is very effective for the BIC inner loop.</p></li>
+</ol>
+</section>
+<section id="opus-4-6-recommendations">
+<h2>Opus 4.6 recommendations<a class="headerlink" href="#opus-4-6-recommendations" title="Link to this heading"></a></h2>
+<ol class="arabic">
+<li><p><strong>Mask pattern for BIC</strong> (validated):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">nnls_masked</span><span class="p">(</span><span class="n">basis</span><span class="p">,</span> <span class="n">spectrum</span><span class="p">,</span> <span class="n">mask</span><span class="p">):</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="p">(</span><span class="n">basis</span> <span class="o">*</span> <span class="n">mask</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">])</span><span class="o">.</span><span class="n">T</span>  <span class="c1"># zero out masked rows</span>
+    <span class="n">G</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">A</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">spectrum</span>
+    <span class="k">return</span> <span class="n">nnls_solver</span><span class="p">(</span><span class="n">G</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Each variant builds its own small <code class="docutils literal notranslate"><span class="pre">G</span></code> — cheap. <code class="docutils literal notranslate"><span class="pre">vmap</span></code> cleanly.</p>
+</li>
+<li><p><strong>Precision</strong>: form <code class="docutils literal notranslate"><span class="pre">G</span></code> and <code class="docutils literal notranslate"><span class="pre">c</span></code> in float64 even if FISTA runs in
+float32. <code class="docutils literal notranslate"><span class="pre">cond(G)</span> <span class="pre">=</span> <span class="pre">cond(A)^2</span></code> so float32 loses most digits on
+correlated bases (spectroscopy commonly hits <code class="docutils literal notranslate"><span class="pre">cond(A)</span> <span class="pre">~</span> <span class="pre">10^3-10^4</span></code>).
+At our sizes the matmul is not memory-bound — just use float64
+throughout.</p></li>
+<li><p><strong>Accuracy expectation</strong>: at ~300 PGD/FISTA iterations on well-
+conditioned problems, <code class="docutils literal notranslate"><span class="pre">||x_fista</span> <span class="pre">-</span> <span class="pre">x_exact||</span> <span class="pre">/</span> <span class="pre">||x_exact||</span> <span class="pre">~</span> <span class="pre">1e-4</span> <span class="pre">..</span> <span class="pre">1e-5</span></code>. Float64. For BIC selection — coefficient changes by ≤1e-4
+are dwarfed by <code class="docutils literal notranslate"><span class="pre">k</span> <span class="pre">*</span> <span class="pre">ln(n)</span></code> penalty term, so this precision is
+sufficient.</p></li>
+<li><p><strong>Step size</strong>: skip power iteration. <code class="docutils literal notranslate"><span class="pre">jnp.linalg.norm(G)</span></code> (operator
+norm via SVD) is exact and microseconds at n=100.</p></li>
+<li><p><strong>KKT quality metric</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grad</span> <span class="o">=</span> <span class="n">G</span> <span class="o">@</span> <span class="n">x</span> <span class="o">-</span> <span class="n">c</span>
+<span class="n">kkt_viol</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">jnp</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">grad</span><span class="p">),</span> <span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">grad</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)))</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="gemini">
+<h2>Gemini<a class="headerlink" href="#gemini" title="Link to this heading"></a></h2>
+<p>Rate-limited (RESOURCE_EXHAUSTED). Skipped — Codex + Opus already
+converged on the same design.</p>
+</section>
+<section id="design-decisions">
+<h2>Design decisions<a class="headerlink" href="#design-decisions" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Algorithm</strong>: FISTA on Gram form, 300 default iterations, fixed-iter
+<code class="docutils literal notranslate"><span class="pre">lax.scan</span></code> (no early exit — preserves jit-ability).</p></li>
+<li><p><strong>Step size</strong>: <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">/</span> <span class="pre">jnp.linalg.norm(G)</span></code> (spectral norm). Cheap, exact,
+jit-friendly.</p></li>
+<li><p><strong>Precision</strong>: float64 throughout (Opus rationale: small matrices,
+matmul is not the bottleneck).</p></li>
+<li><p><strong>Single-spectrum API</strong>: <code class="docutils literal notranslate"><span class="pre">nnls_jax(A,</span> <span class="pre">b,</span> <span class="pre">max_iter=300)</span> <span class="pre">-&gt;</span> <span class="pre">(x,</span> <span class="pre">info)</span></code>.
+<code class="docutils literal notranslate"><span class="pre">info</span></code> carries final KKT violation + residual norm for diagnostics.</p></li>
+<li><p><strong>Batched API</strong>: <code class="docutils literal notranslate"><span class="pre">nnls_jax_batch(A,</span> <span class="pre">b,</span> <span class="pre">masks,</span> <span class="pre">max_iter=300)</span> <span class="pre">-&gt;</span> <span class="pre">X</span></code>
+where <code class="docutils literal notranslate"><span class="pre">masks:</span> <span class="pre">(B,</span> <span class="pre">n_components)</span></code> are boolean row-masks. Builds
+per-batch <code class="docutils literal notranslate"><span class="pre">G</span></code> and <code class="docutils literal notranslate"><span class="pre">c</span></code> via <code class="docutils literal notranslate"><span class="pre">einsum</span></code> and vmaps the inner solver.</p></li>
+<li><p><strong>Numerical-agreement target</strong>: rtol=1e-4 on coefficients <em>and</em>
+rtol=1e-5 on <code class="docutils literal notranslate"><span class="pre">||Ax-b||</span></code> residual norm. Per Codex, coefficient match
+can fail on rank-deficient problems; residual match is the real
+contract.</p></li>
+<li><p><strong>Opt-in flags</strong> (mirroring PR #118):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">SpectralNNLSIdentifier.__init__(...,</span> <span class="pre">use_jax_nnls:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bic_prune_elements(...,</span> <span class="pre">use_jax_nnls:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False)</span></code> kwarg.</p></li>
+</ul>
+</li>
+<li><p><strong>Tiny ridge</strong>: <code class="docutils literal notranslate"><span class="pre">λ</span> <span class="pre">=</span> <span class="pre">1e-12</span></code> for the FISTA iteration to handle
+degenerate Gram matrices without altering well-conditioned solves.</p></li>
+</ol>
+</section>
+<section id="out-of-scope">
+<h2>Out of scope<a class="headerlink" href="#out-of-scope" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Adding <code class="docutils literal notranslate"><span class="pre">jaxopt</span></code> as a hard dependency — file a follow-up bd issue if
+we want it later for the (more accurate) bounded-LBFGS NNLS.</p></li>
+<li><p>True early-exit via dynamic iter count — defeats jit; revisit if
+profile shows FISTA is the bottleneck.</p></li>
+<li><p>Active-set Lawson–Hanson implementation — branching kills <code class="docutils literal notranslate"><span class="pre">vmap</span></code>;
+see Codex (1).</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

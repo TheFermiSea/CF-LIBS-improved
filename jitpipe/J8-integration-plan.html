@@ -1,0 +1,592 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J8 Integration Plan — End-to-End Single-Spectrum jit Pipeline (Milestone M1) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J8 Integration Plan — End-to-End Single-Spectrum jit Pipeline (Milestone M1)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/jitpipe/J8-integration-plan.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j8-integration-plan-end-to-end-single-spectrum-jit-pipeline-milestone-m1">
+<h1>J8 Integration Plan — End-to-End Single-Spectrum jit Pipeline (Milestone M1)<a class="headerlink" href="#j8-integration-plan-end-to-end-single-spectrum-jit-pipeline-milestone-m1" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> pre-wiring audit + composition plan. <strong>Bead:</strong> J8. <strong>ADR:</strong> <a class="reference internal" href="../adr/ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §5.1/§5.2/§5.4; <strong>Spec:</strong> <a class="reference internal" href="../adr/specs/J8-end-to-end-m1.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">specs/J8-end-to-end-m1.md</span></code></span></a>.</p>
+<p>This document is the concrete plan to compose the nine independently-built stage
+kernels (J1–J7, J10, J11) into one jitted single-spectrum graph (<code class="docutils literal notranslate"><span class="pre">run_one</span></code>) plus
+the host glue that reconstitutes the reference result dataclasses. It is produced
+from a read-only audit of the integrated <code class="docutils literal notranslate"><span class="pre">integ-jfan</span></code> worktree against the
+frozen reference (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:785</span></code> <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code>).</p>
+<hr class="docutils" />
+<section id="headline-finding-the-orchestrators-are-still-j0-stubs">
+<h2>0. Headline finding — the orchestrators are still J0 stubs<a class="headerlink" href="#headline-finding-the-orchestrators-are-still-j0-stubs" title="Link to this heading"></a></h2>
+<p>The nine stages were each built <strong>inside their own module as low-level kernels
+with explicit padded-array signatures</strong>, parity-tested directly. But every
+<strong>high-level orchestrator entry point that carries the <code class="docutils literal notranslate"><span class="pre">(snapshot,</span> <span class="pre">params,</span> <span class="pre">static)</span></code> signature is still a J0 skeleton that <code class="docutils literal notranslate"><span class="pre">raise</span> <span class="pre">NotImplementedError</span></code>:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Module</p></th>
+<th class="head"><p>Stub entry (raises)</p></th>
+<th class="head"><p>Real kernel surface (implemented + parity-tested)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pipeline.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">run_one</span></code>, <code class="docutils literal notranslate"><span class="pre">run_batch</span></code></p></td>
+<td><p>— (this is the J8 deliverable)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">forward.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">forward_spectrum</span></code></p></td>
+<td><p>(bridges to <code class="docutils literal notranslate"><span class="pre">radiation.kernels.forward_model</span></code> via <code class="docutils literal notranslate"><span class="pre">snapshot.to_atomic_snapshot</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calibrate.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">calibrate_wavelengths</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">calibrate_axis_kernel</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">identify.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">identify_lines</span></code> (this stub is for J10 presence-scoring)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">score_comb_grid</span></code> → <code class="docutils literal notranslate"><span class="pre">select_shifts</span></code> → <code class="docutils literal notranslate"><span class="pre">select_accepted_mask</span></code> → <code class="docutils literal notranslate"><span class="pre">kdet_keep_mask</span></code> → <code class="docutils literal notranslate"><span class="pre">shift_coherence_veto</span></code> → <code class="docutils literal notranslate"><span class="pre">build_observations</span></code> → <code class="docutils literal notranslate"><span class="pre">extract_intensity_trapezoid</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fit.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">boltzmann_fit</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">select_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">sb_graph_fit</span></code>, <code class="docutils literal notranslate"><span class="pre">common_slope_fit</span></code>, <code class="docutils literal notranslate"><span class="pre">sigma_clip_fit</span></code>, <code class="docutils literal notranslate"><span class="pre">closure_*</span></code>, <code class="docutils literal notranslate"><span class="pre">keystone_degenerate</span></code>, <code class="docutils literal notranslate"><span class="pre">masked_median</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">selfabs.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">correct_self_absorption</span></code> (5-arg adapter)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">correct_self_absorption_arrays</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">solve.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative_solve</span></code> (explicitly says “host wrapper lands at J8”)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LaxKernelInputs.from_snapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">scan_solve</span></code>, <code class="docutils literal notranslate"><span class="pre">joint_wls_solve</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stark.py</span></code></p></td>
+<td><p>— (<code class="docutils literal notranslate"><span class="pre">stark_electron_density</span></code> IS implemented)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">measure_stark_ne_jit</span></code>, <code class="docutils literal notranslate"><span class="pre">stark_ne_from_widths</span></code>, <code class="docutils literal notranslate"><span class="pre">extract_windows</span></code>, <code class="docutils literal notranslate"><span class="pre">multiplet_blend_mask</span></code>, <code class="docutils literal notranslate"><span class="pre">stark_electron_density</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">preprocess.py</span></code></p></td>
+<td><p>— (all kernels implemented)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">snip_baseline</span></code>/<code class="docutils literal notranslate"><span class="pre">als_baseline</span></code>/<code class="docutils literal notranslate"><span class="pre">median_baseline</span></code>/<code class="docutils literal notranslate"><span class="pre">percentile_baseline</span></code>, <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code>, <code class="docutils literal notranslate"><span class="pre">robust_normalize</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Implication:</strong> J8 is not merely “call the seven orchestrators in order.” J8 must
+(a) write the orchestration body for each stub by calling the real kernels, OR
+(b) skip the per-stage orchestrators and call the kernels directly from
+<code class="docutils literal notranslate"><span class="pre">pipeline.run_one</span></code>. The cleaner path is (b): <code class="docutils literal notranslate"><span class="pre">run_one</span></code> calls the kernels directly
+(the kernels are the parity surface; the stub orchestrators were placeholders).
+The stubbed <code class="docutils literal notranslate"><span class="pre">(snapshot,</span> <span class="pre">params,</span> <span class="pre">static)</span></code> orchestrators can either be deleted or
+filled in as thin wrappers — but <code class="docutils literal notranslate"><span class="pre">run_one</span></code> should not depend on them.</p>
+<p>This is the single largest piece of work and the reason none of the stages today
+read a <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> object (see §3).</p>
+</section>
+<hr class="docutils" />
+<section id="stage-by-stage-data-flow-graph-single-spectrum-run-one">
+<h2>1. Stage-by-stage data-flow graph (single-spectrum <code class="docutils literal notranslate"><span class="pre">run_one</span></code>)<a class="headerlink" href="#stage-by-stage-data-flow-graph-single-spectrum-run-one" title="Link to this heading"></a></h2>
+<p>Mirrors the reference stage order <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code>: response-multiply → calibrate →
+detect → identify → (self-absorption) → stark → fit → solve. Shapes use the
+shapes.md constants (<code class="docutils literal notranslate"><span class="pre">P_max</span></code>, <code class="docutils literal notranslate"><span class="pre">L_max</span></code>, <code class="docutils literal notranslate"><span class="pre">E_max</span></code>, <code class="docutils literal notranslate"><span class="pre">K_comb</span></code>, <code class="docutils literal notranslate"><span class="pre">W</span></code>, <code class="docutils literal notranslate"><span class="pre">C</span></code>, <code class="docutils literal notranslate"><span class="pre">N_wl</span></code>).
+<strong>Bold arrows</strong> are the device data flow; <em>italic</em> notes are host glue (§2).</p>
+<section id="stage-chain">
+<h3>Stage chain<a class="headerlink" href="#stage-chain" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>                 raw (intensities (N_wl,), wavelengths_nm (N_wl,))
+                          │  HOST: response-curve multiplier array (per-channel), §2.A
+                          ▼
+[J1 preprocess]   intensity_corr = intensity * response          (N_wl,) f64
+   snip/als/median/percentile_baseline(intensity) -&gt; baseline    (N_wl,) f64
+   estimate_noise(intensity, baseline)            -&gt; noise        scalar f64
+   (robust_normalize for the detection-path height)
+                          │
+        ┌─────────────────┴───────────────────────────────┐
+        ▼ calibration path                                 ▼ detection path
+[J2 detect, calibration param.]                  [J2 detect, detection param.]
+  detect_peaks_calibration(intensity,            detect_peaks_detection(intensity,
+     baseline, noise, distance_px=...)              min_peak_height, distance_px=...)
+   -&gt; PeakResult{indices (P_max,) i32,             -&gt; PeakResult (P_max,) (P_MAX_DETECTION)
+       mask (P_max,) bool, count, truncated}
+        │  HOST: peak_wl = wavelengths[indices]              │ HOST: same gather
+        ▼                                                    │
+[J3 calibrate]                                               │
+  calibrate_axis_kernel(peak_wl, peak_amp, peak_mask,        │
+     line_wl, line_strength, line_mask, wavelength, wl_mask) │
+   -&gt; CalibrationKernelResult{corrected_wavelength (W_max,), │
+       coefficients (3,), model_id, quality_passed, ...}     │
+        │  corrected axis feeds the detection-path λ axis ───┘
+        │  HOST: build FrontEndSnapshot (§2.B) — the big one
+        ▼
+[J4 identify]  snap: FrontEndSnapshot{peak_* (P_max,), comb_* (E_max,K_comb), element_mask (E_max,)}
+  score_comb_grid(snap, shift_grid (S,), tolerance_nm, comb_min_*) -&gt; CombScoreArrays{f1,precision,
+       recall,matched_lines,passes : (S,E_max)}
+  select_shifts(scores, shift_grid, element_mask)  -&gt; (best_idx, fb_idx, best_has_pass, total_f1)
+  select_accepted_mask(scores, best_idx, fb_idx, ...) -&gt; (accepted_mask (E_max,), applied_idx)
+  kdet_keep_mask(snap, ...)                        -&gt; keep (E_max,) bool
+  shift_coherence_veto(snap, ...)                  -&gt; veto-adjusted accepted (E_max,)
+  build_observations(snap, f1, matched_lines, accepted_mask, shift_nm, tolerance_nm, ...)
+       -&gt; ObservationBuild{obs_valid (E,K) bool, obs_peak_slot (E,K) i32, n_gated (E,), dropped (E,)}
+  extract_intensity_trapezoid(...)                 -&gt; per-obs integrated intensity + Poisson sigma
+        │  HOST: gather valid obs -&gt; padded per-line arrays for the line axis
+        │        (the (E, N_max) Boltzmann block + line_index into snapshot)
+        ▼
+        │  *** FAILURE GATE *** if Σ obs_valid == 0 -&gt; failed mask (§4, AC4)
+        ▼
+[J5 self-absorption]  (only when static.apply_self_absorption)
+  correct_self_absorption_arrays(intensity (L,), intensity_unc (L,), aki_unc (L,),
+       line_index (L,), line_valid (L,), line_element (L,), pair_idx (P,2), pair_valid (P,), snapshot)
+   -&gt; SelfAbsorptionResult{intensity (L,), intensity_unc (L,), tau, method, suspect, n_corrected,...}
+        │  corrected intensity + inflated sigma replace the obs intensities
+        ▼
+[J6 stark n_e]
+  HOST: extract_windows + multiplet_blend_mask + candidate selection (SNR/isolation/source-class)
+  measure_stark_ne_jit(wl_win (C,W), inten_win (C,W), mask (C,W), center0 (C,), gaussian_fwhm_nm (C,),
+       stark_w_ref_nm (C,), stark_alpha (C,), candidate_mask (C,), T_K)
+   -&gt; StarkNeResult{ne_median scalar, ne_scatter, valid (C,), n_lines}
+        │  ne_median pins the solve (audit F2); NaN -&gt; solver fallback path
+        ▼
+[J7a fit (Boltzmann/SB-graph)]
+  HOST: build Boltzmann ordinates y = ln(I λ / (g A)), x = E_k, per-element (E, N_max) block
+        from corrected obs intensities + snapshot atomic data (this is glue, not a kernel)
+  select_lines(wavelength,intensity,intensity_unc,atomic_unc,element_idx,is_resonance,mask,
+       n_elements=E, min_snr, isolation_scale_nm, energy_ev, top_k)
+   -&gt; {selected_mask (B,L), topk_index (B,E,top_k), topk_valid, spread_ev, n_valid}
+  (sb_graph_fit / common_slope_fit / sigma_clip_fit are the fit primitives; in the
+   production geological path the SB-graph runs INSIDE scan_solve — see §5 note)
+        ▼
+[J7b solve]
+  LaxKernelInputs.from_snapshot(lax_snapshot, x (E,N_max), y, w, stage, mask)   &lt;- snapshot.to_lax_snapshot(elements)
+  scan_solve(inp, init_T_K=1e4, init_ne_cm3=ne_median or 1e17, max_iters=static.max_iters,
+       closure_mode=static.closure_mode, oxide_factors=..., t_tol_k, ne_tol_frac, pressure_pa, min_r2)
+   -&gt; LoopState{T_K, n_e_cm3, concentrations (E,), r_squared, converged, i, ...}
+  (optional) joint_wls_solve(inp, n_e_cm3=ne_median, closure_mode, ...) -&gt; JointWLSResult (production estimator)
+        │  HOST: reconstitute CFLIBSResult (§2.D)
+        ▼
+                  CFLIBSResult{temperature_K, electron_density_cm3, concentrations: dict, ...}
+</pre></div>
+</div>
+</section>
+<section id="shape-handoff-table-device-boundaries-that-must-agree">
+<h3>Shape-handoff table (device boundaries that must agree)<a class="headerlink" href="#shape-handoff-table-device-boundaries-that-must-agree" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Producer → Consumer</p></th>
+<th class="head"><p>Producer output</p></th>
+<th class="head"><p>Consumer expects</p></th>
+<th class="head"><p>Status</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>preprocess → detect</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">baseline</span> <span class="pre">(N_wl,)</span> <span class="pre">f64</span></code>, <code class="docutils literal notranslate"><span class="pre">noise</span> <span class="pre">scalar</span> <span class="pre">f64</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">detect_peaks_calibration(intensity,</span> <span class="pre">baseline,</span> <span class="pre">noise,</span> <span class="pre">...)</span></code></p></td>
+<td><p>OK</p></td>
+</tr>
+<tr class="row-odd"><td><p>detect → calibrate</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PeakResult.indices</span> <span class="pre">(P_max,)</span> <span class="pre">i32</span></code> + <code class="docutils literal notranslate"><span class="pre">mask</span></code></p></td>
+<td><p>calibrate needs <code class="docutils literal notranslate"><span class="pre">peak_wl</span> <span class="pre">(P_max,)</span> <span class="pre">f64</span></code> + <code class="docutils literal notranslate"><span class="pre">peak_amp</span></code> + <code class="docutils literal notranslate"><span class="pre">peak_mask</span></code></p></td>
+<td><p><strong>GAP (host gather), §2.B</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>calibrate → detect/identify</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">corrected_wavelength</span> <span class="pre">(W_max,)</span> <span class="pre">f64</span></code></p></td>
+<td><p>identify needs <code class="docutils literal notranslate"><span class="pre">peak_wavelength_nm</span> <span class="pre">(P_max,)</span></code> (= corrected_wl[indices])</p></td>
+<td><p><strong>GAP (host gather)</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>identify → fit</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ObservationBuild.obs_valid</span> <span class="pre">(E,K)</span></code>, <code class="docutils literal notranslate"><span class="pre">obs_peak_slot</span> <span class="pre">(E,K)</span></code> + per-obs intensity</p></td>
+<td><p>fit needs <code class="docutils literal notranslate"><span class="pre">(E,</span> <span class="pre">N_max)</span></code> Boltzmann block + <code class="docutils literal notranslate"><span class="pre">line_index</span></code></p></td>
+<td><p><strong>GAP (host gather/reshape), §2.C</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>fit → solve</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">select_lines.topk_index</span> <span class="pre">(B,E,top_k)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LaxKernelInputs.x/y/w/stage/mask</span> <span class="pre">(E,</span> <span class="pre">N_max)</span></code></p></td>
+<td><p><strong>GAP — different layout; host gather, §5</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>stark → solve</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">StarkNeResult.ne_median</span> <span class="pre">scalar</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scan_solve(init_ne_cm3=...)</span></code> / <code class="docutils literal notranslate"><span class="pre">joint_wls_solve(n_e_cm3=...)</span></code></p></td>
+<td><p>OK (scalar pin)</p></td>
+</tr>
+<tr class="row-even"><td><p>selfabs → fit</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SelfAbsorptionResult.intensity</span> <span class="pre">(L,)</span></code>, <code class="docutils literal notranslate"><span class="pre">intensity_unc</span> <span class="pre">(L,)</span></code></p></td>
+<td><p>corrected intensities feed the Boltzmann <code class="docutils literal notranslate"><span class="pre">y</span></code></p></td>
+<td><p>OK (in-place replace)</p></td>
+</tr>
+<tr class="row-odd"><td><p>solve → host</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LoopState</span></code> / <code class="docutils literal notranslate"><span class="pre">JointWLSResult</span></code> (E-indexed)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CFLIBSResult.concentrations:</span> <span class="pre">Dict[str,float]</span></code></p></td>
+<td><p><strong>GAP (host unpack), §2.D</strong></p></td>
+</tr>
+</tbody>
+</table>
+<p>None of these gaps are <em>blocking mismatches</em> in the sense of incompatible
+shapes that can’t be reconciled — they are all <strong>host-glue gathers that do not
+exist yet</strong> (the FrontEndSnapshot assembly, the line-block assembly, the result
+unpack). See §6 for the one genuine blocker.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="host-glue-still-required-the-j8-host-surface">
+<h2>2. Host glue still required (the J8 host surface)<a class="headerlink" href="#host-glue-still-required-the-j8-host-surface" title="Link to this heading"></a></h2>
+<p>The kernels are device-pure; J8 must add the impure host code in <code class="docutils literal notranslate"><span class="pre">host.py</span></code>
+(and complete <code class="docutils literal notranslate"><span class="pre">pipeline.py</span></code> / <code class="docutils literal notranslate"><span class="pre">parity.py</span></code>). None of this exists today.</p>
+<section id="a-response-curve-multiplier">
+<h3>2.A Response-curve multiplier<a class="headerlink" href="#a-response-curve-multiplier" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">run_pipeline:816-820</span></code> divides intensity by <code class="docutils literal notranslate"><span class="pre">SpectralResponseCorrection.apply</span></code>.
+The per-channel multiplier array is the only thing that crosses to device
+(ADR §5.1.3). Host computes it; <code class="docutils literal notranslate"><span class="pre">run_one</span></code> multiplies inside the trace.</p>
+</section>
+<section id="b-frontendsnapshot-host-assembly-the-largest-j8-glue-item">
+<h3>2.B <code class="docutils literal notranslate"><span class="pre">FrontEndSnapshot</span></code> host assembly — <strong>the largest J8 glue item</strong><a class="headerlink" href="#b-frontendsnapshot-host-assembly-the-largest-j8-glue-item" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">identify.py:18</span></code> and <code class="docutils literal notranslate"><span class="pre">:50</span></code> flag this explicitly: <em>“The host assembles a
+<code class="docutils literal notranslate"><span class="pre">FrontEndSnapshot</span></code> per (dataset × element set)”</em> and <em>“the host wrapper that
+rebuilds <code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code> strings (J8 glue).”</em> There is <strong>no builder in
+<code class="docutils literal notranslate"><span class="pre">host.py</span></code></strong> today. It must:</p>
+<ol class="arabic simple">
+<li><p>Run scipy/host catalog SQL for the candidate elements (or gather from the
+<code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> superset by element mask — ADR §5.1.2 prefers the latter).</p></li>
+<li><p>Reproduce the reference gA-Boltzmann comb ranking (<code class="docutils literal notranslate"><span class="pre">COMB_STRENGTH_T_REF_EV</span></code>,
+strongest-first) to pad <code class="docutils literal notranslate"><span class="pre">comb_*</span></code> to <code class="docutils literal notranslate"><span class="pre">(E_max,</span> <span class="pre">K_comb)</span></code>.</p></li>
+<li><p>Gather peak arrays <code class="docutils literal notranslate"><span class="pre">peak_wavelength_nm/peak_index/peak_mask</span> <span class="pre">(P_max,)</span></code> from the
+detect <code class="docutils literal notranslate"><span class="pre">PeakResult.indices</span></code> against the <em>calibrated</em> wavelength axis.</p></li>
+<li><p>Build <code class="docutils literal notranslate"><span class="pre">shift_grid</span> <span class="pre">(S,)</span></code> (<code class="docutils literal notranslate"><span class="pre">_build_shift_grid</span></code>), <code class="docutils literal notranslate"><span class="pre">element_mask</span></code>, <code class="docutils literal notranslate"><span class="pre">full_n_lines</span></code>.</p></li>
+</ol>
+</section>
+<section id="c-observation-line-block-gather">
+<h3>2.C Observation → line-block gather<a class="headerlink" href="#c-observation-line-block-gather" title="Link to this heading"></a></h3>
+<p>After <code class="docutils literal notranslate"><span class="pre">build_observations</span></code>, the host gathers valid <code class="docutils literal notranslate"><span class="pre">(e,k)</span></code> obs into the padded
+<code class="docutils literal notranslate"><span class="pre">(E,</span> <span class="pre">N_max)</span></code> line axis the fit/solve kernels consume: <code class="docutils literal notranslate"><span class="pre">line_index</span></code> into the
+snapshot, integrated intensity, intensity_unc, <code class="docutils literal notranslate"><span class="pre">is_resonance</span></code>, <code class="docutils literal notranslate"><span class="pre">element_idx</span></code>,
+<code class="docutils literal notranslate"><span class="pre">stage</span></code>, <code class="docutils literal notranslate"><span class="pre">E_k</span></code>. Mirrors the reference <code class="docutils literal notranslate"><span class="pre">_build_padded_arrays_from_obs</span></code>
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:2986-3020</span></code>) + <code class="docutils literal notranslate"><span class="pre">snapshot.reorder</span></code>.</p>
+</section>
+<section id="d-stark-window-extraction-candidate-selection-host-portion">
+<h3>2.D Stark window extraction + candidate selection (host portion)<a class="headerlink" href="#d-stark-window-extraction-candidate-selection-host-portion" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">stark.py</span></code> docstring: <em>candidate selection (SNR/isolation/source-class/blend
+ranking) is the host/snapshot side.</em> Host runs <code class="docutils literal notranslate"><span class="pre">extract_windows</span></code> +
+<code class="docutils literal notranslate"><span class="pre">multiplet_blend_mask</span></code> against the corrected axis and snapshot, gathers
+<code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">W)</span></code> windows, then calls the device <code class="docutils literal notranslate"><span class="pre">measure_stark_ne_jit</span></code>.</p>
+</section>
+<section id="e-laxkernelinputs-per-bucket-assembly-to-lax-snapshot">
+<h3>2.E <code class="docutils literal notranslate"><span class="pre">LaxKernelInputs</span></code> per-bucket assembly + <code class="docutils literal notranslate"><span class="pre">to_lax_snapshot</span></code><a class="headerlink" href="#e-laxkernelinputs-per-bucket-assembly-to-lax-snapshot" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">snapshot.to_lax_snapshot(elements)</span></code> already builds the lax <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code>
+(implemented, J0). <code class="docutils literal notranslate"><span class="pre">LaxKernelInputs.from_snapshot</span></code> (implemented) consumes it plus
+the <code class="docutils literal notranslate"><span class="pre">(E,N_max)</span></code> obs block. Host calls these — only the <code class="docutils literal notranslate"><span class="pre">(E,N_max)</span></code> block (§2.C)
+is missing.</p>
+</section>
+<section id="f-result-reconstitution-reference-dataclasses">
+<h3>2.F Result reconstitution → reference dataclasses<a class="headerlink" href="#f-result-reconstitution-reference-dataclasses" title="Link to this heading"></a></h3>
+<p>J8 spec §2 names three: <code class="docutils literal notranslate"><span class="pre">WavelengthCalibrationResult</span></code> (from
+<code class="docutils literal notranslate"><span class="pre">CalibrationKernelResult</span></code>), <code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code> (from <code class="docutils literal notranslate"><span class="pre">ObservationBuild</span></code> +
+intensities; the warning/diagnostic strings), <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code>
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:81</span></code> — <code class="docutils literal notranslate"><span class="pre">temperature_K</span></code>, <code class="docutils literal notranslate"><span class="pre">electron_density_cm3</span></code>,
+<code class="docutils literal notranslate"><span class="pre">concentrations:</span> <span class="pre">Dict[str,float]</span></code>, <code class="docutils literal notranslate"><span class="pre">iterations</span></code>, <code class="docutils literal notranslate"><span class="pre">converged</span></code>, <code class="docutils literal notranslate"><span class="pre">quality_metrics</span></code>)
+from <code class="docutils literal notranslate"><span class="pre">LoopState</span></code>/<code class="docutils literal notranslate"><span class="pre">JointWLSResult</span></code> (E-indexed arrays → element-keyed dicts via
+<code class="docutils literal notranslate"><span class="pre">element_symbols</span></code>). <code class="docutils literal notranslate"><span class="pre">solve.py:695</span></code> says this CFLIBSResult unpack <em>“lands with J8.”</em></p>
+</section>
+<section id="g-scoreboard-pipeline-reference-jit-dispatch">
+<h3>2.G Scoreboard <code class="docutils literal notranslate"><span class="pre">--pipeline</span> <span class="pre">{reference,jit}</span></code> dispatch<a class="headerlink" href="#g-scoreboard-pipeline-reference-jit-dispatch" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">scoreboard._score_spectrum:211</span></code> calls <code class="docutils literal notranslate"><span class="pre">run_pipeline(...)</span></code> unconditionally. J8
+threads a <code class="docutils literal notranslate"><span class="pre">pipeline_kind</span></code> through <code class="docutils literal notranslate"><span class="pre">_score_spectrum</span></code>/<code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code> and, for
+<code class="docutils literal notranslate"><span class="pre">jit</span></code>, calls a <code class="docutils literal notranslate"><span class="pre">run_one</span></code>→<code class="docutils literal notranslate"><span class="pre">(CFLIBSResult,</span> <span class="pre">diagnostics)</span></code> host wrapper that emits the
+identical record schema incl. <code class="docutils literal notranslate"><span class="pre">stage_timings_s</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;pipeline&quot;:&quot;jit&quot;</span></code>. Scoring
+logic (<code class="docutils literal notranslate"><span class="pre">:194</span></code> candidate policy, presence rule, confusion, failure policy) is
+untouched.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="consistency-convention-drift-findings">
+<h2>3. Consistency / convention-drift findings<a class="headerlink" href="#consistency-convention-drift-findings" title="Link to this heading"></a></h2>
+<section id="pipelineparams-audit-point-1-no-stage-reads-it-the-wrapper-must-map-every-field-by-hand">
+<h3>3.1 PipelineParams (audit point 1) — <strong>no stage reads it; the wrapper must map every field by hand</strong><a class="headerlink" href="#pipelineparams-audit-point-1-no-stage-reads-it-the-wrapper-must-map-every-field-by-hand" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">rg</span> <span class="pre">&quot;params\.&lt;field&gt;&quot;</span></code> across all stage modules returns <strong>zero</strong> real reads.
+Every implemented kernel takes its knobs as <strong>individual scalar-array keyword
+args</strong>, not a <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> object. The only <code class="docutils literal notranslate"><span class="pre">(snapshot,</span> <span class="pre">params,</span> <span class="pre">static)</span></code>
+signatures are the NotImplementedError stubs plus <code class="docutils literal notranslate"><span class="pre">stark_electron_density</span></code>
+(<code class="docutils literal notranslate"><span class="pre">del</span> <span class="pre">params,</span> <span class="pre">static</span></code>) and <code class="docutils literal notranslate"><span class="pre">forward_fit_identify</span></code> (reads only
+<code class="docutils literal notranslate"><span class="pre">static.broadening_mode</span></code>). Consequences:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> is wired into nothing yet.</strong> J8 owns the entire
+<code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> → kernel-kwarg fan-out. This is by design (traced leaves flow
+as values) but means the field-name mapping is unwritten and must be exact.</p></li>
+<li><p><strong>Name drift the wrapper must bridge</strong> (PipelineParams field → kernel kwarg):</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">t_tolerance_k</span></code> → <code class="docutils literal notranslate"><span class="pre">scan_solve(t_tol_k=...)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ne_tolerance_frac</span></code> → <code class="docutils literal notranslate"><span class="pre">scan_solve(ne_tol_frac=...)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_boltzmann_r2</span></code> → <code class="docutils literal notranslate"><span class="pre">scan_solve(min_r2=...)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">isolation_wavelength_nm</span></code> → <code class="docutils literal notranslate"><span class="pre">select_lines(isolation_scale_nm=...)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">top_k_per_element</span></code> → <code class="docutils literal notranslate"><span class="pre">select_lines(top_k=...)</span></code> (rounded to int; but <code class="docutils literal notranslate"><span class="pre">top_k</span></code>
+is also <code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code>-shaped — see 3.4)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wavelength_tolerance_nm</span></code> → <code class="docutils literal notranslate"><span class="pre">identify.*(tolerance_nm=...)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">residual_shift_scan_nm</span></code> / <code class="docutils literal notranslate"><span class="pre">global_shift_scan_nm</span></code> → identify shift-grid build</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pressure_pa</span></code>, <code class="docutils literal notranslate"><span class="pre">min_snr</span></code>, <code class="docutils literal notranslate"><span class="pre">min_peak_height</span></code>, <code class="docutils literal notranslate"><span class="pre">peak_width_nm</span></code> → pass straight.</p></li>
+</ul>
+</li>
+<li><p><strong>Gate knobs absent from PipelineParams.</strong> <code class="docutils literal notranslate"><span class="pre">comb_min_matches</span> <span class="pre">(=3)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">comb_min_precision</span> <span class="pre">(=0.02)</span></code>, <code class="docutils literal notranslate"><span class="pre">comb_min_recall</span> <span class="pre">(=0.1)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">comb_max_missing_fraction</span> <span class="pre">(=0.85)</span></code>, <code class="docutils literal notranslate"><span class="pre">comb_fallback_max_elements</span> <span class="pre">(=5)</span></code>,
+and calibrate’s <code class="docutils literal notranslate"><span class="pre">inlier_tolerance_nm</span> <span class="pre">(=0.08)</span></code>, <code class="docutils literal notranslate"><span class="pre">quality_min_inliers</span> <span class="pre">(=12)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">quality_max_rmse_nm</span> <span class="pre">(=0.10)</span></code> etc. are <strong>not</strong> <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> fields. They are
+reference <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> / <code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis</span></code> defaults
+(<code class="docutils literal notranslate"><span class="pre">line_detection.py:1113-1118</span></code>). Decision needed: either (a) add them to
+<code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> (keeps them traced/tunable — preferred for J11 knob-tuning), or
+(b) the host sources them from <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code> and passes them as
+closed-over constants. M1 parity only requires the reference defaults; (b) is the
+minimal path, (a) is the ADR-§6.3-aligned path.</p></li>
+</ul>
+</section>
+<section id="pipelinesnapshot-accessors-audit-point-2-consistent">
+<h3>3.2 PipelineSnapshot accessors (audit point 2) — <strong>consistent</strong><a class="headerlink" href="#pipelinesnapshot-accessors-audit-point-2-consistent" title="Link to this heading"></a></h3>
+<p>All consumers read snapshot fields by the canonical names in <code class="docutils literal notranslate"><span class="pre">snapshot.py</span></code>
+(<code class="docutils literal notranslate"><span class="pre">line_wavelength_nm</span></code>, <code class="docutils literal notranslate"><span class="pre">line_A_ki</span></code>, <code class="docutils literal notranslate"><span class="pre">line_stark_w</span></code>, <code class="docutils literal notranslate"><span class="pre">line_stark_alpha</span></code>,
+<code class="docutils literal notranslate"><span class="pre">species_physics[:,0]=ip</span></code>, <code class="docutils literal notranslate"><span class="pre">oxide_stoichiometry</span></code>, <code class="docutils literal notranslate"><span class="pre">doublet_pairs/rho/r_thin</span></code>).
+<code class="docutils literal notranslate"><span class="pre">stark_electron_density</span></code> reads <code class="docutils literal notranslate"><span class="pre">snapshot.line_stark_w[idx]</span></code> /
+<code class="docutils literal notranslate"><span class="pre">line_stark_alpha[idx]</span></code>; <code class="docutils literal notranslate"><span class="pre">to_lax_snapshot</span></code> reads <code class="docutils literal notranslate"><span class="pre">partition_coeffs_stored</span></code>
+(NaN-sentinel, lax convention) while <code class="docutils literal notranslate"><span class="pre">to_atomic_snapshot</span></code> reads <code class="docutils literal notranslate"><span class="pre">partition_coeffs</span></code>
+(canonical re-fit) — this dual-poly split is <strong>correct and documented</strong>
+(contracts.md eager-fallback section). No drift found.</p>
+</section>
+<section id="padding-constants-audit-point-4-consistent-but-two-distinct-p-max">
+<h3>3.3 Padding constants (audit point 4) — <strong>consistent, but two distinct <code class="docutils literal notranslate"><span class="pre">P_max</span></code></strong><a class="headerlink" href="#padding-constants-audit-point-4-consistent-but-two-distinct-p-max" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">detect.py</span></code> defines <code class="docutils literal notranslate"><span class="pre">P_MAX_CALIBRATION</span></code> (=2048) and <code class="docutils literal notranslate"><span class="pre">P_MAX_DETECTION</span></code> (=2560),
+matching shapes.md (calibration 2048 / detection 2560) and <code class="docutils literal notranslate"><span class="pre">P_CAND_MAX</span></code> (=8192).
+identify’s <code class="docutils literal notranslate"><span class="pre">FrontEndSnapshot</span></code> uses <code class="docutils literal notranslate"><span class="pre">(E_max,</span> <span class="pre">K_comb)</span></code> / <code class="docutils literal notranslate"><span class="pre">(P_max,)</span></code>. solve uses
+<code class="docutils literal notranslate"><span class="pre">(E,</span> <span class="pre">N_max)</span></code>. No hardcoded divergent constant was found; the <strong>two P_max values
+are intentional</strong> (calibration vs detection paths) — J8 must route the right one
+to each path (calibration peaks → <code class="docutils literal notranslate"><span class="pre">P_MAX_CALIBRATION</span></code>; detection peaks →
+<code class="docutils literal notranslate"><span class="pre">P_MAX_DETECTION</span></code>). The <code class="docutils literal notranslate"><span class="pre">bucket_for_n_lines</span></code> ladder in <code class="docutils literal notranslate"><span class="pre">host.py:152</span></code> matches
+shapes.md (64…4096 powers of two).</p>
+</section>
+<section id="staticconfig-vs-pipelineparams-overlap-audit-point-1-4">
+<h3>3.4 <code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code> vs <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> overlap (audit point 1/4)<a class="headerlink" href="#staticconfig-vs-pipelineparams-overlap-audit-point-1-4" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">top_k_per_element</span></code> lives in <strong>both</strong> <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> (float, traced) and
+implicitly as <code class="docutils literal notranslate"><span class="pre">select_lines(top_k=...)</span></code> which must be a <strong>static int</strong> (it sizes
+the <code class="docutils literal notranslate"><span class="pre">(B,E,top_k)</span></code> array and keys the cache). Same tension for <code class="docutils literal notranslate"><span class="pre">max_iterations</span></code>
+(traced budget) vs <code class="docutils literal notranslate"><span class="pre">StaticConfig.max_iters</span></code> (static trip count) — params.py
+documents this split. J8 must take the <strong>static</strong> value from <code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code> for
+array shapes and may pass the <strong>traced</strong> value only where it is a pure threshold.
+<code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code> carries <code class="docutils literal notranslate"><span class="pre">closure_mode</span></code>, <code class="docutils literal notranslate"><span class="pre">broadening_mode</span></code>, <code class="docutils literal notranslate"><span class="pre">apply_self_absorption</span></code>,
+<code class="docutils literal notranslate"><span class="pre">max_iters</span></code>, <code class="docutils literal notranslate"><span class="pre">bucket_id</span></code>, <code class="docutils literal notranslate"><span class="pre">n_species</span></code>, <code class="docutils literal notranslate"><span class="pre">level_pad</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_size</span></code> — all consumed
+correctly (<code class="docutils literal notranslate"><span class="pre">scan_solve(closure_mode=static.closure_mode)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">forward_fit_identify(static.broadening_mode)</span></code>).</p>
+</section>
+<section id="fp64-fp32-policy-audit-point-5-consistent-all-fp64">
+<h3>3.5 fp64/fp32 policy (audit point 5) — <strong>consistent (all fp64)</strong><a class="headerlink" href="#fp64-fp32-policy-audit-point-5-consistent-all-fp64" title="Link to this heading"></a></h3>
+<p>No stage forces fp32 device math. The two <code class="docutils literal notranslate"><span class="pre">float32</span></code> text hits are a comment
+(<code class="docutils literal notranslate"><span class="pre">stark.py:51</span></code>) and a <code class="docutils literal notranslate"><span class="pre">jnp.result_type(...,</span> <span class="pre">jnp.float32)</span></code> tiny-floor guard
+(<code class="docutils literal notranslate"><span class="pre">forward_id.py:296</span></code>, harmless). <code class="docutils literal notranslate"><span class="pre">LaxKernelInputs.from_snapshot</span></code> casts everything
+to <code class="docutils literal notranslate"><span class="pre">jnp.float64</span></code>; <code class="docutils literal notranslate"><span class="pre">find_peaks_fixed</span></code> casts <code class="docutils literal notranslate"><span class="pre">x</span></code> to f64; closure/SB-graph all f64.
+Matches ADR §5.3 / contracts.md precision policy. No drift.</p>
+</section>
+<section id="result-type-conventions-consistent-namedtuple-dataclass-pattern">
+<h3>3.6 Result-type conventions — <strong>consistent NamedTuple/dataclass pattern</strong><a class="headerlink" href="#result-type-conventions-consistent-namedtuple-dataclass-pattern" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">PeakResult</span></code>, <code class="docutils literal notranslate"><span class="pre">CombScoreArrays</span></code>, <code class="docutils literal notranslate"><span class="pre">ObservationBuild</span></code>, <code class="docutils literal notranslate"><span class="pre">SelfAbsorptionResult</span></code>,
+<code class="docutils literal notranslate"><span class="pre">StarkFitResult</span></code>/<code class="docutils literal notranslate"><span class="pre">StarkNeResult</span></code>, <code class="docutils literal notranslate"><span class="pre">LaxKernelInputs</span></code>, <code class="docutils literal notranslate"><span class="pre">JointWLSResult</span></code> are
+NamedTuples (pytree leaves); <code class="docutils literal notranslate"><span class="pre">CalibrationKernelResult</span></code> is a dataclass with an
+explicit <code class="docutils literal notranslate"><span class="pre">register_pytree_node</span></code>. All are valid vmap/grad bundles. No drift; J8
+just needs adapters from these to the reference <code class="docutils literal notranslate"><span class="pre">WavelengthCalibrationResult</span></code> /
+<code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code> / <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="failure-policy-parity-ac4">
+<h2>4. Failure-policy parity (AC4)<a class="headerlink" href="#failure-policy-parity-ac4" title="Link to this heading"></a></h2>
+<p>Reference raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> at zero observations (<code class="docutils literal notranslate"><span class="pre">pipeline.py:872-873</span></code>);
+scoreboard scores all-FN (<code class="docutils literal notranslate"><span class="pre">:159-166</span></code>). The jit graph must <strong>not raise</strong> — at
+<code class="docutils literal notranslate"><span class="pre">Σ</span> <span class="pre">ObservationBuild.obs_valid</span> <span class="pre">==</span> <span class="pre">0</span></code> set a scalar <code class="docutils literal notranslate"><span class="pre">failed</span></code> mask, propagate
+NaN-free pass-through state through fit/solve, and have the <code class="docutils literal notranslate"><span class="pre">run_one</span></code> host
+wrapper interpret <code class="docutils literal notranslate"><span class="pre">failed</span></code> → emit the same all-FN record (NaN-free
+concentrations, <code class="docutils literal notranslate"><span class="pre">converged=False</span></code>). This <code class="docutils literal notranslate"><span class="pre">failed</span></code> flag is a new output of the
+identify→fit boundary that J8 must thread; no kernel raises.</p>
+</section>
+<hr class="docutils" />
+<section id="the-one-structural-decision-sb-graph-ownership-fit-vs-solve">
+<h2>5. The one structural decision: SB-graph ownership (fit vs solve)<a class="headerlink" href="#the-one-structural-decision-sb-graph-ownership-fit-vs-solve" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fit.sb_graph_fit</span></code> and <code class="docutils literal notranslate"><span class="pre">solve.scan_solve</span></code> <strong>both</strong> compute the SB-graph: <code class="docutils literal notranslate"><span class="pre">fit</span></code>
+exposes it as a standalone <code class="docutils literal notranslate"><span class="pre">(E,N)</span></code> primitive, while <code class="docutils literal notranslate"><span class="pre">scan_solve._solve_iteration</span></code>
+runs the SB-graph <strong>inside</strong> the iteration via the same <code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code>
+twin (solve.py:437-442 region). They are math-identical (both reduce to
+<code class="docutils literal notranslate"><span class="pre">_common_slope_kernel</span></code> on ion-shifted coords). For the <strong>production geological
+path</strong> (<code class="docutils literal notranslate"><span class="pre">saha_boltzmann_graph=True</span></code>, <code class="docutils literal notranslate"><span class="pre">closure_mode=&quot;oxide&quot;</span></code> — the only path that
+runs in production, ADR §1.1), the solve owns the SB-graph and re-derives T/n_e
+each iteration. <strong>J8 decision:</strong> for M1 parity, <code class="docutils literal notranslate"><span class="pre">run_one</span></code> should build the
+<code class="docutils literal notranslate"><span class="pre">(E,N_max)</span></code> Boltzmann block once (host glue §2.C), feed <code class="docutils literal notranslate"><span class="pre">LaxKernelInputs</span></code>, and let
+<code class="docutils literal notranslate"><span class="pre">scan_solve</span></code> own the fit — using <code class="docutils literal notranslate"><span class="pre">fit.select_lines</span></code> only for the selection gate
+(SNR/isolation/top-K), <strong>not</strong> calling <code class="docutils literal notranslate"><span class="pre">fit.sb_graph_fit</span></code> separately. This avoids
+a double fit and matches the reference solve loop. <code class="docutils literal notranslate"><span class="pre">joint_wls_solve</span></code> is the J8.5+
+production estimator (ADR §6.1); for M1 the <code class="docutils literal notranslate"><span class="pre">scan_solve</span></code> initializer alone meets
+the Tier-B contract.</p>
+</section>
+<hr class="docutils" />
+<section id="blocking-mismatch">
+<h2>6. Blocking mismatch<a class="headerlink" href="#blocking-mismatch" title="Link to this heading"></a></h2>
+<p><strong>One genuine blocker, and it is a “not-built-yet”, not a shape conflict:</strong></p>
+<blockquote>
+<div><p><strong>B1 — the host glue layer (<code class="docutils literal notranslate"><span class="pre">host.py</span></code> candidate-set assembly, <code class="docutils literal notranslate"><span class="pre">FrontEndSnapshot</span></code>
+builder, <code class="docutils literal notranslate"><span class="pre">(E,N_max)</span></code> Boltzmann-block gather, Stark window extraction, result
+reconstitution) does not exist.</strong> Every stage kernel was built and parity-tested
+in isolation against <em>hand-padded</em> inputs (via the test adapters), so the
+seam between stages — which is pure host gather/scatter — was never written.
+<code class="docutils literal notranslate"><span class="pre">pipeline.run_one</span></code>, <code class="docutils literal notranslate"><span class="pre">forward.forward_spectrum</span></code>, <code class="docutils literal notranslate"><span class="pre">calibrate.calibrate_wavelengths</span></code>,
+<code class="docutils literal notranslate"><span class="pre">identify.identify_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">fit.boltzmann_fit</span></code>, <code class="docutils literal notranslate"><span class="pre">selfabs.correct_self_absorption</span></code>,
+<code class="docutils literal notranslate"><span class="pre">solve.iterative_solve</span></code> all still <code class="docutils literal notranslate"><span class="pre">raise</span> <span class="pre">NotImplementedError</span></code>. <strong>This is the J8
+deliverable</strong>, not a regression — but it means M1 cannot compose until §2.A–§2.F
+are written. No two kernels have <em>incompatible</em> shapes once the documented host
+gathers (<code class="docutils literal notranslate"><span class="pre">_build_padded_arrays_from_obs</span></code> / <code class="docutils literal notranslate"><span class="pre">reorder</span></code> pattern, ADR §5.1.2) run.</p>
+</div></blockquote>
+<p>No fp64/fp32, padding-constant, or snapshot-accessor mismatch was found that would
+break composition. The PipelineParams name-drift (§3.1) is a <strong>wiring</strong> issue (the
+wrapper must map names), not a runtime shape break, but it WILL silently
+mis-parameterize the graph if J8 maps <code class="docutils literal notranslate"><span class="pre">t_tolerance_k</span></code>→<code class="docutils literal notranslate"><span class="pre">t_tol_k</span></code> etc. incorrectly —
+treat the §3.1 mapping table as a checklist.</p>
+</section>
+<hr class="docutils" />
+<section id="ordered-task-list-to-reach-m1">
+<h2>7. Ordered task list to reach M1<a class="headerlink" href="#ordered-task-list-to-reach-m1" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">host.py</span></code>: candidate-set assembly + element-mask gather</strong> over the
+<code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> superset → per-bucket padded line arrays (the
+<code class="docutils literal notranslate"><span class="pre">_build_padded_arrays_from_obs</span></code>/<code class="docutils literal notranslate"><span class="pre">reorder</span></code> pattern). Foundation for §2.B/§2.C/§2.E.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">host.py</span></code>: <code class="docutils literal notranslate"><span class="pre">FrontEndSnapshot</span></code> builder</strong> (§2.B) — gA-Boltzmann comb ranking,
+peak gather against the calibrated axis, shift grid. Parity-test against the
+reference <code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code> ranking on one fixture per dataset.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">host.py</span></code>: Stark window extraction host wrapper</strong> (§2.D) — <code class="docutils literal notranslate"><span class="pre">extract_windows</span></code> +
+<code class="docutils literal notranslate"><span class="pre">multiplet_blend_mask</span></code> + candidate selection → <code class="docutils literal notranslate"><span class="pre">(C,W)</span></code> windows.</p></li>
+<li><p><strong>Decide PipelineParams gate-knob policy</strong> (§3.1 (a) vs (b)). Minimal-for-M1:
+(b), source comb/calibrate gate defaults from <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code>. File a
+follow-up bead for (a) (J11 tunability).</p></li>
+<li><p><strong>Write <code class="docutils literal notranslate"><span class="pre">pipeline.run_one</span></code></strong> as the composition (§1), calling the <strong>real
+kernels directly</strong> (not the stub orchestrators), with the §3.1 param map. Thread
+the <code class="docutils literal notranslate"><span class="pre">failed</span></code> mask (§4). Single-spectrum only (batch is J9).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">host.py</span></code>: result reconstitution</strong> (§2.F) → <code class="docutils literal notranslate"><span class="pre">WavelengthCalibrationResult</span></code>,
+<code class="docutils literal notranslate"><span class="pre">LineDetectionResult</span></code>, <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> + the <code class="docutils literal notranslate"><span class="pre">failed</span></code>→all-FN path.</p></li>
+<li><p><strong>Fill (or delete) the stub orchestrators</strong> (<code class="docutils literal notranslate"><span class="pre">forward_spectrum</span></code>,
+<code class="docutils literal notranslate"><span class="pre">calibrate_wavelengths</span></code>, <code class="docutils literal notranslate"><span class="pre">identify_lines</span></code>(keep for J10), <code class="docutils literal notranslate"><span class="pre">boltzmann_fit</span></code>,
+<code class="docutils literal notranslate"><span class="pre">correct_self_absorption</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative_solve</span></code>) as thin wrappers that delegate to
+the kernels — so the public <code class="docutils literal notranslate"><span class="pre">__init__</span></code> API resolves and the stub
+<code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>s are gone.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">parity.py</span></code>: complete the per-stage adapters</strong> (<code class="docutils literal notranslate"><span class="pre">preprocess_parity</span></code>,
+<code class="docutils literal notranslate"><span class="pre">detect_parity</span></code>, <code class="docutils literal notranslate"><span class="pre">identify_parity</span></code>, <code class="docutils literal notranslate"><span class="pre">fit_parity</span></code>, <code class="docutils literal notranslate"><span class="pre">solve_parity</span></code>) so AC5
+stage-bisection works on the composed graph.</p></li>
+<li><p><strong>Scoreboard <code class="docutils literal notranslate"><span class="pre">--pipeline</span></code> dispatch</strong> (§2.G) — flag through
+<code class="docutils literal notranslate"><span class="pre">_score_spectrum</span></code>/<code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code>; <code class="docutils literal notranslate"><span class="pre">jit</span></code> path emits identical record schema.</p></li>
+<li><p><strong>Tests</strong> (<code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_pipeline.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">test_scoreboard_dispatch.py</span></code>): end-to-end vs <code class="docutils literal notranslate"><span class="pre">run_pipeline</span></code> on the two M1
+datasets (bhvo2_chemcam, chemcam_calib), failure-policy fixture, graph-level
+padding invariance, compile-once-per-bucket (AC6). <strong>Per CLAUDE.md: run only
+narrow subsets inside any sub-agent; background the full suite from the
+parent.</strong> Commit after each step (watchdog discipline).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">docs/jitpipe/divergence-ledger.md</span></code></strong> — create and seed with any M1
+adjudications (J8 spec §2).</p></li>
+</ol>
+<p><strong>Sequencing note:</strong> steps 1–3 (host gather) unblock everything; step 5 is the
+integration spine; steps 9–11 are the M1 gate. <code class="docutils literal notranslate"><span class="pre">forward_id.py</span></code> (J10) and
+<code class="docutils literal notranslate"><span class="pre">autodiff.py</span></code> (J11) are <strong>off the M1 critical path</strong> — they are the recall-endgame
+and differentiability tracks, not part of the <code class="docutils literal notranslate"><span class="pre">run_one</span></code> parity composition.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

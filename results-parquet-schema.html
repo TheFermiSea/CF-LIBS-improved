@@ -1,0 +1,499 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>results.parquet — Unified Benchmark Result Schema (v1) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active"><code class="docutils literal notranslate"><span class="pre">results.parquet</span></code> — Unified Benchmark Result Schema (v1)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/results-parquet-schema.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="results-parquet-unified-benchmark-result-schema-v1">
+<h1><code class="docutils literal notranslate"><span class="pre">results.parquet</span></code> — Unified Benchmark Result Schema (v1)<a class="headerlink" href="#results-parquet-unified-benchmark-result-schema-v1" title="Link to this heading"></a></h1>
+<p>Single Parquet file per unified-benchmark experiment, replacing the
+legacy <code class="docutils literal notranslate"><span class="pre">composition_records.json</span></code> + <code class="docutils literal notranslate"><span class="pre">id_records.json</span></code> triplet. One row
+per (id_workflow × composition_workflow × outer_split × spectrum) pair
+in the composition section, plus one row per (id_workflow × spectrum)
+pair in the identification section. The two sections are
+distinguished by the <code class="docutils literal notranslate"><span class="pre">record_kind</span></code> column (<code class="docutils literal notranslate"><span class="pre">&quot;identification&quot;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&quot;composition&quot;</span></code>); rows with <code class="docutils literal notranslate"><span class="pre">record_kind</span> <span class="pre">=</span> <span class="pre">&quot;identification&quot;</span></code> leave all
+composition-specific columns NULL and vice-versa.</p>
+<section id="file-layout">
+<h2>File layout<a class="headerlink" href="#file-layout" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Default path: <code class="docutils literal notranslate"><span class="pre">&lt;output_dir&gt;/results.parquet</span></code></p></li>
+<li><p>Compression: Snappy (pyarrow default)</p></li>
+<li><p>Row-group size: pyarrow default (~64 MB)</p></li>
+<li><p>Append semantics: <code class="docutils literal notranslate"><span class="pre">write_parquet(...,</span> <span class="pre">append=True)</span></code> reads the existing
+file, concatenates, and rewrites. Schema must match.</p></li>
+<li><p>Partitioning: optional <code class="docutils literal notranslate"><span class="pre">partition_cols=[...]</span></code> argument forwards to
+<code class="docutils literal notranslate"><span class="pre">pyarrow.parquet.write_to_dataset</span></code> for callers that need hive-style
+partitions (e.g. by <code class="docutils literal notranslate"><span class="pre">dataset_id</span></code> or <code class="docutils literal notranslate"><span class="pre">outer_split_id</span></code>). Default is a
+single file.</p></li>
+</ul>
+</section>
+<section id="top-level-columns">
+<h2>Top-level columns<a class="headerlink" href="#top-level-columns" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Nullable</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">schema_version</span></code></p></td>
+<td><p>INT32</p></td>
+<td><p>no</p></td>
+<td><p>constant = 1</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>no</p></td>
+<td><p>UUID per <code class="docutils literal notranslate"><span class="pre">write_parquet</span></code> invocation</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">record_kind</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>no</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;identification&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;composition&quot;</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">record_index</span></code></p></td>
+<td><p>INT64</p></td>
+<td><p>no</p></td>
+<td><p>0-based position within source list</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">timestamp_iso</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>no</p></td>
+<td><p>ISO-8601 UTC at write time</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dataset_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>no</p></td>
+<td><p>from <code class="docutils literal notranslate"><span class="pre">IDEvaluationRecord.dataset_id</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">spectrum_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>no</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">group_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">specimen_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">instrument_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">truth_type</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>no</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">TruthType</span></code> enum value</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rp_estimate</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>yes</p></td>
+<td><p>resolving-power estimate</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">label_cardinality</span></code></p></td>
+<td><p>INT64</p></td>
+<td><p>yes</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">spectrum_kind</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">outer_split_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>no</p></td>
+<td><p>outer cross-validation fold name</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tuning_split_id</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>inner split when applicable</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">elapsed_seconds</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>no</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scored</span></code></p></td>
+<td><p>BOOL</p></td>
+<td><p>no</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">failure_reason</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">annotations_json</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">json.dumps(record.annotations)</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<section id="run-metadata-columns-added-by-writer-not-on-records-today">
+<h3>Run-metadata columns (added by writer, not on records today)<a class="headerlink" href="#run-metadata-columns-added-by-writer-not-on-records-today" title="Link to this heading"></a></h3>
+<p>These come from the new <code class="docutils literal notranslate"><span class="pre">run_metadata</span></code> argument to <code class="docutils literal notranslate"><span class="pre">write_parquet</span></code> and
+are constant across the file. They’re the columns the brief explicitly
+calls out for downstream slicing.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Nullable</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cell</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>e.g. <code class="docutils literal notranslate"><span class="pre">&quot;C1&quot;</span></code> — loop driver pass-through</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">identifier</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>mirrors <code class="docutils literal notranslate"><span class="pre">id_workflow_name</span></code> for queries</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">platform</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>e.g. <code class="docutils literal notranslate"><span class="pre">&quot;jax-cpu&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;numpy&quot;</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seed</span></code></p></td>
+<td><p>INT64</p></td>
+<td><p>yes</p></td>
+<td><p>RNG seed if known</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">iter_index</span></code></p></td>
+<td><p>INT64</p></td>
+<td><p>yes</p></td>
+<td><p>loop iteration index</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">experiment_label</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>yes</p></td>
+<td><p>free-form, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;loop-2026-05-12&quot;</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="identification-only-columns-null-on-composition-rows">
+<h3>Identification-only columns (NULL on composition rows)<a class="headerlink" href="#identification-only-columns-null-on-composition-rows" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">id_workflow_name</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">IDEvaluationRecord.workflow_name</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">id_config_name</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">config_name</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">true_elements</span></code></p></td>
+<td><p>LIST<STRING></p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">predicted_elements</span></code></p></td>
+<td><p>LIST<STRING></p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tp</span></code> / <code class="docutils literal notranslate"><span class="pre">fp</span></code> / <code class="docutils literal notranslate"><span class="pre">fn</span></code> / <code class="docutils literal notranslate"><span class="pre">tn</span></code></p></td>
+<td><p>INT64</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">precision</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">recall</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">f1</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">jaccard</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hamming_loss</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">exact_match</span></code></p></td>
+<td><p>BOOL</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">false_positives_per_spectrum</span></code></p></td>
+<td><p>INT64</p></td>
+<td><p>from record</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="composition-only-columns-null-on-identification-rows">
+<h3>Composition-only columns (NULL on identification rows)<a class="headerlink" href="#composition-only-columns-null-on-identification-rows" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Source</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">comp_id_workflow_name</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">id_workflow_name</span></code> (the upstream identifier)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">composition_workflow_name</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">comp_id_config_name</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">composition_config_name</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">candidate_elements</span></code></p></td>
+<td><p>LIST<STRING></p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">true_composition</span></code></p></td>
+<td><p>LIST&lt;STRUCT&lt;element:STRING, mass_fraction:DOUBLE&gt;&gt;</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code> -&gt; list-of-structs</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">predicted_composition</span></code></p></td>
+<td><p>LIST&lt;STRUCT&lt;element:STRING, mass_fraction:DOUBLE&gt;&gt;</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code> -&gt; list-of-structs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">aitchison</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record (also surfaced as <code class="docutils literal notranslate"><span class="pre">d_a</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">d_a</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>alias of <code class="docutils literal notranslate"><span class="pre">aitchison</span></code> for query ergonomics</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rmse</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">temperature_error_frac</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ne_error_frac</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">closure_residual</span></code></p></td>
+<td><p>DOUBLE</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">error_tier</span></code></p></td>
+<td><p>STRING</p></td>
+<td><p>from record</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">per_element_absolute_error</span></code></p></td>
+<td><p>LIST&lt;STRUCT&lt;element:STRING, value:DOUBLE&gt;&gt;</p></td>
+<td><p>dict -&gt; list-of-structs (NaNs preserved)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">per_element_relative_error</span></code></p></td>
+<td><p>LIST&lt;STRUCT&lt;element:STRING, value:DOUBLE&gt;&gt;</p></td>
+<td><p>dict -&gt; list-of-structs</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subcompositional_ratio_errors</span></code></p></td>
+<td><p>LIST&lt;STRUCT&lt;pair:STRING, value:DOUBLE&gt;&gt;</p></td>
+<td><p>dict -&gt; list-of-structs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">posterior_diagnostics</span></code></p></td>
+<td><p>STRUCT&lt;rhat_max:DOUBLE, ess_bulk_min:DOUBLE, k_hat_max:DOUBLE, divergent_count:INT64, coverage:DOUBLE&gt;</p></td>
+<td><p>derived from <code class="docutils literal notranslate"><span class="pre">annotations[&quot;posterior&quot;]</span></code> if present, else NULL</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="query-examples-duckdb">
+<h2>Query examples (DuckDB)<a class="headerlink" href="#query-examples-duckdb" title="Link to this heading"></a></h2>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="c1">-- Acceptance test: &lt;100 ms on a 48-iter file</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">identifier</span><span class="p">,</span><span class="w"> </span><span class="k">AVG</span><span class="p">(</span><span class="n">d_a</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">mean_d_a</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">read_parquet</span><span class="p">(</span><span class="s1">&#39;output/loop-2026-05-12/results.parquet&#39;</span><span class="p">)</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">record_kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;composition&#39;</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">identifier</span>
+<span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">mean_d_a</span><span class="p">;</span>
+
+<span class="c1">-- Average d_a per (cell, identifier, seed)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">cell</span><span class="p">,</span><span class="w"> </span><span class="n">identifier</span><span class="p">,</span><span class="w"> </span><span class="n">seed</span><span class="p">,</span><span class="w"> </span><span class="k">AVG</span><span class="p">(</span><span class="n">d_a</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">mean_d_a</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">n</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">read_parquet</span><span class="p">(</span><span class="s1">&#39;output/loop-2026-05-12/results.parquet&#39;</span><span class="p">)</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">record_kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;composition&#39;</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">scored</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">cell</span><span class="p">,</span><span class="w"> </span><span class="n">identifier</span><span class="p">,</span><span class="w"> </span><span class="n">seed</span>
+<span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">cell</span><span class="p">,</span><span class="w"> </span><span class="n">identifier</span><span class="p">,</span><span class="w"> </span><span class="n">seed</span><span class="p">;</span>
+
+<span class="c1">-- Per-element relative error distribution</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">element</span><span class="p">,</span><span class="w"> </span><span class="n">MEDIAN</span><span class="p">(</span><span class="n">t</span><span class="p">.</span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">median_rel_err</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">read_parquet</span><span class="p">(</span><span class="s1">&#39;output/loop-2026-05-12/results.parquet&#39;</span><span class="p">),</span>
+<span class="w">     </span><span class="k">UNNEST</span><span class="p">(</span><span class="n">per_element_relative_error</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">t</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">record_kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;composition&#39;</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">element</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+<section id="backwards-compatibility">
+<h2>Backwards compatibility<a class="headerlink" href="#backwards-compatibility" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">UnifiedBenchmarkRunner.write_outputs(...)</span></code> accepts an <code class="docutils literal notranslate"><span class="pre">output_format</span></code>
+argument:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;parquet&quot;</span></code> (default) — writes <code class="docutils literal notranslate"><span class="pre">results.parquet</span></code> plus all
+non-records files (CSVs, summaries, plots, statistics). Skips the
+legacy <code class="docutils literal notranslate"><span class="pre">id_records.json</span></code> and <code class="docutils literal notranslate"><span class="pre">composition_records.json</span></code> payloads.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code> — writes the legacy bundle. No parquet file.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;both&quot;</span></code> — writes both. Use during dogfood transition.</p></li>
+</ul>
+<p>The CLI flag <code class="docutils literal notranslate"><span class="pre">--output-format</span></code> on
+<code class="docutils literal notranslate"><span class="pre">scripts/run_unified_benchmark.py</span></code> exposes this. The env var
+<code class="docutils literal notranslate"><span class="pre">CFLIBS_OUTPUT_FORMAT</span></code> provides a non-CLI escape hatch for loop
+drivers.</p>
+</section>
+<section id="schema-version-policy">
+<h2>Schema-version policy<a class="headerlink" href="#schema-version-policy" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">schema_version</span> <span class="pre">=</span> <span class="pre">1</span></code> is what this file documents. Future incompatible
+changes bump the integer and <strong>must</strong> record the diff in this document.
+Readers may filter by <code class="docutils literal notranslate"><span class="pre">schema_version</span></code> to multiplex across runs.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

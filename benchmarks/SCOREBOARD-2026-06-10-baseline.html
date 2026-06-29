@@ -1,0 +1,572 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Goal-Metric Scoreboard &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Goal-Metric Scoreboard</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/benchmarks/SCOREBOARD-2026-06-10-baseline.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-goal-metric-scoreboard">
+<h1>CF-LIBS Goal-Metric Scoreboard<a class="headerlink" href="#cf-libs-goal-metric-scoreboard" title="Link to this heading"></a></h1>
+<p>Generated: 2026-06-10T13:19:59+00:00<br />
+cflibs: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/w4-integration/cflibs</span></code><br />
+Preset: geological (production default)<br />
+Sampling: seed=20260610, max_spectra=12</p>
+<p>Reproduce:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">JAX_PLATFORMS</span><span class="o">=</span>cpu<span class="w"> </span>cflibs<span class="w"> </span>scoreboard<span class="w"> </span>--output-dir<span class="w"> </span>output/scoreboard<span class="w"> </span>--max-spectra<span class="w"> </span><span class="m">12</span><span class="w"> </span>--seed<span class="w"> </span><span class="m">20260610</span>
+</pre></div>
+</div>
+<p><strong>Candidate-set policy:</strong> candidates(spectrum) = truth.elements_present UNION confounder_elements (confounders: Ag, Sn, W, Bi, Th). <strong>Presence rule:</strong> solved mass fraction &gt;= 0.005 (0.5 wt%). Failed spectra call nothing present (truth counts as FN) and are also listed under failures. ID metrics are micro-averaged; RMSE is the median per-spectrum RMSE over certified elements (element-wt% basis, oxygen excluded); runtimes are per-dataset medians.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head"><p>Tags</p></th>
+<th class="head"><p>Spectra (run/total)</p></th>
+<th class="head"><p>P</p></th>
+<th class="head"><p>R</p></th>
+<th class="head"><p>F1</p></th>
+<th class="head"><p>RMSE wt% (med)</p></th>
+<th class="head"><p>s/spectrum (med)</p></th>
+<th class="head"><p>Failures</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>bhvo2_chemcam</p></td>
+<td><p>geological, real</p></td>
+<td><p>4/4</p></td>
+<td><p>1.000</p></td>
+<td><p>0.575</p></td>
+<td><p>0.730</p></td>
+<td><p>2.52</p></td>
+<td><p>2.6</p></td>
+<td><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p>aalto</p></td>
+<td><p>minerals, real</p></td>
+<td><p>12/74 (sampled)</p></td>
+<td><p>0.933</p></td>
+<td><p>0.519</p></td>
+<td><p>0.667</p></td>
+<td><p>—</p></td>
+<td><p>0.8</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p>nist_srm_612</p></td>
+<td><p>placeholder, real</p></td>
+<td><p>0/0 (skipped)</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-odd"><td><p>nist_steel</p></td>
+<td><p>placeholder, real</p></td>
+<td><p>0/0 (skipped)</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>synthetic_fixedforward</p></td>
+<td><p>synthetic</p></td>
+<td><p>12/288 (sampled)</p></td>
+<td><p>0.667</p></td>
+<td><p>0.316</p></td>
+<td><p>0.429</p></td>
+<td><p>65.19</p></td>
+<td><p>0.4</p></td>
+<td><p>5</p></td>
+</tr>
+<tr class="row-odd"><td><p>csa_planetary</p></td>
+<td><p>broadband, element_wt, geological, real</p></td>
+<td><p>12/99 (sampled)</p></td>
+<td><p>1.000</p></td>
+<td><p>0.267</p></td>
+<td><p>0.422</p></td>
+<td><p>15.82</p></td>
+<td><p>5.1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p>chemcam_calib</p></td>
+<td><p>chemcam, element_wt, geological, real</p></td>
+<td><p>12/240 (sampled)</p></td>
+<td><p>0.909</p></td>
+<td><p>0.566</p></td>
+<td><p>0.698</p></td>
+<td><p>5.56</p></td>
+<td><p>2.4</p></td>
+<td><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p>emslibs2019</p></td>
+<td><p>classification, ore, presence_only, real</p></td>
+<td><p>12/282 (sampled)</p></td>
+<td><p>0.889</p></td>
+<td><p>0.436</p></td>
+<td><p>0.585</p></td>
+<td><p>—</p></td>
+<td><p>2.3</p></td>
+<td><p>3</p></td>
+</tr>
+<tr class="row-even"><td><p>silva2022</p></td>
+<td><p>presence_only, real, soil</p></td>
+<td><p>12/102 (sampled)</p></td>
+<td><p>0.000</p></td>
+<td><p>0.000</p></td>
+<td><p>0.000</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>12</p></td>
+</tr>
+<tr class="row-odd"><td><p>gibbons2024</p></td>
+<td><p>element_wt, nitrogen, planetary, real</p></td>
+<td><p>12/175 (sampled)</p></td>
+<td><p>1.000</p></td>
+<td><p>0.458</p></td>
+<td><p>0.629</p></td>
+<td><p>1.69</p></td>
+<td><p>0.9</p></td>
+<td><p>1</p></td>
+</tr>
+</tbody>
+</table>
+<section id="bhvo2-chemcam">
+<h2>bhvo2_chemcam<a class="headerlink" href="#bhvo2-chemcam" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>ChemCam (LANL testbed) LIBS of USGS BHVO-2 Hawaiian basalt; truth = USGS/GeoReM certified oxide composition converted to element wt% (cflibs.benchmark.reference_compositions.BHVO2_BASALT_USGS; oxygen excluded, oxide-bound). All 10 certified elements are above the 0.01 wt% presence cutoff. CCS spectra arrive response-corrected upstream; resolving power not certified (None).</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=23 FP=0 FN=17 — P=1.000 R=0.575 F1=0.730</p></li>
+<li><p>Runtime medians (s): total=2.64, calibration=1.55, detection+ID=0.89, stark n_e=0.15, solve=0.01</p></li>
+<li><p>Composition (n=4): RMSE wt% median=2.52, mean=2.71</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>mean signed error (wt%)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Al</p></td>
+<td><p>-1.75</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca</p></td>
+<td><p>-2.15</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe</p></td>
+<td><p>+0.93</p></td>
+</tr>
+<tr class="row-odd"><td><p>K</p></td>
+<td><p>-0.43</p></td>
+</tr>
+<tr class="row-even"><td><p>Mg</p></td>
+<td><p>-0.97</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mn</p></td>
+<td><p>-0.13</p></td>
+</tr>
+<tr class="row-even"><td><p>Na</p></td>
+<td><p>-1.65</p></td>
+</tr>
+<tr class="row-odd"><td><p>P</p></td>
+<td><p>-0.12</p></td>
+</tr>
+<tr class="row-even"><td><p>Si</p></td>
+<td><p>+4.62</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti</p></td>
+<td><p>+4.51</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="aalto">
+<h2>aalto<a class="headerlink" href="#aalto" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>Aalto LIBS library pure-element standard (Al); presence-only truth. Nominal composition is ~100 wt% metal but element-wt comparison is skipped: the production geological preset closes on an oxide basis, which is ill-defined for a metallic standard. https://users.aalto.fi/~lainei1/pages/elements/</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=14 FP=1 FN=13 — P=0.933 R=0.519 F1=0.667</p></li>
+<li><p>Runtime medians (s): total=0.78, calibration=0.54, detection+ID=0.20, stark n_e=0.02, solve=0.01</p></li>
+<li><p>Sampled 12 of 74 spectra (seeded rng, seed=20260610).</p></li>
+</ul>
+<p>Failures:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">mineral_sideriteE40</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+</ul>
+</section>
+<section id="nist-srm-612">
+<h2>nist_srm_612<a class="headerlink" href="#nist-srm-612" title="Link to this heading"></a></h2>
+<p><strong>Skipped</strong> — adapter yielded no spectra (see log / dataset README).</p>
+</section>
+<section id="nist-steel">
+<h2>nist_steel<a class="headerlink" href="#nist-steel" title="Link to this heading"></a></h2>
+<p><strong>Skipped</strong> — adapter yielded no spectra (see log / dataset README).</p>
+</section>
+<section id="synthetic-fixedforward">
+<h2>synthetic_fixedforward<a class="headerlink" href="#synthetic-fixedforward" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>SYNTHETIC corpus w2_fixedforward_v1 (version ak3.1.3) generated by OUR OWN fixed forward model — valid for RELATIVE comparisons between pipeline versions only, never a headline accuracy number (the generator shares physics with the inversion under test). Truth = generation recipe mass fractions; elements below 0.01 wt% excluded from elements_present. Source: /home/brian/code/CF-LIBS-improved/.worktrees/w1-integration/output/synthetic_corpus_w2/w2_fixedforward_v1/corpus.json</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=6 FP=3 FN=13 — P=0.667 R=0.316 F1=0.429</p></li>
+<li><p>Runtime medians (s): total=0.42, calibration=0.34, detection+ID=0.07, stark n_e=0.00, solve=0.00</p></li>
+<li><p>Sampled 12 of 288 spectra (seeded rng, seed=20260610).</p></li>
+<li><p>Composition (n=7): RMSE wt% median=65.19, mean=58.91</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>mean signed error (wt%)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Cr</p></td>
+<td><p>-6.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fe</p></td>
+<td><p>-61.81</p></td>
+</tr>
+<tr class="row-even"><td><p>Mn</p></td>
+<td><p>-2.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ni</p></td>
+<td><p>-19.08</p></td>
+</tr>
+</tbody>
+</table>
+<p>Failures:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">pure_Fe_0002</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pure_Fe_0009</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pure_Fe_0013</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pure_Fe_0026</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">steel_like_0023</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+</ul>
+</section>
+<section id="csa-planetary">
+<h2>csa_planetary<a class="headerlink" href="#csa-planetary" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>CSA open planetary-analogue LIBS dataset (LIBSOpenDatacsv.7z, large200 set, file ‘Andesite73302_200AVG.csv’); composition row ‘Andesite73302’ from Sample_Composition_Data_LargeSet.csv (oxide basis), oxide panel Al2O3/CaO/FeO/K2O/MgO/MnO/Na2O/SiO2/TiO2/P2O5 + elemental C converted to element wt% (O excluded); certified panel covers 97.2% of sample mass – elements outside the panel (e.g. S, Cu, Zn, volatiles) may appear in the spectrum; presence cutoff 0.01 wt%; intensities are raw 200-pulse averages; instrument resolving power not stated in the dataset files.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=31 FP=0 FN=85 — P=1.000 R=0.267 F1=0.422</p></li>
+<li><p>Runtime medians (s): total=5.06, calibration=3.97, detection+ID=1.05, stark n_e=0.08, solve=0.01</p></li>
+<li><p>Sampled 12 of 99 spectra (seeded rng, seed=20260610).</p></li>
+<li><p>Composition (n=11): RMSE wt% median=15.82, mean=17.59</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>mean signed error (wt%)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Al</p></td>
+<td><p>-6.77</p></td>
+</tr>
+<tr class="row-odd"><td><p>As</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-even"><td><p>C</p></td>
+<td><p>-0.05</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca</p></td>
+<td><p>-0.88</p></td>
+</tr>
+<tr class="row-even"><td><p>Cr</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Cu</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe</p></td>
+<td><p>+12.67</p></td>
+</tr>
+<tr class="row-odd"><td><p>K</p></td>
+<td><p>+8.53</p></td>
+</tr>
+<tr class="row-even"><td><p>Mg</p></td>
+<td><p>+16.65</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mn</p></td>
+<td><p>-0.26</p></td>
+</tr>
+<tr class="row-even"><td><p>Mo</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Na</p></td>
+<td><p>+12.84</p></td>
+</tr>
+<tr class="row-even"><td><p>Ni</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>P</p></td>
+<td><p>-0.16</p></td>
+</tr>
+<tr class="row-even"><td><p>Pb</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>S</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-even"><td><p>Sb</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si</p></td>
+<td><p>-21.49</p></td>
+</tr>
+<tr class="row-even"><td><p>Sn</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti</p></td>
+<td><p>+10.17</p></td>
+</tr>
+<tr class="row-even"><td><p>V</p></td>
+<td><p>-0.00</p></td>
+</tr>
+<tr class="row-odd"><td><p>Zn</p></td>
+<td><p>-0.00</p></td>
+</tr>
+</tbody>
+</table>
+<p>Failures:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">csa/large200/RockFer2</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+</ul>
+</section>
+<section id="chemcam-calib">
+<h2>chemcam_calib<a class="headerlink" href="#chemcam-calib" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>MSL ChemCam preflight cleanroom calibration spectrum (PDS MSL-M-CHEMCAM-LIBS-4/5-RDR-V1.0, MSL_CCAM_LIBS_CALIB.CSV, column ‘AGV2’, target ‘AGV2’); radiance in photons/shot/mm^2/sr/nm at 3 m through 7 Torr CO2 (Wiens et al. 2013); composition from CCAM_CALIBRATION_COMPOSITIONS.CSV oxide columns SiO2/TiO2/Al2O3/FeOT/MnO/MgO/CaO/Na2O/K2O converted to element wt% (O excluded); certified panel totals 97.4 wt% – elements outside the panel (S, P, C, H2O, trace metals) may appear in the spectrum; presence cutoff 0.01 wt%. Resolving-power hint 2000 (band FWHM about 0.15/0.20/0.65 nm in UV/VIO/VNIR, Wiens et al. 2012); spectra contain real gaps at 341-382 and 469-473 nm.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=60 FP=6 FN=46 — P=0.909 R=0.566 F1=0.698</p></li>
+<li><p>Runtime medians (s): total=2.45, calibration=1.49, detection+ID=0.86, stark n_e=0.06, solve=0.01</p></li>
+<li><p>Sampled 12 of 240 spectra (seeded rng, seed=20260610).</p></li>
+<li><p>Composition (n=12): RMSE wt% median=5.56, mean=6.30</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>mean signed error (wt%)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Al</p></td>
+<td><p>-2.58</p></td>
+</tr>
+<tr class="row-odd"><td><p>Ca</p></td>
+<td><p>+5.69</p></td>
+</tr>
+<tr class="row-even"><td><p>Fe</p></td>
+<td><p>+6.77</p></td>
+</tr>
+<tr class="row-odd"><td><p>K</p></td>
+<td><p>-1.17</p></td>
+</tr>
+<tr class="row-even"><td><p>Mg</p></td>
+<td><p>+0.91</p></td>
+</tr>
+<tr class="row-odd"><td><p>Mn</p></td>
+<td><p>-0.07</p></td>
+</tr>
+<tr class="row-even"><td><p>Na</p></td>
+<td><p>-2.05</p></td>
+</tr>
+<tr class="row-odd"><td><p>Si</p></td>
+<td><p>-0.15</p></td>
+</tr>
+<tr class="row-even"><td><p>Ti</p></td>
+<td><p>+6.09</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="emslibs2019">
+<h2>emslibs2019<a class="headerlink" href="#emslibs2019" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>EMSLIBS 2019 contest train spectrum (Vrabel/Kepes et al. 2020, train.h5); single-shot, 40002 channels, 200-1000 nm; class 1 (U ore); presence panel = intersection of analytes certified &gt;= 0.01 wt% over all 15 class members in support_tables.xlsx sheet MIXED_composition (columns Al/Ca/Cr/Cu/Fe/K/Mg/Na/Pb/Si/Ti); zeros there mean uncertified, not absent, so matrix elements (often Si, O, S) are outside the panel – use for recall-on-panel scoring; per-sample quantitative truth is not recoverable from the published files; instrument resolving power not stated in the files.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=24 FP=3 FN=31 — P=0.889 R=0.436 F1=0.585</p></li>
+<li><p>Runtime medians (s): total=2.35, calibration=1.32, detection+ID=0.93, stark n_e=0.08, solve=0.01</p></li>
+<li><p>Sampled 12 of 282 spectra (seeded rng, seed=20260610).</p></li>
+</ul>
+<p>Failures:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">emslibs2019/train/s001/shot2</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">emslibs2019/train/s002/shot2</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">emslibs2019/train/s005/shot0</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+</ul>
+</section>
+<section id="silva2022">
+<h2>silva2022<a class="headerlink" href="#silva2022" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>Silva et al. 2022 tropical-soil LIBS spectrum (LIBS_data.txt, sample ID 1, field 1); raw intensities, 200-780 nm; presence truth from soil_fertility_data.txt exchangeable panel exP=15 mg/dm3, exK=4.1, exCa=31, exMg=13 mmolc/dm3 – exchangeable concentrations are not convertible to wt% without bulk density, hence presence_only; column ‘V’ is base saturation (%), not vanadium; matrix elements (Si, Al, Fe, Ti, O, C, …) are uncertified – recall-on-panel scoring only; instrument resolving power not stated in the files.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=0 FP=0 FN=48 — P=0.000 R=0.000 F1=0.000</p></li>
+<li><p>Runtime medians (s): total=—, calibration=—, detection+ID=—, stark n_e=—, solve=—</p></li>
+<li><p>Sampled 12 of 102 spectra (seeded rng, seed=20260610).</p></li>
+</ul>
+<p>Failures:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample1</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample2</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample4</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample5</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample10</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample19</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample29</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample32</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field1/sample34</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field2/sample64</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field2/sample79</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">silva2022/field2/sample89</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+</ul>
+</section>
+<section id="gibbons2024">
+<h2>gibbons2024<a class="headerlink" href="#gibbons2024" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>Gibbons et al. nitrate-doped Mars Global Simulant LIBS spectrum (SI_Raw_Spectral_Data.xlsx, sheet Nitrates_UnnormalizedSpectra, row ‘0.5CaNO3_5LineScan_100ShotsPerScan_NitrateSetting_He_1’); 100-shot accumulated raw intensity, He atmosphere, 185.7-1049.0 nm (duplicate channel-boundary wavelengths deduplicated); the 213 nm Nd:YAG laser line is recorded in-range; matrix = Mars Global Simulant, composition not in file, so the element panel is partial (matrix Si/Fe/Mg/Al/Ca/O/… will appear in the spectrum) – recall-on-panel scoring only; instrument resolving power not stated in the file. Quantitative N: ‘wt. % NO3- ion’ column = 0.5 wt% NO3-, x M_N/M_NO3 (0.225905) = 0.1130 wt% N (stoichiometric identity, hydration-independent); cation Ca certified present via the ‘Nitrate Salt Cation’ column (its wt% depends on uncertified hydration state and matrix content, so it is presence-only).</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>ID (micro): TP=11 FP=0 FN=13 — P=1.000 R=0.458 F1=0.629</p></li>
+<li><p>Runtime medians (s): total=0.86, calibration=0.66, detection+ID=0.16, stark n_e=0.04, solve=0.00</p></li>
+<li><p>Sampled 12 of 175 spectra (seeded rng, seed=20260610).</p></li>
+<li><p>Composition (n=10): RMSE wt% median=1.69, mean=2.08</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Element</p></th>
+<th class="head"><p>mean signed error (wt%)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>N</p></td>
+<td><p>-2.08</p></td>
+</tr>
+</tbody>
+</table>
+<p>Failures:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gibbons2024/0.5FeNO3_5LineScan_100ShotsPerScan_NitrateSetting_He_3</span></code>: ValueError: No usable spectral lines detected for inversion.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

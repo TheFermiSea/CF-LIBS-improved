@@ -1,0 +1,470 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADR-0007 Investigation: SOTA Atomic-Data Lookup Representation for Real-Time CF-LIBS &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">ADR-0007 Investigation: SOTA Atomic-Data Lookup Representation for Real-Time CF-LIBS</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/atomic-db-latency-ADR-0007-investigation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <p>The next ADR number is ADR-0007. I have everything I need. Here is the synthesized recommendation.</p>
+<hr class="docutils" />
+<section id="adr-0007-investigation-sota-atomic-data-lookup-representation-for-real-time-cf-libs">
+<h1>ADR-0007 Investigation: SOTA Atomic-Data Lookup Representation for Real-Time CF-LIBS<a class="headerlink" href="#adr-0007-investigation-sota-atomic-data-lookup-representation-for-real-time-cf-libs" title="Link to this heading"></a></h1>
+<p><em>Synthesis of three independent investigations (hot-path profiling, framework benchmark, access-pattern design). All numbers measured on <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> — 28,727 lines, 158 species, <code class="docutils literal notranslate"><span class="pre">idx_main(element,sp_num)</span></code>, CPU — with VALD/Kurucz-scale projections. No shipped code was modified; all benchmarks ran from isolated scratch venvs/scripts.</em></p>
+<hr class="docutils" />
+<section id="bottleneck-verdict-where-the-sqlite-latency-actually-is">
+<h2>1. Bottleneck verdict — where the SQLite latency actually is<a class="headerlink" href="#bottleneck-verdict-where-the-sqlite-latency-actually-is" title="Link to this heading"></a></h2>
+<p><strong>The bottleneck is not SQLite, the query planner, or the connection pool. It is per-call Python object materialization that runs on every call — including warm cache hits.</strong> All three investigations independently converge on this.</p>
+<p>Two distinct seams dominate the hot path:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Seam</p></th>
+<th class="head"><p>Where</p></th>
+<th class="head text-right"><p>Measured cost</p></th>
+<th class="head"><p>What it actually is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong><code class="docutils literal notranslate"><span class="pre">get_transitions()</span></code> COLD</strong></p></td>
+<td><p>line-window lookup feeding <code class="docutils literal notranslate"><span class="pre">snapshot()</span></code> + every identify wavelength window</p></td>
+<td class="text-right"><p><strong>187–203 ms</strong> for Fe I (2439 lines); 28 ms via the production pandas path</p></td>
+<td><p><strong><code class="docutils literal notranslate"><span class="pre">pandas.iterrows()</span></code> + per-row <code class="docutils literal notranslate"><span class="pre">Transition</span></code> dataclass construction = 92% of cold cost.</strong> Raw <code class="docutils literal notranslate"><span class="pre">sqlite</span> <span class="pre">execute+fetchall</span></code> is only <strong>7.2 ms</strong>; pool acquire/release is <strong>4.3 µs</strong> (negligible — pooling works).</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong><code class="docutils literal notranslate"><span class="pre">partition_function_for(el,stage).at(T)</span></code></strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iterative.py</span></code> <code class="docutils literal notranslate"><span class="pre">_evaluate_partition_functions</span></code>, <strong>per iteration × N_el × 2 stages</strong></p></td>
+<td class="text-right"><p><strong>173 µs</strong> (Fe I) / <strong>254 µs</strong> (Fe II) even fully warm</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_spec_cache</span></code> already makes the SQL/fit compute-once (0.5 µs warm). The cost is pure Python churn that runs <em>anyway</em>: <code class="docutils literal notranslate"><span class="pre">to_provider()</span></code> rebuilds a frozen-dataclass provider + numpy→tuple conversion (<strong>82 µs</strong>) and <code class="docutils literal notranslate"><span class="pre">.at(T)</span></code> re-runs the exact Σgᵢexp(−Eᵢ/kT) direct-sum over hundreds of levels at Python runtime (<strong>60 µs</strong>).</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>How much it matters (measured, end-to-end):</strong></p>
+<ul class="simple">
+<li><p>A 10-element synthetic inversion total <code class="docutils literal notranslate"><span class="pre">solve()</span></code> = <strong>13.6 ms</strong>, of which <code class="docutils literal notranslate"><span class="pre">partition_function_for</span></code> = <strong>3.82 ms (29%)</strong> — and that run converged in only <strong>4 iterations</strong>. At the 20-iteration cap, partition lookups scale ~5× and dominate the solve.</p></li>
+<li><p>The “warm LRU = 6 µs” number is <strong>misleading for the identify stage</strong>: 50 <em>distinct</em> Fe I wavelength windows (one per detected peak — the realistic pattern) ran at <strong>5,591 µs/call with a 0.00 hit rate</strong>, because the LRU is keyed on exact <code class="docutils literal notranslate"><span class="pre">(element,</span> <span class="pre">stage,</span> <span class="pre">wl_min,</span> <span class="pre">wl_max)</span></code>. Every new window pays the full cold materialization.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">get_ionization_potential</span></code> (6 µs warm) and the connection pool are <strong>not</strong> problems — they confirm the existing cache/pool layer is already fast for what it caches. <code class="docutils literal notranslate"><span class="pre">get_stark_parameters</span></code> (355 µs, uncached, unindexed <code class="docutils literal notranslate"><span class="pre">ABS()</span></code> scan) is a latent per-line forward-Stark cost but is not in the iterative loop today.</p></li>
+</ul>
+<p><strong>Bottom line:</strong> the storage engine is fine; the inner loop pays for (a) rebuilding Python objects the cache should have frozen, and (b) re-running the direct-sum partition evaluation at Python speed. A faster <em>database</em> fixes neither.</p>
+</section>
+<hr class="docutils" />
+<section id="recommendation-in-memory-columnar-numpy">
+<h2>2. Recommendation — in-memory columnar NumPy<a class="headerlink" href="#recommendation-in-memory-columnar-numpy" title="Link to this heading"></a></h2>
+<p><strong>Adopt an in-RAM columnar NumPy representation for the inference tier; keep SQLite as the offline build/source-of-truth.</strong> This is the unanimous recommendation across all three investigations.</p>
+<p>The static <code class="docutils literal notranslate"><span class="pre">lines</span></code> table is loaded <strong>once at startup</strong> into a dict keyed by species:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">dict</span><span class="p">[(</span><span class="n">element</span><span class="p">,</span> <span class="n">sp_num</span><span class="p">)]</span> <span class="o">-&gt;</span> <span class="p">(</span><span class="n">wl_sorted</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">[</span><span class="n">N</span><span class="p">,</span> <span class="n">k</span><span class="p">])</span>
+<span class="nb">dict</span><span class="p">[(</span><span class="n">element</span><span class="p">,</span> <span class="n">sp_num</span><span class="p">)]</span> <span class="o">-&gt;</span> <span class="n">partition_coeffs</span>   <span class="c1"># (a0..a4, t_min, t_max)</span>
+<span class="nb">dict</span><span class="p">[(</span><span class="n">element</span><span class="p">,</span> <span class="n">sp_num</span><span class="p">)]</span> <span class="o">-&gt;</span> <span class="n">ip_ev</span><span class="p">,</span> <span class="n">mass</span><span class="p">,</span> <span class="n">levels</span>
+</pre></div>
+</div>
+<p>Lookups become: <strong>dict hash → <code class="docutils literal notranslate"><span class="pre">np.searchsorted</span></code> on the pre-sorted wavelength → zero-copy slice</strong>, returning contiguous arrays. The hot path never touches SQLite and never builds a <code class="docutils literal notranslate"><span class="pre">Transition</span></code> object.</p>
+<section id="measured-latency-delta-vs-sqlite">
+<h3>Measured latency delta vs SQLite<a class="headerlink" href="#measured-latency-delta-vs-sqlite" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Operation</p></th>
+<th class="head text-right"><p>SQLite (production/raw)</p></th>
+<th class="head text-right"><p>In-RAM columnar</p></th>
+<th class="head text-right"><p>Speedup</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Line-window lookup (full species)</p></td>
+<td class="text-right"><p>676 µs raw / 28 ms cold prod</p></td>
+<td class="text-right"><p><strong>0.14 µs</strong></p></td>
+<td class="text-right"><p>~140× vs raw, ~6,000× vs prod</p></td>
+</tr>
+<tr class="row-odd"><td><p>Line-window sub-window (<code class="docutils literal notranslate"><span class="pre">searchsorted</span></code>)</p></td>
+<td class="text-right"><p>676 µs raw</p></td>
+<td class="text-right"><p><strong>4.69 µs</strong></p></td>
+<td class="text-right"><p>~140×</p></td>
+</tr>
+<tr class="row-even"><td><p>Point lookup, 20k-window benchmark</p></td>
+<td class="text-right"><p>153 µs (indexed <code class="docutils literal notranslate"><span class="pre">:memory:</span></code>)</p></td>
+<td class="text-right"><p><strong>3.23 µs</strong></p></td>
+<td class="text-right"><p>~47×</p></td>
+</tr>
+<tr class="row-odd"><td><p>IP lookup</p></td>
+<td class="text-right"><p>5.6 µs</p></td>
+<td class="text-right"><p><strong>0.13 µs</strong></p></td>
+<td class="text-right"><p>~43×</p></td>
+</tr>
+<tr class="row-even"><td><p>Partition U(T) eval</p></td>
+<td class="text-right"><p>6.9 µs fetch + 60 µs direct-sum</p></td>
+<td class="text-right"><p><strong>1.69 µs</strong> (coeffs in RAM) / <strong>1.4 µs</strong> (vectorised matrix)</p></td>
+<td class="text-right"><p>~100× vs direct-sum</p></td>
+</tr>
+<tr class="row-odd"><td><p>Partition coeffs (Q2)</p></td>
+<td class="text-right"><p>7.53 µs</p></td>
+<td class="text-right"><p><strong>0.086 µs</strong></p></td>
+<td class="text-right"><p>~88×</p></td>
+</tr>
+</tbody>
+</table>
+<p>The win is <strong>flat to millions of lines</strong> — lookup cost is hash + binary search, independent of table size. At 2M lines NumPy stays <strong>~4 µs/lookup</strong> while indexed SQLite climbs to <strong>~14 ms/lookup</strong>.</p>
+</section>
+<section id="why-numpy-and-when-each-alternative-applies">
+<h3>Why NumPy, and when each alternative applies<a class="headerlink" href="#why-numpy-and-when-each-alternative-applies" title="Link to this heading"></a></h3>
+<p>The decisive comparison (28k-line reference DB, 20k windowed lookups, retrieval kernel):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Representation</p></th>
+<th class="head text-right"><p>µs/lookup</p></th>
+<th class="head"><p>Footprint</p></th>
+<th class="head"><p>Use when</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>NumPy dict + <code class="docutils literal notranslate"><span class="pre">searchsorted</span></code></strong></p></td>
+<td class="text-right"><p><strong>3.23</strong></p></td>
+<td><p>13.6 MB RSS</p></td>
+<td><p><strong>Inference inner loop — WINNER.</strong> Hash + 2 binary searches + zero-copy slice, no query planner.</p></td>
+</tr>
+<tr class="row-odd"><td><p>NumPy dict + boolean mask</p></td>
+<td class="text-right"><p>11.0</p></td>
+<td><p>(same)</p></td>
+<td><p>Avoid — per-call mask alloc 3.4× slower than <code class="docutils literal notranslate"><span class="pre">searchsorted</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>SQLite <code class="docutils literal notranslate"><span class="pre">:memory:</span></code> + index</p></td>
+<td class="text-right"><p>153</p></td>
+<td><p>18.3 MB</p></td>
+<td><p>Build/storage only. ~47× slower on point lookups (per-row tuple fetch).</p></td>
+</tr>
+<tr class="row-odd"><td><p>Polars per-species <code class="docutils literal notranslate"><span class="pre">.filter()</span></code></p></td>
+<td class="text-right"><p>184</p></td>
+<td><p>33.5 MB</p></td>
+<td><p><strong>No</strong> for inner loop — ~180 µs expr/dispatch overhead per call. Fine offline.</p></td>
+</tr>
+<tr class="row-even"><td><p>DuckDB <code class="docutils literal notranslate"><span class="pre">:memory:</span></code></p></td>
+<td class="text-right"><p>1,719–1,782</p></td>
+<td><p>75.3 MB</p></td>
+<td><p><strong>No</strong> for inner loop — OLAP per-query planning kills point-lookup latency (~500× slower than NumPy). <strong>Yes</strong> for the offline build path (Parquet predicate-pushdown to select the run’s subset).</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Decision per framework:</strong></p>
+<ul class="simple">
+<li><p><strong>NumPy columnar → inference inner loop.</strong> Tiny point lookups, sub-µs to ~5 µs, flat scaling, L2/L3-friendly contiguous arrays.</p></li>
+<li><p><strong>DuckDB / PyArrow → offline build/storage only.</strong> Their per-query dispatch overhead (hundreds of µs to ms) makes them the <em>slowest</em> options for the inner loop, but they are excellent for Parquet predicate-pushdown when materializing the subset at build time. PyArrow IPC / <code class="docutils literal notranslate"><span class="pre">.npz</span></code> is the natural serialization format for fast cold start.</p></li>
+<li><p><strong>Polars → reject for inner loop.</strong> Whole-frame scan or ~180 µs dispatch per point lookup; fine as an offline batch/corpus tool.</p></li>
+<li><p><strong>SQLite → stays the source of truth and on-disk artifact.</strong> Never touched on the hot path.</p></li>
+</ul>
+<p>So the answer to “keep SQLite for build/storage + in-memory columnar for inference?” is <strong>yes, explicitly two-tier.</strong> The critical refactor is not the storage swap — it is <strong>returning contiguous arrays and never instantiating per-line <code class="docutils literal notranslate"><span class="pre">Transition</span></code> objects</strong> (the ~5.6 ms <code class="docutils literal notranslate"><span class="pre">iterrows()</span></code> materialization, not the engine, is what blocks sub-ms today).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="design-drop-in-atomicdatasource-inference-backend">
+<h2>3. Design — drop-in <code class="docutils literal notranslate"><span class="pre">AtomicDataSource</span></code> inference backend<a class="headerlink" href="#design-drop-in-atomicdatasource-inference-backend" title="Link to this heading"></a></h2>
+<p>The codebase already has the right seam. <code class="docutils literal notranslate"><span class="pre">AtomicDataSource</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/core/abc.py</span></code>) is a <code class="docutils literal notranslate"><span class="pre">&#64;runtime_checkable</span></code> Protocol with four abstract methods (<code class="docutils literal notranslate"><span class="pre">get_transitions</span></code>, <code class="docutils literal notranslate"><span class="pre">get_energy_levels</span></code>, <code class="docutils literal notranslate"><span class="pre">get_ionization_potential</span></code>, <code class="docutils literal notranslate"><span class="pre">get_available_elements</span></code>), and production code <strong>duck-types</strong> the concrete <code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code>. A new <code class="docutils literal notranslate"><span class="pre">InMemoryColumnarSource</span></code> satisfies the Protocol structurally — no inheritance needed — and is constructed once at pipeline entry.</p>
+<p><strong>Critically, the needed species set is known up-front.</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:198</span></code> declares <code class="docutils literal notranslate"><span class="pre">elements</span></code> “the run’s identity, not overridable” (CLI <code class="docutils literal notranslate"><span class="pre">--elements</span> <span class="pre">Fe</span> <span class="pre">Cu</span></code>); line-ID narrows it further; the wavelength window is fixed per run. So the entire relevant atomic subset (species × ions × wl-window) can be pre-loaded before any hot loop. The forward and Bayesian paths already exploit this via <code class="docutils literal notranslate"><span class="pre">snapshot()</span></code> / <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot.from_solver</span></code> (zero SQL in the MCMC loop); the legacy iterative-CPU, Saha, and identify modules still hit SQLite per call — those are the consumers this backend rescues.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">InMemoryColumnarSource</span><span class="p">:</span>  <span class="c1"># duck-types AtomicDataSource — no inheritance</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db_path</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">wavelength_range</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">):</span>
+        <span class="c1"># one bulk SELECT ... WHERE element IN (...); group by (element, sp_num);</span>
+        <span class="c1"># store wavelength-sorted contiguous column arrays per species + scalar dicts</span>
+        <span class="o">...</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_database</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">db</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">wavelength_range</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="c1"># ---- Protocol surface (zero SQL after construction) ----</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_transitions</span><span class="p">(</span><span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Transition</span><span class="p">]:</span> <span class="o">...</span>      <span class="c1"># lazy materialize only if asked</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_energy_levels</span><span class="p">(</span><span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">EnergyLevel</span><span class="p">]:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_ionization_potential</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">stage</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ip</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">el</span><span class="p">,</span> <span class="n">stage</span><span class="p">))</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_available_elements</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="c1"># ---- fast columnar surface (preferred by hot loops, no objects) ----</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">line_columns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">stage</span><span class="p">,</span> <span class="n">wl_min</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">wl_max</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lines</span><span class="p">[(</span><span class="n">el</span><span class="p">,</span> <span class="n">stage</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="n">wl_min</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">return</span> <span class="n">cols</span>
+        <span class="n">wl</span> <span class="o">=</span> <span class="n">cols</span><span class="p">[</span><span class="s2">&quot;wavelength_nm&quot;</span><span class="p">]</span>
+        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="n">wl</span><span class="p">,</span> <span class="p">[</span><span class="n">wl_min</span><span class="p">,</span> <span class="n">wl_max</span><span class="p">])</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">c</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="n">lo</span><span class="p">:</span><span class="n">hi</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cols</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>      <span class="c1"># ~4.7 µs, no base copy</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">partition_coeffs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">stage</span><span class="p">):</span> <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pf</span><span class="o">.</span><span class="n">get</span><span class="p">((</span><span class="n">el</span><span class="p">,</span> <span class="n">stage</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Convenience methods (<code class="docutils literal notranslate"><span class="pre">partition_function_for</span></code>, <code class="docutils literal notranslate"><span class="pre">snapshot</span></code>) are <code class="docutils literal notranslate"><span class="pre">hasattr</span></code>-guarded and not part of the Protocol, so they can be added to keep existing hot loops working unchanged. This generalizes the <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> pytree (already used by the forward/Bayesian JAX kernels) to also serve the scalar/legacy consumers. <strong>Best practice:</strong> evaluate <code class="docutils literal notranslate"><span class="pre">U(T)</span></code> from a precomputed <code class="docutils literal notranslate"><span class="pre">(n_species,</span> <span class="pre">5)</span></code> coefficient matrix in one vectorised <code class="docutils literal notranslate"><span class="pre">polyval</span></code> call (<strong>27.7 µs for all 20 species-stages, ~1.4 µs each</strong>) rather than per-species direct-sum — replaces the dominant per-iteration cost entirely.</p>
+<section id="in-ram-footprint-measured-projected">
+<h3>In-RAM footprint (measured / projected)<a class="headerlink" href="#in-ram-footprint-measured-projected" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Scope</p></th>
+<th class="head text-right"><p>Lines</p></th>
+<th class="head text-right"><p>f64</p></th>
+<th class="head text-right"><p>f32</p></th>
+<th class="head text-right"><p>Build time</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Full reference DB</p></td>
+<td class="text-right"><p>28,727</p></td>
+<td class="text-right"><p>2.19 MiB</p></td>
+<td class="text-right"><p>1.10 MiB</p></td>
+<td class="text-right"><p>117 ms</p></td>
+</tr>
+<tr class="row-odd"><td><p>Typical 12-element × ions 1–3, 200–900 nm</p></td>
+<td class="text-right"><p>12,271</p></td>
+<td class="text-right"><p><strong>0.96 MiB</strong></p></td>
+<td class="text-right"><p>—</p></td>
+<td class="text-right"><p><strong>46 ms</strong> (one bulk query)</p></td>
+</tr>
+<tr class="row-even"><td><p>VALD/Kurucz 1M lines</p></td>
+<td class="text-right"><p>1,000,000</p></td>
+<td class="text-right"><p>76 MiB</p></td>
+<td class="text-right"><p>38 MiB</p></td>
+<td class="text-right"><p>~3.2 s one-time</p></td>
+</tr>
+<tr class="row-odd"><td><p>VALD/Kurucz 5M lines</p></td>
+<td class="text-right"><p>5,000,000</p></td>
+<td class="text-right"><p>381 MiB</p></td>
+<td class="text-right"><p>191 MiB</p></td>
+<td class="text-right"><p>—</p></td>
+</tr>
+<tr class="row-even"><td><p>+ 30M molecular TiO (6 f32 cols)</p></td>
+<td class="text-right"><p>30,000,000</p></td>
+<td class="text-right"><p>—</p></td>
+<td class="text-right"><p><strong>0.67 GiB</strong></p></td>
+<td class="text-right"><p>—</p></td>
+</tr>
+</tbody>
+</table>
+<p>Footprint is a non-issue: &lt;1 MiB today, ≤0.67 GiB for the full future atomic+molecular target. Keep <code class="docutils literal notranslate"><span class="pre">wavelength_nm</span></code>/<code class="docutils literal notranslate"><span class="pre">ek_ev</span></code>/<code class="docutils literal notranslate"><span class="pre">ei_ev</span></code> in <strong>f64</strong> (f32’s ~7 sig figs ≈ 0.0001 nm error at 500 nm is borderline for line centers) and demote only <code class="docutils literal notranslate"><span class="pre">aki</span></code>/<code class="docutils literal notranslate"><span class="pre">g</span></code>/<code class="docutils literal notranslate"><span class="pre">rel_int</span></code>/Stark columns to f32 if RAM ever matters. <code class="docutils literal notranslate"><span class="pre">np.memmap</span></code>/Arrow-IPC backing is the natural next step if footprint grows — lookup latency unchanged.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="physics-only-constraint-check">
+<h2>4. Physics-only constraint check<a class="headerlink" href="#physics-only-constraint-check" title="Link to this heading"></a></h2>
+<p><strong>Clean.</strong> The banned list (<code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>, TID251 + the <code class="docutils literal notranslate"><span class="pre">cflibs/evolution/evaluator.py</span></code> AST scanner) is ML-only: <code class="docutils literal notranslate"><span class="pre">sklearn</span></code>, <code class="docutils literal notranslate"><span class="pre">torch</span></code>, <code class="docutils literal notranslate"><span class="pre">tensorflow</span></code>, <code class="docutils literal notranslate"><span class="pre">keras</span></code>, <code class="docutils literal notranslate"><span class="pre">flax</span></code>, <code class="docutils literal notranslate"><span class="pre">equinox</span></code>, <code class="docutils literal notranslate"><span class="pre">transformers</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.experimental.stax</span></code>.</p>
+<ul class="simple">
+<li><p><strong>NumPy</strong> — already a core dependency; the recommended framework. Not banned.</p></li>
+<li><p><strong>PyArrow (≥15), DuckDB (≥0.10)</strong> — already declared deps (offline-tier only). Not banned.</p></li>
+<li><p><strong>Polars</strong> — unlisted but equally non-banned (rejected for the inner loop on latency grounds, not policy).</p></li>
+</ul>
+<p>None embed a server; all are in-process. No new dependency is required for the recommended path (NumPy columnar). All benchmark candidates passed the blocklist check.</p>
+</section>
+<hr class="docutils" />
+<section id="fit-with-the-roadmap">
+<h2>5. Fit with the roadmap<a class="headerlink" href="#fit-with-the-roadmap" title="Link to this heading"></a></h2>
+<p>This is the <strong>M10 (latency-last) lever</strong> and explicitly an <strong>investigation/ADR, not an implementation order.</strong> Per the standing directive (<em>accuracy/precision/reliability first; sub-ms latency deferred until the pipeline is robust</em>), this representation change must not precede the accuracy work:</p>
+<ul class="simple">
+<li><p><strong>The DB build comes first.</strong> Real-data accuracy is currently atomic-data-limited (line-list mismatch ~0.171 vs algorithm floor ~0). The M5 Kurucz/VALD ingest (<code class="docutils literal notranslate"><span class="pre">scripts/ingest_kurucz_atomic.py</span></code>, ExoJAX AdbKurucz) and STARK-B <code class="docutils literal notranslate"><span class="pre">n_e</span></code> data are the accuracy levers. A faster lookup over the <em>wrong</em> line list buys nothing.</p></li>
+<li><p><strong>This change is accuracy-neutral and forward-compatible.</strong> Because the bottleneck is object materialization (not the engine), and because a VALD/Kurucz DB <em>explodes the per-row cold-materialization cost roughly linearly</em> (the 187 ms / 2439-line figure → seconds per heavy species at millions of lines), the columnar pre-materialization becomes <em>more</em> urgent exactly when the accuracy-driven DB grows. It is the right representation to land once the line list is settled.</p></li>
+</ul>
+<p><strong>Concrete next prototype step:</strong> Build <code class="docutils literal notranslate"><span class="pre">InMemoryColumnarSource.from_database(db,</span> <span class="pre">elements,</span> <span class="pre">wl_range)</span></code> as a standalone module (no shipped-code edits yet), wire it behind a feature flag in <strong>one</strong> consumer — the legacy iterative-CPU <code class="docutils literal notranslate"><span class="pre">_evaluate_partition_functions</span></code> path — using the precomputed <code class="docutils literal notranslate"><span class="pre">(n_species,</span> <span class="pre">5)</span></code> coefficient matrix for vectorised <code class="docutils literal notranslate"><span class="pre">U(T)</span></code>. Benchmark that single seam end-to-end.</p>
+<p><strong>Expected speedup:</strong> <code class="docutils literal notranslate"><span class="pre">partition_function_for</span></code> drops from ~146 µs/species-stage to ~1.4 µs (~100×), removing the <strong>3.82 ms (29%)</strong> partition share of a 13.6 ms solve and a larger share at the 20-iteration cap. Then point the identify modules’ wavelength-window lookups at <code class="docutils literal notranslate"><span class="pre">line_columns()</span></code> to convert the <strong>5,591 µs/window</strong> cold-miss identify pattern to <strong>~4.7 µs</strong> (~1,000×). Together these move the binding line-window lookup from 676 µs–28 ms into the <strong>0.14–4.7 µs</strong> range — comfortably inside the sub-ms budget — with the dominant remaining solve cost being the physics math, not data access.</p>
+</section>
+<hr class="docutils" />
+<section id="adr-draft">
+<h2>6. ADR draft<a class="headerlink" href="#adr-draft" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p>Drop into <code class="docutils literal notranslate"><span class="pre">docs/adr/ADR-0007-in-memory-columnar-atomic-source.md</span></code>.</p>
+</div></blockquote>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span><span class="gh"># ADR-0007: In-Memory Columnar Atomic-Data Source for Real-Time Inference</span>
+
+Status: Proposed (investigation complete; implementation deferred to M10, post accuracy/DB-build)
+Date: 2026-06-23
+Deciders: CF-LIBS core
+Related: ADR-0004 (jittable inversion pipeline), ADR-0006 (instrument calibration
+first-class), AtomicSnapshot (core/jax_runtime.py), AtomicDataSource (core/abc.py)
+
+<span class="gu">## Context</span>
+
+Real-time CF-LIBS needs sub-ms atomic-data access on the inference hot path.
+Profiling the current SQLite + connection-pool + LRU layer (libs_production.db,
+28,727 lines, 158 species, CPU) shows the latency is NOT in the database engine:
+
+<span class="k">-</span><span class="w"> </span>Raw <span class="sb">`sqlite execute+fetchall`</span> for a line window = 7.2 ms cold; the connection
+  pool acquire/release = 4.3 µs (negligible). Warm cached scalar lookups = ~6 µs.
+<span class="k">-</span><span class="w"> </span>The cost is per-call Python object materialization that runs even on cache hits:
+  (1) <span class="sb">`get_transitions()`</span> COLD spends 92% of 187–203 ms in pandas <span class="sb">`iterrows()`</span> +
+  per-row <span class="sb">`Transition`</span> dataclass construction; (2) <span class="sb">`partition_function_for().at(T)`</span>
+  rebuilds a provider (<span class="sb">`to_provider()`</span> 82 µs) and re-runs the exact direct-sum over
+  hundreds of levels (60 µs) on every per-iteration call — ~3.82 ms (29%) of a
+  13.6 ms 10-element solve, scaling ~5× at the 20-iteration cap.
+<span class="k">-</span><span class="w"> </span>The LRU is keyed on exact (element, stage, wl_min, wl_max); the realistic
+  identify pattern of distinct per-peak windows runs at 5,591 µs/call, 0.00 hit rate.
+
+The relevant atomic subset (species × ions × wavelength window) is known up-front:
+<span class="sb">`--elements`</span> is the run&#39;s identity and the wavelength window is fixed per run. The
+forward and Bayesian paths already pre-load it once via <span class="sb">`snapshot()`</span>; the legacy
+iterative-CPU, Saha, and identify modules still hit SQLite per call.
+
+Benchmarked storage alternatives (20k windowed lookups, retrieval kernel):
+NumPy dict + searchsorted = 3.23 µs (winner, 13.6 MB RSS, flat to 2M lines);
+indexed SQLite :memory: = 153 µs (~47×); Polars filter = 184 µs; DuckDB :memory:
+= ~1,720 µs (~500×). DuckDB/Polars per-query dispatch makes them the slowest for
+tiny point lookups.
+
+<span class="gu">## Decision</span>
+
+Adopt a two-tier representation:
+
+<span class="k">1.</span> SQLite (or Parquet) remains the offline BUILD/STORAGE source of truth; the hot
+   path never touches it.
+<span class="k">2.</span> An <span class="sb">`InMemoryColumnarSource`</span> (duck-types the <span class="sb">`AtomicDataSource`</span> Protocol) loads
+   the run&#39;s known-up-front species × ion × wavelength subset ONCE (~46 ms for a
+   12-element run) into per-species contiguous NumPy column arrays + scalar dicts
+   (IP, partition coeffs, mass), keyed by (element, sp_num). Lookups = dict hash +
+   <span class="sb">`np.searchsorted`</span> + zero-copy slice. Partition U(T) is evaluated from a
+   precomputed (n_species, 5) coefficient matrix via one vectorised polyval call.
+
+The hot path returns contiguous arrays and never instantiates per-line <span class="sb">`Transition`</span>
+objects. NumPy is the inference tier; DuckDB/PyArrow/Polars are confined to the
+offline build path (Parquet predicate-pushdown to select the subset).
+
+<span class="gu">## Consequences</span>
+
+Positive:
+<span class="k">-</span><span class="w"> </span>Line-window lookup: 676 µs–28 ms → 0.14–4.7 µs (~140× vs raw SQL, ~6,000× vs the
+  production pandas/object path). IP 0.13 µs, partition U(T) ~1.4 µs.
+<span class="k">-</span><span class="w"> </span>partition_function_for drops ~100× (~146 µs → ~1.4 µs/species-stage), removing the
+  29% partition share of the solve.
+<span class="k">-</span><span class="w"> </span>Latency flat to millions of lines (hash + binary search); the win grows as the
+  accuracy-driven VALD/Kurucz DB grows (cold materialization scales ~linearly with
+  per-species line count).
+<span class="k">-</span><span class="w"> </span>Footprint trivial: &lt;1 MiB today; ≤0.67 GiB (f32) for the full atomic + 30M
+  molecular TiO target. Use f32 only for aki/g/rel_int/Stark; keep wavelength and
+  energies in f64 (line-center precision).
+<span class="k">-</span><span class="w"> </span>Physics-only clean: NumPy/PyArrow/DuckDB are existing non-banned deps; no ML.
+<span class="k">-</span><span class="w"> </span>Minimal blast radius: structural Protocol satisfaction, constructed once at
+  pipeline entry, generalizes the existing AtomicSnapshot to the legacy consumers.
+
+Negative / risks:
+<span class="k">-</span><span class="w"> </span>Build-time must reuse cached partition_spec_for fits (or precompute PF coeffs at
+  build) or the per-species direct-sum FITTING (3.5 s cold snapshot) dominates load.
+<span class="k">-</span><span class="w"> </span><span class="sb">`get_transitions(...) -&gt; list[Transition]`</span> object materialization must stay off
+  the hot loop; hot loops use the raw <span class="sb">`line_columns()`</span> array API.
+<span class="k">-</span><span class="w"> </span>f32 wavelength is too coarse for line centers — keep wavelength/energies f64.
+<span class="k">-</span><span class="w"> </span>get_stark_parameters (355 µs, unindexed ABS() scan) is a latent forward-Stark cost
+  to fold into the columnar source if a per-line Stark path goes hot.
+
+<span class="gu">## Sequencing</span>
+
+This is the M10 latency-last lever. Accuracy work (the Kurucz/VALD DB build,
+STARK-B n_e) comes FIRST; a faster lookup over the wrong line list buys nothing.
+First prototype: standalone <span class="sb">`InMemoryColumnarSource.from_database`</span>, flag-gated into
+the iterative-CPU <span class="sb">`_evaluate_partition_functions`</span> path with vectorised U(T), then
+the identify wavelength-window lookups. No shipped-code edits until accuracy lands.
+</pre></div>
+</div>
+<hr class="docutils" />
+<p><strong>Relevant existing seams referenced (absolute paths):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/cflibs/core/abc.py</span></code> — <code class="docutils literal notranslate"><span class="pre">AtomicDataSource</span></code> Protocol (4 methods, <code class="docutils literal notranslate"><span class="pre">&#64;runtime_checkable</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/cflibs/atomic/database.py</span></code> — <code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code>, <code class="docutils literal notranslate"><span class="pre">get_transitions</span></code>, <code class="docutils literal notranslate"><span class="pre">partition_function_for</span></code>, <code class="docutils literal notranslate"><span class="pre">snapshot</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/cflibs/core/jax_runtime.py</span></code> — <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> (existing columnar pytree to generalize)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/cflibs/inversion/solve/iterative.py</span></code> — <code class="docutils literal notranslate"><span class="pre">_evaluate_partition_functions</span></code> (dominant per-iteration consumer), legacy CPU path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/cflibs/inversion/pipeline.py:198</span></code> — elements “run’s identity, not overridable” (justifies up-front pre-load)</p></li>
+<li><p><strong>Next ADR number is ADR-0007</strong> (ADR-0006 is the latest in <code class="docutils literal notranslate"><span class="pre">docs/adr/</span></code>)</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

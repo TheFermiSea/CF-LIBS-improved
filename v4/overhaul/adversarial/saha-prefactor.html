@@ -1,0 +1,299 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adversarial Audit: Saha Equation Prefactor, Units, and eV/K Convention &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Adversarial Audit: Saha Equation Prefactor, Units, and eV/K Convention</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/saha-prefactor.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adversarial-audit-saha-equation-prefactor-units-and-ev-k-convention">
+<h1>Adversarial Audit: Saha Equation Prefactor, Units, and eV/K Convention<a class="headerlink" href="#adversarial-audit-saha-equation-prefactor-units-and-ev-k-convention" title="Link to this heading"></a></h1>
+<p><strong>Domain:</strong> <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/core/constants.py</span></code> + full Saha implementation in <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py</span></code>
+<strong>Auditor:</strong> Adversarial physics audit — assumes code is WRONG unless proven otherwise.</p>
+<hr class="docutils" />
+<section id="verdict">
+<h2>VERDICT<a class="headerlink" href="#verdict" title="Link to this heading"></a></h2>
+<p><strong>correct</strong> — severity: <strong>low</strong></p>
+<p>The Saha equation structure (exponent form, eV/K convention, spin-degeneracy factor of 2, partition function ratio U_II/U_I) is internally consistent and physically correct. The prefactor <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span> <span class="pre">=</span> <span class="pre">6.042e21</span></code> is <strong>0.0806% above</strong> the CODATA-exact value of <code class="docutils literal notranslate"><span class="pre">6.03713370e21</span> <span class="pre">cm^-3</span> <span class="pre">eV^-3/2</span></code>. This is a stale rounded value from pre-2014 constants, not a structural error. The induced temperature error at LIBS conditions (T ≈ 2 eV, IP_Fe = 7.9 eV) is <strong>~5 K out of ~23,000 K</strong> (~0.02%), three orders of magnitude below the 10–20% Boltzmann-plot temperature uncertainty. The eV-temperature convention is applied consistently throughout.</p>
+</section>
+<hr class="docutils" />
+<section id="ground-truth">
+<h2>GROUND TRUTH<a class="headerlink" href="#ground-truth" title="Link to this heading"></a></h2>
+<section id="governing-equation">
+<h3>Governing Equation<a class="headerlink" href="#governing-equation" title="Link to this heading"></a></h3>
+<p>The Saha equation in the form used by the code (McWhirter / CF-LIBS convention):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">n_</span><span class="p">{</span><span class="n">z</span><span class="o">+</span><span class="mi">1</span><span class="p">}</span> <span class="o">*</span> <span class="n">n_e</span> <span class="o">/</span> <span class="n">n_z</span> <span class="o">=</span> <span class="n">C_Saha</span> <span class="o">*</span> <span class="n">T_eV</span><span class="o">^</span><span class="p">{</span><span class="mi">3</span><span class="o">/</span><span class="mi">2</span><span class="p">}</span> <span class="o">*</span> <span class="p">(</span><span class="n">U_</span><span class="p">{</span><span class="n">z</span><span class="o">+</span><span class="mi">1</span><span class="p">}</span> <span class="o">/</span> <span class="n">U_z</span><span class="p">)</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">chi_eV</span> <span class="o">/</span> <span class="n">T_eV</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">n</span></code> in cm^-3, <code class="docutils literal notranslate"><span class="pre">T_eV</span></code> in eV (= k_B T / e), <code class="docutils literal notranslate"><span class="pre">chi_eV</span></code> in eV</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">C_Saha</span> <span class="pre">=</span> <span class="pre">2</span> <span class="pre">*</span> <span class="pre">(2π</span> <span class="pre">m_e</span> <span class="pre">k_B</span> <span class="pre">/</span> <span class="pre">h²)^{3/2}</span> <span class="pre">*</span> <span class="pre">(eV/k_B)^{3/2}</span> <span class="pre">*</span> <span class="pre">1e-6</span></code> [cm^-3 eV^-3/2]</p></li>
+<li><p>The factor of 2 is the electron spin degeneracy g_e = 2</p></li>
+</ul>
+</section>
+<section id="derivation-from-codata-2018-astropy">
+<h3>Derivation from CODATA 2018 (astropy)<a class="headerlink" href="#derivation-from-codata-2018-astropy" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>m_e = 9.1093837015e-31 kg   (CODATA 2018, exact)
+k_B = 1.380649e-23 J/K     (CODATA 2018, exact by definition)
+h   = 6.62607015e-34 J*s   (CODATA 2018, exact by definition)
+eV  = 1.602176634e-19 J    (exact by SI definition)
+
+C0_SI  = 2 * (2π m_e k_B / h²)^{3/2}  =  4.82936608e+21 m^-3 K^-3/2
+C0_cm3 = C0_SI * 1e-6                   =  4.82936608e+15 cm^-3 K^-3/2
+C_eV   = C0_cm3 * (eV/k_B)^{3/2}       =  6.03713370e+21 cm^-3 eV^-3/2
+</pre></div>
+</div>
+</section>
+<section id="citations">
+<h3>Citations<a class="headerlink" href="#citations" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>McWhirter, R.W.P. (1965).</strong> “Spectral intensities.” In <em>Plasma Diagnostic Techniques</em>, Ch. 5. Academic Press. [Canonical CF-LIBS Saha form with spin degeneracy factor 2 included in prefactor.]</p></li>
+<li><p><strong>Cristoforetti, G., De Giacomo, A., Dell’Aglio, M., Legnaioli, S., Tognoni, E., Salvetti, A., &amp; Palleschi, V. (2010).</strong> “Local Thermodynamic Equilibrium in Laser-Induced Breakdown Spectroscopy: Beyond the McWhirter criterion.” <em>Spectrochimica Acta Part B</em>, 65(1), 86–95. DOI: 10.1016/j.sab.2009.11.005. [Cites K-form prefactor 4.829e21 cm^-3 K^-3/2 — consistent with CODATA within 0.008%.]</p></li>
+<li><p><strong>NIST CODATA 2018.</strong> Physical constants: m_e, k_B, h, e. https://physics.nist.gov/cuu/Constants/</p></li>
+<li><p><strong>Griem, H.R. (1964).</strong> <em>Plasma Spectroscopy.</em> McGraw-Hill. [Derivation of Saha equation in CGS/mixed units, spin factor 2.]</p></li>
+<li><p><strong>Tognoni, E., Cristoforetti, G., Legnaioli, S., &amp; Palleschi, V. (2010).</strong> “Calibration-free laser-induced breakdown spectroscopy: State of the art.” <em>Spectrochimica Acta Part B</em>, 65(1), 1–14. DOI: 10.1016/j.sab.2009.07.006. [Standard CF-LIBS Saha formulation.]</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="code-value-numerical">
+<h2>CODE VALUE (numerical)<a class="headerlink" href="#code-value-numerical" title="Link to this heading"></a></h2>
+<section id="command-1-verify-import-path">
+<h3>Command 1 — Verify import path:<a class="headerlink" href="#command-1-verify-import-path" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> <span class="n">PYTHONPATH</span><span class="o">=/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="n">JAX_PLATFORMS</span><span class="o">=</span><span class="n">cpu</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;import cflibs; print(cflibs.__file__)&quot;</span>
+</pre></div>
+</div>
+<p>Output: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/cflibs/__init__.py</span></code></p>
+</section>
+<section id="command-2-read-constant-from-code">
+<h3>Command 2 — Read constant from code:<a class="headerlink" href="#command-2-read-constant-from-code" title="Link to this heading"></a></h3>
+<p>File: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/cflibs/core/constants.py</span></code> line 76:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">SAHA_CONST_CM3</span> <span class="o">=</span> <span class="mf">6.042e21</span>  <span class="c1"># cm^-3 eV^-1.5 (pre-factor for T in eV, n_e in cm^-3)</span>
+</pre></div>
+</div>
+</section>
+<section id="command-3-independent-derivation-from-astropy-codata">
+<h3>Command 3 — Independent derivation from astropy/CODATA:<a class="headerlink" href="#command-3-independent-derivation-from-astropy-codata" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> <span class="n">PYTHONPATH</span><span class="o">=...</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">astropy</span><span class="w"> </span><span class="kn">import</span> <span class="n">constants</span> <span class="k">as</span> <span class="n">const</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="n">m_e</span> <span class="o">=</span> <span class="n">const</span><span class="o">.</span><span class="n">m_e</span><span class="o">.</span><span class="n">value</span><span class="p">;</span> <span class="n">k_B</span> <span class="o">=</span> <span class="n">const</span><span class="o">.</span><span class="n">k_B</span><span class="o">.</span><span class="n">value</span><span class="p">;</span> <span class="n">h</span> <span class="o">=</span> <span class="n">const</span><span class="o">.</span><span class="n">h</span><span class="o">.</span><span class="n">value</span><span class="p">;</span> <span class="n">eV</span> <span class="o">=</span> <span class="mf">1.602176634e-19</span>
+<span class="n">C_SI</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">m_e</span> <span class="o">*</span> <span class="n">k_B</span> <span class="o">/</span> <span class="n">h</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mf">1.5</span>
+<span class="n">C_eV_cm3</span> <span class="o">=</span> <span class="n">C_SI</span> <span class="o">*</span> <span class="mf">1e-6</span> <span class="o">*</span> <span class="p">(</span><span class="n">eV</span><span class="o">/</span><span class="n">k_B</span><span class="p">)</span><span class="o">**</span><span class="mf">1.5</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;CODATA derivation: </span><span class="si">{</span><span class="n">C_eV_cm3</span><span class="si">:</span><span class="s1">.8e</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Code value:        6.042e21&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Error:             </span><span class="si">{</span><span class="p">(</span><span class="mf">6.042e21</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">C_eV_cm3</span><span class="p">)</span><span class="o">/</span><span class="n">C_eV_cm3</span><span class="o">*</span><span class="mi">100</span><span class="si">:</span><span class="s1">.4f</span><span class="si">}</span><span class="s1">%&#39;</span><span class="p">)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">CODATA</span> <span class="n">derivation</span><span class="p">:</span> <span class="mf">6.03713370e+21</span>
+<span class="n">Code</span> <span class="n">value</span><span class="p">:</span>        <span class="mf">6.042e21</span>
+<span class="n">Error</span><span class="p">:</span>             <span class="mf">0.0806</span><span class="o">%</span>
+</pre></div>
+</div>
+</section>
+<section id="command-4-verify-ev-k-convention-in-boltzmann-exponent">
+<h3>Command 4 — Verify eV/K convention in Boltzmann exponent:<a class="headerlink" href="#command-4-verify-ev-k-convention-in-boltzmann-exponent" title="Link to this heading"></a></h3>
+<p>Code at <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py</span></code> line 224:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">S1</span> <span class="o">=</span> <span class="p">(</span><span class="n">SAHA_CONST_CM3</span> <span class="o">/</span> <span class="n">n_e_cm3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">T_e_eV</span><span class="o">**</span><span class="mf">1.5</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">U_II</span> <span class="o">/</span> <span class="n">U_I</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">eff_ip_I</span> <span class="o">/</span> <span class="n">T_e_eV</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Exponent <code class="docutils literal notranslate"><span class="pre">exp(-chi[eV]</span> <span class="pre">/</span> <span class="pre">T[eV])</span></code> = <code class="docutils literal notranslate"><span class="pre">exp(-chi</span> <span class="pre">/</span> <span class="pre">k_B</span> <span class="pre">T)</span></code> — <strong>dimensionally correct</strong> since T_e_eV = k_B*T / eV.</p>
+<p>Level population Boltzmann factor at <code class="docutils literal notranslate"><span class="pre">saha_boltzmann.py</span></code> line 355:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">U</span> <span class="o">+=</span> <span class="n">level</span><span class="o">.</span><span class="n">g</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">level</span><span class="o">.</span><span class="n">energy_ev</span> <span class="o">/</span> <span class="n">T_e_eV</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Same convention: <code class="docutils literal notranslate"><span class="pre">exp(-E[eV]</span> <span class="pre">/</span> <span class="pre">T[eV])</span></code> — <strong>correct</strong>.</p>
+</section>
+<section id="command-5-verify-ev-to-k-vs-codata">
+<h3>Command 5 — Verify EV_TO_K vs CODATA:<a class="headerlink" href="#command-5-verify-ev-to-k-vs-codata" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">CODATA</span> <span class="n">k_B</span><span class="o">/</span><span class="n">e</span> <span class="o">=</span> <span class="mf">8.617333262145e-05</span> <span class="n">eV</span><span class="o">/</span><span class="n">K</span>
+<span class="n">Code</span>  <span class="n">KB_EV</span>  <span class="o">=</span> <span class="mf">8.617333262e-05</span> <span class="n">eV</span><span class="o">/</span><span class="n">K</span>
+<span class="n">Difference</span>   <span class="o">=</span> <span class="mf">1.45e-15</span>  <span class="p">(</span><span class="n">sub</span><span class="o">-</span><span class="n">femto</span> <span class="n">eV</span><span class="o">/</span><span class="n">K</span><span class="p">,</span> <span class="n">negligible</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="command-6-verify-jax-kernel-uses-same-constant">
+<h3>Command 6 — Verify JAX kernel uses same constant:<a class="headerlink" href="#command-6-verify-jax-kernel-uses-same-constant" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/plasma/kernels.py</span></code> line 30 imports <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> from <code class="docutils literal notranslate"><span class="pre">cflibs.core.constants</span></code>, line 76 applies it identically. Both NumPy and JAX paths use the same value.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="delta-interpretation">
+<h2>DELTA &amp; INTERPRETATION<a class="headerlink" href="#delta-interpretation" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Quantity</p></th>
+<th class="head"><p>CODATA-exact</p></th>
+<th class="head"><p>Code</p></th>
+<th class="head"><p>Error</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> (cm^-3 eV^-3/2)</p></td>
+<td><p>6.03713370e21</p></td>
+<td><p>6.042e21</p></td>
+<td><p>+0.0806%</p></td>
+</tr>
+<tr class="row-odd"><td><p>EV_TO_K (K/eV)</p></td>
+<td><p>11604.5182</p></td>
+<td><p>11604.5 (from KB_EV)</p></td>
+<td><p>~1 ppm</p></td>
+</tr>
+<tr class="row-even"><td><p>M_E (kg)</p></td>
+<td><p>9.1093837015e-31</p></td>
+<td><p>9.1093837015e-31</p></td>
+<td><p>0</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Physical impact of 0.0806% prefactor error:</strong></p>
+<p>The Saha ratio S1 = C * T^1.5 * (U_II/U_I) * exp(-chi/T) is proportional to C. An 0.0806% high C means all ionization ratios are 0.0806% high. For inversion (where T is inferred from Saha), the induced temperature error is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dT</span><span class="o">/</span><span class="n">T</span> <span class="o">=</span> <span class="p">(</span><span class="n">dC</span><span class="o">/</span><span class="n">C</span><span class="p">)</span> <span class="o">*</span> <span class="n">T_eV</span><span class="o">/</span><span class="n">chi_eV</span>   <span class="p">(</span><span class="n">dominant</span> <span class="n">term</span> <span class="n">at</span> <span class="n">chi</span> <span class="o">&gt;&gt;</span> <span class="n">T</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>At T = 2 eV, IP_Fe = 7.9024 eV:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>dT/T = 0.0806% * 2/7.9 = 0.0204%
+dT   = 0.000204 * 2 eV * 11604 K/eV ≈ 4.7 K  out of  23,208 K
+</pre></div>
+</div>
+<p>For comparison, Boltzmann-plot temperature uncertainties in LIBS are typically 10–20% (2,000–4,000 K). The prefactor error is <strong>~500× smaller</strong> than measurement noise.</p>
+<p><strong>Impact on composition:</strong> For n_II/n_I ratio used as Saha correction in CF-LIBS inversion, a 0.0806% error in S1 propagates to an identical fractional error in composition correction — well below any experimental accuracy threshold.</p>
+<p><strong>Structural correctness:</strong></p>
+<ul class="simple">
+<li><p>Saha exponent: <code class="docutils literal notranslate"><span class="pre">exp(-chi_eV</span> <span class="pre">/</span> <span class="pre">T_eV)</span></code> is correct (dimensionless, equivalent to exp(-chi/k_B T))</p></li>
+<li><p>Partition function ratio: <code class="docutils literal notranslate"><span class="pre">U_II</span> <span class="pre">/</span> <span class="pre">U_I</span></code> is correctly used WITHOUT an additional factor of 2 (the spin degeneracy is already baked into SAHA_CONST_CM3)</p></li>
+<li><p>Three-stage balance: <code class="docutils literal notranslate"><span class="pre">n_III</span> <span class="pre">/</span> <span class="pre">n_II</span> <span class="pre">=</span> <span class="pre">S2</span></code> computed correctly with the second ionization potential</p></li>
+<li><p>JAX kernel and NumPy solver are consistent (both import same SAHA_CONST_CM3)</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="fix">
+<h2>FIX<a class="headerlink" href="#fix" title="Link to this heading"></a></h2>
+<p>The code is <strong>structurally correct</strong>. The only finding is a stale prefactor value rounded from older (pre-CODATA-2014) constants. If tightened:</p>
+<p><strong>File:</strong> <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/cflibs/core/constants.py</span></code> line 76</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Current (stale, 0.08% high):</span>
+<span class="n">SAHA_CONST_CM3</span> <span class="o">=</span> <span class="mf">6.042e21</span>  <span class="c1"># cm^-3 eV^-1.5</span>
+
+<span class="c1"># Corrected to CODATA 2018 (m_e, k_B, h exact by SI definition):</span>
+<span class="n">SAHA_CONST_CM3</span> <span class="o">=</span> <span class="mf">6.03713370e21</span>  <span class="c1"># cm^-3 eV^-1.5 (CODATA 2018: 2*(2π m_e k_B/h²)^1.5 * (eV/k_B)^1.5 * 1e-6)</span>
+</pre></div>
+</div>
+<p><strong>Severity assessment:</strong> Low — the physical impact (4.7 K temperature error at LIBS conditions) is three orders of magnitude below the experimental noise floor. This is a cosmetic tightening, not a physics bug. Leaving it unchanged would be defensible; updating it eliminates any future confusion.</p>
+<p><strong>What would have to be true for this to be wrong:</strong> If the code had accidentally omitted the factor of 2 (spin degeneracy), the constant would be 3.019e21 — half the CODATA value — and the ionization balance would be systematically off by 2×. That would induce ~40–70% errors in ionic-to-neutral ratios and would cause wildly incorrect Saha corrections to the Boltzmann temperature. But the code’s comment at line 72–74 correctly documents that the spin factor is included, and the numerical value (6.042 vs 6.037 CODATA) confirms the factor of 2 is present (half would be 3.018e21).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

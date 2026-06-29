@@ -1,0 +1,166 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J12 Implementation Spec — Full-Board Superiority Run + Promotion Decision → Milestone M3 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J12 Implementation Spec — Full-Board Superiority Run + Promotion Decision → Milestone M3</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J12-scoreboard-promotion-m3.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j12-implementation-spec-full-board-superiority-run-promotion-decision-milestone-m3">
+<h1>J12 Implementation Spec — Full-Board Superiority Run + Promotion Decision → Milestone M3<a class="headerlink" href="#j12-implementation-spec-full-board-superiority-run-promotion-decision-milestone-m3" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J12 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §8.2 (M3), D6, §10 · <strong>Track:</strong> spine (decision point) · <strong>Depends:</strong> J9, J10 (J11 optional input) · <strong>Estimated effort:</strong> 3–5 pd + iteration buffer / ~1 wk</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Run the full 10-dataset scoreboard with the integrated jit pipeline (J8 graph + J9 batching + J10 identifier), perform the gap analysis, and either write the promotion ADR or file gap beads and remain parallel. This bead <strong>decides</strong>; it does not get to redefine the board.</p>
+</section>
+<section id="protocol">
+<h2>2. Protocol<a class="headerlink" href="#protocol" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Baseline = <code class="docutils literal notranslate"><span class="pre">docs/benchmarks/SCOREBOARD-2026-06-10-baseline.md</span></code> protocol at the pinned reference SHA (geological preset; candidate policy truth ∪ {Ag,Sn,W,Bi,Th}; presence rule ≥0.5 wt %; seed 20260610) — <strong>full board, all spectra, not <code class="docutils literal notranslate"><span class="pre">--max-spectra</span> <span class="pre">12</span></code></strong>.</p></li>
+<li><p>Evaluated on the <strong>holdout tier</strong> of the dataset split defined in <code class="docutils literal notranslate"><span class="pre">docs/audit/2026-06-10-goalfirst/optimization-program-design.md</span></code> §2.1; vault datasets opened only at this gate per that policy.</p></li>
+<li><p>Precondition: <strong>≥1 release of shadow-mode operation</strong> (J8’s Tier-B harness: both pipelines on every scoreboard invocation, deltas logged) with the divergence ledger current and every Tier-D divergence adjudicated.</p></li>
+<li><p>Promotion is computed over <strong>scoring datasets only</strong> (nist_srm_612 / nist_steel yield no spectra — measured); the failure-count criterion is tracked separately (risk R12). silva2022’s 12/12 baseline failures are a reference bug surface the jit failure-policy parity must mirror, not hide.</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria-milestone-m3-gate-all-five">
+<h2>3. Acceptance criteria — <strong>Milestone M3 gate</strong> (all five)<a class="headerlink" href="#acceptance-criteria-milestone-m3-gate-all-five" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Identification:</strong> aggregate micro-F1 ≥ reference AND no scoring dataset regresses F1 by &gt; 0.02 AND per-dataset F1 ≥ reference − 0.01 on ≥ 7/10 datasets (protects the zero-FP precision asset named by the campaign doc).</p></li>
+<li><p><strong>Composition:</strong> median RMSE wt % ≤ reference on every dataset with quantitative truth (one dataset may regress ≤ 5 % relative if the aggregate improves).</p></li>
+<li><p><strong>Failures:</strong> hard-failure count ≤ reference (the 12 silva2022 failures are the floor to beat, <code class="docutils literal notranslate"><span class="pre">SCOREBOARD…md:171-188</span></code>); jit failures score all-FN identically to the reference policy (<code class="docutils literal notranslate"><span class="pre">scoreboard.py:159-166</span></code>).</p></li>
+<li><p><strong>Runtime:</strong> batched ≥ 10× median spectra/s vs the 0.4–5.1 s/spectrum baseline medians; CPU single-spectrum ≤ 2× reference wall time. (M2’s ≥50 spectra/s is the engineering target; this is the promotion floor — ADR-0004 §3 C5.)</p></li>
+<li><p><strong>Parity suite green</strong> at the §5.4 tier contracts on the promotion SHA.</p></li>
+</ol>
+</section>
+<section id="outcomes">
+<h2>4. Outcomes<a class="headerlink" href="#outcomes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Pass →</strong> write <code class="docutils literal notranslate"><span class="pre">ADR-0005-jitpipe-promotion.md</span></code>: default flips to jit (Stage B of D6 — reference available as <code class="docutils literal notranslate"><span class="pre">--pipeline=reference</span></code>, parity oracle, bug-fixes-only with paired parity-test updates for ≥2 releases; Stage-C demotion criteria restated). Board JSON, gap analysis, and the reproduce line committed alongside.</p></li>
+<li><p><strong>Fail →</strong> gap analysis identifying the offending stage(s) via the Tier-D ledger + stage-bisect; gap beads filed; the pipeline <strong>stays parallel</strong> — J9’s throughput and J10’s campaign-evaluator value stand on their own (ADR-0004 §10: the failure mode is bounded; the program never holds the scoreboard hostage). Re-attempt requires a new J12-class bead.</p></li>
+</ul>
+</section>
+<section id="test-plan-artifacts">
+<h2>5. Test plan / artifacts<a class="headerlink" href="#test-plan-artifacts" title="Link to this heading"></a></h2>
+<p>Committed artifacts: full-board JSON for both pipelines, per-dataset delta table, divergence-ledger snapshot, runtime table (per-bucket B, compile counts, amortized spectra/s), promotion-or-gap memo. Runs launched as background sbatch jobs from the parent session (watchdog rules); deterministic-ops flag set.</p>
+</section>
+<section id="risks">
+<h2>6. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>Holdout/vault contamination (enforce the split mechanically — adapters refuse vault datasets outside this bead); adjudication backlog at the gate (require the ledger be current as a precondition, not a deliverable); temptation to tune on the holdout (one full-board evaluation per candidate SHA, recorded).</p>
+</section>
+<section id="dependencies-files">
+<h2>7. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J9, J10 (J11 optional). Files: <code class="docutils literal notranslate"><span class="pre">docs/benchmarks/SCOREBOARD-&lt;date&gt;-jit-vs-reference.{md,json}</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/adr/ADR-0005-jitpipe-promotion.md</span></code> (on pass), gap beads (on fail). No code beyond harness glue.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

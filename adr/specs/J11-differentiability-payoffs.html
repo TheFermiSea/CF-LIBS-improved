@@ -1,0 +1,153 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J11 Implementation Spec — Differentiability Payoffs: Implicit-Diff Spike, Gradient Knob-Tuning, HMC &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J11 Implementation Spec — Differentiability Payoffs: Implicit-Diff Spike, Gradient Knob-Tuning, HMC</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J11-differentiability-payoffs.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j11-implementation-spec-differentiability-payoffs-implicit-diff-spike-gradient-knob-tuning-hmc">
+<h1>J11 Implementation Spec — Differentiability Payoffs: Implicit-Diff Spike, Gradient Knob-Tuning, HMC<a class="headerlink" href="#j11-implementation-spec-differentiability-payoffs-implicit-diff-spike-gradient-knob-tuning-hmc" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J11 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §6, §8.4 (“start small regardless”) · <strong>Track:</strong> C (research) · <strong>Depends:</strong> J0 (spike phase); J7 (full-model phase); J9 batch harness (opportunistic) · <strong>Estimated effort:</strong> 7–10 pd / ~2 wk</p>
+<section id="goals-three-deliverables">
+<h2>1. Goals (three deliverables)<a class="headerlink" href="#goals-three-deliverables" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">custom_root</span></code> implicit-diff spike (early; pairs with J0 as the program’s cheap de-risk).</strong> Implement implicit differentiation through the converged (T*, n_e*) fixed point of the scan initializer via <code class="docutils literal notranslate"><span class="pre">jax.lax.custom_root</span></code> or a hand-written <code class="docutils literal notranslate"><span class="pre">custom_vjp</span></code> IFT linear solve — the deferred T4-1 item (<code class="docutils literal notranslate"><span class="pre">specs/T1-3-lax-while-iterative.md:155,181,190</span></code>). Tooling constraint (ADR-0004 §9): jaxopt is unmaintained; optimistix/lineax are equinox-dependent — <strong>banned</strong>; core JAX only. Host scipy L-BFGS-B driving JAX gradients is acceptable for research phases (scipy is not on the banlist). Novelty note: neither jaxrts nor ExoJAX does <code class="docutils literal notranslate"><span class="pre">custom_root</span></code> through a plasma fixed point (ADR-0001 §5.4) — paper-worthy.</p></li>
+<li><p><strong>Gradient knob-tuning harness (§6.3).</strong> One backward pass over a batch yields d(soft-F1)/d(continuous knobs) for ≈2–3× the cost of a forward board — vs one full board per Optuna point with no gradient. Implement the <strong>train-soft / eval-hard relaxation map</strong> (§6.4): presence rule → explicit-<code class="docutils literal notranslate"><span class="pre">jnp</span></code> sigmoid (no <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>; or reuse <code class="docutils literal notranslate"><span class="pre">cflibs.inversion.physics.softmax_closure</span></code>); top-K/SNR/prominence gates → soft-top-K or straight-through; quality scalars → sigmoid penalties. <strong>Hard always:</strong> structural masks; reparameterized physical constraints (log-T, log-n_e, ILR/softmax simplex); scoreboard scoring (the board never sees a relaxed metric); convergence flags (gradients masked). Deliver the hybrid recommended in §6.3: TPE over categorical/integer knobs with a gradient inner loop on the ~20 continuous knobs of <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code> (<code class="docutils literal notranslate"><span class="pre">pipeline.py:90-152</span></code>) per trial — zero recompiles since knobs are traced <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> leaves.</p></li>
+<li><p><strong>HMC over the full model (§6.2).</strong> NumPyro NUTS consuming the jit likelihood (the ExoJAX pattern: forward outside the model graph; sampler loop host-side per ADR-0004 §5.1.3). The J7 joint-WLS residual, reverse-differentiated, is directly the potential over (T, n_e, α). NNLS top-K candidate prefilter stays mandatory (CLAUDE.md). Chebyshev baseline as in <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code>. fp64 throughout — NUTS on fp32 plasma exponentials produces divergences. Reuse the <code class="docutils literal notranslate"><span class="pre">solve/bayesian/</span></code> priors/samplers split; do not duplicate <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code>.</p></li>
+</ol>
+</section>
+<section id="acceptance-criteria">
+<h2>2. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Spike:</strong> gradient of (T*, n_e*) w.r.t. inputs via implicit diff agrees with central finite differences at rtol ≤1e-4 on golden spectra (<code class="docutils literal notranslate"><span class="pre">cflibs/validation/round_trip.py</span></code>); backward memory independent of iteration count (vs the unrolled scan); viability verdict written up (adopt for the initializer / scan-unroll suffices) — this answer gates nothing else, which is the point of doing it early.</p></li>
+<li><p><strong>Knob-tuning:</strong> end-to-end backward pass through the relaxed objective fits 16 GB at batch ≥32 (remat on the broadening stage per J9); gradients FD-verified on a 3-knob slice; a demonstration run on the optimization split shows the gradient inner loop reducing the soft-F1 objective with the <strong>hard</strong>-scored board confirming a non-negative aggregate move (any hard-board regression is a finding, not a failure — soft-hard gap measured and reported); benchmark-gated before any campaign adoption.</p></li>
+<li><p><strong>HMC:</strong> vectorized chains across ≥16 spectra of one bucket on one V100S; R-hat &lt; 1.01 on golden synthetic posteriors; posterior means consistent with J7 point estimates within posterior σ; runtime documented.</p></li>
+<li><p>All work obeys physics-only TID251; no <code class="docutils literal notranslate"><span class="pre">jax.nn</span></code>, no jaxopt/optimistix/lineax imports anywhere.</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>3. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_implicit_diff.py</span></code> (FD agreement, memory probe); <code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_soft_relax.py</span></code> (soft→hard limit: τ→0 recovers hard counts; straight-through forward equals hard forward); HMC golden-posterior test marked <code class="docutils literal notranslate"><span class="pre">slow</span></code>+<code class="docutils literal notranslate"><span class="pre">requires_bayesian</span></code>. GPU runs from the parent session per watchdog rules.</p>
+</section>
+<section id="risks">
+<h2>4. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>Implicit-diff conditioning at weakly-converged fixed points (use well-converged golden fixtures; report conditioning); soft-objective/hard-board gap may be large for gate-dominated knobs (measure first — that result itself informs Campaign-1 design); HMC multimodality on confounder-rich candidate sets (prefilter + documented divergence counts).</p>
+</section>
+<section id="dependencies-files">
+<h2>5. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Spike: J0 only. Full-model: J7 (+J9 opportunistically). Optional input to J12. Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/solve.py</span></code> (custom_root wrapper), <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/tuning.py</span></code>, HMC glue under <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> consuming <code class="docutils literal notranslate"><span class="pre">solve/bayesian/</span></code> host drivers, tests. Reference untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

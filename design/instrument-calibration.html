@@ -1,0 +1,508 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Design — InstrumentCalibration: a first-class, provenance-tracked instrument seam &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Design — <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code>: a first-class, provenance-tracked instrument seam</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/design/instrument-calibration.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="design-instrumentcalibration-a-first-class-provenance-tracked-instrument-seam">
+<h1>Design — <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code>: a first-class, provenance-tracked instrument seam<a class="headerlink" href="#design-instrumentcalibration-a-first-class-provenance-tracked-instrument-seam" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> design (implements <a class="reference internal" href="../adr/ADR-0006-instrument-calibration-first-class.html"><span class="std std-doc">ADR-0006</span></a>)
+<strong>Date:</strong> 2026-06-20
+<strong>Owner module (to create):</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/calibration.py</span></code></p>
+<p>This document specifies the <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> abstraction: its data model, its three builders
+(one per acquisition mode), the lamp-fitting math, how it enters the forward model, and how every
+pipeline consumes it. The <em>why</em> (and the decision to require it) lives in ADR-0006; this is the <em>how</em>.</p>
+<hr class="docutils" />
+<section id="the-physical-model-the-object-must-represent">
+<h2>1. The physical model the object must represent<a class="headerlink" href="#the-physical-model-the-object-must-represent" title="Link to this heading"></a></h2>
+<p>A spectrometer transforms a true plasma radiance <code class="docutils literal notranslate"><span class="pre">I_true(λ)</span></code> into a recorded, sampled spectrum
+<code class="docutils literal notranslate"><span class="pre">y[pixel]</span></code> through three composable operations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>            wavelength axis            line-spread fn            response
+  y[p]  ≈   sample at λ(p)   ∘   convolve with LSF_σ(λ)   ∘   multiply by E(λ)   { I_true(λ) }   (+ noise)
+</pre></div>
+</div>
+<p>Written as the forward operator the inversion actually fits (profile space):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>  S_meas(θ; p) = E( λ(p) ) · [ LSF_σ(λ)  *  Σ_s C_s · ε_s(T, n_e; λ) ] evaluated on the λ(p) grid
+</pre></div>
+</div>
+<p>with <code class="docutils literal notranslate"><span class="pre">θ</span> <span class="pre">=</span> <span class="pre">(T,</span> <span class="pre">log₁₀</span> <span class="pre">n_e,</span> <span class="pre">{C_s})</span></code> and <code class="docutils literal notranslate"><span class="pre">ε_s</span></code> the per-species emissivity (Saha-Boltzmann × line data).
+The instrument contributes exactly three terms, and each enters the fit differently:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Term</p></th>
+<th class="head"><p>Symbol</p></th>
+<th class="head"><p>Physical origin</p></th>
+<th class="head"><p>How it enters the fit</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Wavelength solution</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code></p></td>
+<td><p>grating dispersion, pixel geometry</p></td>
+<td><p>resample / sub-pixel shift — <strong>nonlinear</strong> if unknown</p></td>
+</tr>
+<tr class="row-odd"><td><p>Line-spread function</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LSF_σ(λ)</span></code></p></td>
+<td><p>slit width, optical aberrations, pixel sampling</p></td>
+<td><p>convolution width — <strong>nonlinear</strong> if unknown; <strong>confounds Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code></strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Spectral response</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">E(λ)</span></code></p></td>
+<td><p>grating efficiency, optics, detector QE</p></td>
+<td><p>multiplicative — <strong>linear</strong>; rotates the Boltzmann plot if unknown</p></td>
+</tr>
+<tr class="row-odd"><td><p>(Scalar efficiency)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">F</span></code></p></td>
+<td><p>volume, solid angle, gain</p></td>
+<td><p><strong>cancels via closure <code class="docutils literal notranslate"><span class="pre">Σ</span> <span class="pre">C_s</span> <span class="pre">=</span> <span class="pre">1</span></code></strong> — <em>not</em> represented</p></td>
+</tr>
+</tbody>
+</table>
+<p>The object represents the first three. <code class="docutils literal notranslate"><span class="pre">F</span></code> is deliberately absent (ADR-0006 §4.1).</p>
+</section>
+<hr class="docutils" />
+<section id="data-model">
+<h2>2. Data model<a class="headerlink" href="#data-model" title="Link to this heading"></a></h2>
+<p>All types are <strong>frozen</strong> dataclasses (calibration is a measurement, not mutable state) so they are
+hashable, snapshot-safe, and jit-static.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># cflibs/instrument/calibration.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">CalibrationMode</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;A_calibrated&quot;</span><span class="p">,</span> <span class="s2">&quot;B_vendor&quot;</span><span class="p">,</span> <span class="s2">&quot;C_self&quot;</span><span class="p">]</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">WavelengthSolution</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;λ(pixel): detector pixel index → wavelength (nm).&quot;&quot;&quot;</span>
+    <span class="n">coeffs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>              <span class="c1"># polynomial coeffs (pixel → nm), highest-order first</span>
+    <span class="n">domain_pixels</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="c1"># valid pixel range the fit covers</span>
+    <span class="n">rms_residual_nm</span><span class="p">:</span> <span class="nb">float</span>         <span class="c1"># lamp-line fit residual (quality)</span>
+    <span class="n">n_anchor_lines</span><span class="p">:</span> <span class="nb">int</span>            <span class="c1"># number of lamp lines that anchored the fit</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_wavelength</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pixel</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">polyval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">pixel</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">))</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LineSpreadFunction</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The instrumental LSF: how a δ-line at λ is smeared on the detector.&quot;&quot;&quot;</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;resolving_power&quot;</span><span class="p">,</span> <span class="s2">&quot;fwhm&quot;</span><span class="p">,</span> <span class="s2">&quot;empirical&quot;</span><span class="p">]</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;gaussian&quot;</span><span class="p">,</span> <span class="s2">&quot;voigt&quot;</span><span class="p">,</span> <span class="s2">&quot;empirical&quot;</span><span class="p">]</span>
+    <span class="n">resolving_power</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>      <span class="c1"># R = λ/FWHM (mode=&quot;resolving_power&quot;)</span>
+    <span class="n">fwhm_nm</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>              <span class="c1"># fixed FWHM (mode=&quot;fwhm&quot;)</span>
+    <span class="n">sigma_grid_nm</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>   <span class="c1"># σ(λ) sampled on wavelength_grid_nm (mode=&quot;empirical&quot;)</span>
+    <span class="n">wavelength_grid_nm</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">lorentz_fwhm_nm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>                 <span class="c1"># Voigt Lorentzian part, if shape=&quot;voigt&quot;</span>
+    <span class="n">kernel</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>          <span class="c1"># explicit normalized kernel(λ) if shape=&quot;empirical&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">sigma_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wl</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gaussian σ (nm) of the LSF at the given wavelength(s).&quot;&quot;&quot;</span>
+        <span class="n">wl</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">wl</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;resolving_power&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">wl</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolving_power</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.355</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;fwhm&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">full_like</span><span class="p">(</span><span class="n">wl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">fwhm_nm</span> <span class="o">/</span> <span class="mf">2.355</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">wl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">wavelength_grid_nm</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma_grid_nm</span><span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SpectralResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;E(λ): relative radiometric efficiency (up to the closure-cancelled scalar F).&quot;&quot;&quot;</span>
+    <span class="n">wavelength_nm</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">response</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>           <span class="c1"># E(λ); relative (normalized to max=1) unless is_absolute</span>
+    <span class="n">is_absolute</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>      <span class="c1"># True only if traceable absolute radiance response (future F-mode)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wl</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">wl</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">wavelength_nm</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">response</span><span class="p">,</span>
+                         <span class="n">left</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CalibrationProvenance</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The audit record — who measured what, when, and how much to trust it.&quot;&quot;&quot;</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="n">CalibrationMode</span>
+    <span class="n">instrument_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">wavelength_source</span><span class="p">:</span> <span class="nb">str</span>         <span class="c1"># e.g. &quot;HgAr lamp 2026-06-20, 14 lines, rms 0.011 nm&quot;</span>
+    <span class="n">lsf_source</span><span class="p">:</span> <span class="nb">str</span>                <span class="c1"># e.g. &quot;HgAr 435.8 nm line, low-T glow discharge&quot;</span>
+    <span class="n">response_source</span><span class="p">:</span> <span class="nb">str</span>           <span class="c1"># e.g. &quot;D2-halogen + NIST cal cert #SN-1234&quot;</span>
+    <span class="n">acquired</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span> <span class="c1"># ISO date of the calibration acquisition (instrument-supplied)</span>
+    <span class="n">quality_flags</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>   <span class="c1"># LOUD flags (Mode-C terms, extrapolation, low n_anchor, ...)</span>
+    <span class="n">notes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">InstrumentCalibration</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The single seam for all instrument physics (ADR-0006).</span>
+
+<span class="sd">    Any term may be None *only* in Mode C, where the missing term is fit from the science</span>
+<span class="sd">    spectrum and a quality flag is raised. In Modes A/B all supplied terms are measured.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">provenance</span><span class="p">:</span> <span class="n">CalibrationProvenance</span>
+    <span class="n">wavelength_solution</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">WavelengthSolution</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">lsf</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">LineSpreadFunction</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">response</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SpectralResponse</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># ---- properties -------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">mode</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CalibrationMode</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">provenance</span><span class="o">.</span><span class="n">mode</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_quantitative_grade</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;ADR-0006 D3: only Mode A or B may back a quantitative/accuracy-claimed result.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;A_calibrated&quot;</span><span class="p">,</span> <span class="s2">&quot;B_vendor&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fitted_terms</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Terms that will be fit from the science spectrum (Mode C). Empty for A/B.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">!=</span> <span class="s2">&quot;C_self&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">()</span>
+        <span class="n">missing</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">response</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;response&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lsf</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;lsf&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">wavelength_solution</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">missing</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;wavelength_shift&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="builders-one-per-mode">
+<h2>3. Builders — one per mode<a class="headerlink" href="#builders-one-per-mode" title="Link to this heading"></a></h2>
+<section id="mode-a-from-lamps-the-calibrated-path">
+<h3>3.1 Mode A — <code class="docutils literal notranslate"><span class="pre">from_lamps</span></code> (the calibrated path)<a class="headerlink" href="#mode-a-from-lamps-the-calibrated-path" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">from_lamps</span><span class="p">(</span>
+    <span class="bp">cls</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">instrument_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">wl_lamp_spectrum</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span>     <span class="c1"># (pixel_or_wl, intensity) of HgAr/Ne/ThAr/Ar</span>
+    <span class="n">lamp_line_list</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>                          <span class="c1"># certified lamp line wavelengths (nm)</span>
+    <span class="n">radiance_lamp_spectrum</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>      <span class="c1"># (wl, intensity) of D2-halogen lamp</span>
+    <span class="n">lamp_certified_radiance</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>     <span class="c1"># (wl, L_cert(λ)) from the cal certificate</span>
+    <span class="n">lsf_shape</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;gaussian&quot;</span><span class="p">,</span> <span class="s2">&quot;voigt&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;gaussian&quot;</span><span class="p">,</span>
+    <span class="n">acquired</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;InstrumentCalibration&quot;</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p><strong>Step 1 — wavelength solution (from the line lamp).</strong> Detect the lamp emission peaks, match each to its
+certified wavelength in <code class="docutils literal notranslate"><span class="pre">lamp_line_list</span></code> (nearest within a tolerance, Hungarian/greedy one-to-one to
+avoid double-assignment), and fit a low-order polynomial <code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code> (typically degree 2–3, or per-CCD-
+segment for echelle). The fit residual RMS and the number of matched lines become quality metrics.
+<em>Reuse:</em> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/preprocess/</span></code> segmented wavelength calibration already does the peak→known-line
+matching; <code class="docutils literal notranslate"><span class="pre">from_lamps</span></code> calls it rather than reimplementing.</p>
+<p><strong>Step 2 — LSF (from the same line lamp).</strong> A glow-discharge lamp runs cold (low <code class="docutils literal notranslate"><span class="pre">T</span></code>) and thin (low <code class="docutils literal notranslate"><span class="pre">n_e</span></code>),
+so the <em>intrinsic</em> line widths (Doppler ≈ a few pm, Stark ≈ 0) are far below the spectrometer width. The
+<strong>measured lamp line profile is therefore the instrumental LSF</strong>. Fit a Gaussian (or Voigt) to several
+isolated lamp lines across the range to recover <code class="docutils literal notranslate"><span class="pre">FWHM(λ)</span></code>; convert to either a constant FWHM, a resolving
+power <code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">λ/FWHM</span></code>, or an empirical <code class="docutils literal notranslate"><span class="pre">σ(λ)</span></code> grid if the width varies. Store the shape and, for <code class="docutils literal notranslate"><span class="pre">voigt</span></code>, the
+Lorentzian part.</p>
+<p><strong>Step 3 — spectral response <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> (from the radiance lamp).</strong> If a deuterium–halogen lamp and its
+certified spectral radiance <code class="docutils literal notranslate"><span class="pre">L_cert(λ)</span></code> are supplied, measure the lamp through the instrument to get
+<code class="docutils literal notranslate"><span class="pre">I_meas_lamp(λ)</span></code>, then</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>E(λ) = I_meas_lamp(λ) / L_cert(λ)        (smoothed; normalized to max = 1 — F is absorbed and cancels)
+</pre></div>
+</div>
+<p>Divide pixel-wise on a common grid (after applying Step-1’s <code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code>), smooth (Savitzky–Golay or a
+low-order spline; <em>not</em> an ML smoother — physics-only), and normalize. If no radiance lamp is supplied but
+the line lamp exists, build the calibration with <code class="docutils literal notranslate"><span class="pre">response=None</span></code> and <code class="docutils literal notranslate"><span class="pre">mode=&quot;C_self&quot;</span></code> for the response term
+only (a <em>mixed</em> calibration — wavelength+LSF measured, response fit — which is common and honestly flagged).</p>
+<p>Provenance records each source string; <code class="docutils literal notranslate"><span class="pre">quality_flags</span></code> notes any term that fell back to fitting.</p>
+</section>
+<section id="mode-b-vendor-precorrected-flight-commercial-instruments">
+<h3>3.2 Mode B — <code class="docutils literal notranslate"><span class="pre">vendor_precorrected</span></code> (flight/commercial instruments)<a class="headerlink" href="#mode-b-vendor-precorrected-flight-commercial-instruments" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">vendor_precorrected</span><span class="p">(</span>
+    <span class="bp">cls</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">instrument_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>                    <span class="c1"># &quot;ChemCam&quot;, &quot;SuperCam&quot;, ...</span>
+    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>                           <span class="c1"># citation / cal-doc id for the published correction</span>
+    <span class="n">response</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SpectralResponse</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>   <span class="c1"># published R(λ); None if delivered already flat</span>
+    <span class="n">lsf</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">LineSpreadFunction</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>      <span class="c1"># published LSF / resolving power</span>
+    <span class="n">wavelength_solution</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">WavelengthSolution</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">acquired</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;InstrumentCalibration&quot;</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>For instruments that ship radiance-corrected data (ChemCam, SuperCam): we <em>declare</em> the vendor provenance
+and use the published terms. If the delivered spectrum is already response-flattened, <code class="docutils literal notranslate"><span class="pre">response</span></code> may be a
+flat <code class="docutils literal notranslate"><span class="pre">E(λ)</span> <span class="pre">≡</span> <span class="pre">1</span></code> with <code class="docutils literal notranslate"><span class="pre">is_absolute=False</span></code> and a provenance note (“vendor radiance-corrected; E(λ)≈1 by
+construction”). This mode is quantitative-grade (<code class="docutils literal notranslate"><span class="pre">is_quantitative_grade</span> <span class="pre">is</span> <span class="pre">True</span></code>) because the correction is
+a documented, traceable measurement — just not one <em>we</em> performed.</p>
+</section>
+<section id="mode-c-self-calibrating-the-flagged-fallback">
+<h3>3.3 Mode C — <code class="docutils literal notranslate"><span class="pre">self_calibrating</span></code> (the flagged fallback)<a class="headerlink" href="#mode-c-self-calibrating-the-flagged-fallback" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@classmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">self_calibrating</span><span class="p">(</span>
+    <span class="bp">cls</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">instrument_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">lsf_prior</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">LineSpreadFunction</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>   <span class="c1"># optional nominal width to seed the fit</span>
+    <span class="n">response_prior</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">SpectralResponse</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">wavelength_solution</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">WavelengthSolution</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;no lamp data available&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;InstrumentCalibration&quot;</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>Builds a calibration whose missing terms (<code class="docutils literal notranslate"><span class="pre">fitted_terms</span></code>) are fit from the science spectrum during
+inversion: <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code> as a low-order Chebyshev (reusing the <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel</span></code> Chebyshev-baseline prior
+art), the LSF width as a nonlinear parameter, and a sub-pixel wavelength shift if no solution is supplied.
+The constructor <strong>always</strong> sets <code class="docutils literal notranslate"><span class="pre">quality_flags</span></code> to include <code class="docutils literal notranslate"><span class="pre">&quot;MODE_C_NONQUANTITATIVE&quot;</span></code> and one flag per
+fitted term. Per ADR-0006 D3, results from a Mode-C calibration are reported non-quantitative and can never
+flip a scoreboard default.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="how-it-enters-each-pipeline-the-two-bridges">
+<h2>4. How it enters each pipeline (the two bridges)<a class="headerlink" href="#how-it-enters-each-pipeline-the-two-bridges" title="Link to this heading"></a></h2>
+<p>The object exposes exactly two adapters, mirroring the partition-function provider’s CPU-scalar / JAX-
+batched split (CONTEXT.md “the seam”):</p>
+<section id="to-instrument-model-legacy-numpy-paths">
+<h3>4.1 <code class="docutils literal notranslate"><span class="pre">to_instrument_model()</span></code> → legacy + NumPy paths<a class="headerlink" href="#to-instrument-model-legacy-numpy-paths" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">to_instrument_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;InstrumentModel&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bridge to the existing InstrumentModel seam (legacy integrated-intensity solver,</span>
+<span class="sd">    SpectrumModel.apply_response / apply_instrument_function).&quot;&quot;&quot;</span>
+</pre></div>
+</div>
+<p>Produces an <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code> (or <code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code>) with <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code>/<code class="docutils literal notranslate"><span class="pre">resolution_fwhm_nm</span></code> from
+<code class="docutils literal notranslate"><span class="pre">self.lsf</span></code>, <code class="docutils literal notranslate"><span class="pre">response_curve</span></code> from <code class="docutils literal notranslate"><span class="pre">self.response</span></code>, and <code class="docutils literal notranslate"><span class="pre">wavelength_calibration</span></code> from
+<code class="docutils literal notranslate"><span class="pre">self.wavelength_solution</span></code>. The legacy <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> path, <code class="docutils literal notranslate"><span class="pre">SpectrumModel</span></code>, and the
+existing <code class="docutils literal notranslate"><span class="pre">apply_response</span></code>/<code class="docutils literal notranslate"><span class="pre">apply_instrument_function</span></code> consumers keep working unchanged — they just receive a
+model that was <em>derived from a provenance-tracked source</em> instead of assembled ad hoc.</p>
+</section>
+<section id="as-snapshot-arrays-hot-path-jitpipe-bayesian-manifold">
+<h3>4.2 <code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code> → hot path + jitpipe + Bayesian + manifold<a class="headerlink" href="#as-snapshot-arrays-hot-path-jitpipe-bayesian-manifold" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">as_snapshot_arrays</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wavelength_grid_nm</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fixed-shape static arrays for the jit forward operator, sampled on the model grid:</span>
+<span class="sd">       { &#39;response_grid&#39;:  E(λ) on wavelength_grid_nm,        # linear block</span>
+<span class="sd">         &#39;sigma_grid_nm&#39;:  σ_LSF(λ) on wavelength_grid_nm,    # folded into the Voigt Gaussian core</span>
+<span class="sd">         &#39;dispersion_coeffs&#39;: λ(pixel) coeffs,                # resample/shift</span>
+<span class="sd">         &#39;fit_response&#39;: bool, &#39;fit_lsf&#39;: bool, &#39;fit_shift&#39;: bool }  # Mode-C switches</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</pre></div>
+</div>
+<p>These arrays drop into the <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> (ADR-0004 D2/D4) and the real-time <code class="docutils literal notranslate"><span class="pre">structured_jacobian</span></code>
+kernel (plan v3 §5.1). The mapping to the structured-Jacobian / VarPro decomposition is:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">response_grid</span></code> (<code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>)</strong> → multiplies the per-species emissivity columns → folds into the <strong>linear
+block</strong> <code class="docutils literal notranslate"><span class="pre">B</span></code> of the structured Jacobian (no extra column when known). When <code class="docutils literal notranslate"><span class="pre">fit_response</span></code>, an extra
+low-order Chebyshev <strong>linear</strong> block is appended.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">sigma_grid_nm</span></code> (LSF)</strong> → folded <strong>exactly</strong> into the Voigt Gaussian core (<code class="docutils literal notranslate"><span class="pre">Gaussian</span> <span class="pre">⊗</span> <span class="pre">Voigt</span> <span class="pre">=</span> <span class="pre">Voigt</span></code>,
+the <code class="docutils literal notranslate"><span class="pre">wphrxvuyj</span></code> mechanism — also dodges the V100S cuDNN <code class="docutils literal notranslate"><span class="pre">convForward</span></code> autotune failure). No separate
+convolution kernel. When <code class="docutils literal notranslate"><span class="pre">fit_lsf</span></code>, the LSF width becomes one extra <strong>nonlinear</strong> column beside
+<code class="docutils literal notranslate"><span class="pre">(T,</span> <span class="pre">log</span> <span class="pre">n_e)</span></code> (~+0.4 ms, +1 forward-difference column measured in <code class="docutils literal notranslate"><span class="pre">wphrxvuyj</span></code>).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">dispersion_coeffs</span></code> (<code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code>)</strong> → a fixed resample when known; when <code class="docutils literal notranslate"><span class="pre">fit_shift</span></code>, a single nonlinear
+sub-pixel shift parameter.</p></li>
+</ul>
+<p>So <strong>Mode A bakes all three as fixed arrays</strong> → the operating point stays the plan-v3
+structured-Jacobian-K=1 (354 µs &#64; ROI-2000), best-conditioned. <strong>Mode C adds 1 linear block + up to 2
+nonlinear columns</strong> → measurably slower and worse-conditioned, and it makes the Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code> non-honest —
+which is exactly what the quality flag warns about.</p>
+</section>
+<section id="consumers-the-call-sites-to-wire-adr-0006-4-5-follow-up-2">
+<h3>4.3 Consumers (the call sites to wire — ADR-0006 §4.5 follow-up 2)<a class="headerlink" href="#consumers-the-call-sites-to-wire-adr-0006-4-5-follow-up-2" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Pipeline</p></th>
+<th class="head"><p>Entry point</p></th>
+<th class="head"><p>Bridge used</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Forward model</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/SpectrumModel</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">to_instrument_model()</span></code> (NumPy) / <code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code> (jit)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Legacy CF-LIBS solver</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py</span></code> (via <code class="docutils literal notranslate"><span class="pre">pipeline.run_pipeline</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">to_instrument_model()</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>jitpipe</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> (<code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Bayesian</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian.py::BayesianForwardModel</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code> (Mode-C reuses its Chebyshev baseline)</p></td>
+</tr>
+<tr class="row-even"><td><p>Real-time hot path</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/rt_kernel.py</span></code> (plan v3)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Manifold / ExoJAX reference</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/</span></code>, offline generator</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Each entry point takes an <code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> (or <code class="docutils literal notranslate"><span class="pre">None</span></code>, which is resolved to an explicit
+<code class="docutils literal notranslate"><span class="pre">self_calibrating(reason=&quot;not</span> <span class="pre">supplied&quot;)</span></code> so the flag is always set — never a silent default).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="the-lamp-fitting-math-reference">
+<h2>5. The lamp-fitting math (reference)<a class="headerlink" href="#the-lamp-fitting-math-reference" title="Link to this heading"></a></h2>
+<p><strong>Wavelength solution.</strong> Given matched pairs <code class="docutils literal notranslate"><span class="pre">(p_i,</span> <span class="pre">λ_i)</span></code> (lamp peak pixel, certified wavelength),
+least-squares fit <code class="docutils literal notranslate"><span class="pre">λ(p)</span> <span class="pre">=</span> <span class="pre">Σ_n</span> <span class="pre">a_n</span> <span class="pre">pⁿ</span></code> (degree 2–3, per-segment for echelle). Report
+<code class="docutils literal notranslate"><span class="pre">rms</span> <span class="pre">=</span> <span class="pre">sqrt(mean((λ(p_i)</span> <span class="pre">−</span> <span class="pre">λ_i)²))</span></code>. Flag if <code class="docutils literal notranslate"><span class="pre">rms</span> <span class="pre">&gt;</span> <span class="pre">0.5·(pixel</span> <span class="pre">dispersion)</span></code> or <code class="docutils literal notranslate"><span class="pre">n_anchor_lines</span> <span class="pre">&lt;</span> <span class="pre">degree+3</span></code>.</p>
+<p><strong>LSF.</strong> For each isolated lamp line, fit <code class="docutils literal notranslate"><span class="pre">A·exp(−(λ−λ₀)²/2σ²)</span></code> (+ a Lorentzian wing for Voigt). The lamp’s
+intrinsic width contribution is <code class="docutils literal notranslate"><span class="pre">σ_intrinsic²</span> <span class="pre">=</span> <span class="pre">σ_Doppler,lamp²</span> <span class="pre">+</span> <span class="pre">σ_Stark,lamp²</span></code>; for a glow discharge both
+are ≪ <code class="docutils literal notranslate"><span class="pre">σ_instrument</span></code>, so <code class="docutils literal notranslate"><span class="pre">σ_measured</span> <span class="pre">≈</span> <span class="pre">σ_instrument</span></code> (subtract in quadrature if a width estimate exists).
+Aggregate <code class="docutils literal notranslate"><span class="pre">FWHM(λ)</span></code> across lines → constant FWHM, <code class="docutils literal notranslate"><span class="pre">R</span> <span class="pre">=</span> <span class="pre">λ/FWHM</span></code>, or an empirical <code class="docutils literal notranslate"><span class="pre">σ(λ)</span></code> grid.</p>
+<p><strong>Response.</strong> <code class="docutils literal notranslate"><span class="pre">E(λ)</span> <span class="pre">=</span> <span class="pre">smooth(</span> <span class="pre">I_meas_lamp(λ)</span> <span class="pre">/</span> <span class="pre">L_cert(λ)</span> <span class="pre">)</span></code>, normalized to max = 1. The smoothing window must
+be wide vs the LSF but narrow vs the response’s true wavelength structure (Savitzky–Golay, physics-only).
+<code class="docutils literal notranslate"><span class="pre">is_absolute=True</span></code> only if <code class="docutils literal notranslate"><span class="pre">L_cert</span></code> is an absolute spectral radiance with matched geometry (future F-mode).</p>
+</section>
+<hr class="docutils" />
+<section id="testing-validation">
+<h2>6. Testing &amp; validation<a class="headerlink" href="#testing-validation" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Round-trip (Mode A):</strong> synthesize a spectrum with a known <code class="docutils literal notranslate"><span class="pre">(λ(pixel),</span> <span class="pre">LSF,</span> <span class="pre">E(λ))</span></code>, build a calibration
+from synthetic lamp spectra, confirm recovery of all three terms within tolerance, and confirm that
+inverting the calibrated spectrum recovers the input composition better than the same spectrum inverted
+Mode C. <em>(This is the gate that proves calibration helps, in the benchmark-gate spirit of
+<code class="docutils literal notranslate"><span class="pre">docs/benchmarks/GATE-FINDINGS-2026-06-19.md</span></code>.)</em></p></li>
+<li><p><strong>Bridge parity:</strong> <code class="docutils literal notranslate"><span class="pre">to_instrument_model()</span></code> and <code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays()</span></code> must produce numerically consistent
+response/σ on a shared grid (rtol 1e-5, the existing <code class="docutils literal notranslate"><span class="pre">InstrumentModelJax</span></code> parity tolerance).</p></li>
+<li><p><strong>Provenance/flag invariants:</strong> Mode C always carries <code class="docutils literal notranslate"><span class="pre">MODE_C_NONQUANTITATIVE</span></code>; <code class="docutils literal notranslate"><span class="pre">is_quantitative_grade</span></code>
+is True iff Mode A/B; a <code class="docutils literal notranslate"><span class="pre">None</span></code> instrument input resolves to a flagged Mode-C construction, never a silent
+default.</p></li>
+<li><p><strong>Scoreboard:</strong> add a per-dataset calibration-mode column; assert Mode C cannot flip a default
+(ADR-0006 D3).</p></li>
+<li><p><strong>Physics-only:</strong> the import-hygiene test covers <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/calibration.py</span></code> (no banned ML imports;
+smoothing is Savitzky–Golay/spline/Chebyshev, not a learned model).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="summary">
+<h2>7. Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">InstrumentCalibration</span></code> makes the spectrometer an explicit, measured, provenance-tracked input with three
+honest acquisition modes. It removes the LSF, <code class="docutils literal notranslate"><span class="pre">E(λ)</span></code>, and <code class="docutils literal notranslate"><span class="pre">λ(pixel)</span></code> from the inversion when they are
+known (Mode A/B — fastest, best-conditioned, honest Stark <code class="docutils literal notranslate"><span class="pre">n_e</span></code>) and fits them with a loud flag when they
+are not (Mode C). One object, two bridges (<code class="docutils literal notranslate"><span class="pre">to_instrument_model</span></code>, <code class="docutils literal notranslate"><span class="pre">as_snapshot_arrays</span></code>), every pipeline.
+The scalar <code class="docutils literal notranslate"><span class="pre">F</span></code> still cancels via closure, so CF-LIBS stays calibration-free in the one sense it always
+legitimately was — and stops pretending to be in the senses it never was.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

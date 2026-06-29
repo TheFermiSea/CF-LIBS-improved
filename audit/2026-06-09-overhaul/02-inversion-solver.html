@@ -1,0 +1,533 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit 02 — Inversion / Solver Physics (CF-LIBS core) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Audit 02 — Inversion / Solver Physics (CF-LIBS core)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/audit/2026-06-09-overhaul/02-inversion-solver.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="audit-02-inversion-solver-physics-cf-libs-core">
+<h1>Audit 02 — Inversion / Solver Physics (CF-LIBS core)<a class="headerlink" href="#audit-02-inversion-solver-physics-cf-libs-core" title="Link to this heading"></a></h1>
+<p><strong>Date:</strong> 2026-06-09 · <strong>Scope:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/</span></code>, supporting
+<code class="docutils literal notranslate"><span class="pre">cflibs/radiation/stark.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py</span></code> (intensity extraction only).
+<strong>Method:</strong> read-only code audit + small numeric checks (<code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span></code>) against the production DB
+(<code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>), grounded in peer-reviewed CF-LIBS literature.
+<strong>Instrument context:</strong> 1 ps Yb:fiber &#64;1040 nm; ps-LIBS regime T ≈ 0.5–1.3 eV, n_e ≈ 1e16–1e18 cm⁻³.</p>
+<p>Findings are <strong>ranked by expected composition-accuracy impact</strong> on real rock/basalt data.</p>
+<hr class="docutils" />
+<section id="executive-summary">
+<h2>Executive summary<a class="headerlink" href="#executive-summary" title="Link to this heading"></a></h2>
+<p>The Ciucci-1999 skeleton is implemented correctly: <code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">ln(Iλ/gA)</span></code> is the right ordinate
+(<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/common/data_structures.py:54-63</span></code>), the multi-species Saha shift to the neutral plane has
+the correct form (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:1252-1317</span></code>), the closure is
+<code class="docutils literal notranslate"><span class="pre">C_s</span> <span class="pre">∝</span> <span class="pre">U_s(T)·exp(q_s)</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/closure.py:553-583</span></code>), and — answering the top suspect
+directly — <strong>the element total <em>does</em> include the ion stage</strong>: every closure call is fed per-element
+multipliers <code class="docutils literal notranslate"><span class="pre">M_s</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">+</span> <span class="pre">n_II/n_I</span></code> from the Saha ratio (<code class="docutils literal notranslate"><span class="pre">iterative.py:1123-1158</span></code>, applied at
+<code class="docutils literal notranslate"><span class="pre">closure.py:565,630,699</span></code>). The Fe/Al over-attribution is <strong>not</strong> a missing-ion-fraction bug.</p>
+<p>The dominant accuracy losses are instead: <strong>(F1)</strong> a wrong hard-coded U_II fallback (Na II = 15 instead of
+≈1.0 — a ~15× direct multiplier error on a basalt major); <strong>(F2)</strong> electron density that is never measured
+(1-atm pressure balance instead of Stark widths) feeding the Saha multipliers; <strong>(F3)</strong> temperature bias
+amplified differentially through U_s(T) (U_Fe doubles per +0.4 eV while U_Si rises 20%); <strong>(F4)</strong> a
+self-absorption “correction” that is a positive-feedback loop on the recovered composition; <strong>(F5)</strong> no
+spectral-response calibration hook anywhere in the inversion intensity path; and <strong>(F6)</strong> an
+intensity-extraction floor that silently swaps integrated areas for peak heights. The SB-graph “fix” is
+shown (numerically, to 1e-14) to be <strong>algebraically identical</strong> to the default common-slope plane under
+equal weights — its measured benefit comes entirely from abandoning the w∝I weighting, which means the
+<code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap=5</span></code> band-aid and the SB-graph are two partial treatments of one root cause (F7).</p>
+</section>
+<hr class="docutils" />
+<section id="f1-hard-coded-u-ii-fallback-15-0-is-wrong-by-15-for-na-ii-and-li-ii-h-ii">
+<h2>F1 — Hard-coded U_II fallback = 15.0 is wrong by ~15× for Na II (and Li II, H II)<a class="headerlink" href="#f1-hard-coded-u-ii-fallback-15-0-is-wrong-by-15-for-na-ii-and-li-ii-h-ii" title="Link to this heading"></a></h2>
+<p><strong>Impact: critical (direct, multiplicative, on a basalt major).</strong></p>
+<p><strong>(a) Code behavior.</strong> <code class="docutils literal notranslate"><span class="pre">_compute_abundance_multipliers</span></code> uses
+<code class="docutils literal notranslate"><span class="pre">U_II</span> <span class="pre">=</span> <span class="pre">partition_funcs_II.get(el,</span> <span class="pre">15.0)</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:1149</span></code>), and the partition ladder bottoms out at
+<code class="docutils literal notranslate"><span class="pre">_canonical_partition_fallback(stage=2)</span> <span class="pre">→</span> <span class="pre">15.0</span></code>
+(<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/self_absorption_inputs.py:72-78</span></code>). Audit check against
+<code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>: stage-II partition providers are <strong>missing for H, Li, Na</strong> — every other
+element resolves. So at T = 1 eV the solver uses U(Na II) = 15.0. The true value is ≈ 1.00 (Ne-like closed
+shell; first excited level ≈ 33 eV). Verified in-repo: K II (Ar-like, physically the same situation) <em>does</em>
+have levels and correctly evaluates to U = 1.0000.</p>
+<p><strong>(b) Literature requirement.</strong> The Saha ratio <code class="docutils literal notranslate"><span class="pre">n_II/n_I</span> <span class="pre">=</span> <span class="pre">(2/n_e)(2πm_ekT/h²)^{3/2}(U_II/U_I)exp(−χ/kT)</span></code>
+requires the actual partition functions (Ciucci et al. 1999, <em>Appl. Spectrosc.</em> 53, 960,
+doi:10.1366/0003702991947612; Tognoni et al. 2010, <em>Spectrochim. Acta B</em> 65, 1,
+doi:10.1016/j.sab.2009.11.006, list partition-function accuracy in the CF-LIBS error budget).</p>
+<p><strong>(c) Quantified impact.</strong> At T = 1 eV, n_e = 1e17 cm⁻³, Na (χ=5.14 eV, U_I=5.33 from DB) is ≳99% ionized:
+S_Na ∝ U_II. Using 15.0 instead of ~1.0 inflates <code class="docutils literal notranslate"><span class="pre">M_Na</span> <span class="pre">=</span> <span class="pre">1+S_Na</span></code> — and hence C_Na before normalization —
+by <strong>~15×</strong>. This alone can explain the historical “Na = 98 wt%” blow-ups, and it still silently taxes
+every solve that includes Na (renormalization then suppresses all other elements).</p>
+<p><strong>(d) Fix.</strong> (1) Ingest Na II / Li II energy levels (NIST ASD has them) or store polynomial U(T) rows;
+(2) replace the constant stage-II fallback with a physics-aware default (closed-shell ions → g₀ ≈ 1), or at
+minimum emit a loud per-element warning when a closure-relevant species hits the fallback;
+(3) add a regression test asserting U(Na II, 1 eV) &lt; 2.</p>
+</section>
+<hr class="docutils" />
+<section id="f2-electron-density-is-never-measured-1-atm-pressure-balance-drives-the-saha-multipliers">
+<h2>F2 — Electron density is never measured: 1-atm pressure balance drives the Saha multipliers<a class="headerlink" href="#f2-electron-density-is-never-measured-1-atm-pressure-balance-drives-the-saha-multipliers" title="Link to this heading"></a></h2>
+<p><strong>Impact: critical for ps-LIBS (T and n_e are the two plasma inputs; one is currently invented).</strong></p>
+<p><strong>(a) Code behavior.</strong> The canonical diagnostic exists (<code class="docutils literal notranslate"><span class="pre">StarkDiagnosticLine</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative.py:127-160</span></code>;
+<code class="docutils literal notranslate"><span class="pre">estimate_ne_from_stark</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/stark.py:215-273</span></code>, with correct Olivero–Longbothum Voigt
+deconvolution) but <strong>no CLI/analysis path ever constructs one</strong> — <code class="docutils literal notranslate"><span class="pre">invert</span></code>/<code class="docutils literal notranslate"><span class="pre">analyze</span></code> call
+<code class="docutils literal notranslate"><span class="pre">solver.solve(observations,</span> <span class="pre">closure_mode=...)</span></code> with no <code class="docutils literal notranslate"><span class="pre">stark_diagnostic</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/cli/main.py:540,623-630</span></code>).
+Every production solve therefore takes the fallback: an isobaric <strong>1-atm STP pressure balance</strong>
+(<code class="docutils literal notranslate"><span class="pre">_pressure_balance_ne</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative.py:1749-1777</span></code>), which the code itself labels “physically invalid for
+LIBS”. The resulting n_e (≈0.6–3e17 cm⁻³ at 1 eV depending on Z̄) is uncorrelated with the actual plasma.
+A supplied Stark line also forces the Python path — the lax path has no Stark support
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:1632-1641</span></code>).</p>
+<p><strong>(b) Literature requirement.</strong> Stark broadening of a well-characterized line (Hα, or Fe I/Si II lines) is
+the standard n_e diagnostic feeding the Saha terms in CF-LIBS (Ciucci et al. 1999; Tognoni et al. 2010 §3;
+Aragón &amp; Aguilera, <em>Spectrochim. Acta B</em> 63 (2008) 893, doi:10.1016/j.sab.2008.05.010; Cristoforetti et
+al. 2010, <em>Spectrochim. Acta B</em> 65, 86, doi:10.1016/j.sab.2009.11.005, require n_e to verify the
+McWhirter/LTE criterion the whole algorithm assumes).</p>
+<p><strong>(c) Quantified impact.</strong> S ∝ 1/n_e. Where all majors are strongly ionized (S≫1) the error is largely
+common-mode and cancels in the closure; the damage is <em>differential</em> in the partially-ionized regime,
+exactly where a cooler ps-LIBS plasma sits. At T = 0.7 eV (DB partition functions: S_Fe(1e17) ≈ 0.4,
+S_Al ≈ 1.2 — both in the steep <code class="docutils literal notranslate"><span class="pre">1+S</span></code> zone), moving n_e by ×10 moves M_Al/M_Si-type ratios by factors of
+~2–5. Al’s low χ (5.99 eV) and tiny U_II (1.08) make C_Al hypersensitive to (T, n_e) — a credible
+contributor to the Al 19-vs-7.1 residual.</p>
+<p><strong>(d) Fix.</strong> Wire <code class="docutils literal notranslate"><span class="pre">stark_diagnostic</span></code> into <code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">invert</span></code> (config: line λ, stored <code class="docutils literal notranslate"><span class="pre">stark_w</span></code> reference
+from the <code class="docutils literal notranslate"><span class="pre">lines</span></code> table, instrument FWHM); prefer Hα when the range covers 656 nm. Treat <code class="docutils literal notranslate"><span class="pre">ne_from_stark</span></code>
+(already in quality metrics, <code class="docutils literal notranslate"><span class="pre">iterative.py:2052-2055</span></code>) as a hard quality gate: a pressure-balance-n_e
+solve should not be labeled quantitative. Cross-check the LTE validator’s McWhirter output against the
+<em>measured</em> n_e.</p>
+</section>
+<hr class="docutils" />
+<section id="f3-temperature-bias-multiplies-back-through-u-s-t-the-real-partition-functions-multiply-back-mechanism">
+<h2>F3 — Temperature bias multiplies back through U_s(T): the real “partition functions multiply back” mechanism<a class="headerlink" href="#f3-temperature-bias-multiplies-back-through-u-s-t-the-real-partition-functions-multiply-back-mechanism" title="Link to this heading"></a></h2>
+<p><strong>Impact: high — this, not a closure-form error, is the Fe (and Ti) failure channel.</strong></p>
+<p><strong>(a) Code behavior.</strong> Closure computes <code class="docutils literal notranslate"><span class="pre">C_s</span> <span class="pre">∝</span> <span class="pre">M_s·U_s(T)·exp(q_s)</span></code> (<code class="docutils literal notranslate"><span class="pre">closure.py:565</span></code>). The fitted
+intercept is <code class="docutils literal notranslate"><span class="pre">q_s</span> <span class="pre">=</span> <span class="pre">ln(n_I·F̃/U_I(T_true))</span></code> — the <em>true</em> U is embedded in the data; the closure multiplies
+by <code class="docutils literal notranslate"><span class="pre">U_I(T_solver)</span></code>. The U factors cancel only if <code class="docutils literal notranslate"><span class="pre">T_solver</span> <span class="pre">=</span> <span class="pre">T_true</span></code>. (Also a one-iteration lag:
+<code class="docutils literal notranslate"><span class="pre">partition_funcs</span></code> are evaluated at the pre-update T (<code class="docutils literal notranslate"><span class="pre">iterative.py:1846</span></code>) while intercepts come from the
+current fit — harmless at convergence, inconsistent on non-converged exits.)</p>
+<p><strong>(b) Literature requirement.</strong> Ciucci et al. 1999 define <code class="docutils literal notranslate"><span class="pre">q_s</span> <span class="pre">=</span> <span class="pre">ln(C_sF/U_s(T))</span></code>; Tognoni et al. 2010 §4
+flag temperature error → U(T) and exp-factor error as a leading CF-LIBS error source. The multi-element
+common-slope fit is the correct mitigation (Aguilera &amp; Aragón 2007, <em>Spectrochim. Acta B</em> 62, 378,
+doi:10.1016/j.sab.2007.03.024).</p>
+<p><strong>(c) Quantified impact</strong> (direct-sum U from the production DB):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>element</p></th>
+<th class="head"><p>U_I(0.8 eV)</p></th>
+<th class="head"><p>U_I(1.0 eV)</p></th>
+<th class="head"><p>U_I(1.2 eV)</p></th>
+<th class="head"><p>ratio 1.2/0.8</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Fe</p></td>
+<td><p>52.3</p></td>
+<td><p>75.5</p></td>
+<td><p>106.5</p></td>
+<td><p><strong>2.04</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Ti</p></td>
+<td><p>66.9</p></td>
+<td><p>97.1</p></td>
+<td><p>132.0</p></td>
+<td><p><strong>1.97</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Si</p></td>
+<td><p>10.9</p></td>
+<td><p>11.8</p></td>
+<td><p>13.1</p></td>
+<td><p>1.20</p></td>
+</tr>
+<tr class="row-odd"><td><p>Al</p></td>
+<td><p>6.2</p></td>
+<td><p>7.0</p></td>
+<td><p>8.3</p></td>
+<td><p>1.33</p></td>
+</tr>
+</tbody>
+</table>
+<p>A +0.4 eV T bias inflates C_Fe/C_Si by ~70% and C_Ti/C_Si by ~65% <em>through the partition functions
+alone</em>, before the slope–intercept covariance term <code class="docutils literal notranslate"><span class="pre">δq_s</span> <span class="pre">=</span> <span class="pre">−x̄_s·δm</span></code> (with SB-graph ion lines Fe’s x̄ is
+10–15 eV, so this term is large too). Both push the same direction as the observed Fe ≈ 3–4× over.
+Self-absorption of retained resonance lines (see F4; the CLI keeps resonance lines by default,
+<code class="docutils literal notranslate"><span class="pre">cli/main.py:319-328</span></code>) <em>flattens</em> the slope → T biased high → exactly this amplification.</p>
+<p><strong>(d) Fix.</strong> (1) Treat T accuracy as the primary target: use the SB-graph (ion lines, long lever arm) for
+the slope and <strong>validate</strong> with the Saha–Boltzmann consistency and per-element T spread checks
+(thresholds at <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/quality.py:77-83</span></code> match accepted practice — wire them into
+<code class="docutils literal notranslate"><span class="pre">converged</span></code>). (2) Propagate σ_T into U_s(T) in the uncertainty path (currently exact —
+<code class="docutils literal notranslate"><span class="pre">uncertainty.py:232-282</span></code>). (3) Consider one-point calibration to absorb residual T/response systematics
+(Cavalcanti et al. 2013, <em>Spectrochim. Acta B</em> 87, 51, doi:10.1016/j.sab.2013.05.016).</p>
+</section>
+<hr class="docutils" />
+<section id="f4-self-absorption-correction-is-a-positive-feedback-loop-on-the-recovered-composition">
+<h2>F4 — Self-absorption correction is a positive-feedback loop on the recovered composition<a class="headerlink" href="#f4-self-absorption-correction-is-a-positive-feedback-loop-on-the-recovered-composition" title="Link to this heading"></a></h2>
+<p><strong>Impact: high when enabled (explains “SA correction makes intercept inflation WORSE”).</strong></p>
+<p><strong>(a) Code behavior.</strong> The implemented correction is a Bulajic-flavored escape-factor divide: τ₀ from the
+classical Doppler line-center formula (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/self_absorption.py:1040-1219</span></code> —
+dimensionally correct, prefactor verified in the docstring), <code class="docutils literal notranslate"><span class="pre">I_thin</span> <span class="pre">=</span> <span class="pre">I_obs/f(τ)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">f(τ)=(1−e^{−τ})/τ</span></code>, τ capped at 10, re-run every solver iteration (<code class="docutils literal notranslate"><span class="pre">iterative.py:1850-1872</span></code>). Crucially
+<strong>τ is computed from the <em>recovered</em> concentrations</strong> (<code class="docutils literal notranslate"><span class="pre">self_absorption.py:1120,1137</span></code>:
+<code class="docutils literal notranslate"><span class="pre">n_s</span> <span class="pre">=</span> <span class="pre">C_s·n_tot</span></code>), with no observable gate. Neither internal-reference (IRSAC) nor doublet/duplication
+methods drive the loop — the doublet-ratio machinery exists (<code class="docutils literal notranslate"><span class="pre">correct_via_doublet_ratio</span></code>,
+<code class="docutils literal notranslate"><span class="pre">find_doublet_pairs</span></code>, <code class="docutils literal notranslate"><span class="pre">self_absorption.py:332-540</span></code>) but is <strong>not wired into the solver</strong>. <code class="docutils literal notranslate"><span class="pre">cdsb.py</span></code> is
+data-structures only (the CD-SB plotter was removed).</p>
+<p><strong>(b) Literature requirement.</strong> Bulajic et al. 2002 (<em>Spectrochim. Acta B</em> 57, 339,
+doi:10.1016/S0584-8547(01)00398-6) iterate τ against a curve-of-growth model constrained by <em>measured</em>
+line profiles/widths, not the composition estimate alone; Sun &amp; Yu 2009 (<em>Talanta</em> 79, 388,
+doi:10.1016/j.talanta.2009.03.066) anchor per-line SA factors to an observed high-E_k internal-reference
+line; El Sherbini et al. 2005 (<em>Spectrochim. Acta B</em> 60, 1573, doi:10.1016/j.sab.2005.10.011) derive the
+SA coefficient from the measured/Stark width ratio; Cristoforetti &amp; Tognoni 2013 (<em>Spectrochim. Acta B</em>
+79–80, 63, doi:10.1016/j.sab.2012.11.010) extract columnar density <em>from the self-absorbed line shapes
+themselves</em>. Common denominator: the correction must be anchored to an <strong>observable</strong>, never only to the
+current composition iterate.</p>
+<p><strong>(c) Why it inflates intercepts (diagnosis).</strong> Over-attributed element (Fe) → larger C_Fe → larger τ for
+<em>every</em> Fe line → larger 1/f(τ) boost → q_Fe rises → closure gives Fe even more mass → next iteration
+boosts again. The τ-cap merely saturates the runaway (flat ~×10 boost on all strong Fe lines = a pure
+intercept shift of +ln 10 ≈ 2.3). Structural, not a tuning problem; 50/50 damping does not help because
+the loop’s fixed point itself is shifted.</p>
+<p><strong>(d) Fix.</strong> Gate per-line correction on an observed signature: (i) measured-vs-expected width ratio
+(El Sherbini 2005 — Stark widths are in the DB), or (ii) doublet ratios (implemented, unwired), or
+(iii) IRSAC normalization within each species (Sun &amp; Yu 2009 — needs no n·L estimate at all, the right
+choice given the solver’s admitted order-of-magnitude column-density uncertainty). Treat plasma-state τ
+only as a prior, never the sole driver.</p>
+</section>
+<hr class="docutils" />
+<section id="f5-no-spectral-response-radiometric-correction-anywhere-in-the-inversion-intensity-path">
+<h2>F5 — No spectral-response (radiometric) correction anywhere in the inversion intensity path<a class="headerlink" href="#f5-no-spectral-response-radiometric-correction-anywhere-in-the-inversion-intensity-path" title="Link to this heading"></a></h2>
+<p><strong>Impact: high for the user’s own ps instrument; latent for ChemCam (CCS arrives calibrated).</strong></p>
+<p><strong>(a) Code behavior.</strong> <code class="docutils literal notranslate"><span class="pre">LineObservation.intensity</span></code> is the raw integrated area from the measured spectrum
+(<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/line_detection.py:367-383,425-447</span></code>). There is no division by a
+detection-efficiency curve anywhere in preprocess/identify/solve; the instrument <code class="docutils literal notranslate"><span class="pre">response_curve</span></code> exists
+only in the <em>forward</em> model (<code class="docutils literal notranslate"><span class="pre">cflibs/instrument/model.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/instrument/kernels.py:41-58</span></code>). The
+Boltzmann ordinate <code class="docutils literal notranslate"><span class="pre">ln(Iλ/gA)</span></code> is otherwise correct (λ-multiplication present, <code class="docutils literal notranslate"><span class="pre">data_structures.py:63</span></code>).</p>
+<p><strong>(b) Literature requirement.</strong> CF-LIBS is built on <em>relative line intensities across wide wavelength
+spans</em>; correction for the spectral efficiency of the collection+spectrometer+detector chain is mandatory
+(Ciucci et al. 1999; Tognoni et al. 2010 §2 list spectral-efficiency calibration among the experimental
+prerequisites; the <em>Front. Phys.</em> 2022 CF-LIBS review, doi:10.3389/fphy.2022.887171, devotes a section to
+it — deuterium/halogen standards).</p>
+<p><strong>(c) Quantified impact.</strong> A factor R in relative response between one element’s lines and another’s
+enters as δq = ln R between intercepts → C ratio biased by R. Typical uncorrected UV-vs-VIS
+grating+detector response differences are ×2–×10 → ln R ≈ 0.7–2.3, the same magnitude as the entire Fe
+intercept anomaly. Elements whose lines cluster in different windows (Si/Mg UV vs Na/K VIS) are worst-hit.</p>
+<p><strong>(d) Fix.</strong> Add a response-curve hook (wavelength → efficiency) applied to <code class="docutils literal notranslate"><span class="pre">intensity</span></code> and
+<code class="docutils literal notranslate"><span class="pre">intensity_uncertainty</span></code> at observation-build time; let <code class="docutils literal notranslate"><span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">invert</span></code> accept a calibration file;
+document that ChemCam CCS input is already radiometrically calibrated (hook defaults to identity).</p>
+</section>
+<hr class="docutils" />
+<section id="f6-intensity-extraction-max-area-peak-height-floor-mixes-incompatible-quantities">
+<h2>F6 — Intensity extraction: <code class="docutils literal notranslate"><span class="pre">max(area,</span> <span class="pre">peak_height)</span></code> floor mixes incompatible quantities<a class="headerlink" href="#f6-intensity-extraction-max-area-peak-height-floor-mixes-incompatible-quantities" title="Link to this heading"></a></h2>
+<p><strong>Impact: medium-high (systematic ln-space distortion of the Boltzmann ordinate).</strong></p>
+<p><strong>(a) Code behavior.</strong> Trapezoid path: <code class="docutils literal notranslate"><span class="pre">line_area</span> <span class="pre">=</span> <span class="pre">max(line_area,</span> <span class="pre">segment_intensity.max())</span></code>
+(<code class="docutils literal notranslate"><span class="pre">line_detection.py:430-431</span></code>) — replaces an integrated area (counts·nm) by a peak height (counts) whenever
+the line is narrower than ~1 nm equivalent. The Voigt-deconvolution path returns a true fitted area with
+no such floor (<code class="docutils literal notranslate"><span class="pre">line_detection.py:367-372</span></code>), and the two builders are mixed <em>within one spectrum</em>
+(<code class="docutils literal notranslate"><span class="pre">_build_observation_for_match</span></code>, <code class="docutils literal notranslate"><span class="pre">line_detection.py:633-662</span></code> — Voigt when a fit exists for that peak,
+trapezoid otherwise).</p>
+<p><strong>(b) Literature requirement.</strong> Boltzmann/Saha–Boltzmann ordinates require the wavelength-integrated line
+intensity for every line on a common scale (Aguilera &amp; Aragón 2007; Tognoni et al. 2010).</p>
+<p><strong>(c) Quantified impact.</strong> For two lines treated by different rules, the ordinate offset is
+|ln(FWHM_eff/1 nm)| ≈ 1.5–3 ln-units at typical 0.05–0.3 nm widths — larger than the entire physical
+q_Si−q_Fe spread (~3) the closure is trying to measure. Whether a line gets Voigt or trapezoid treatment
+depends on deconvolution success, i.e. effectively on SNR — a bias correlated with brightness.</p>
+<p><strong>(d) Fix.</strong> Delete the <code class="docutils literal notranslate"><span class="pre">max()</span></code> floor (keep a positivity check); on deconvolution failure fall back to
+trapezoid area only; never mix peak heights and areas. Unit-test that the two builders agree to ~10% on a
+synthetic isolated Gaussian.</p>
+</section>
+<hr class="docutils" />
+<section id="f7-boltzmann-weighting-w-i-single-line-dominance-the-sb-graph-gain-is-only-the-weighting-change">
+<h2>F7 — Boltzmann weighting: w ∝ I single-line dominance; the SB-graph gain is <em>only</em> the weighting change<a class="headerlink" href="#f7-boltzmann-weighting-w-i-single-line-dominance-the-sb-graph-gain-is-only-the-weighting-change" title="Link to this heading"></a></h2>
+<p><strong>Impact: medium-high (partially mitigated by <code class="docutils literal notranslate"><span class="pre">boltzmann_weight_cap</span></code>; misattribution blocks the real fix).</strong></p>
+<p><strong>(a) Code behavior.</strong> σ_y = σ_I/I with the Poisson floor σ_I ≈ √(I·Δλ) (<code class="docutils literal notranslate"><span class="pre">line_detection.py:300-331</span></code>)
+gives w = 1/σ_y² ∝ I: the brightest line owns its element’s intercept (documented in-repo: Fe I 382 nm
+carried 133× the next Fe weight, lifting q_Fe by +2.2 → e^2.2 ≈ 9× in C_Fe, <code class="docutils literal notranslate"><span class="pre">iterative.py:931-958</span></code>). Two
+mitigations coexist: a per-element cap <code class="docutils literal notranslate"><span class="pre">w</span> <span class="pre">≤</span> <span class="pre">5×median</span></code> (<code class="docutils literal notranslate"><span class="pre">_cap_boltzmann_weights</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative.py:2842-2875</span></code>)
+on the default plane, and the opt-in SB-graph which is <strong>unweighted</strong> (<code class="docutils literal notranslate"><span class="pre">iterative.py:2707-2746</span></code>). This
+audit verified numerically (Frisch–Waugh–Lovell) that the per-element-centered pooled fit
+(<code class="docutils literal notranslate"><span class="pre">_fit_common_boltzmann_plane</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative.py:1398-1501</span></code>) and the global dummy-variable lstsq
+(<code class="docutils literal notranslate"><span class="pre">_solve_sb_graph_lstsq</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative.py:2749-2817</span></code>) produce <strong>identical slopes and intercepts to 1e-14
+under equal weights</strong>. The in-code claim that the SB-graph’s “global geometry conditions the intercepts”
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:960-984</span></code>) is misattributed: with the same line set and weights they are the same estimator.
+The measured RMSE gain comes from (i) unit weights and (ii) the SB-graph retaining single-line elements
+that the common-slope path silently drops (<code class="docutils literal notranslate"><span class="pre">iterative.py:1421-1423</span></code> requires ≥2 lines/element; the graph
+only needs the global system determined, <code class="docutils literal notranslate"><span class="pre">iterative.py:2775</span></code>).</p>
+<p><strong>(b) Literature requirement.</strong> Aguilera &amp; Aragón 2007 construct the multi-element (Saha-)Boltzmann plot
+from <em>calibrated emissivities</em> with uniform treatment of lines; standard WLS (Bevington &amp; Robinson,
+<em>Data Reduction and Error Analysis</em>, §6) is only optimal when the σ_y model is <em>correct</em> — Poisson-only σ
+on 4-decade intensities ignores the dominant per-line systematics (A_ki grades 10–50%, self-absorption,
+blends, response), so the implied weights are wrong by orders of magnitude precisely for bright lines.</p>
+<p><strong>(c) Quantified impact.</strong> Documented in-repo: weighted SB-graph RMSE 14 vs unweighted 8 (ChemCam BHVO-2);
+default plane Fe → 72% without the cap.</p>
+<p><strong>(d) Fix.</strong> Replace w = 1/σ_stat² with a total-error model σ_y² = (σ_I/I)² + σ_Aki² + σ_floor², with
+σ_floor ≈ 0.2–0.5 ln-units for un-modeled per-line systematics (this bounds any line’s weight naturally and
+removes both the ad-hoc cap and the all-or-nothing unweighted choice). The <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code> folding
+already implemented (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/boltzmann.py:896-931</span></code>) is the right pattern — extend it
+with the systematic floor and apply it identically on <em>both</em> fit paths.</p>
+</section>
+<hr class="docutils" />
+<section id="f8-converged-true-on-degenerate-solves-the-lax-path-lacks-gates-and-the-metrics">
+<h2>F8 — <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> on degenerate solves: the lax path lacks gates and the metrics<a class="headerlink" href="#f8-converged-true-on-degenerate-solves-the-lax-path-lacks-gates-and-the-metrics" title="Link to this heading"></a></h2>
+<p><strong>Impact: medium (silently green-lights garbage).</strong></p>
+<p><strong>(a) Code behavior.</strong> The Python path gates convergence on slope sign, R² ≥ <code class="docutils literal notranslate"><span class="pre">min_boltzmann_r2</span></code> (default
+0.3), and the keystone-collapse test (<code class="docutils literal notranslate"><span class="pre">iterative.py:1917-1919,1989-2002,2157-2161</span></code>) and always emits
+<code class="docutils literal notranslate"><span class="pre">boltzmann_r_squared</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:2048</span></code>). The <strong>lax path</strong> (<code class="docutils literal notranslate"><span class="pre">_solve_lax</span></code> + <code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code>)
+gates only on slope/R² (<code class="docutils literal notranslate"><span class="pre">iterative.py:782-784,818-824</span></code>): <strong>no closure-degeneracy gate</strong>, and its quality
+dict contains only <code class="docutils literal notranslate"><span class="pre">r_squared_last</span></code> + LTE keys (<code class="docutils literal notranslate"><span class="pre">iterative.py:2298-2299</span></code>) — so a consumer reading
+<code class="docutils literal notranslate"><span class="pre">quality_metrics.get(&quot;boltzmann_r_squared&quot;)</span></code> gets <code class="docutils literal notranslate"><span class="pre">None</span></code> while <code class="docutils literal notranslate"><span class="pre">converged=True</span></code>. This is the exact
+reported symptom; <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax.solve</span></code> routes there (<code class="docutils literal notranslate"><span class="pre">iterative.py:3125-3175</span></code>). Additionally
+convergence is a <em>step-size</em> test (|ΔT|&lt;100 K, Δn_e/n_e&lt;0.1 under 50% damping, <code class="docutils literal notranslate"><span class="pre">iterative.py:1997-2002</span></code>) —
+a slowly drifting iterate can pass it.</p>
+<p><strong>(b) Literature requirement.</strong> No formal convergence canon exists (Ciucci 1999 is single-pass), but
+published quality gates are: Boltzmann R² ≥ 0.8–0.95, inter-element T spread ≤ 10–15%, Saha–Boltzmann T
+consistency ≤ 20–30%, closure residual ≤ 5–10% — these exact thresholds are already encoded in
+<code class="docutils literal notranslate"><span class="pre">quality.py:77-83</span></code> (per Tognoni et al. 2010; Grifoni et al. 2016, <em>Spectrochim. Acta B</em> 124, 40,
+doi:10.1016/j.sab.2016.08.022); they are just never enforced. Line-selection canon: E_k span well above kT
+(the repo’s <code class="docutils literal notranslate"><span class="pre">min_energy_spread_ev</span> <span class="pre">=</span> <span class="pre">2.0</span></code> ≈ 2.3 kT at 1 eV is reasonable but is a <em>warning</em>, not a gate —
+<code class="docutils literal notranslate"><span class="pre">line_selection.py:286-300</span></code>), ≥3–4 lines/element (warning only, <code class="docutils literal notranslate"><span class="pre">line_selection.py:302-314</span></code>). Note the
+CLI keeps resonance lines by default (<code class="docutils literal notranslate"><span class="pre">exclude_resonance=False</span></code>, <code class="docutils literal notranslate"><span class="pre">cli/main.py:319-328</span></code>) with SA off — a
+known optical-depth exposure no gate catches.</p>
+<p><strong>(d) Fix.</strong> Port the three Python gates + full quality dict to the lax assembly (all inputs are in
+<code class="docutils literal notranslate"><span class="pre">LoopState</span></code>); make <code class="docutils literal notranslate"><span class="pre">QualityAssessor</span></code> thresholds part of the <code class="docutils literal notranslate"><span class="pre">converged</span></code> definition (or a tri-state
+<code class="docutils literal notranslate"><span class="pre">quality_flag</span></code> consumed by the CLI); add a fixed-point residual test (re-evaluate one undamped iteration
+at the final state) instead of the damped step-size test.</p>
+</section>
+<hr class="docutils" />
+<section id="f9-uncertainty-reporting-is-structurally-right-but-quantitatively-dishonest">
+<h2>F9 — Uncertainty reporting is structurally right but quantitatively dishonest<a class="headerlink" href="#f9-uncertainty-reporting-is-structurally-right-but-quantitatively-dishonest" title="Link to this heading"></a></h2>
+<p><strong>Impact: medium.</strong></p>
+<p><strong>(a) Code behavior.</strong> <code class="docutils literal notranslate"><span class="pre">solve()</span></code> returns zeros for all uncertainties (<code class="docutils literal notranslate"><span class="pre">iterative.py:2170-2182</span></code>).
+<code class="docutils literal notranslate"><span class="pre">solve_with_uncertainty</span></code> does propagate slope/intercept correlation through the closure with a shared
+<code class="docutils literal notranslate"><span class="pre">slope_u</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:2360-2392</span></code>; <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/uncertainty.py:232-282</span></code>) — the correlation
+bookkeeping matches the Tognoni-2010 error-budget structure. But: (i) <code class="docutils literal notranslate"><span class="pre">y_mean_err</span> <span class="pre">=</span> <span class="pre">√(1/Σw)</span></code>
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:2379</span></code>) assumes the stated σ_y are correct and ignores residual scatter — no χ²/dof
+inflation, so when the plane misfits (every real-rock case) σ_C is underestimated by the misfit factor;
+(ii) on the SB-graph path weights are unit, so <code class="docutils literal notranslate"><span class="pre">√(1/Σw)</span> <span class="pre">=</span> <span class="pre">1/√N</span></code> is dimensionally meaningless;
+(iii) U_s(T) and the Saha exp(−χ/T) are treated as exact in closure propagation (T variance enters only
+via <code class="docutils literal notranslate"><span class="pre">temperature_from_slope</span></code>, <code class="docutils literal notranslate"><span class="pre">uncertainty.py:160-179</span></code>, and is <em>not</em> fed into M_s or U_s — the dominant
+non-linear terms of F3); (iv) n_e variance enters only if the caller passes <code class="docutils literal notranslate"><span class="pre">n_e_relative_uncertainty</span></code>
+(default 0).</p>
+<p><strong>(b) Literature requirement.</strong> Tognoni et al. 2010 §4: concentration uncertainty must include T-error
+propagation through both exp(E_k/kT) <em>and</em> U(T) and the Saha terms; a-posteriori (scatter-based) error
+scaling is standard WLS practice when χ²/dof ≫ 1.</p>
+<p><strong>(d) Fix.</strong> Scale intercept covariances by max(1, χ²/dof) per element; propagate σ_T into U_s(T)
+numerically (finite difference — providers are cheap); document <code class="docutils literal notranslate"><span class="pre">MonteCarloUQ</span></code> (<code class="docutils literal notranslate"><span class="pre">uncertainty.py:790+</span></code>) as
+the honest path and wire it into the CLI <code class="docutils literal notranslate"><span class="pre">--uncertainty</span></code> mode for real samples.</p>
+</section>
+<hr class="docutils" />
+<section id="f10-loop-architecture-the-fixed-point-iteration-is-workable-but-the-joint-fit-should-be-promoted">
+<h2>F10 — Loop architecture: the fixed-point iteration is workable but the joint fit should be promoted<a class="headerlink" href="#f10-loop-architecture-the-fixed-point-iteration-is-workable-but-the-joint-fit-should-be-promoted" title="Link to this heading"></a></h2>
+<p><strong>Impact: medium (robustness; the pieces already exist in-repo).</strong></p>
+<p><strong>(a) Code behavior.</strong> T comes from the pooled all-element common slope (good — this <em>is</em> the
+multi-element SB plot of Aguilera &amp; Aragón 2007), with 50% damping on T and n_e
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:1924,1981</span></code>) and the R²/slope-sign T-guard. The loop is a Gauss–Seidel fixed point over
+(T, n_e, C, SA); its failure modes (F4 feedback, step-size convergence, mid-iteration U(T) lag) are all
+artifacts of the splitting. A joint estimator already exists twice in-repo: <code class="docutils literal notranslate"><span class="pre">JointOptimizer</span></code> (L-BFGS over
+(T, log n_e, C) against a forward model, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/joint_optimizer.py:229+</span></code>) and the
+Bayesian forward model (full-spectrum, NumPyro NUTS, <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/forward.py:98+</span></code>),
+plus <code class="docutils literal notranslate"><span class="pre">ClosedFormILRSolver</span></code> (single WLS with slope + ILR coordinates + shared intercept,
+<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/closed_form.py:220-331</span></code> — well-posed, honest covariance from the normal
+equations).</p>
+<p><strong>(b) Literature.</strong> Grifoni et al. 2016 compare iterative CF-LIBS against C-sigma and
+fundamental-parameter (synthetic-spectrum-fit) approaches and find the global-fit families more robust to
+line-level pathologies; Aragón &amp; Aguilera’s Cσ graphs (<em>J. Quant. Spectrosc. Radiat. Transf.</em> 149 (2014)
+90, doi:10.1016/j.jqsrt.2014.07.026) fold curve-of-growth self-absorption <em>into</em> the regression instead
+of pre-correcting intensities — directly the cure for F4.</p>
+<p><strong>(d) Recommendation.</strong> Keep the iterative solver as initializer; promote
+<code class="docutils literal notranslate"><span class="pre">ClosedFormILRSolver</span></code>/<code class="docutils literal notranslate"><span class="pre">JointOptimizer</span></code> (seeded by it, with Stark-n_e fixed per F2) as the production
+estimator; evaluate a Cσ-graph mode (one weighted regression over all lines with per-line COG factor) as
+the principled SA treatment. All are physics-only (no ML-constraint violation).</p>
+</section>
+<hr class="docutils" />
+<section id="lower-priority-observations">
+<h2>Lower-priority observations<a class="headerlink" href="#lower-priority-observations" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Saha shift form is correct</strong> (Q2): <code class="docutils literal notranslate"><span class="pre">x*</span> <span class="pre">=</span> <span class="pre">E_k</span> <span class="pre">+</span> <span class="pre">χ_eff</span></code>, <code class="docutils literal notranslate"><span class="pre">y*</span> <span class="pre">=</span> <span class="pre">y</span> <span class="pre">−</span> <span class="pre">ln[(2(2πm_ek)^{3/2}/h³)(T^{3/2}/n_e)]</span></code>
+with <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span> <span class="pre">=</span> <span class="pre">6.042e21</span></code> verified to 0.1% (computed 6.037e21 cm⁻³ eV^−1.5); U_II/U_I correctly
+<em>omitted</em> from the shift (absorbed into the fitted neutral intercept). IPD is implemented consistently
+in both the shift and the multipliers (<code class="docutils literal notranslate"><span class="pre">iterative.py:1216-1229</span></code>) but <strong>off by default</strong>
+(<code class="docutils literal notranslate"><span class="pre">apply_ipd=False</span></code>, <code class="docutils literal notranslate"><span class="pre">iterative.py:863</span></code>); Debye–Hückel Δχ ≈ 0.06 eV at (1 eV, 1e17) → ~6% Saha effect —
+enable it.</p></li>
+<li><p><strong>Dead API:</strong> the <code class="docutils literal notranslate"><span class="pre">closure:</span> <span class="pre">ClosureStrategy</span></code> constructor arg is stored (<code class="docutils literal notranslate"><span class="pre">iterative.py:1060-1064</span></code>) but
+never consumed by <code class="docutils literal notranslate"><span class="pre">solve</span></code> — closure selection is the <code class="docutils literal notranslate"><span class="pre">closure_mode</span></code> string. Remove or wire it.</p></li>
+<li><p><strong>Corona empiricism:</strong> <code class="docutils literal notranslate"><span class="pre">T_saha</span> <span class="pre">=</span> <span class="pre">0.3·T</span> <span class="pre">+</span> <span class="pre">0.7·T_corona</span></code> for {Si,Fe,Ca,Al,Mg} and <code class="docutils literal notranslate"><span class="pre">T_corona</span> <span class="pre">=</span> <span class="pre">0.8·T</span></code>
+(<code class="docutils literal notranslate"><span class="pre">iterative.py:1146-1155,1926-1931</span></code>) is honestly documented as non-literature; it should not survive an
+overhaul (two-zone physics belongs in <code class="docutils literal notranslate"><span class="pre">solve/bayesian/two_zone.py</span></code>).</p></li>
+<li><p><strong>Oxide closure</strong> is a correct molar-oxygen balance with fixed geological oxidation states
+(<code class="docutils literal notranslate"><span class="pre">closure.py:39-98</span></code>); ILR/PWLR closures are single-pass-equivalent to standard normalization by
+construction (<code class="docutils literal notranslate"><span class="pre">closure.py:719-880</span></code>) — they change conditioning, not physics.</p></li>
+<li><p><strong>τ estimate uses g_i ≈ g_k</strong> (<code class="docutils literal notranslate"><span class="pre">self_absorption.py:1159</span></code>, documented O(1) bias) — plumb true g_i via
+<code class="docutils literal notranslate"><span class="pre">CDSBLineObservation</span></code>, which already carries it (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/cdsb.py:63-91</span></code>).</p></li>
+<li><p><strong>Multiplet aggregation</strong> (Wakil-style gA summing, <code class="docutils literal notranslate"><span class="pre">boltzmann.py:291-324</span></code>) and NIST-grade A_ki
+weighting are good practice — keep.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="answers-to-the-audit-questions-cross-reference">
+<h2>Answers to the audit questions (cross-reference)<a class="headerlink" href="#answers-to-the-audit-questions-cross-reference" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Q</p></th>
+<th class="head"><p>Verdict</p></th>
+<th class="head"><p>Findings</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Ordinate ln(Iλ/gA) correct; <strong>no spectral-response correction</strong>; w∝I weighting pathological, cap is a band-aid; common-slope fit = Aguilera–Aragón multi-element SB plot (algebra verified)</p></td>
+<td><p>F5, F7, F6</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Saha shift correct incl. optional IPD (off by default); Saha constant verified; pooled SB-graph = same estimator as the default plane under equal weights</p></td>
+<td><p>F7, obs. 1</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p><strong>Element total = n_I + n_II IS used</strong> (M_s = 1+S everywhere). Real defects: U_II(Na)=15 fallback (~15×), invented n_e in S, U_s(T) amplification of T bias</p></td>
+<td><p>F1, F2, F3</p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Escape-factor COG divide (Bulajic-flavored), τ from recovered composition, runs every iteration; positive feedback explains “SA makes inflation worse”; doublet tools exist unwired; no IRSAC/CD-SB</p></td>
+<td><p>F4</p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Stark machinery exists, never wired by the CLI; default = 1-atm pressure balance (physically invalid, self-acknowledged)</p></td>
+<td><p>F2</p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Python gates OK (slope sign, R²≥0.3, keystone); lax path lacks keystone gate + metrics → <code class="docutils literal notranslate"><span class="pre">converged=True</span></code> / <code class="docutils literal notranslate"><span class="pre">boltzmann_r_squared=None</span></code>; published quality thresholds encoded but unenforced; E_k-span (2 eV ≈ 2.3 kT) and min-lines checks are warnings only</p></td>
+<td><p>F8</p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Correlated slope/intercept propagation exists, but no χ²/dof scaling, SB-graph weights meaningless, U(T)/Saha treated exact → underestimates</p></td>
+<td><p>F9</p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>T from all-element common slope (correct), 50% damping, R²-gated; loop is a fixable Gauss–Seidel splitting; promote in-repo joint/closed-form fits, consider Cσ graphs</p></td>
+<td><p>F10, F3</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Ciucci, Corsi, Palleschi, Rastelli, Salvetti, Tognoni (1999). <em>Appl. Spectrosc.</em> 53, 960–964. doi:10.1366/0003702991947612.</p></li>
+<li><p>Tognoni, Cristoforetti, Legnaioli, Palleschi (2010). <em>Spectrochim. Acta B</em> 65, 1–14. doi:10.1016/j.sab.2009.11.006.</p></li>
+<li><p>Aguilera &amp; Aragón (2007). <em>Spectrochim. Acta B</em> 62, 378–385. doi:10.1016/j.sab.2007.03.024.</p></li>
+<li><p>Aragón &amp; Aguilera (2008). <em>Spectrochim. Acta B</em> 63, 893–916. doi:10.1016/j.sab.2008.05.010.</p></li>
+<li><p>Aragón &amp; Aguilera (2014). <em>J. Quant. Spectrosc. Radiat. Transf.</em> 149, 90–102. doi:10.1016/j.jqsrt.2014.07.026.</p></li>
+<li><p>Bulajic et al. (2002). <em>Spectrochim. Acta B</em> 57, 339–353. doi:10.1016/S0584-8547(01)00398-6.</p></li>
+<li><p>Sun &amp; Yu (2009). <em>Talanta</em> 79, 388–395. doi:10.1016/j.talanta.2009.03.066.</p></li>
+<li><p>El Sherbini et al. (2005). <em>Spectrochim. Acta B</em> 60, 1573–1579. doi:10.1016/j.sab.2005.10.011.</p></li>
+<li><p>Cristoforetti &amp; Tognoni (2013). <em>Spectrochim. Acta B</em> 79–80, 63–71. doi:10.1016/j.sab.2012.11.010.</p></li>
+<li><p>Cristoforetti et al. (2010). <em>Spectrochim. Acta B</em> 65, 86–95. doi:10.1016/j.sab.2009.11.005.</p></li>
+<li><p>Cavalcanti et al. (2013). <em>Spectrochim. Acta B</em> 87, 51–56. doi:10.1016/j.sab.2013.05.016.</p></li>
+<li><p>Grifoni et al. (2016). <em>Spectrochim. Acta B</em> 124, 40–46. doi:10.1016/j.sab.2016.08.022.</p></li>
+<li><p>CF-LIBS review (2022). <em>Front. Phys.</em> 10:887171. doi:10.3389/fphy.2022.887171.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

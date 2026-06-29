@@ -1,0 +1,223 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M5 Atomic-Database Accuracy Findings (confound-controlled) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">M5 Atomic-Database Accuracy Findings (confound-controlled)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/M5-db-accuracy-findings.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="m5-atomic-database-accuracy-findings-confound-controlled">
+<h1>M5 Atomic-Database Accuracy Findings (confound-controlled)<a class="headerlink" href="#m5-atomic-database-accuracy-findings-confound-controlled" title="Link to this heading"></a></h1>
+<p><strong>Question:</strong> does the new VALD-complete database improve CF-LIBS composition accuracy vs NIST?
+<strong>Harness:</strong> <code class="docutils literal notranslate"><span class="pre">run_scoreboard(pipeline_impl=&quot;reference&quot;)</span></code>, paired per spectrum, <strong>same-element-set
+conditioned</strong> RMSE (scored over the intersection of elements both DBs called present, so the
+ID-density element-flip cannot distort the comparison). max_spectra=4, datasets bhvo2_chemcam +
+supercam_labcal.</p>
+<section id="results-median-conditioned-rmse-wt">
+<h2>Results (median conditioned RMSE, wt%)<a class="headerlink" href="#results-median-conditioned-rmse-wt" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variant</p></th>
+<th class="head"><p>bhvo2_chemcam</p></th>
+<th class="head"><p>supercam_labcal</p></th>
+<th class="head"><p>vs NIST</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>NIST</strong> (28k graded)</p></td>
+<td><p><strong>2.49</strong></p></td>
+<td><p><strong>2.12</strong></p></td>
+<td><p>baseline</p></td>
+</tr>
+<tr class="row-odd"><td><p>VALD-complete (1.09M)</p></td>
+<td><p>5.17</p></td>
+<td><p>4.00</p></td>
+<td><p><strong>~2× worse</strong> (elem sets matched 4/4)</p></td>
+</tr>
+<tr class="row-even"><td><p>VALD grade-B-only (118k)</p></td>
+<td><p>20.1</p></td>
+<td><p>17.8</p></td>
+<td><p><strong>~8× worse</strong> (only 15/200 species have B lines)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="interpretation-honest">
+<h2>Interpretation (honest)<a class="headerlink" href="#interpretation-honest" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Raw VALD-complete REGRESSES ~2×</strong> — and this is <em>real</em>, not the earlier ID-flip artifact
+(scored element sets were identical 4/4, so conditioned == raw). Mechanism: VALD’s line
+<em>selection</em> draws ~20 lines/element from 1.09M lines that are **75% D-grade (Kurucz-theoretical)</p>
+<ul class="simple">
+<li><p>14% U**, polluting the Boltzmann/Saha quantitation. NIST’s small <em>curated, graded</em> set fits cleaner.</p></li>
+</ul>
+</li>
+<li><p><strong>VALD grade-B-only is far worse</strong> — VALD’s experimental-grade (B) lines exist for only <strong>15
+species</strong> (118k lines, 11%). Filtering to them decimates coverage. “Use only the good lines”
+is not viable standalone.</p></li>
+<li><p><strong>This confirms the standing hypothesis + reconciles everything</strong>: completeness alone HURTS;
+the lever is <strong>grade-aware selection</strong>, not raw substitution. Consistent with the earlier Kurucz
+regression, the literature (“default NIST A/B; use VALD/Kurucz only to widen coverage, downweighted”),
+and the repo’s own measurement — which found Kurucz BEATS NIST <em>only</em> because it used a curated
+24-strongest-line bundle + structured-GN, NOT the raw dump.</p></li>
+</ol>
+</section>
+<section id="the-key-meta-finding">
+<h2>The key meta-finding<a class="headerlink" href="#the-key-meta-finding" title="Link to this heading"></a></h2>
+<p><strong>Database value is COUPLED to the selection regime.</strong> In the production <em>reference pipeline with
+default (intensity-only) selection</em>, NIST’s curated graded set wins. A bigger DB only helps if the
+<strong>line selector is grade-aware</strong> (prefer high-grade lines; fall back to fill coverage) or the
+analytical set is curated — exactly the regime where the repo measured completeness winning.</p>
+</section>
+<section id="viable-paths-not-yet-tested-the-real-m5-levers">
+<h2>Viable paths NOT yet tested (the real M5 levers)<a class="headerlink" href="#viable-paths-not-yet-tested-the-real-m5-levers" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>R4 — NIST-A/B ∪ VALD-backfill</strong> (literature-recommended hybrid): NIST graded lines authoritative;
+add VALD lines ONLY where NIST lacks (element,ion,~λ) coverage, flagged/downweighted. Keeps NIST
+accuracy + adds completeness for gaps. Needs a merged DB (complete_atomic_db.py merge+dedup).</p></li>
+<li><p><strong>Grade-aware LineSelector</strong> (Lever 1B, a <em>pipeline</em> change not a DB filter): make the per-element
+line selector prefer accuracy_grade A/B over D/U, falling back only to fill the min-lines floor.
+Tested with VALD-complete — this is the change that could let completeness win without pollution.</p></li>
+<li><p><strong>Curated-bundle regime</strong>: run VALD through <code class="docutils literal notranslate"><span class="pre">build_atomic_bundle.py</span></code> (24 strongest/element) +
+structured-GN, apples-to-apples with the repo’s winning measurement, to see if VALD-curated beats
+NIST-curated.</p></li>
+</ul>
+</section>
+<section id="grade-aware-lineselector-lever-1b-implemented-measured-no-op-for-vald">
+<h2>Grade-aware LineSelector (Lever 1B) — implemented, MEASURED no-op for VALD<a class="headerlink" href="#grade-aware-lineselector-lever-1b-implemented-measured-no-op-for-vald" title="Link to this heading"></a></h2>
+<p>Implemented <code class="docutils literal notranslate"><span class="pre">grade_aware_selection</span></code> (gated, default-off): feed grade-derived <code class="docutils literal notranslate"><span class="pre">aki_uncertainty</span></code>
+into the selector so per-element top-N prefers A/B over D/U (U→worst, not the optimistic 0.10).
+Found the selector was <strong>grade-blind</strong> (pipeline never passed <code class="docutils literal notranslate"><span class="pre">atomic_uncertainties</span></code>); the flag
+activates the existing scoring path.</p>
+<p><strong>Result: byte-identical RMSE on VALD-complete (ON == OFF).</strong> Root cause: VALD’s LIBS-major species
+are <strong>almost entirely D-grade (Kurucz-theoretical) with no A/B alternatives</strong> — Si/Fe 1/Ca/Ti/Mn/Na/K
+are all D/U. <strong>You cannot prefer accurate lines that do not exist.</strong> So VALD’s ~2× regression is a
+pure <strong>gf-VALUE-accuracy</strong> issue (Kurucz-theoretical D-grade &lt; NIST graded for the same lines),
+<em>not</em> a selection problem — unfixable by any selection change <em>within VALD</em>.</p>
+</section>
+<section id="definitive-conclusion">
+<h2>DEFINITIVE conclusion<a class="headerlink" href="#definitive-conclusion" title="Link to this heading"></a></h2>
+<p>The new databases do <strong>NOT</strong> improve accuracy by substitution: VALD-complete is ~75% Kurucz-theoretical
+D-grade, so its gf values are less accurate than NIST’s graded set for the LIBS analytical lines, and
+it regresses ~2×. Grade-aware selection can’t recover it (no high-grade alternatives in VALD).</p>
+<p><strong>The only path that can improve accuracy is R4 — NIST-A/B authoritative + VALD backfill ONLY where
+NIST lacks coverage.</strong> Keep NIST’s accurate gf where it has lines; use VALD purely to <em>widen</em> coverage.
+And the grade-aware selector built here is <strong>exactly the mechanism R4 needs</strong>: in a NIST∪VALD merged DB,
+NIST lines are A/B and VALD backfill is D, so <code class="docutils literal notranslate"><span class="pre">grade_aware_selection=True</span></code> would prefer the NIST-accurate
+lines. This is also the literature-recommended approach and the basis of the repo’s own Kurucz-beats-NIST
+measurement (curated graded set, not raw dump).</p>
+<p><strong>Next experiment: build R4 (merged NIST-A/B ∪ VALD-backfill) and benchmark with grade-aware ON.</strong></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,599 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS Validation Metrics — Pre-PR Gate Framework &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS Validation Metrics — Pre-PR Gate Framework</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/VALIDATION_METRICS.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-validation-metrics-pre-pr-gate-framework">
+<h1>CF-LIBS Validation Metrics — Pre-PR Gate Framework<a class="headerlink" href="#cf-libs-validation-metrics-pre-pr-gate-framework" title="Link to this heading"></a></h1>
+<p>A scientifically grounded, multi-tier validation framework for evaluating
+whether a swarm-generated PR <em>actually improved</em> the CF-LIBS pipeline.
+Authoritative reference for <code class="docutils literal notranslate"><span class="pre">validation/protocol.yaml</span></code> and for the
+benchmark gate run by <code class="docutils literal notranslate"><span class="pre">python/benchmark_gate.py</span></code> in beefcake-swarm.</p>
+<blockquote>
+<div><p><strong>Status:</strong> drafted 2026-05-06 from a parallel literature + statistics
+review (NotebookLM CF-LIBS corpus + Asta + community-practice survey).
+Treat the thresholds as v0 — they will be tightened as data accumulates.</p>
+</div></blockquote>
+<hr class="docutils" />
+<section id="design-principles">
+<h2>1. Design principles<a class="headerlink" href="#design-principles" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Single primary endpoint.</strong> One scalar gates merge; everything else is
+diagnostic. Avoids multiplicity and the “13 PRs each finds a metric they
+improved” failure mode.</p></li>
+<li><p><strong>Tiered reporting.</strong> Tier 1 (gate; binding pass/fail), Tier 2 (alarms;
+require justification but don’t block), Tier 3 (forensic; logged for
+review).</p></li>
+<li><p><strong>Two reference baselines.</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">last-green-on-main</span></code> (rolling A/B; detects regressions)</p></li>
+<li><p><strong>Frozen v0 baseline</strong> (re-run of a fixed published-baseline pipeline
+configuration; detects long-horizon drift across the whole codebase).</p></li>
+</ul>
+</li>
+<li><p><strong>Multiplicity control.</strong> Holm-Bonferroni for Tier-1 hard gates within a
+single PR; Benjamini-Hochberg FDR &#64; q=0.10 for Tier-2 alarms across the
+PR family. Tier-3 metrics are exploratory and never gate.</p></li>
+<li><p><strong>Goodhart-resistance by construction.</strong> Physical-constraint gates
+(LTE, McWhirter, charge balance, mass conservation) are first-principles
+and cannot be tuned by the agent without breaking the physics.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="tier-1-gate-metrics-binding">
+<h2>2. Tier 1 — gate metrics (binding)<a class="headerlink" href="#tier-1-gate-metrics-binding" title="Link to this heading"></a></h2>
+<section id="composition-accuracy">
+<h3>2.1 Composition accuracy<a class="headerlink" href="#composition-accuracy" title="Link to this heading"></a></h3>
+<p><strong>Primary scalar: Aitchison distance $d_A$ on the closed composition.</strong></p>
+<p>$$d_A(\hat C, C^<em>) = \sqrt{\sum_i \left(\mathrm{clr}(\hat C)_i - \mathrm{clr}(C^</em>)_i\right)^2}$$</p>
+<p>where $\mathrm{clr}(C)_i = \log(C_i/g(C))$ and $g$ is the geometric mean.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>Threshold</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>EXCELLENT</p></td>
+<td><p>$d_A &lt; 0.05$</p></td>
+</tr>
+<tr class="row-odd"><td><p>GOOD</p></td>
+<td><p>$d_A &lt; 0.10$</p></td>
+</tr>
+<tr class="row-even"><td><p>ACCEPTABLE</p></td>
+<td><p>$d_A &lt; 0.20$</p></td>
+</tr>
+<tr class="row-odd"><td><p>FAIL</p></td>
+<td><p>$d_A \geq 0.20$</p></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><p><strong>Per-spectrum.</strong> Median-aggregated per dataset.</p></li>
+<li><p><strong>Cross-dataset aggregation:</strong> Friedman mean rank.</p></li>
+<li><p><strong>No-regression cap:</strong> no single dataset’s median $d_A$ degraded by</p>
+<blockquote>
+<div><p>10% relative vs <code class="docutils literal notranslate"><span class="pre">last-green-on-main</span></code>.</p>
+</div></blockquote>
+</li>
+</ul>
+<p><strong>Stratified concentration reporting</strong> (mandatory):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stratum</p></th>
+<th class="head"><p>RD threshold</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Majors ($&gt; 5$ wt%)</p></td>
+<td><p>RD &lt; 5%</p></td>
+</tr>
+<tr class="row-odd"><td><p>Minors (0.1–5 wt%)</p></td>
+<td><p>RD &lt; 20%</p></td>
+</tr>
+<tr class="row-even"><td><p>Traces ($&lt; 0.1$ wt%)</p></td>
+<td><p>MDL-bounded; report as $\leq \text{LOQ}$ if below LOQ</p></td>
+</tr>
+</tbody>
+</table>
+<p>A PR that improves majors while wrecking traces does <strong>not</strong> pass.</p>
+<p><strong>Subcompositional ratio errors</strong> (also reported):
+$|\log(\hat r/r^*)|$ for the Fe/Si, Mg/Si, Ca/Si, Al/Si pairs — the
+invariants CF-LIBS physics actually preserves under partial detection.</p>
+<p><strong>Companion metrics</strong> (informational, not separately gated):
+clr-RMSEP, NRMSEP, MAPE, $R^2$, Pearson r — preserved for cross-study
+comparability with Takahashi 2017, Anderson 2017, Hao 2018 conventions.</p>
+</section>
+<section id="identification-quality">
+<h3>2.2 Identification quality<a class="headerlink" href="#identification-quality" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Threshold</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Macro-F1</p></td>
+<td><p>within 2 abs points of last-green</p></td>
+</tr>
+<tr class="row-odd"><td><p>Recall (per element)</p></td>
+<td><p>$\geq 0.6$ for {Si, Fe, Mg, Ca, Al, Ti, Mn, K, Na} on Aalto, USGS, NIST SRM</p></td>
+</tr>
+<tr class="row-even"><td><p>Wavelength tolerance</p></td>
+<td><p>$\epsilon(\lambda) = \sqrt{\mathrm{FWHM}<em>{\mathrm{inst}}^2 + \omega</em>{\mathrm{Stark}}^2}$</p></td>
+</tr>
+</tbody>
+</table>
+<p>The adaptive tolerance replaces fixed $\pm\lambda/(2 R_P)$ — Stark widths
+in dense plasmas reach 0.2–0.5 nm vs ~0.1 nm instrumental and silently
+mis-classify dense-plasma lines under a fixed tolerance.</p>
+</section>
+<section id="posterior-calibration-when-mcmc-ns-active">
+<h3>2.3 Posterior calibration (when MCMC/NS active)<a class="headerlink" href="#posterior-calibration-when-mcmc-ns-active" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Threshold</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Failure mode</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>$\hat R$ (all parameters)</p></td>
+<td><p>$&lt; 1.01$</p></td>
+<td><p>hard fail</p></td>
+</tr>
+<tr class="row-odd"><td><p>ESS bulk (all parameters)</p></td>
+<td><p>$\geq 400$</p></td>
+<td><p>run is <strong>INVALID</strong> (re-run, not fail)</p></td>
+</tr>
+<tr class="row-even"><td><p>Divergent transitions</p></td>
+<td><p>$0$</p></td>
+<td><p>hard fail</p></td>
+</tr>
+<tr class="row-odd"><td><p>PSIS $\hat k$ (all folds)</p></td>
+<td><p>$&lt; 0.7$</p></td>
+<td><p>hard fail (LOO unreliable)</p></td>
+</tr>
+<tr class="row-even"><td><p>95% credible-interval coverage</p></td>
+<td><p>$\in [0.93, 0.97]$</p></td>
+<td><p>bidirectional — over-coverage is also a fail</p></td>
+</tr>
+<tr class="row-odd"><td><p>ELPD vs baseline</p></td>
+<td><p>$\Delta\mathrm{ELPD} - 2 \cdot \mathrm{SE}_{\mathrm{diff}} &gt; 0$</p></td>
+<td><p>required for likelihood-changing PRs</p></td>
+</tr>
+</tbody>
+</table>
+<p>Coverage outside the band fires a Tier-2 alarm if not in the hard-fail
+range. PIT-histogram $\chi^2$ uniformity test is reported as Tier-3
+diagnostic.</p>
+<p><strong>Implementation:</strong> <code class="docutils literal notranslate"><span class="pre">cflibs.benchmark.posterior_metrics.compute_posterior_diagnostics</span></code>
+returns a <code class="docutils literal notranslate"><span class="pre">PosteriorDiagnostics</span></code> dataclass covering R-hat / ESS-bulk /
+ESS-tail per parameter, divergent-transition count, PSIS-LOO ELPD with
+per-fold $\hat k$, 95%-CI empirical coverage with a bidirectional gate
+verdict, PIT $\chi^2$ p-value, and CLR-space sharpness. The unified
+runner threads this through to <code class="docutils literal notranslate"><span class="pre">composition_records.json</span></code> whenever a
+composition workflow emits a <code class="docutils literal notranslate"><span class="pre">posterior_samples</span></code> payload.</p>
+</section>
+<section id="cross-dataset-generalization-anti-overfit">
+<h3>2.4 Cross-dataset generalization (anti-overfit)<a class="headerlink" href="#cross-dataset-generalization-anti-overfit" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Requirement</p></th>
+<th class="head"><p>Spec</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Multi-matrix CRM panel</p></td>
+<td><p>Steel (NIST SRM 1764 or JK), Basalt (BHVO-2), Mars analog (Norite or Shergottite), Plant/Soil (NIST 1573a)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Sequestered held-out fraction</p></td>
+<td><p>30% of CRM panel, never shown to the agent or in any prompt</p></td>
+</tr>
+<tr class="row-even"><td><p>Sequestered rotation</p></td>
+<td><p>quarterly</p></td>
+</tr>
+<tr class="row-odd"><td><p>Negative-transfer guard</p></td>
+<td><p>If Aalto improves but ChemCam regresses, block regardless of mean</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="physical-consistency">
+<h3>2.5 Physical consistency<a class="headerlink" href="#physical-consistency" title="Link to this heading"></a></h3>
+<p>A PR fails if <strong>any 2</strong> of these trip; one alone fires a Tier-2 alarm
+that requires explicit justification.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Constraint</p></th>
+<th class="head"><p>Spec</p></th>
+<th class="head"><p>Reference</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Multi-T LTE consistency</p></td>
+<td><p>$</p></td>
+<td><p>T_{\mathrm{neutral}} - T_{\mathrm{ion}}</p></td>
+</tr>
+<tr class="row-odd"><td><p>McWhirter $n_e$ floor</p></td>
+<td><p>$n_e \geq 1.6 \times 10^{12} T^{1/2} (\Delta E)^3$</p></td>
+<td><p>textbook LTE</p></td>
+</tr>
+<tr class="row-even"><td><p>Plasma-T physicality</p></td>
+<td><p>$T_e \in [3000, 20000]$ K (catastrophic if any &lt; 1000 K)</p></td>
+<td><p>NB1 §25–26</p></td>
+</tr>
+<tr class="row-odd"><td><p>Closure residual (un-normalized)</p></td>
+<td><p>$</p></td>
+<td><p>\sum_s C_s - 1</p></td>
+</tr>
+</tbody>
+</table>
+<p>The magnitude of forced normalization is itself a missing-element bias
+signal — log it even when within bounds.</p>
+</section>
+<section id="statistical-decision-protocol">
+<h3>2.6 Statistical decision protocol<a class="headerlink" href="#statistical-decision-protocol" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>Spec</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Pre-registration</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">validation/protocol.yaml</span></code> frozen on <code class="docutils literal notranslate"><span class="pre">main</span></code>; changes require versioned bump</p></td>
+</tr>
+<tr class="row-odd"><td><p>Per-PR test</p></td>
+<td><p>Wilcoxon paired (per-dataset $d_A$) vs <code class="docutils literal notranslate"><span class="pre">last-green-on-main</span></code> AND vs frozen-v0</p></td>
+</tr>
+<tr class="row-even"><td><p>Tier-1 multiplicity</p></td>
+<td><p>Holm-Bonferroni across the family of Tier-1 gates (q = 0.05)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Tier-2 multiplicity</p></td>
+<td><p>BH-FDR across the alarm family (q = 0.10)</p></td>
+</tr>
+<tr class="row-even"><td><p>Effect-size requirement</p></td>
+<td><p>$\geq 5%$ relative AND $\geq 0.005$ absolute improvement on aggregate $d_A$; 95% bootstrap CI excludes zero</p></td>
+</tr>
+<tr class="row-odd"><td><p>Reproducibility</p></td>
+<td><p>$\geq 5$ seeds; two independent runs agree within 1% on $d_A$</p></td>
+</tr>
+<tr class="row-even"><td><p>Frozen environment</p></td>
+<td><p>Docker image SHA pinned in protocol.yaml; deterministic CUDA flags; single-GPU per run</p></td>
+</tr>
+<tr class="row-odd"><td><p>Seed control</p></td>
+<td><p>Agent CANNOT pick seeds; the protocol does</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="tier-2-alarms-bh-fdr-q-0-10-don-t-gate">
+<h2>3. Tier 2 — alarms (BH-FDR q=0.10, don’t gate)<a class="headerlink" href="#tier-2-alarms-bh-fdr-q-0-10-don-t-gate" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Metric</p></th>
+<th class="head"><p>Threshold</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Wall-clock per-spectrum</p></td>
+<td><p>not regressed &gt; 20%</p></td>
+</tr>
+<tr class="row-odd"><td><p>Peak RSS</p></td>
+<td><p>not regressed &gt; 30%</p></td>
+</tr>
+<tr class="row-even"><td><p>MCMC tokens / leapfrog steps</p></td>
+<td><p>not regressed &gt; 50%</p></td>
+</tr>
+<tr class="row-odd"><td><p>Boltzmann-plot linearity $R^2$</p></td>
+<td><p>per-element regression alarm</p></td>
+</tr>
+<tr class="row-even"><td><p>Stark-broadening multi-line residual</p></td>
+<td><p>per-line-family alarm</p></td>
+</tr>
+<tr class="row-odd"><td><p>Saha-Boltzmann self-consistency drift</p></td>
+<td><p>$</p></td>
+</tr>
+<tr class="row-even"><td><p>Per-element FP rate</p></td>
+<td><p>track Mn, Na, K specifically (current 2.6/14.3/28.6% precision)</p></td>
+</tr>
+<tr class="row-odd"><td><p>ALIAS Confidence Level CL components</p></td>
+<td><p>$k_{\mathrm{det}} \cdot P_{\mathrm{maj}} \cdot P_{\mathrm{SNR}} \cdot P_{\mathrm{ab}}$</p></td>
+</tr>
+<tr class="row-even"><td><p>Coverage drift outside [0.93, 0.97]</p></td>
+<td><p>when not a hard fail</p></td>
+</tr>
+<tr class="row-odd"><td><p>ELPD regression</p></td>
+<td><p>$&gt; 4 \cdot \mathrm{SE}$</p></td>
+</tr>
+<tr class="row-even"><td><p>Internal/external precision ratio</p></td>
+<td><p>$&lt; 0.3$ → over-confident model fitting noise (Holtzman 2015 stellar guardrail)</p></td>
+</tr>
+</tbody>
+</table>
+<section id="robustness-perturbation-tests-tier-2">
+<h3>Robustness perturbation tests (Tier-2)<a class="headerlink" href="#robustness-perturbation-tests-tier-2" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Test</p></th>
+<th class="head"><p>Spec</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Line-dropout robustness</p></td>
+<td><p>Remove top-3 leverage lines; recompute $d_A$; require $\Delta d_A &lt; 0.02$</p></td>
+</tr>
+<tr class="row-odd"><td><p>Outlier injection</p></td>
+<td><p>Inject $N(0, 5\sigma)$ into 5% of channels; require $\Delta d_A &lt; 0.05$</p></td>
+</tr>
+<tr class="row-even"><td><p>Self-absorption stress</p></td>
+<td><p>Verify $\sigma(T)/T &lt; 0.01$ before applying SA correction (Völker &amp; Gornushkin 2023)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Student-t likelihoods (PR #58) should beat $L_2$ on the outlier-injection
+test — failure to do so is itself a Tier-2 alarm against the PR.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="tier-3-forensics-log-only-never-gate">
+<h2>4. Tier 3 — forensics (log only, never gate)<a class="headerlink" href="#tier-3-forensics-log-only-never-gate" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Per-spectrum residual table for the top-10 worst spectra.</p></li>
+<li><p>PIT-histogram $\chi^2$ uniformity p-value.</p></li>
+<li><p>Bayes factor / log-evidence $\ln Z$ from nested sampling.</p></li>
+<li><p>Per-element MDL/LOQ alongside RD.</p></li>
+<li><p>Subcompositional Aitchison restricted to detected-only elements
+(separate from full-composition $d_A$).</p></li>
+<li><p>Resolving-power-stratified scoring (RP buckets 0–500, 500–1k, 1k–3k, 3k+).</p></li>
+<li><p>Plasma-parameter-vs-composition correlation (does composition error
+correlate with bad T or $n_e$ recovery?).</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="reference-baselines">
+<h2>5. Reference baselines<a class="headerlink" href="#reference-baselines" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Baseline</p></th>
+<th class="head"><p>Purpose</p></th>
+<th class="head"><p>Cadence</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">last-green-on-main</span></code></p></td>
+<td><p>Rolling A/B; regression detection</p></td>
+<td><p>Per-PR (current)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Frozen-v0 (Tognoni 2010 reproduction)</p></td>
+<td><p>Long-horizon drift; absolute-progress reference</p></td>
+<td><p>Quarterly re-run from a pinned configuration</p></td>
+</tr>
+</tbody>
+</table>
+<p>Until the v0 reference pipeline is implemented, use the first commit on
+<code class="docutils literal notranslate"><span class="pre">main</span></code> as the v0 baseline.</p>
+</section>
+<hr class="docutils" />
+<section id="goodhart-hedges">
+<h2>6. Goodhart hedges<a class="headerlink" href="#goodhart-hedges" title="Link to this heading"></a></h2>
+<p>The agent will optimize for whatever it sees in the prompt. The hedges
+below assume the swarm WILL find loopholes given enough iterations.</p>
+<ol class="arabic simple">
+<li><p><strong>Sequestered held-out</strong> — 30% of the CRM panel is never shown to the
+agent or in any prompt; the primary endpoint is computed only on the
+held-out split. Rotated quarterly.</p></li>
+<li><p><strong>Physical-constraint gates</strong> — Tier 1 §2.5 above. Cannot be tuned
+without breaking first-principles physics.</p></li>
+<li><p><strong>Adversarial-twin run</strong> — A parallel agent is told the metric <em>and</em>
+told to game it. If its gains match the candidate PR’s, the candidate
+is presumed gamed and rejected.</p></li>
+<li><p><strong>Internal/external precision-ratio guardrail</strong> — Tier-2 alarm if
+internal repeatability ≪ external accuracy (model is overconfident,
+fitting noise; stellar-survey practice from Holtzman 2015 / GALAH).</p></li>
+<li><p><strong>Multi-matrix CRM mandate</strong> — Single-matrix wins do not unlock merge.</p></li>
+<li><p><strong>No metric leakage to workers</strong> — The architect sees aggregated
+pass/fail; workers see compile/test results only. Per-dataset
+numerics are not threaded into the iteration loop.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="pre-pr-vs-post-pr-gate-scope">
+<h2>7. Pre-PR vs post-PR gate scope<a class="headerlink" href="#pre-pr-vs-post-pr-gate-scope" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Stage</p></th>
+<th class="head"><p>Runs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Pre-merge gate (<code class="docutils literal notranslate"><span class="pre">scripts/post-merge-benchmark.sh</span> <span class="pre">nightly</span></code> triggered by <code class="docutils literal notranslate"><span class="pre">python/benchmark_gate.py</span></code>)</p></td>
+<td><p>Tier 1 §2.1–§2.5 minus adversarial-twin</p></td>
+</tr>
+<tr class="row-odd"><td><p>Post-merge nightly on <code class="docutils literal notranslate"><span class="pre">main</span></code></p></td>
+<td><p>Frozen-v0 reproduction; sequestered-fold rotation; full Tier 1+2+3</p></td>
+</tr>
+<tr class="row-even"><td><p>Quarterly</p></td>
+<td><p>Sequestered-fold reshuffle; v0-baseline re-run; Tognoni reference recompute</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="implementation-gap-as-of-2026-05-06">
+<h2>8. Implementation gap (as of 2026-05-06)<a class="headerlink" href="#implementation-gap-as-of-2026-05-06" title="Link to this heading"></a></h2>
+<p>The current benchmark already emits:</p>
+<ul class="simple">
+<li><p>Aitchison distance $d_A$ + RMSE composition + closure residual</p></li>
+<li><p>Per-element RMSEP, MAE, MAPE, Bias, $R^2$, Pearson r, LOD, LOQ</p></li>
+<li><p>Identification: precision, recall, F1, Jaccard, Hamming Loss</p></li>
+<li><p>Plasma physics: $T$ error, $n_e$ error</p></li>
+<li><p>Per-spectrum elapsed_seconds; total wall-clock</p></li>
+<li><p>Resolving-power estimate per spectrum (not yet stratified)</p></li>
+</ul>
+<p>The current benchmark <strong>does not</strong> emit:</p>
+<ul class="simple">
+<li><p>Posterior calibration (R̂, ESS, coverage in [0.93, 0.97], PSIS-LOO)</p></li>
+<li><p>Stratified-by-magnitude composition reporting</p></li>
+<li><p>Subcompositional ratio errors (Fe/Si, Mg/Si, Ca/Si, Al/Si)</p></li>
+<li><p>Adaptive wavelength tolerance $\epsilon(\lambda)$</p></li>
+<li><p>Multi-T LTE consistency check (single-T currently — McWhirter floor,
+T physicality and closure residual are now Tier-1-gated via
+<code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/physical_consistency.py</span></code>; the multi-T LTE check
+itself only fires when an inversion populates per-spectrum
+<code class="docutils literal notranslate"><span class="pre">t_neutral_k</span></code> and <code class="docutils literal notranslate"><span class="pre">t_ion_k</span></code>, which is still TODO)</p></li>
+<li><p>Robustness perturbation tests (line-dropout, outlier injection)</p></li>
+<li><p>Adversarial-twin run</p></li>
+<li><p>Sequestered held-out separation</p></li>
+<li><p>Frozen-v0 reference baseline</p></li>
+</ul>
+<p>These gaps are tracked as P1 issues in beads (CF-LIBS-improved-*).</p>
+</section>
+<hr class="docutils" />
+<section id="sources">
+<h2>9. Sources<a class="headerlink" href="#sources" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Greenacre, <em>Statistical Science</em> 2022</strong> — Aitchison reappraisal,
+subcompositional coherence</p></li>
+<li><p><strong>Egozcue et al., <em>TEST</em> 2019</strong> — compositional sample-space structure</p></li>
+<li><p><strong>Tognoni et al., <em>Spectrochim. Acta Part B</em> 2010</strong> — CF-LIBS state-of-art
+baseline (frozen-v0 reference)</p></li>
+<li><p><strong>Vehtari, Gelman, Gabry, <em>Stat Comput</em> 2017</strong> — PSIS-LOO + WAIC</p></li>
+<li><p><strong>Cousins &amp; Wasserman, PHYSTAT 2024</strong> (arXiv:2402.16229) — nuisance-
+parameter handling</p></li>
+<li><p><strong>Bousquet et al., <em>Spectrochim. Acta Part B</em> 2023</strong> — Boltzmann-plot
+trueness/precision/accuracy</p></li>
+<li><p><strong>Völker &amp; Gornushkin, <em>JAAS</em> 2023</strong> — multiplet Boltzmann + 1% T-RSD
+limit for SA correction</p></li>
+<li><p><strong>Matsumura et al., <em>ACS Earth Space Chem</em> 2024</strong> — robust Student-t
+Boltzmann fitting under outliers</p></li>
+<li><p><strong>Cristoforetti et al., <em>Spectrochim. Acta Part B</em> 2010</strong> — LTE-validity
+consistency criteria</p></li>
+<li><p><strong>Pedarnig et al., <em>JAAS</em> 2023</strong> — benchmark protocol for CF-LIBS</p></li>
+<li><p><strong>Demšar, <em>JMLR</em> 2006</strong> — Friedman + Nemenyi for cross-classifier ranking</p></li>
+<li><p><strong>Benjamini &amp; Hochberg, <em>J R Stat Soc B</em> 1995</strong> — FDR multiplicity control</p></li>
+<li><p><strong>Holtzman et al., <em>AJ</em> 2015</strong> — APOGEE internal/external scatter
+framework (stellar precision/accuracy guardrail)</p></li>
+<li><p><strong>Aitchison, <em>J R Stat Soc B</em> 1982/1986</strong> — subcompositional coherence
+and the simplex</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

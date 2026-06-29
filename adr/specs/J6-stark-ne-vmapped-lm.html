@@ -1,0 +1,173 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J6 Implementation Spec — Stark n_e via Vmapped Fixed-Iteration Levenberg–Marquardt &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J6 Implementation Spec — Stark n_e via Vmapped Fixed-Iteration Levenberg–Marquardt</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J6-stark-ne-vmapped-lm.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j6-implementation-spec-stark-n-e-via-vmapped-fixed-iteration-levenbergmarquardt">
+<h1>J6 Implementation Spec — Stark n_e via Vmapped Fixed-Iteration Levenberg–Marquardt<a class="headerlink" href="#j6-implementation-spec-stark-n-e-via-vmapped-fixed-iteration-levenbergmarquardt" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J6 · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §4 row 8, risk R9 · <strong>Track:</strong> B · <strong>Depends:</strong> J0 (soft J1 for peak inputs; parity adapters can feed reference peaks) · <strong>Estimated effort:</strong> 5–10 pd — the largest genuinely new kernel in the program · <strong>Risk:</strong> MED-HIGH</p>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<p>Port the Stark-width n_e measurement (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/stark_ne.py:394-663</span></code> <code class="docutils literal notranslate"><span class="pre">measure_stark_ne</span></code>) and its per-iteration solver coupling (<code class="docutils literal notranslate"><span class="pre">solve/iterative.py:1250-1280</span></code> <code class="docutils literal notranslate"><span class="pre">_estimate_ne_from_stark_multi</span></code>) into <code class="docutils literal notranslate"><span class="pre">jitpipe/stark.py</span></code> as a vmapped fixed-iteration LM fit. This closes lax seam (iii) of ADR-0004 §4 row 10 — the lax body is currently pressure-balance-only with <code class="docutils literal notranslate"><span class="pre">ne_from_stark</span></code> hardwired False (<code class="docutils literal notranslate"><span class="pre">iterative.py:2358-2364</span></code>) — and supplies the pinned n_e for J7’s joint estimator (audit F2).</p>
+</section>
+<section id="current-algorithm-and-jit-breakers-file-line-physics-stark-ne-py-unless-noted">
+<h2>2. Current algorithm and jit-breakers (file:line; <code class="docutils literal notranslate"><span class="pre">physics/stark_ne.py</span></code> unless noted)<a class="headerlink" href="#current-algorithm-and-jit-breakers-file-line-physics-stark-ne-py-unless-noted" title="Link to this heading"></a></h2>
+<p>Candidate gates: literature-grade <code class="docutils literal notranslate"><span class="pre">stark_w_source</span> <span class="pre">∈</span> <span class="pre">('stark_b',)</span></code> (<code class="docutils literal notranslate"><span class="pre">:77,486-490</span></code>); SNR ≥ 5 (<code class="docutils literal notranslate"><span class="pre">:492-499</span></code>); instrument-width ladder explicit / resolving-power / narrowest-line-percentile floor (<code class="docutils literal notranslate"><span class="pre">:469-481</span></code>; <code class="docutils literal notranslate"><span class="pre">estimate_instrument_fwhm</span></code> <code class="docutils literal notranslate"><span class="pre">:185-234</span></code> with half-max crossings via Python loops <code class="docutils literal notranslate"><span class="pre">:139-182</span></code>); isolation ≥ 1.5× local Gaussian FWHM (<code class="docutils literal notranslate"><span class="pre">:507-509</span></code>); preference bonus for canonical diagnostics + 0.5× resonance down-rank (<code class="docutils literal notranslate"><span class="pre">:511-519</span></code>); score-sorted, capped at <code class="docutils literal notranslate"><span class="pre">max_lines=5</span></code> (<code class="docutils literal notranslate"><span class="pre">:536-541</span></code>); per-candidate same-species multiplet-blend <strong>DB query inside the loop</strong> (<code class="docutils literal notranslate"><span class="pre">_has_strong_multiplet_neighbour</span></code> <code class="docutils literal notranslate"><span class="pre">:332-371</span></code>, calling <code class="docutils literal notranslate"><span class="pre">atomic_db.get_transitions</span></code> at <code class="docutils literal notranslate"><span class="pre">:356</span></code>); local-peak recentre (<code class="docutils literal notranslate"><span class="pre">:237-254</span></code>); <strong>pinned-Gaussian Voigt fit</strong> <code class="docutils literal notranslate"><span class="pre">_fit_lorentz_fwhm</span></code> (<code class="docutils literal notranslate"><span class="pre">:257-313</span></code>): <code class="docutils literal notranslate"><span class="pre">scipy.optimize.least_squares</span></code> (trust-region, bounds, max_nfev=400) over 5 params (area, x₀, Lorentz HWHM γ, linear baseline c₀,c₁) with σ_G pinned; gates rel-RMSE ≤ 0.25 (<code class="docutils literal notranslate"><span class="pre">:559</span></code>), resolvability floor <code class="docutils literal notranslate"><span class="pre">γ_FWHM</span> <span class="pre">≥</span> <span class="pre">0.05·gauss</span></code> (<code class="docutils literal notranslate"><span class="pre">:564</span></code>), sanity band 1e14–1e20 (<code class="docutils literal notranslate"><span class="pre">:575,93-94</span></code>); closed-form inversion <code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">=</span> <span class="pre">REF_NE·(w/w_ref)·(T/T_ref)^α</span></code> (<code class="docutils literal notranslate"><span class="pre">radiation/stark.py:215-236</span></code>); cohort log₁₀-MAD trim at 1 decade (<code class="docutils literal notranslate"><span class="pre">:374-391,611-636</span></code>); median + 1.4826·MAD combine (<code class="docutils literal notranslate"><span class="pre">:638-656</span></code>). Solver-level: closed-form per-line re-inversion at current T, median + MAD (<code class="docutils literal notranslate"><span class="pre">iterative.py:1250-1280</span></code>).</p>
+<p>Breakers: SQLite inside the candidate loop; <code class="docutils literal notranslate"><span class="pre">scipy.least_squares</span></code> (host, adaptive trust region, data-dependent nfev); data-dependent candidate count + Python sort + break-at-max_lines; half-max crossing loops; rejection-reason string dict (<code class="docutils literal notranslate"><span class="pre">:460-461</span></code>); isolation-dependent irregular windows (<code class="docutils literal notranslate"><span class="pre">:545</span></code>); broad exception catch (<code class="docutils literal notranslate"><span class="pre">:369</span></code>).</p>
+</section>
+<section id="redesign">
+<h2>3. Redesign<a class="headerlink" href="#redesign" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Snapshot (J0 fields):</strong> per-line <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>, <code class="docutils literal notranslate"><span class="pre">stark_alpha</span></code>, <code class="docutils literal notranslate"><span class="pre">stark_shift</span></code>, <code class="docutils literal notranslate"><span class="pre">is_resonance</span></code>, uint8 <code class="docutils literal notranslate"><span class="pre">stark_source_class</span></code>. Measured: 28,331/28,727 lines have <code class="docutils literal notranslate"><span class="pre">stark_w</span></code>; literature-grade <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> = 244 rows. Atomic masses from <code class="docutils literal notranslate"><span class="pre">species_physics</span></code> feed Doppler widths (<code class="docutils literal notranslate"><span class="pre">stark_ne.py:504-506</span></code>). The multiplet-blend gate is atomic-data-only apart from a weak Boltzmann factor: precompute per line at snapshot build, or evaluate on device against the full 29k-line table at current T — a (C, 29k) masked reduction, trivial. Eliminates the in-loop DB query.</p></li>
+<li><p><strong>Windows:</strong> fixed-size <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">W=64)</span></code> windows <strong>gathered as raw samples</strong> around the recentred peak (recentre = masked argmax — jittable); irregular physical widths become per-candidate masks over the fixed W samples. <strong>Never resample</strong> — window-extraction parity is the main hazard (risk R9).</p></li>
+<li><p><strong>Fit:</strong> vmapped LM, K≈20 fixed iterations, 5×5 damped normal equations (<code class="docutils literal notranslate"><span class="pre">jnp.linalg.solve</span></code>); feasibility by transform (γ = exp(θ), area = exp(θ)) instead of box bounds; Voigt from the jittable profile kernel already used by <code class="docutils literal notranslate"><span class="pre">radiation/kernels.py</span></code> (ADR-0001 forward model). Per-candidate convergence is a mask, not a break.</p></li>
+<li><p><strong>Gates → masks; ranking + max_lines=5 → <code class="docutils literal notranslate"><span class="pre">top_k</span></code>; median/MAD/cohort-trim → masked median (J4 helper) + mask-and-recompute (two fixed passes); rejection reasons → uint8 codes.</strong> Instrument-floor percentile must implement <code class="docutils literal notranslate"><span class="pre">np.percentile</span></code> linear interpolation exactly.</p></li>
+<li><p><strong>Solver coupling:</strong> the width-law inversion + median combine are pure algebra over a fixed <code class="docutils literal notranslate"><span class="pre">(D,)</span></code> diagnostic array — drop directly into J7’s solve body for per-iteration re-inversion at current T.</p></li>
+</ul>
+</section>
+<section id="tolerance-contract">
+<h2>4. Tolerance contract<a class="headerlink" href="#tolerance-contract" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Per-line n_e rtol 1e-3 vs the scipy fit on identical fixed windows <em>when both converge</em> — different optimizers, same smooth 5-param least-squares basin: <strong>contract on the solution, not the optimizer path</strong>; LM-vs-trf divergence on near-degenerate profiles is handled by the same rel-RMSE/resolvability gates rather than by chasing optimizer parity.</p></li>
+<li><p>Median n_e rtol 1e-3; candidate-set equality under a documented tiebreak; percentile = exact <code class="docutils literal notranslate"><span class="pre">np.percentile</span></code> interpolation.</p></li>
+<li><p>fp64 mandatory; never run the Voigt fit fp32 (<code class="docutils literal notranslate"><span class="pre">radiation/profiles.py:425-434</span></code> is the authority).</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria">
+<h2>5. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Golden tests on real-data windows extracted from the datasets behind <code class="docutils literal notranslate"><span class="pre">docs/benchmarks/stark-vjbh-empirical-impact.md</span></code>; contract green.</p></li>
+<li><p>Candidate-gate decision sets equal to the reference on the golden corpus (incl. the blend gate, SNR, isolation, source-class, instrument-floor ladder).</p></li>
+<li><p>jit + vmap over (B × C) candidates; padding invariance; no-SQLite-in-kernel; grad-finite hard assert (n_e enters J7’s penalty term).</p></li>
+<li><p>Convergence-mask behaviour: candidates where scipy converges but LM doesn’t (or vice versa) are ≤2 % of the golden cohort and every case is gate-rejected, not silently divergent — each ledgered.</p></li>
+<li><p>Solver-coupling kernel (closed-form re-inversion + median) parity vs <code class="docutils literal notranslate"><span class="pre">iterative.py:1250-1280</span></code> at rtol 1e-12 (pure algebra).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>6. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_parity_stark.py</span></code>: window-extraction equality test (raw-sample gather vs reference slicing — byte-identical samples); LM-vs-scipy property test over synthetic Voigt profiles spanning γ/σ_G ∈ [0.02, 5] incl. the resolvability boundary; gate-decision A/B; cohort-trim/median exactness; golden real-data cohort.</p>
+</section>
+<section id="risks">
+<h2>7. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<p>MED-HIGH: (a) window-extraction parity — mitigated by raw-sample gather + byte-identity test; (b) LM vs scipy-trf on marginal profiles — bounded by the shared gates and AC-4’s ≤2 % ledgered budget; (c) exp-transform reparameterization shifts the optimizer path — accepted, contract is on the solution.</p>
+</section>
+<section id="dependencies-files">
+<h2>8. Dependencies / files<a class="headerlink" href="#dependencies-files" title="Link to this heading"></a></h2>
+<p>Depends J0 (snapshot Stark metadata, masses); soft J1. Enables J7 (pinned n_e + per-iteration coupling). Files: <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/stark.py</span></code>, tests, golden <code class="docutils literal notranslate"><span class="pre">.npz</span></code> windows. Reference untouched.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,282 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cflibs/core — Adversarial Verification Report &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">cflibs/core — Adversarial Verification Report</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/verified/core.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cflibs-core-adversarial-verification-report">
+<h1>cflibs/core — Adversarial Verification Report<a class="headerlink" href="#cflibs-core-adversarial-verification-report" title="Link to this heading"></a></h1>
+<p>Verified: 2026-06-25<br />
+Verifier model: claude-sonnet-4-6<br />
+Methodology: rg + Read on actual source at <code class="docutils literal notranslate"><span class="pre">.worktrees/v4-m5/cflibs/</span></code>; each finding independently re-derived from code.</p>
+<hr class="docutils" />
+<section id="verdict-summary">
+<h2>Verdict Summary<a class="headerlink" href="#verdict-summary" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ID</p></th>
+<th class="head"><p>Title</p></th>
+<th class="head"><p>REAL</p></th>
+<th class="head"><p>Corrected Severity</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>F1</p></td>
+<td><p>AtomicSnapshot in jax_runtime.py</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+<td><p>Confirmed domain carrier misplaced</p></td>
+</tr>
+<tr class="row-odd"><td><p>F2</p></td>
+<td><p>abc.py imports atomic.structures</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium (downgraded)</p></td>
+<td><p>Real layering smell; no actual cycle today</p></td>
+</tr>
+<tr class="row-even"><td><p>F3</p></td>
+<td><p>Cache None-sentinel bug</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+<td><p>Confirmed; affects ionization-potential cache</p></td>
+</tr>
+<tr class="row-odd"><td><p>F4</p></td>
+<td><p>JAX backend ordering hazard</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Real risk; warning logged but not enforced</p></td>
+</tr>
+<tr class="row-even"><td><p>F5</p></td>
+<td><p>pool._created decrement for pool-origin connections</p></td>
+<td><p>TRUE (partial)</p></td>
+<td><p>low (downgraded)</p></td>
+<td><p>Bug path exists; normal path never triggers it</p></td>
+</tr>
+<tr class="row-odd"><td><p>F6</p></td>
+<td><p>McWhirter constant 1.6e12 duplicated</p></td>
+<td><p>TRUE (3 sites, not 5)</p></td>
+<td><p>low</p></td>
+<td><p>bayesian/atomic.py correctly uses import — not a violation</p></td>
+</tr>
+<tr class="row-even"><td><p>F7</p></td>
+<td><p>validate_instrument_config rejects resolving_power config</p></td>
+<td><p>TRUE</p></td>
+<td><p>high</p></td>
+<td><p>Confirmed; CLI hard-errors on valid config</p></td>
+</tr>
+<tr class="row-odd"><td><p>F8</p></td>
+<td><p>test_constants.py doesn’t pin SAHA_CONST_CM3</p></td>
+<td><p>TRUE</p></td>
+<td><p>medium</p></td>
+<td><p>Confirmed</p></td>
+</tr>
+<tr class="row-even"><td><p>F9</p></td>
+<td><p>pool.py has no dedicated tests</p></td>
+<td><p>TRUE</p></td>
+<td><p>low</p></td>
+<td><p>Confirmed; no test_pool.py exists</p></td>
+</tr>
+<tr class="row-odd"><td><p>F10</p></td>
+<td><p>Cache TTL/sizes are magic numbers</p></td>
+<td><p>TRUE</p></td>
+<td><p>low</p></td>
+<td><p>Confirmed</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="detailed-verdicts">
+<h2>Detailed Verdicts<a class="headerlink" href="#detailed-verdicts" title="Link to this heading"></a></h2>
+<section id="f1-real-severity-high">
+<h3>F1 — REAL / severity: high<a class="headerlink" href="#f1-real-severity-high" title="Link to this heading"></a></h3>
+<p><strong>AtomicSnapshot domain carrier lives in jax_runtime.py</strong></p>
+<p>Confirmed. <code class="docutils literal notranslate"><span class="pre">jax_runtime.py</span></code> lines 429–551 define a 20+-field frozen dataclass with fields covering atomic line arrays, partition function polynomial coefficients, ionization potentials, Stark shift arrays, Stage-III Saha extension fields, and per-species direct-sum flags. This class is consumed directly by <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py</span></code> (which builds it via <code class="docutils literal notranslate"><span class="pre">db.snapshot()</span></code>), <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/spectrum_model.py</span></code>, and <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/atomic.py</span></code>. The pytree registration (<code class="docutils literal notranslate"><span class="pre">_snapshot_flatten</span></code>, <code class="docutils literal notranslate"><span class="pre">_snapshot_unflatten</span></code>, <code class="docutils literal notranslate"><span class="pre">jax.tree_util.register_pytree_node</span></code>) is the only JAX-runtime concern; the dataclass itself is a pure atomic domain carrier. Any atomic data model change forces editing a module named “runtime helpers for JAX backend capability checks.” Severity confirmed high.</p>
+</section>
+<section id="f2-real-severity-medium-downgraded-from-high">
+<h3>F2 — REAL / severity: medium (downgraded from high)<a class="headerlink" href="#f2-real-severity-medium-downgraded-from-high" title="Link to this heading"></a></h3>
+<p><strong>abc.py imports cflibs.atomic.structures — inverts the layer</strong></p>
+<p>Confirmed at <code class="docutils literal notranslate"><span class="pre">abc.py:12</span></code>: <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.atomic.structures</span> <span class="pre">import</span> <span class="pre">Transition,</span> <span class="pre">EnergyLevel</span></code>. However, <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/structures.py</span></code> has zero imports from <code class="docutils literal notranslate"><span class="pre">cflibs.core.*</span></code> (verified by rg), so there is no actual import cycle today — only the potential for one. The single caller <code class="docutils literal notranslate"><span class="pre">cflibs/plasma/saha_boltzmann.py</span></code> imports both <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.core.abc</span> <span class="pre">import</span> <span class="pre">SolverStrategy,</span> <span class="pre">AtomicDataSource</span></code> and later uses <code class="docutils literal notranslate"><span class="pre">Transition</span></code> from <code class="docutils literal notranslate"><span class="pre">cflibs.atomic.structures</span></code> directly. The layering violation is real but the risk is latent, not manifested. Downgrade to medium: architectural smell that should be fixed but poses no runtime hazard now.</p>
+</section>
+<section id="f3-real-severity-high">
+<h3>F3 — REAL / severity: high<a class="headerlink" href="#f3-real-severity-high" title="Link to this heading"></a></h3>
+<p><strong>Cache _make_cache_decorator silently fails to cache None results</strong></p>
+<p>Confirmed. <code class="docutils literal notranslate"><span class="pre">cache.py:149</span></code> uses <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">cached_value</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">None:</span></code> as the hit check. <code class="docutils literal notranslate"><span class="pre">LRUCache.get()</span></code> returns <code class="docutils literal notranslate"><span class="pre">None</span></code> on miss (line 64). <code class="docutils literal notranslate"><span class="pre">get_ionization_potential()</span></code> (<code class="docutils literal notranslate"><span class="pre">database.py:534–559</span></code>) returns <code class="docutils literal notranslate"><span class="pre">None</span></code> when a species is absent from <code class="docutils literal notranslate"><span class="pre">species_physics</span></code>. With <code class="docutils literal notranslate"><span class="pre">&#64;cached_ionization</span></code> applied, every call for a missing species: (a) misses the cache, (b) hits the DB, (c) calls <code class="docutils literal notranslate"><span class="pre">cache.set(key,</span> <span class="pre">None)</span></code> which stores <code class="docutils literal notranslate"><span class="pre">None</span></code>, (d) on the next call <code class="docutils literal notranslate"><span class="pre">cache.get()</span></code> returns <code class="docutils literal notranslate"><span class="pre">None</span></code>, which the wrapper interprets as a miss, and the DB is hit again. The <code class="docutils literal notranslate"><span class="pre">None</span></code>-as-sentinel design fails silently on any function that can legitimately return <code class="docutils literal notranslate"><span class="pre">None</span></code>. During benchmarks sweeping over elements not in the DB this causes O(N_queries) DB hits instead of O(1). The fix (dedicated sentinel or tuple-wrapping) is straightforward. Severity confirmed high.</p>
+</section>
+<section id="f4-real-severity-medium">
+<h3>F4 — REAL / severity: medium<a class="headerlink" href="#f4-real-severity-medium" title="Link to this heading"></a></h3>
+<p><strong>JAX_BACKEND resolved at import time; configure_jax() may run after</strong></p>
+<p>Confirmed. <code class="docutils literal notranslate"><span class="pre">jax_runtime.py:59</span></code> executes <code class="docutils literal notranslate"><span class="pre">JAX_BACKEND</span> <span class="pre">=</span> <span class="pre">_resolve_backend()</span></code> at module import time. <code class="docutils literal notranslate"><span class="pre">configure_jax()</span></code> in <code class="docutils literal notranslate"><span class="pre">platform_config.py</span></code> sets <code class="docutils literal notranslate"><span class="pre">os.environ[&quot;JAX_PLATFORMS&quot;]</span> <span class="pre">=</span> <span class="pre">&quot;cpu&quot;</span></code> on macOS (line 80), but it does NOT call <code class="docutils literal notranslate"><span class="pre">_refresh_runtime_state()</span></code> afterward. If any module imports <code class="docutils literal notranslate"><span class="pre">jax_runtime</span></code> before <code class="docutils literal notranslate"><span class="pre">configure_jax()</span></code> is called (common since <code class="docutils literal notranslate"><span class="pre">jax_runtime</span></code> is the primary JAX facade used at ~36 import sites), <code class="docutils literal notranslate"><span class="pre">JAX_BACKEND</span></code> will be stale. The warning on line 71 fires when JAX is already in <code class="docutils literal notranslate"><span class="pre">sys.modules</span></code>, which is a different (but related) check. The <code class="docutils literal notranslate"><span class="pre">_refresh_runtime_state()</span></code> function exists and is documented precisely for this purpose, but <code class="docutils literal notranslate"><span class="pre">configure_jax()</span></code> does not invoke it. Severity confirmed medium: in practice, macOS users who call <code class="docutils literal notranslate"><span class="pre">configure_jax()</span></code> get a correct JAX CPU backend but a stale <code class="docutils literal notranslate"><span class="pre">JAX_BACKEND</span> <span class="pre">==</span> <span class="pre">&quot;metal&quot;</span></code> module variable, which could mislead conditional logic that branches on <code class="docutils literal notranslate"><span class="pre">JAX_BACKEND</span></code>.</p>
+</section>
+<section id="f5-real-partial-severity-low-downgraded-from-medium">
+<h3>F5 — REAL (partial) / severity: low (downgraded from medium)<a class="headerlink" href="#f5-real-partial-severity-low-downgraded-from-medium" title="Link to this heading"></a></h3>
+<p><strong>pool._created decremented without is_new guard</strong></p>
+<p>Confirmed as coded. In <code class="docutils literal notranslate"><span class="pre">pool.py:96–101</span></code>, if <code class="docutils literal notranslate"><span class="pre">put_nowait</span></code> raises, <code class="docutils literal notranslate"><span class="pre">_created</span></code> is decremented unconditionally. The <code class="docutils literal notranslate"><span class="pre">_created</span></code> counter is only incremented when a new connection is created (line 82), not when one is taken from the pool. So for a pool-origin connection (taken from the queue at line 76), if <code class="docutils literal notranslate"><span class="pre">put_nowait</span></code> fails, <code class="docutils literal notranslate"><span class="pre">_created</span></code> is decremented below its correct value, allowing more than <code class="docutils literal notranslate"><span class="pre">max_connections</span></code> to be created subsequently.</p>
+<p>However, the census overstates the practical risk. The queue has <code class="docutils literal notranslate"><span class="pre">maxsize=max_connections</span></code>. If we took a connection from the pool (pool path), the queue now has one fewer item, so <code class="docutils literal notranslate"><span class="pre">put_nowait</span></code> on return has space. The “Queue Full” path is only reachable in a race where another thread also created connections in between, which is possible but pathological. In the normal single-thread or low-concurrency use case, the <code class="docutils literal notranslate"><span class="pre">except</span> <span class="pre">Exception</span></code> branch on line 97 is essentially unreachable. Downgrade to low: the accounting logic is wrong but the trigger condition requires a race condition unlikely in practice.</p>
+</section>
+<section id="f6-real-3-sites-not-5-severity-low">
+<h3>F6 — REAL (3 sites, not 5) / severity: low<a class="headerlink" href="#f6-real-3-sites-not-5-severity-low" title="Link to this heading"></a></h3>
+<p><strong>McWhirter constant 1.6e12 duplicated</strong></p>
+<p>Confirmed at 3 sites, but the census claim about <code class="docutils literal notranslate"><span class="pre">bayesian/atomic.py</span></code> is inaccurate. That file correctly imports <code class="docutils literal notranslate"><span class="pre">MCWHIRTER_CONST</span></code> from <code class="docutils literal notranslate"><span class="pre">cflibs.core.constants</span></code> (line 38) and uses it in actual computation (lines 542, 550). The <code class="docutils literal notranslate"><span class="pre">1.6e12</span></code> appearance in that file (line 535) is only in the docstring. The three actual code-level re-definitions are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/physical_consistency.py:49</span></code>: <code class="docutils literal notranslate"><span class="pre">_MCWHIRTER_CONST</span> <span class="pre">=</span> <span class="pre">1.6e12</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/line_selection.py:114</span></code>: <code class="docutils literal notranslate"><span class="pre">MCWHIRTER_PREFACTOR_CM3_K</span> <span class="pre">=</span> <span class="pre">1.6e12</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/temporal.py:455</span></code>: inline <code class="docutils literal notranslate"><span class="pre">1.6e12</span> <span class="pre">*</span> <span class="pre">np.sqrt(T_K)</span> <span class="pre">*</span> <span class="pre">...</span></code></p></li>
+</ul>
+<p>Finding is real but the count is 3, not 5. The comment in <code class="docutils literal notranslate"><span class="pre">physical_consistency.py:45</span></code> even notes it is “Mirror of MCWHIRTER_CONST in” (core), acknowledging the duplication. Severity confirmed low.</p>
+</section>
+<section id="f7-real-severity-high">
+<h3>F7 — REAL / severity: high<a class="headerlink" href="#f7-real-severity-high" title="Link to this heading"></a></h3>
+<p><strong>validate_instrument_config rejects resolving_power-mode configs</strong></p>
+<p>Confirmed. <code class="docutils literal notranslate"><span class="pre">config.py:234</span></code> hard-errors with <code class="docutils literal notranslate"><span class="pre">ValueError(&quot;Instrument</span> <span class="pre">config</span> <span class="pre">missing</span> <span class="pre">'resolution_fwhm_nm'&quot;)</span></code> when that key is absent, with no fallback to <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code>. Yet <code class="docutils literal notranslate"><span class="pre">VALID_ANALYSIS_KEYS</span></code> at <code class="docutils literal notranslate"><span class="pre">config.py:140</span></code> explicitly includes <code class="docutils literal notranslate"><span class="pre">&quot;resolving_power&quot;</span></code> as a valid analysis key, and <code class="docutils literal notranslate"><span class="pre">InstrumentModel</span></code> (<code class="docutils literal notranslate"><span class="pre">instrument/model.py:34–105</span></code>) has full support for <code class="docutils literal notranslate"><span class="pre">resolving_power</span></code> mode via <code class="docutils literal notranslate"><span class="pre">from_resolving_power()</span></code>. The CLI uses <code class="docutils literal notranslate"><span class="pre">validate_instrument_config()</span></code> at <code class="docutils literal notranslate"><span class="pre">cli/main.py:129</span></code> for the <code class="docutils literal notranslate"><span class="pre">forward</span></code> subcommand, meaning any config file using resolving-power mode will fail at startup with a misleading error, despite the instrument model accepting it perfectly. This is a real functional gap: resolving-power mode is a first-class documented path but the config validator blocks it. Severity confirmed high.</p>
+</section>
+<section id="f8-real-severity-medium">
+<h3>F8 — REAL / severity: medium<a class="headerlink" href="#f8-real-severity-medium" title="Link to this heading"></a></h3>
+<p><strong>test_constants.py doesn’t pin SAHA_CONST_CM3</strong></p>
+<p>Confirmed. <code class="docutils literal notranslate"><span class="pre">tests/test_constants.py</span></code> (47 lines) only checks constants exist and are positive/reasonable-order. No test derives <code class="docutils literal notranslate"><span class="pre">SAHA_CONST_CM3</span></code> from CODATA values or asserts it against a computed value. The derived value from SI constants is <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">×</span> <span class="pre">(2π</span> <span class="pre">m_e</span> <span class="pre">k_B</span> <span class="pre">/</span> <span class="pre">h²)^{3/2}</span> <span class="pre">×</span> <span class="pre">1e-6</span> <span class="pre">≈</span> <span class="pre">6.037e21</span></code>; the coded value is <code class="docutils literal notranslate"><span class="pre">6.042e21</span></code> (0.08% difference from literature rounding). A test would catch accidental edits that lose the factor-of-2 electron spin degeneracy (giving ~3.018e21, a 2× Saha ratio error). Also missing: <code class="docutils literal notranslate"><span class="pre">KB_EV</span> <span class="pre">=</span> <span class="pre">KB</span> <span class="pre">/</span> <span class="pre">E_CHARGE</span></code> cross-check and <code class="docutils literal notranslate"><span class="pre">CM_TO_EV</span></code> cross-check. Severity confirmed medium.</p>
+</section>
+<section id="f9-real-severity-low">
+<h3>F9 — REAL / severity: low<a class="headerlink" href="#f9-real-severity-low" title="Link to this heading"></a></h3>
+<p><strong>pool.py has no dedicated tests</strong></p>
+<p>Confirmed. No <code class="docutils literal notranslate"><span class="pre">tests/core/test_pool.py</span></code> or any <code class="docutils literal notranslate"><span class="pre">test_pool*.py</span></code> file exists in the test tree. The pool is only exercised through <code class="docutils literal notranslate"><span class="pre">requires_db</span></code> integration tests that create real DB connections. The F5 accounting bug and thread-safety logic are invisible to the fast gate (<code class="docutils literal notranslate"><span class="pre">-m</span> <span class="pre">&quot;not</span> <span class="pre">requires_db&quot;</span></code>). Severity confirmed low.</p>
+</section>
+<section id="f10-real-severity-low">
+<h3>F10 — REAL / severity: low<a class="headerlink" href="#f10-real-severity-low" title="Link to this heading"></a></h3>
+<p><strong>Cache TTL/sizes are magic numbers with no configuration path</strong></p>
+<p>Confirmed. <code class="docutils literal notranslate"><span class="pre">cache.py:136–138</span></code> defines three module-level <code class="docutils literal notranslate"><span class="pre">LRUCache</span></code> instances with hardcoded <code class="docutils literal notranslate"><span class="pre">max_size</span></code> and <code class="docutils literal notranslate"><span class="pre">ttl_seconds</span></code>. The hit/miss counters (<code class="docutils literal notranslate"><span class="pre">self.hits</span></code>, <code class="docutils literal notranslate"><span class="pre">self.misses</span></code>) are plain <code class="docutils literal notranslate"><span class="pre">int</span></code> attributes with no lock — concurrent benchmark workers increment them without synchronization, producing inaccurate (but not dangerous) stats. Severity confirmed low.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="missed-findings">
+<h2>Missed Findings<a class="headerlink" href="#missed-findings" title="Link to this heading"></a></h2>
+<section id="mf1-performance-low">
+<h3>MF1 — PERFORMANCE / low<a class="headerlink" href="#mf1-performance-low" title="Link to this heading"></a></h3>
+<p><strong>_make_cache_decorator pickles <code class="docutils literal notranslate"><span class="pre">self</span></code> (AtomicDatabase) on every method call</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">LRUCache._make_key(*args,</span> <span class="pre">**kwargs)</span></code> uses <code class="docutils literal notranslate"><span class="pre">pickle.dumps((args,</span> <span class="pre">sorted(kwargs.items())))</span></code>. When a method decorated with <code class="docutils literal notranslate"><span class="pre">&#64;cached_ionization</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;cached_transitions</span></code> is called, <code class="docutils literal notranslate"><span class="pre">args[0]</span></code> is <code class="docutils literal notranslate"><span class="pre">self</span></code> (the <code class="docutils literal notranslate"><span class="pre">AtomicDatabase</span></code> instance). <code class="docutils literal notranslate"><span class="pre">AtomicDatabase.__getstate__</span></code> strips <code class="docutils literal notranslate"><span class="pre">_pool</span></code> and <code class="docutils literal notranslate"><span class="pre">conn</span></code>, so pickling succeeds, but it serializes the full database object (including in-memory <code class="docutils literal notranslate"><span class="pre">OrderedDict</span></code> caches of prior results) on every cache lookup — before checking whether the key is already in the cache. For a 1000-element manifold sweep, each lookup serializes the database twice (once for key derivation on cache hit, once on miss). A simple fix: use <code class="docutils literal notranslate"><span class="pre">(id(self),</span> <span class="pre">*args[1:])</span></code> as the key tuple for bound methods, or expose a <code class="docutils literal notranslate"><span class="pre">cache_key_prefix</span></code> per database instance. This is a performance issue, not a correctness bug.</p>
+</section>
+<section id="mf2-correctness-medium">
+<h3>MF2 — CORRECTNESS / medium<a class="headerlink" href="#mf2-correctness-medium" title="Link to this heading"></a></h3>
+<p><strong>_make_cache_decorator stores result unconditionally even when None, but only reads back if not None</strong></p>
+<p>This is technically part of F3 but worth separating: the <code class="docutils literal notranslate"><span class="pre">cache.set(cache_key,</span> <span class="pre">result)</span></code> at line 153 always runs, including when <code class="docutils literal notranslate"><span class="pre">result</span> <span class="pre">is</span> <span class="pre">None</span></code>. This means the cache fills up with <code class="docutils literal notranslate"><span class="pre">None</span></code>-valued entries for missing species that will never be returned as hits. These entries count toward <code class="docutils literal notranslate"><span class="pre">max_size</span></code> and trigger LRU eviction of <em>valid</em> non-None entries. In the worst case (many missing elements), the ionization cache fills entirely with phantom <code class="docutils literal notranslate"><span class="pre">None</span></code> entries, evicting real cached values and causing valid queries to miss repeatedly. The fix for F3 (sentinel object or tuple-wrapping) resolves this as well.</p>
+</section>
+<section id="mf3-correctness-low">
+<h3>MF3 — CORRECTNESS / low<a class="headerlink" href="#mf3-correctness-low" title="Link to this heading"></a></h3>
+<p><strong>configure_jax() does not call _refresh_runtime_state() after setting env vars</strong></p>
+<p>This is implicit in F4 but the census fix description omits the specific call needed: <code class="docutils literal notranslate"><span class="pre">configure_jax()</span></code> should end with <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.core.jax_runtime</span> <span class="pre">import</span> <span class="pre">_refresh_runtime_state;</span> <span class="pre">_refresh_runtime_state()</span></code> (or better, accept a module-level refresh hook). Without this, callers who do <code class="docutils literal notranslate"><span class="pre">configure_jax()</span></code> then check <code class="docutils literal notranslate"><span class="pre">cflibs.core.jax_runtime.JAX_BACKEND</span></code> get a stale value. The census describes the symptom but not the concrete one-line fix that already exists (<code class="docutils literal notranslate"><span class="pre">_refresh_runtime_state()</span></code>).</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

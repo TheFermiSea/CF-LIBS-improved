@@ -1,0 +1,310 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stark T-factor fix (CF-LIBS-improved-vjbh) — empirical delta report &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Stark T-factor fix (CF-LIBS-improved-vjbh) — empirical delta report</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/benchmarks/stark-vjbh-empirical-impact.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="stark-t-factor-fix-cf-libs-improved-vjbh-empirical-delta-report">
+<h1>Stark T-factor fix (CF-LIBS-improved-vjbh) — empirical delta report<a class="headerlink" href="#stark-t-factor-fix-cf-libs-improved-vjbh-empirical-delta-report" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><strong>Before</strong>: <code class="docutils literal notranslate"><span class="pre">output/stark-fix-vjbh/before</span></code> (8 records)</p></li>
+<li><p><strong>After</strong>:  <code class="docutils literal notranslate"><span class="pre">output/stark-fix-vjbh/after</span></code> (8 records)</p></li>
+<li><p>Bootstrap CI iterations: 1000</p></li>
+<li><p>Method: per-metric paired delta (join key (‘dataset_id’, ‘spectrum_id’, ‘composition_workflow_name’, ‘composition_config_name’)) with 1000-sample bootstrap 95% CI on the mean.</p></li>
+</ul>
+<section id="control-workflow-iterative-jax-sanity-check">
+<h2>Control workflow <code class="docutils literal notranslate"><span class="pre">iterative_jax</span></code> sanity check<a class="headerlink" href="#control-workflow-iterative-jax-sanity-check" title="Link to this heading"></a></h2>
+<p>✅ All non-wallclock metrics show |Δ| &lt; 1e-12 — the unaffected control workflow is bit-stable across the two runs, so any deltas observed for the <code class="docutils literal notranslate"><span class="pre">bayesian</span></code> workflow below are attributable to the Stark T-factor change.</p>
+</section>
+<section id="bayesian-workflow-deltas">
+<h2>Bayesian workflow deltas<a class="headerlink" href="#bayesian-workflow-deltas" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Metric</p></th>
+<th class="head text-right"><p>Median before</p></th>
+<th class="head text-right"><p>Median after</p></th>
+<th class="head"><p>Δ mean [95% CI]</p></th>
+<th class="head text-right"><p>N paired</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">aitchison</span></code></p></td>
+<td class="text-right"><p>+25.4253</p></td>
+<td class="text-right"><p>+25.4253</p></td>
+<td><p>+0.0000 [+0.0000, +0.0000]</p></td>
+<td class="text-right"><p>3</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rmse</span></code></p></td>
+<td class="text-right"><p>+0.3055</p></td>
+<td class="text-right"><p>+0.3055</p></td>
+<td><p>+0.0000 [+0.0000, +0.0000]</p></td>
+<td class="text-right"><p>3</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">temperature_error_frac</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ne_error_frac</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">elapsed_seconds</span></code></p></td>
+<td class="text-right"><p>+1073.6577</p></td>
+<td class="text-right"><p>+945.0561</p></td>
+<td><p>-184.9991 [-553.5706, +10.8477]</p></td>
+<td class="text-right"><p>4</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rhat_max</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ess_bulk_min</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">k_hat_max</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">divergent_count</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">coverage</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="per-dataset-aitchison-distance-bayesian-workflow">
+<h2>Per-dataset Aitchison distance (bayesian workflow)<a class="headerlink" href="#per-dataset-aitchison-distance-bayesian-workflow" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Dataset</p></th>
+<th class="head text-right"><p>N paired</p></th>
+<th class="head text-right"><p>Median before</p></th>
+<th class="head text-right"><p>Median after</p></th>
+<th class="head"><p>Δ mean [95% CI]</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">aalto_libs</span></code></p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>+0.0000</p></td>
+<td class="text-right"><p>+0.0000</p></td>
+<td><p>+0.0000 [+0.0000, +0.0000]</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bhvo2_usgs</span></code></p></td>
+<td class="text-right"><p>2</p></td>
+<td class="text-right"><p>+25.4253</p></td>
+<td class="text-right"><p>+25.4253</p></td>
+<td><p>+0.0000 [+0.0000, +0.0000]</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="control-iterative-jax-deltas-full-table">
+<h2>Control <code class="docutils literal notranslate"><span class="pre">iterative_jax</span></code> deltas (full table)<a class="headerlink" href="#control-iterative-jax-deltas-full-table" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Metric</p></th>
+<th class="head text-right"><p>Median before</p></th>
+<th class="head text-right"><p>Median after</p></th>
+<th class="head"><p>Δ mean [95% CI]</p></th>
+<th class="head text-right"><p>N paired</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">aitchison</span></code></p></td>
+<td class="text-right"><p>+25.4253</p></td>
+<td class="text-right"><p>+25.4253</p></td>
+<td><p>+0.0000 [+0.0000, +0.0000]</p></td>
+<td class="text-right"><p>3</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rmse</span></code></p></td>
+<td class="text-right"><p>+0.3055</p></td>
+<td class="text-right"><p>+0.3055</p></td>
+<td><p>+0.0000 [+0.0000, +0.0000]</p></td>
+<td class="text-right"><p>3</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">temperature_error_frac</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ne_error_frac</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">elapsed_seconds</span></code></p></td>
+<td class="text-right"><p>+0.2716</p></td>
+<td class="text-right"><p>+0.2466</p></td>
+<td><p>-0.0287 [-0.0371, -0.0226]</p></td>
+<td class="text-right"><p>4</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rhat_max</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ess_bulk_min</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">k_hat_max</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">divergent_count</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">coverage</span></code></p></td>
+<td class="text-right"><p>+nan</p></td>
+<td class="text-right"><p>+nan</p></td>
+<td><p>—</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,241 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>McWhirter LTE Criterion Audit &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">McWhirter LTE Criterion Audit</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/mcwhirter-lte.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mcwhirter-lte-criterion-audit">
+<h1>McWhirter LTE Criterion Audit<a class="headerlink" href="#mcwhirter-lte-criterion-audit" title="Link to this heading"></a></h1>
+<section id="verdict">
+<h2>VERDICT<a class="headerlink" href="#verdict" title="Link to this heading"></a></h2>
+<p><strong>correct</strong> — severity: <strong>low</strong></p>
+<p>The McWhirter constant <code class="docutils literal notranslate"><span class="pre">1.6e12</span></code> is numerically exact per every authoritative source. The resonance-dE M2 claim is correct in physics, but the code’s default deviation (using <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> instead of the resonance-line energy) is a <em>known, documented, conservative</em> bias — it inflates the LTE threshold up to 15–25× vs the paper form, which means low-n_e plasmas may be falsely flagged as non-LTE (false negatives, not false positives). An environment flag <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE=1</span></code> exists to switch to the paper-correct form. Because the error direction is conservative and the fix path is in place, severity is <strong>low</strong>.</p>
+</section>
+<hr class="docutils" />
+<section id="ground-truth">
+<h2>GROUND TRUTH<a class="headerlink" href="#ground-truth" title="Link to this heading"></a></h2>
+<section id="constant-value-1-6e12">
+<h3>Constant value: 1.6e12<a class="headerlink" href="#constant-value-1-6e12" title="Link to this heading"></a></h3>
+<p>All five of the following peer-reviewed sources give exactly <code class="docutils literal notranslate"><span class="pre">1.6</span> <span class="pre">×</span> <span class="pre">10¹²</span></code> for the McWhirter prefactor with units <code class="docutils literal notranslate"><span class="pre">cm⁻³</span> <span class="pre">K⁻¹/²</span> <span class="pre">eV⁻³</span></code>:</p>
+<ol class="arabic simple">
+<li><p><strong>McWhirter, R.W.P. (1965)</strong> — “Spectral Intensities” in <em>Plasma Diagnostic Techniques</em>, Eds. Huddlestone &amp; Leonard, Academic Press, p. 201. <em>(Primary source — where the criterion originates.)</em></p></li>
+<li><p><strong>Cristoforetti, G. et al. (2010)</strong> — “Local Thermodynamic Equilibrium in Laser-Induced Breakdown Spectroscopy: Beyond the McWhirter criterion”, <em>Spectrochim. Acta B</em> 65, 86–95. DOI: <a class="reference external" href="https://doi.org/10.1016/j.sab.2009.11.005">10.1016/j.sab.2009.11.005</a><br />
+Eq. (1): <code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">[cm⁻³]</span> <span class="pre">≥</span> <span class="pre">1.6</span> <span class="pre">×</span> <span class="pre">10¹²</span> <span class="pre">T^{1/2}</span> <span class="pre">(ΔE)³</span></code></p></li>
+<li><p><strong>Griem, H.R. (1997)</strong> — <em>Principles of Plasma Spectroscopy</em>, Cambridge University Press, p. 218.</p></li>
+<li><p><strong>Aragon, C. &amp; Aguilera, J.A. (2008)</strong> — “Characterization of laser induced plasmas by optical emission spectroscopy”, <em>Spectrochim. Acta B</em> 63, 893–916. DOI: <a class="reference external" href="https://doi.org/10.1016/j.sab.2008.05.010">10.1016/j.sab.2008.05.010</a></p></li>
+<li><p><strong>Tognoni, E. et al. (2010)</strong> — “Calibration-free laser-induced breakdown spectroscopy: State of the art”, <em>Spectrochim. Acta B</em> 65, 1–14. DOI: <a class="reference external" href="https://doi.org/10.1016/j.sab.2009.07.006">10.1016/j.sab.2009.07.006</a></p></li>
+</ol>
+<p>The derivation path: van Regemorter (1962, ApJ 136, 906) electron-impact rate coefficient <code class="docutils literal notranslate"><span class="pre">C₁₂</span> <span class="pre">~</span> <span class="pre">2.16×10⁻⁶</span> <span class="pre">g̅</span> <span class="pre">T_eV^{-0.5}</span> <span class="pre">/</span> <span class="pre">(ΔE)²</span></code>, combined with the requirement that <code class="docutils literal notranslate"><span class="pre">n_e</span> <span class="pre">·</span> <span class="pre">C₁₂</span> <span class="pre">≳</span> <span class="pre">A₂₁</span></code> for a representative allowed transition with <code class="docutils literal notranslate"><span class="pre">g̅</span> <span class="pre">~</span> <span class="pre">0.2</span></code>, yields the <code class="docutils literal notranslate"><span class="pre">T^{0.5}</span> <span class="pre">(ΔE)^3</span></code> scaling. The numerical prefactor <code class="docutils literal notranslate"><span class="pre">1.6×10¹²</span></code> embeds the van Regemorter numerical factor, the Gaunt-factor approximation, and unit conversion from SI/Rydberg to <code class="docutils literal notranslate"><span class="pre">cm⁻³/K/eV</span></code>.</p>
+</section>
+<section id="resonance-de-definition-m2">
+<h3>Resonance-dE definition (M2)<a class="headerlink" href="#resonance-de-definition-m2" title="Link to this heading"></a></h3>
+<p>Cristoforetti et al. (2010), Sec. 2.1, states explicitly:</p>
+<blockquote>
+<div><p>“In formula (1) ΔE represents the energy gap of the strongest resonance transition, i.e. the transition between the fundamental level and the first excited level with the same parity.”</p>
+</div></blockquote>
+<p>This is the <strong>resonance (ground → first-excited)</strong> energy, <strong>not</strong> the maximum upper-level energy of observed lines.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="code-value-numerical">
+<h2>CODE VALUE (numerical)<a class="headerlink" href="#code-value-numerical" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> \
+<span class="n">PYTHONPATH</span><span class="o">=/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="n">JAX_PLATFORMS</span><span class="o">=</span><span class="n">cpu</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.core.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCWHIRTER_CONST</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;MCWHIRTER_CONST = </span><span class="si">{</span><span class="n">MCWHIRTER_CONST</span><span class="si">:</span><span class="s1">.4e</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.plasma.lte_validator</span><span class="w"> </span><span class="kn">import</span> <span class="n">LTEValidator</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">LTEValidator</span><span class="p">()</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">T_K</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span> <span class="n">n_e_cm3</span><span class="o">=</span><span class="mf">1e17</span><span class="p">,</span> <span class="n">delta_E_eV</span><span class="o">=</span><span class="mf">5.0</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;n_e_required = </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">mcwhirter</span><span class="o">.</span><span class="n">n_e_required</span><span class="si">:</span><span class="s1">.4e</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;ratio = </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">mcwhirter</span><span class="o">.</span><span class="n">ratio</span><span class="si">:</span><span class="s1">.3f</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MCWHIRTER_CONST</span> <span class="o">=</span> <span class="mf">1.6000e+12</span>
+<span class="n">n_e_required</span> <span class="o">=</span> <span class="mf">2.0000e+16</span>
+<span class="n">ratio</span> <span class="o">=</span> <span class="mf">5.000</span>
+</pre></div>
+</div>
+<p>Location: <code class="docutils literal notranslate"><span class="pre">/home/brian/code/CF-LIBS-improved/.worktrees/v4-m5/cflibs/core/constants.py:80</span></code></p>
+<section id="m2-de-definition-default-behavior">
+<h3>M2 (dE definition) default behavior:<a class="headerlink" href="#m2-de-definition-default-behavior" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> \
+<span class="n">PYTHONPATH</span><span class="o">=/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="n">JAX_PLATFORMS</span><span class="o">=</span><span class="n">cpu</span> <span class="n">python</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.plasma.lte_validator</span><span class="w"> </span><span class="kn">import</span> <span class="n">LTEValidator</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">LTEValidator</span><span class="p">()</span>
+<span class="c1"># T=8000 K, n_e=1e16 — borderline case</span>
+<span class="n">r_max</span>  <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">check_mcwhirter</span><span class="p">(</span><span class="n">T_K</span><span class="o">=</span><span class="mi">8000</span><span class="p">,</span> <span class="n">n_e_cm3</span><span class="o">=</span><span class="mf">1e16</span><span class="p">,</span> <span class="n">delta_E_eV</span><span class="o">=</span><span class="mf">6.0</span><span class="p">)</span>  <span class="c1"># max(E_k)</span>
+<span class="n">r_res</span>  <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">check_mcwhirter</span><span class="p">(</span><span class="n">T_K</span><span class="o">=</span><span class="mi">8000</span><span class="p">,</span> <span class="n">n_e_cm3</span><span class="o">=</span><span class="mf">1e16</span><span class="p">,</span> <span class="n">delta_E_eV</span><span class="o">=</span><span class="mf">2.4</span><span class="p">)</span>  <span class="c1"># resonance</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;max(E_k)=6eV:     threshold=</span><span class="si">{</span><span class="n">r_max</span><span class="o">.</span><span class="n">n_e_required</span><span class="si">:</span><span class="s1">.2e</span><span class="si">}</span><span class="s1">, pass=</span><span class="si">{</span><span class="n">r_max</span><span class="o">.</span><span class="n">satisfied</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;resonance=2.4eV:  threshold=</span><span class="si">{</span><span class="n">r_res</span><span class="o">.</span><span class="n">n_e_required</span><span class="si">:</span><span class="s1">.2e</span><span class="si">}</span><span class="s1">, pass=</span><span class="si">{</span><span class="n">r_res</span><span class="o">.</span><span class="n">satisfied</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>Output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">max</span><span class="p">(</span><span class="n">E_k</span><span class="p">)</span><span class="o">=</span><span class="mi">6</span><span class="n">eV</span><span class="p">:</span>     <span class="n">threshold</span><span class="o">=</span><span class="mf">3.09e+16</span><span class="p">,</span> <span class="k">pass</span><span class="o">=</span><span class="kc">False</span>
+<span class="n">resonance</span><span class="o">=</span><span class="mf">2.4</span><span class="n">eV</span><span class="p">:</span>  <span class="n">threshold</span><span class="o">=</span><span class="mf">1.98e+15</span><span class="p">,</span> <span class="k">pass</span><span class="o">=</span><span class="kc">True</span>
+</pre></div>
+</div>
+<p>Verdict flips at low-n_e borderline conditions: <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> says non-LTE, <code class="docutils literal notranslate"><span class="pre">resonance</span> <span class="pre">dE</span></code> says LTE — the default code is <strong>15.6× more conservative</strong> than the paper form for Fe I (ratio = <code class="docutils literal notranslate"><span class="pre">(6.0/2.4)³</span> <span class="pre">=</span> <span class="pre">15.6</span></code>).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="delta-interpretation">
+<h2>DELTA &amp; INTERPRETATION<a class="headerlink" href="#delta-interpretation" title="Link to this heading"></a></h2>
+<section id="constant-1-6e12-zero-delta">
+<h3>Constant (1.6e12): Zero delta<a class="headerlink" href="#constant-1-6e12-zero-delta" title="Link to this heading"></a></h3>
+<p>Code = 1.600×10¹², literature = 1.6×10¹². Exact match. No error.</p>
+</section>
+<section id="m2-de-definition-conservative-bias-known-and-documented">
+<h3>M2 (dE definition): Conservative bias, known and documented<a class="headerlink" href="#m2-de-definition-conservative-bias-known-and-documented" title="Link to this heading"></a></h3>
+<p>The code’s <strong>default</strong> path (<code class="docutils literal notranslate"><span class="pre">_delta_e_from_observations</span></code>) uses <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> from the observed upper levels. For Fe I, typical LIBS lines have upper levels up to ~6–7 eV, while the resonance energy is ~2.4 eV. The threshold scales as <code class="docutils literal notranslate"><span class="pre">(dE)³</span></code>, so:</p>
+<ul class="simple">
+<li><p>Fe I: <code class="docutils literal notranslate"><span class="pre">(6.0/2.4)³</span> <span class="pre">≈</span> <span class="pre">15.6×</span></code> overstatement of required <code class="docutils literal notranslate"><span class="pre">n_e</span></code></p></li>
+<li><p>Ca I: similar magnitude</p></li>
+</ul>
+<p>At <code class="docutils literal notranslate"><span class="pre">T=8000</span> <span class="pre">K,</span> <span class="pre">n_e=1×10¹⁶</span> <span class="pre">cm⁻³</span></code> (plausible low-density LIBS):</p>
+<ul class="simple">
+<li><p>Paper-correct threshold: <code class="docutils literal notranslate"><span class="pre">1.98×10¹⁵</span> <span class="pre">cm⁻³</span></code> → <strong>LTE satisfied</strong></p></li>
+<li><p>Code default threshold: <code class="docutils literal notranslate"><span class="pre">3.09×10¹⁶</span> <span class="pre">cm⁻³</span></code> → <strong>LTE flagged as violated (false negative)</strong></p></li>
+</ul>
+<p><strong>Physical consequence:</strong> The LTE quality flag in <code class="docutils literal notranslate"><span class="pre">CFLIBSResult</span></code> will report <code class="docutils literal notranslate"><span class="pre">lte_mcwhirter_satisfied=False</span></code> for plasmas that <em>do</em> satisfy the true McWhirter criterion. This is a conservative error — it may suppress valid results or generate spurious warnings — but it does <strong>not</strong> permit non-LTE spectra to pass silently. The composition/temperature calculation itself is not affected; only the quality-metric flag is wrong.</p>
+<p><strong>Mitigating factors:</strong></p>
+<ol class="arabic simple">
+<li><p>The code acknowledges this in the <code class="docutils literal notranslate"><span class="pre">_delta_e_from_observations</span></code> docstring: “bounds the resonance-to-upper-level transition and is far larger than the adjacent-gap value.”</p></li>
+<li><p>The environment flag <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE=1</span></code> (in <code class="docutils literal notranslate"><span class="pre">iterative.py:2161</span></code>) switches to the paper-correct resonance dE. This flag is <strong>off by default</strong>.</p></li>
+<li><p>The code explicitly calls this sub-lever “M2” and links it to Cristoforetti (2010).</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="fix">
+<h2>FIX<a class="headerlink" href="#fix" title="Link to this heading"></a></h2>
+<section id="constant-no-fix-needed">
+<h3>Constant: no fix needed<a class="headerlink" href="#constant-no-fix-needed" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">MCWHIRTER_CONST</span> <span class="pre">=</span> <span class="pre">1.6e12</span></code> in <code class="docutils literal notranslate"><span class="pre">cflibs/core/constants.py:80</span></code> is exact.</p>
+</section>
+<section id="m2-de-definition-fix-exists-but-off-by-default">
+<h3>M2 (dE definition): fix exists but off by default<a class="headerlink" href="#m2-de-definition-fix-exists-but-off-by-default" title="Link to this heading"></a></h3>
+<p>The correct fix is to <strong>flip the default</strong> of <code class="docutils literal notranslate"><span class="pre">CFLIBS_MCWHIRTER_RESONANCE_DE</span></code> to <code class="docutils literal notranslate"><span class="pre">on</span></code> (or <code class="docutils literal notranslate"><span class="pre">True</span></code>), or better, to make <code class="docutils literal notranslate"><span class="pre">_delta_e_from_observations</span></code> use the ground→first-excited resonance transition energy from the atomic database rather than <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code>.</p>
+<p>Current path: <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:2161</span></code> — the environment flag gates the resonance dE.<br />
+Correct default: enable the resonance-dE path (<code class="docutils literal notranslate"><span class="pre">delta_e_override</span> <span class="pre">=</span> <span class="pre">self._mcwhirter_delta_e_resonance(observations)</span></code>) without requiring an env flag.</p>
+<p>Additionally, <code class="docutils literal notranslate"><span class="pre">lte_validator.py:387–389</span></code> should document that <code class="docutils literal notranslate"><span class="pre">max(E_k)</span></code> is an approximation that overstates the threshold, not a faithful implementation of McWhirter/Cristoforetti.</p>
+<p>For the code to be wrong <em>in the dangerous direction</em>, the dE would need to be <strong>smaller</strong> than the resonance transition (e.g., using adjacent-level gaps), which would <em>under</em>-estimate the required <code class="docutils literal notranslate"><span class="pre">n_e</span></code> and allow non-LTE plasmas to pass silently. The current error goes the other way (too large dE → too high threshold → false LTE failures). Low severity.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

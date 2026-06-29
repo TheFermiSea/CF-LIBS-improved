@@ -1,0 +1,185 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arbor integration (autonomous accuracy optimization) &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Arbor integration (autonomous accuracy optimization)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/arbor-integration.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="arbor-integration-autonomous-accuracy-optimization">
+<h1>Arbor integration (autonomous accuracy optimization)<a class="headerlink" href="#arbor-integration-autonomous-accuracy-optimization" title="Link to this heading"></a></h1>
+<p><a class="reference external" href="https://github.com/RUC-NLPIR/Arbor">Arbor</a> in <strong>keyless mode</strong>: the host Claude Code agent’s model
+drives the research loop; Arbor contributes the durable Idea Tree, git-worktree isolation, guarded
+merges, and reports as deterministic tools. No separate API keys. This wires it to CF-LIBS’s
+existing harness so the autonomous search is <em>gated and anti-overfit by construction</em>.</p>
+<section id="the-adapter-what-i-built-the-rest">
+<h2>The adapter (what I built — “the rest”)<a class="headerlink" href="#the-adapter-what-i-built-the-rest" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Piece</p></th>
+<th class="head"><p>File</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Eval + correctness gate</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scripts/arbor/run_eval.py</span></code></p></td>
+<td><p>Arbor runs this per candidate in a worktree</p></td>
+</tr>
+<tr class="row-odd"><td><p>Research config</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">scripts/arbor/research_config.yaml</span></code></p></td>
+<td><p>objective + coordinator settings</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong><code class="docutils literal notranslate"><span class="pre">run_eval.py</span></code> does two things, in order:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>CORRECTNESS GATE (the keystone).</strong> Arbor’s built-in merge gate is <em>accuracy-only</em>, so
+correctness is enforced here: run the physics-only import blocklist (<code class="docutils literal notranslate"><span class="pre">ruff</span> <span class="pre">--select</span> <span class="pre">TID251</span> <span class="pre">cflibs/</span></code>) + the cflibs-formal oracle conformance (<code class="docutils literal notranslate"><span class="pre">tests/oracle/</span></code> + the csigma/reliability/
+identifiability tests). On any failure → <code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">-1e9</span></code>, <code class="docutils literal notranslate"><span class="pre">valid=false</span></code> → Arbor never merges it.
+This is the mechanism that <strong>auto-catches Cσ-class silent errors</strong> (a candidate that scores well
+but is physically wrong) — the same <code class="docutils literal notranslate"><span class="pre">fitness</span> <span class="pre">=</span> <span class="pre">-inf</span> <span class="pre">on</span> <span class="pre">violation</span></code> idea as
+<code class="docutils literal notranslate"><span class="pre">cflibs/evolution/evaluator.py</span></code>.</p></li>
+<li><p><strong>SCORE.</strong> Median composition RMSE (wt%) from the production <code class="docutils literal notranslate"><span class="pre">run_scoreboard</span></code>. Emits
+<code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">100/RMSE</span></code> (maximize) so Arbor’s <code class="docutils literal notranslate"><span class="pre">merge_threshold</span></code> (% gain) maps ~1:1 to relative RMSE
+reduction. Also emits the raw <code class="docutils literal notranslate"><span class="pre">rmse_wt</span></code> and per-dataset breakdown.</p></li>
+</ol>
+<p><strong>Anti-overfit splits use the project’s own tiers (no leakage):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--split</span> <span class="pre">dev</span></code> → <strong>optimization</strong> tier (<code class="docutils literal notranslate"><span class="pre">supercam_labcal</span></code> + <code class="docutils literal notranslate"><span class="pre">aalto</span></code>) — iterate here.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--split</span> <span class="pre">test</span></code> → <strong>holdout</strong> tier (<code class="docutils literal notranslate"><span class="pre">supercam_scct</span></code> n=547 + <code class="docutils literal notranslate"><span class="pre">bhvo2_chemcam</span></code> n=4) — the merge gate.</p></li>
+</ul>
+</section>
+<section id="scope-where-accuracy-can-actually-move">
+<h2>Scope (where accuracy can actually move)<a class="headerlink" href="#scope-where-accuracy-can-actually-move" title="Link to this heading"></a></h2>
+<p>The config points Arbor at the two reachable levers and <em>forbids</em> the inert ones (this session’s
+findings): <strong>self-absorption correction</strong> (the measured −0.21 wt% win) and <strong>atomic-data/grade
+weighting</strong> (<code class="docutils literal notranslate"><span class="pre">composition_error_bound</span></code> says per-line density error dominates on high-SNR data). It
+forbids re-exploring the proven-inert line-selection gates, and forbids touching the harness, data,
+tests, the oracle, or adding ML imports.</p>
+</section>
+<section id="honest-bound">
+<h2>Honest bound<a class="headerlink" href="#honest-bound" title="Link to this heading"></a></h2>
+<p>Arbor makes the <em>search</em> structured, parallel, gated, and resumable — it does <strong>not</strong> change the
+finding that the deeper bottleneck is atomic-data <em>quality</em>, which code-optimization can’t reach.
+Its value is exhaustively + safely exploring the two levers above, with the oracle as the gate.</p>
+</section>
+<section id="run-it">
+<h2>Run it<a class="headerlink" href="#run-it" title="Link to this heading"></a></h2>
+<p>See <code class="docutils literal notranslate"><span class="pre">scripts/arbor/research_config.yaml</span></code> header, or the command block handed off with this commit.
+Verify the eval first: <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">scripts/arbor/run_eval.py</span> <span class="pre">--split</span> <span class="pre">dev</span> <span class="pre">--max-spectra</span> <span class="pre">20</span></code> should print
+<code class="docutils literal notranslate"><span class="pre">&quot;valid&quot;:</span> <span class="pre">true</span></code> and a real <code class="docutils literal notranslate"><span class="pre">score</span></code>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

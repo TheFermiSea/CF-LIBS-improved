@@ -1,0 +1,658 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CF-LIBS-improved codebase audit — 2026-05-19 &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CF-LIBS-improved codebase audit — 2026-05-19</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/architecture/codebase-audit-2026-05-19.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cf-libs-improved-codebase-audit-2026-05-19">
+<h1>CF-LIBS-improved codebase audit — 2026-05-19<a class="headerlink" href="#cf-libs-improved-codebase-audit-2026-05-19" title="Link to this heading"></a></h1>
+<p>Cross-cutting architecture / quality / docs / performance review, produced
+by four parallel read-only agents (architect, code-reviewer, scribe,
+feature-dev:code-explorer). Each finding cites file:line evidence. Items
+are grouped by theme and prioritized by impact-over-effort.</p>
+<p><strong>Constraint note:</strong> NotebookLM MCP was disconnected when this audit ran,
+so the citation-gap list at the bottom is staged for manual ingestion
+into NotebookLM. Serena was also disconnected — agents fell back to grep,
+so line numbers may be ±1–2.</p>
+<hr class="docutils" />
+<section id="top-10-actions-do-these-first">
+<h2>Top 10 actions (do these first)<a class="headerlink" href="#top-10-actions-do-these-first" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>#</p></th>
+<th class="head"><p>Action</p></th>
+<th class="head"><p>Severity</p></th>
+<th class="head"><p>Effort</p></th>
+<th class="head"><p>Bead</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>Retarget new-location modules to stop importing through legacy flat shims</p></td>
+<td><p>high</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">arch-1</span></code> → <a class="reference internal" href="#.beads/issues.jsonl"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-38xr</span></code></span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>Enable JAX on-disk compile cache at cluster startup</p></td>
+<td><p>high</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">perf-1</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-vym9</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>Move <code class="docutils literal notranslate"><span class="pre">_saha_two_stage_populations</span></code> index-building out of every leapfrog call</p></td>
+<td><p>high</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">perf-2</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-wiqb</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>4</p></td>
+<td><p>Extract <code class="docutils literal notranslate"><span class="pre">unified.py</span></code> (was 2206 lines at audit time; 2423+ at b225e41) into Runner + 4 sibling modules</p></td>
+<td><p>high</p></td>
+<td><p>M</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">arch-2</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-oso3</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>5</p></td>
+<td><p>Promote <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> arrays to float64 once (eliminate per-call dtype promotion)</p></td>
+<td><p>high</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">perf-3</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-2ygu</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>6</p></td>
+<td><p>Replace <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code> species dict with flat pytree array</p></td>
+<td><p>high</p></td>
+<td><p>M</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">perf-4</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-xtak</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>7</p></td>
+<td><p>Consolidate setup instructions across README/CLAUDE.md/AGENTS.md</p></td>
+<td><p>medium</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docs-1</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-v3r6</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>8</p></td>
+<td><p>Add <code class="docutils literal notranslate"><span class="pre">.bib</span></code> entries for the 12 hanging code citations (use Asta/paper_search)</p></td>
+<td><p>medium</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docs-2</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-s5ba</span></code> (CLOSED)</p></td>
+</tr>
+<tr class="row-even"><td><p>9</p></td>
+<td><p>Introduce <code class="docutils literal notranslate"><span class="pre">BaseIdentifier</span></code> to share peak/baseline/coverage preprocessing</p></td>
+<td><p>medium</p></td>
+<td><p>M</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">arch-3</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-5d1b</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>10</p></td>
+<td><p>Delete the <code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> (trailing-s) shim package</p></td>
+<td><p>medium</p></td>
+<td><p>S</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">arch-4</span></code> → <code class="docutils literal notranslate"><span class="pre">CF-LIBS-improved-4ig9</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Wall-time effect of #1–6:</strong> with the architecture fixes plus the four
+perf wins, the bayesian benchmark per-spectrum time projects from 945 s →
+~780 s on V100S (~17% reduction, primarily from cache reuse + dtype +
+Python overhead elimination).</p>
+</section>
+<hr class="docutils" />
+<section id="architecture">
+<h2>1. Architecture<a class="headerlink" href="#architecture" title="Link to this heading"></a></h2>
+<section id="arch-1-new-location-modules-round-trip-through-legacy-flat-shims-high-s">
+<h3>arch-1 — New-location modules round-trip through legacy flat shims <strong>(HIGH / S)</strong><a class="headerlink" href="#arch-1-new-location-modules-round-trip-through-legacy-flat-shims-high-s" title="Link to this heading"></a></h3>
+<p>The ADR-0001 sub-package split moved code from <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/{boltzmann,</span> <span class="pre">closure,</span> <span class="pre">solver,</span> <span class="pre">…}.py</span></code> into <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/{physics,solve,…}/*.py</span></code>. The
+old flat paths were kept as thin shims that <code class="docutils literal notranslate"><span class="pre">*</span></code>-import from the new
+locations. But the <strong>new</strong> locations still import from the <strong>old</strong> shims:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/uncertainty.py:23</span></code> → <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.uncertainty</span> <span class="pre">import</span> <span class="pre">…</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/matrix_effects.py:40</span></code> → <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solver</span> <span class="pre">import</span> <span class="pre">CFLIBSResult</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/closed_form.py:30</span></code> → <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">cflibs.inversion.solver</span> <span class="pre">import</span> <span class="pre">CFLIBSResult</span></code></p></li>
+<li><p>Many more across <code class="docutils literal notranslate"><span class="pre">physics/</span></code>, <code class="docutils literal notranslate"><span class="pre">solve/</span></code>, <code class="docutils literal notranslate"><span class="pre">runtime/</span></code>, <code class="docutils literal notranslate"><span class="pre">identify/</span></code>.</p></li>
+</ul>
+<p>Every load round-trips: new → shim → new. The shim layer was supposed to
+serve external callers only; internal usage defeats the split.</p>
+<p><strong>Fix:</strong> mechanical rewrite — each new-location import retargets to a
+canonical sibling. Then the shims become real leaves (no circular paths)
+and #arch-5 (deleting them) becomes safe.</p>
+</section>
+<section id="arch-2-benchmark-unified-py-is-still-a-2206-line-god-module-high-m">
+<h3>arch-2 — <code class="docutils literal notranslate"><span class="pre">benchmark/unified.py</span></code> is still a 2206-line god module <strong>(HIGH / M)</strong><a class="headerlink" href="#arch-2-benchmark-unified-py-is-still-a-2206-line-god-module-high-m" title="Link to this heading"></a></h3>
+<p>After the checkpoint + composition_eval extractions, <code class="docutils literal notranslate"><span class="pre">unified.py</span></code> still
+contains:</p>
+<ul class="simple">
+<li><p>dataset adapters (lines ~190–490)</p></li>
+<li><p>split construction (~491–525)</p></li>
+<li><p>workflow registries (~523–1100)</p></li>
+<li><p>tuning + evaluation (~1213–1419)</p></li>
+<li><p>statistics + aggregates (~1419–1900)</p></li>
+<li><p>CSV/JSON I/O (~1891–1916)</p></li>
+<li><p>matplotlib plotting (~1917–2049)</p></li>
+<li><p>the <code class="docutils literal notranslate"><span class="pre">UnifiedBenchmarkRunner</span></code> orchestrator (~2050–end)</p></li>
+</ul>
+<p>Single biggest merge-conflict hotspot; mixing matplotlib with statistics
+blocks targeted dependency trimming.</p>
+<p><strong>Fix:</strong> extract in order — <code class="docutils literal notranslate"><span class="pre">benchmark/datasets/loaders.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">benchmark/registries.py</span></code>, <code class="docutils literal notranslate"><span class="pre">benchmark/aggregates.py</span></code>, <code class="docutils literal notranslate"><span class="pre">benchmark/reporting.py</span></code>.
+What remains in <code class="docutils literal notranslate"><span class="pre">unified.py</span></code> is the Runner only.</p>
+</section>
+<section id="arch-3-alias-is-3440-lines-identifiers-duplicate-preprocessing-high-m">
+<h3>arch-3 — ALIAS is 3440 lines, identifiers duplicate preprocessing <strong>(HIGH / M)</strong><a class="headerlink" href="#arch-3-alias-is-3440-lines-identifiers-duplicate-preprocessing-high-m" title="Link to this heading"></a></h3>
+<p>Each of the six identifiers (<code class="docutils literal notranslate"><span class="pre">alias</span></code>, <code class="docutils literal notranslate"><span class="pre">comb</span></code>, <code class="docutils literal notranslate"><span class="pre">correlation</span></code>, <code class="docutils literal notranslate"><span class="pre">hybrid</span></code>,
+<code class="docutils literal notranslate"><span class="pre">spectral_nnls</span></code>, <code class="docutils literal notranslate"><span class="pre">line_detection</span></code>) independently calls <code class="docutils literal notranslate"><span class="pre">estimate_baseline</span></code>,
+<code class="docutils literal notranslate"><span class="pre">detect_peaks_auto</span></code>, <code class="docutils literal notranslate"><span class="pre">estimate_noise</span></code> with slightly different conventions.
+<code class="docutils literal notranslate"><span class="pre">IdentifierProtocol</span></code> (<code class="docutils literal notranslate"><span class="pre">_protocol.py</span></code>) only pins the <code class="docutils literal notranslate"><span class="pre">identify(...)</span></code>
+signature — there’s no shared base.</p>
+<p><code class="docutils literal notranslate"><span class="pre">alias.py</span></code> alone has:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code> 388 lines (validation + caching + grid pre-compute)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">identify()</span></code> 625 lines (9 sub-phases, no phase-level helpers)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_estimate_plasma_temperature</span></code> 266 lines</p></li>
+</ul>
+<p><strong>Fix:</strong> introduce <code class="docutils literal notranslate"><span class="pre">identify/_base.py</span></code> with <code class="docutils literal notranslate"><span class="pre">BaseIdentifier._preprocess</span></code>
+returning a typed <code class="docutils literal notranslate"><span class="pre">PreprocessedSpectrum</span></code>. Split ALIAS into
+<code class="docutils literal notranslate"><span class="pre">alias/core.py</span></code>, <code class="docutils literal notranslate"><span class="pre">alias/scoring.py</span></code>, <code class="docutils literal notranslate"><span class="pre">alias/grid.py</span></code>.</p>
+</section>
+<section id="arch-4-cflibs-benchmark-vs-cflibs-benchmarks-shim-duplication-med-s">
+<h3>arch-4 — <code class="docutils literal notranslate"><span class="pre">cflibs.benchmark</span></code> vs <code class="docutils literal notranslate"><span class="pre">cflibs.benchmarks</span></code> shim duplication <strong>(MED / S)</strong><a class="headerlink" href="#arch-4-cflibs-benchmark-vs-cflibs-benchmarks-shim-duplication-med-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/__init__.py</span></code> is a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code>-emitting shim
+re-exporting from <code class="docutils literal notranslate"><span class="pre">cflibs.benchmark</span></code>. The trailing-s typo trap, zero
+production callers outside <code class="docutils literal notranslate"><span class="pre">scripts/</span></code>, deprecation note says “2026-04
+cleanup”. Delete it.</p>
+</section>
+<section id="arch-5-25-zero-logic-flat-shim-modules-med-s-blocked-on-arch-1">
+<h3>arch-5 — 25+ zero-logic flat shim modules <strong>(MED / S, blocked on arch-1)</strong><a class="headerlink" href="#arch-5-25-zero-logic-flat-shim-modules-med-s-blocked-on-arch-1" title="Link to this heading"></a></h3>
+<p>Files like <code class="docutils literal notranslate"><span class="pre">cflibs/inversion/{solver,</span> <span class="pre">bayesian,</span> <span class="pre">closure,</span> <span class="pre">boltzmann,</span> <span class="pre">…}.py</span></code>
+are 3-line stubs. Tests still use them heavily. After arch-1 lands,
+bulk-rewrite tests via codemod and delete the shim files.</p>
+</section>
+<section id="arch-6-benchmark-workflows-py-is-1026-lines-with-layering-inversion-med-m">
+<h3>arch-6 — <code class="docutils literal notranslate"><span class="pre">benchmark/workflows.py</span></code> is 1026 lines with layering inversion <strong>(MED / M)</strong><a class="headerlink" href="#arch-6-benchmark-workflows-py-is-1026-lines-with-layering-inversion-med-m" title="Link to this heading"></a></h3>
+<p>Contains 28 <code class="docutils literal notranslate"><span class="pre">_build_*_predictor</span></code> / <code class="docutils literal notranslate"><span class="pre">_fit_*_pipeline</span></code> functions. The lazy
+script loader at <code class="docutils literal notranslate"><span class="pre">workflows.py:122</span></code> reflectively loads <code class="docutils literal notranslate"><span class="pre">scripts/*.py</span></code>
+files — library imports scripts, not the reverse. Split into
+<code class="docutils literal notranslate"><span class="pre">workflows/{identifiers,pipelines,aalto_adapter}.py</span></code> and move script
+helpers into <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/datasets/</span></code>.</p>
+</section>
+<section id="arch-7-manifold-exposes-deep-modules-while-benchmark-uses-lazy-getattr-low-s">
+<h3>arch-7 — <code class="docutils literal notranslate"><span class="pre">manifold/</span></code> exposes deep modules while <code class="docutils literal notranslate"><span class="pre">benchmark/</span></code> uses lazy <code class="docutils literal notranslate"><span class="pre">__getattr__</span></code> <strong>(LOW / S)</strong><a class="headerlink" href="#arch-7-manifold-exposes-deep-modules-while-benchmark-uses-lazy-getattr-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">manifold/__init__.py:11-13</span></code> eagerly imports <code class="docutils literal notranslate"><span class="pre">generator</span></code>, <code class="docutils literal notranslate"><span class="pre">loader</span></code>,
+<code class="docutils literal notranslate"><span class="pre">config</span></code>; consumers bypass and import <code class="docutils literal notranslate"><span class="pre">manifold.basis_library.BasisLibrary</span></code>
+directly from 40+ sites. Mirror benchmark’s lazy pattern.</p>
+</section>
+<section id="arch-8-iterativecflibssolverjax-deprecated-but-still-in-all-low-s">
+<h3>arch-8 — <code class="docutils literal notranslate"><span class="pre">IterativeCFLIBSSolverJax</span></code> deprecated but still in <code class="docutils literal notranslate"><span class="pre">__all__</span></code> <strong>(LOW / S)</strong><a class="headerlink" href="#arch-8-iterativecflibssolverjax-deprecated-but-still-in-all-low-s" title="Link to this heading"></a></h3>
+<p>Pick a removal milestone (e.g., v0.5), update the one test that still uses
+it (<code class="docutils literal notranslate"><span class="pre">tests/benchmark/test_jax_workflows.py</span></code>), delete.</p>
+</section>
+<section id="arch-9-coverage-py-wired-into-only-4-of-6-identifiers-low-s">
+<h3>arch-9 — <code class="docutils literal notranslate"><span class="pre">_coverage.py</span></code> wired into only 4 of 6 identifiers <strong>(LOW / S)</strong><a class="headerlink" href="#arch-9-coverage-py-wired-into-only-4-of-6-identifiers-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">spectral_nnls.py</span></code> and <code class="docutils literal notranslate"><span class="pre">line_detection.py</span></code> emit no coverage telemetry,
+breaking the “all identifiers comparable” contract. Pull <code class="docutils literal notranslate"><span class="pre">CoverageTracker</span></code>
+setup into the <code class="docutils literal notranslate"><span class="pre">BaseIdentifier</span></code> from arch-3, or add to the two missing
+identifiers explicitly.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="code-quality-readability">
+<h2>2. Code quality / readability<a class="headerlink" href="#code-quality-readability" title="Link to this heading"></a></h2>
+<section id="quality-1-5-functions-over-200-lines-med-m">
+<h3>quality-1 — 5 functions over 200 lines <strong>(MED / M)</strong><a class="headerlink" href="#quality-1-5-functions-over-200-lines-med-m" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Function</p></th>
+<th class="head"><p>File:line</p></th>
+<th class="head"><p>Length</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ALIASIdentifier.identify</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:1284-1909</span></code></p></td>
+<td><p>625</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">detect_line_observations</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">line_detection.py:440-830</span></code></p></td>
+<td><p>390 (+ 28 params)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ALIASIdentifier.__init__</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:811-1199</span></code></p></td>
+<td><p>388</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">calibrate_wavelength_axis</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">wavelength_calibration.py:379-668</span></code></p></td>
+<td><p>289</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_estimate_plasma_temperature</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:2044-2310</span></code></p></td>
+<td><p>266</p></td>
+</tr>
+</tbody>
+</table>
+<p>Common pattern: each function orchestrates 5–9 sub-phases inline. Fix by
+extracting per-phase private methods.</p>
+</section>
+<section id="quality-2-optional-deps-gateway-inconsistency-med-s">
+<h3>quality-2 — Optional-deps gateway inconsistency <strong>(MED / S)</strong><a class="headerlink" href="#quality-2-optional-deps-gateway-inconsistency-med-s" title="Link to this heading"></a></h3>
+<p>67 <code class="docutils literal notranslate"><span class="pre">except</span> <span class="pre">ImportError</span></code> blocks across <code class="docutils literal notranslate"><span class="pre">cflibs/</span></code>. Some use <code class="docutils literal notranslate"><span class="pre">HAS_JAX</span></code> flags,
+others use bare try/except, others patch <code class="docutils literal notranslate"><span class="pre">jnp</span> <span class="pre">=</span> <span class="pre">None</span></code>. Centralize in
+<code class="docutils literal notranslate"><span class="pre">cflibs/optional_deps.py</span></code>.</p>
+</section>
+<section id="quality-3-dict-str-any-in-8-public-apis-med-s">
+<h3>quality-3 — <code class="docutils literal notranslate"><span class="pre">Dict[str,</span> <span class="pre">Any]</span></code> in 8+ public APIs <strong>(MED / S)</strong><a class="headerlink" href="#quality-3-dict-str-any-in-8-public-apis-med-s" title="Link to this heading"></a></h3>
+<p>Callers can’t tell required keys. Define <code class="docutils literal notranslate"><span class="pre">TypedDict</span></code> (or dataclass) per
+config surface. Top offenders: <code class="docutils literal notranslate"><span class="pre">bayesian_sparse_id.py:85</span></code>, the workflow
+config dicts.</p>
+</section>
+<section id="quality-4-public-functions-missing-docstrings-15-med-s">
+<h3>quality-4 — Public functions missing docstrings (15+) <strong>(MED / S)</strong><a class="headerlink" href="#quality-4-public-functions-missing-docstrings-15-med-s" title="Link to this heading"></a></h3>
+<p>Especially <code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/{bayesian_sparse_id,</span> <span class="pre">harness,</span> <span class="pre">composition_metrics}.py</span></code>.
+Add NumPy-style with a one-line <strong>physics/algorithm</strong> description and
+citation key (<code class="docutils literal notranslate"><span class="pre">\cite{NoelEtAl2025}</span></code> style) for any equation.</p>
+</section>
+<section id="quality-5-30-what-comments-where-they-should-be-why-low-s">
+<h3>quality-5 — 30+ “what” comments where they should be “why” <strong>(LOW / S)</strong><a class="headerlink" href="#quality-5-30-what-comments-where-they-should-be-why-low-s" title="Link to this heading"></a></h3>
+<p>E.g., <code class="docutils literal notranslate"><span class="pre">alias.py:1321</span> <span class="pre">#</span> <span class="pre">Reset</span> <span class="pre">per-dispatch</span> <span class="pre">self-absorption</span> <span class="pre">damping</span> <span class="pre">counters</span></code>
+is obvious from code. Reserve comments for non-obvious constraints
+(hidden invariants, workarounds, references).</p>
+</section>
+<section id="quality-6-stale-pr-number-references-in-comments-low-s">
+<h3>quality-6 — Stale PR-number references in comments <strong>(LOW / S)</strong><a class="headerlink" href="#quality-6-stale-pr-number-references-in-comments-low-s" title="Link to this heading"></a></h3>
+<p>8+ comments cite closed PR numbers as context. PR metadata rots; inline
+the rationale or link to an ADR.</p>
+</section>
+<section id="quality-7-load-atomic-data-embeds-140-line-element-mass-dict-low-s">
+<h3>quality-7 — <code class="docutils literal notranslate"><span class="pre">_load_atomic_data</span></code> embeds 140-line element-mass dict <strong>(LOW / S)</strong><a class="headerlink" href="#quality-7-load-atomic-data-embeds-140-line-element-mass-dict-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">manifold/generator.py:107-353</span></code>. Extract <code class="docutils literal notranslate"><span class="pre">STANDARD_MASSES</span></code> to
+<code class="docutils literal notranslate"><span class="pre">cflibs/core/atomic_constants.py</span></code> or use the <code class="docutils literal notranslate"><span class="pre">periodictable</span></code> library.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="documentation">
+<h2>3. Documentation<a class="headerlink" href="#documentation" title="Link to this heading"></a></h2>
+<section id="docs-1-setup-instructions-diverge-across-3-entry-points-high-s">
+<h3>docs-1 — Setup instructions diverge across 3 entry points <strong>(HIGH / S)</strong><a class="headerlink" href="#docs-1-setup-instructions-diverge-across-3-entry-points-high-s" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Instructions</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">README.md:35-52</span></code></p></td>
+<td><p>4 paths (core, jax-cpu, jax-metal, local, cluster)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md:34-46</span></code></p></td>
+<td><p>3 paths (base, metal, cluster)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AGENTS.md:34-46</span></code></p></td>
+<td><p>different from both above</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CLAUDE.md:18-24</span></code></p></td>
+<td><p>2-step install</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fix:</strong> single source of truth in CLAUDE.md; README/CONTRIBUTING/AGENTS
+each link to it instead of restating.</p>
+</section>
+<section id="docs-2-12-papers-cited-in-code-without-bib-entries-high-m">
+<h3>docs-2 — 12 papers cited in code without <code class="docutils literal notranslate"><span class="pre">.bib</span></code> entries <strong>(HIGH / M)</strong><a class="headerlink" href="#docs-2-12-papers-cited-in-code-without-bib-entries-high-m" title="Link to this heading"></a></h3>
+<p>See <code class="docutils literal notranslate"><span class="pre">##</span> <span class="pre">Citation</span> <span class="pre">gap</span> <span class="pre">list</span></code> below. Each needs verification (real paper?
+DOI?) plus a BibTeX entry in <code class="docutils literal notranslate"><span class="pre">paper/refs.bib</span></code>.</p>
+</section>
+<section id="docs-3-docs-api-reference-md-incomplete-abandoned-med-s">
+<h3>docs-3 — <code class="docutils literal notranslate"><span class="pre">docs/API_Reference.md</span></code> incomplete + abandoned <strong>(MED / S)</strong><a class="headerlink" href="#docs-3-docs-api-reference-md-incomplete-abandoned-med-s" title="Link to this heading"></a></h3>
+<p>Cuts off mid-function at line 100. Either complete or stub with a link
+to autogenerated API docs and <code class="docutils literal notranslate"><span class="pre">CLAUDE.md</span></code> module map.</p>
+</section>
+<section id="docs-4-claude-md-and-agents-md-setup-conflict-med-s">
+<h3>docs-4 — <code class="docutils literal notranslate"><span class="pre">CLAUDE.md</span></code> and <code class="docutils literal notranslate"><span class="pre">AGENTS.md</span></code> setup conflict <strong>(MED / S)</strong><a class="headerlink" href="#docs-4-claude-md-and-agents-md-setup-conflict-med-s" title="Link to this heading"></a></h3>
+<p>Same as docs-1.</p>
+</section>
+<section id="docs-5-readme-cites-ciucci-et-al-2009-but-bib-has-ciucci1999-med-s">
+<h3>docs-5 — README cites “Ciucci et al. (2009)” but bib has Ciucci1999 <strong>(MED / S)</strong><a class="headerlink" href="#docs-5-readme-cites-ciucci-et-al-2009-but-bib-has-ciucci1999-med-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">README.md:282-294</span></code>. Year mismatches on Ciucci, Salzmann, Griem,
+Colombant-Tonon, Landi.</p>
+</section>
+<section id="docs-6-claude-md-215-references-non-existent-manifold-generator-py-low-s">
+<h3>docs-6 — <code class="docutils literal notranslate"><span class="pre">CLAUDE.md:215</span></code> references non-existent <code class="docutils literal notranslate"><span class="pre">manifold-generator.py</span></code> <strong>(LOW / S)</strong><a class="headerlink" href="#docs-6-claude-md-215-references-non-existent-manifold-generator-py-low-s" title="Link to this heading"></a></h3>
+<p>Script was deleted; the note about not running it under MPI is now a
+trap. Replace with “Use <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">generate-manifold</span></code>”.</p>
+</section>
+<section id="docs-7-user-guide-md-24-30-specifies-python-3-8-low-s">
+<h3>docs-7 — <code class="docutils literal notranslate"><span class="pre">User_Guide.md:24-30</span></code> specifies Python 3.8 <strong>(LOW / S)</strong><a class="headerlink" href="#docs-7-user-guide-md-24-30-specifies-python-3-8-low-s" title="Link to this heading"></a></h3>
+<p>Actual minimum is 3.12. Match <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>.</p>
+</section>
+<section id="docs-8-docs-archive-legacy-has-15-files-with-no-deprecated-marker-low-s">
+<h3>docs-8 — <code class="docutils literal notranslate"><span class="pre">docs/archive/legacy/</span></code> has 15+ files with no DEPRECATED marker <strong>(LOW / S)</strong><a class="headerlink" href="#docs-8-docs-archive-legacy-has-15-files-with-no-deprecated-marker-low-s" title="Link to this heading"></a></h3>
+<p>New contributors may follow stale architecture docs. Add a <code class="docutils literal notranslate"><span class="pre">README.md</span></code>
+to that directory pointing to current sources.</p>
+</section>
+<section id="docs-9-missing-top-level-docs-med-m">
+<h3>docs-9 — Missing top-level docs <strong>(MED / M)</strong><a class="headerlink" href="#docs-9-missing-top-level-docs-med-m" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Missing</p></th>
+<th class="head"><p>Where it should live</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CHANGELOG</p></td>
+<td><p>repo root</p></td>
+</tr>
+<tr class="row-odd"><td><p>inversion/ sub-package API reference</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docs/api/inversion.md</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>“How to cite CF-LIBS”</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docs/CITATION.md</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>JAX troubleshooting</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docs/troubleshooting/jax.md</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="docs-10-year-corrections-path-anchor-fixes-smaller-items">
+<h3>docs-10 — Year corrections + path/anchor fixes (smaller items)<a class="headerlink" href="#docs-10-year-corrections-path-anchor-fixes-smaller-items" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ROADMAP.md:54,65</span></code> references bead IDs without verification</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/CF-LIBS_Codebase_Technical_Documentation.md:40</span></code> broken relative link</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/adr/ADR-0001-RUNBOOK.md:19</span></code> branch-name typo (<code class="docutils literal notranslate"><span class="pre">retrieval-decomposition</span></code> vs <code class="docutils literal notranslate"><span class="pre">bayesian-decomposition</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AGENTS.md:77</span></code> anchor format</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Quick_Start_For_Scientists.md:24</span></code> undefined <code class="docutils literal notranslate"><span class="pre">cflibs</span> <span class="pre">doctor</span></code> command</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Manifold_Generation_Guide.md:25</span></code> orphaned “Phase 3” reference</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="performance">
+<h2>4. Performance<a class="headerlink" href="#performance" title="Link to this heading"></a></h2>
+<section id="perf-1-enable-jax-on-disk-compile-cache-at-cluster-startup-high-s">
+<h3>perf-1 — Enable JAX on-disk compile cache at cluster startup <strong>(HIGH / S)</strong><a class="headerlink" href="#perf-1-enable-jax-on-disk-compile-cache-at-cluster-startup-high-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">sampler_cache</span></code> in <code class="docutils literal notranslate"><span class="pre">workflows.py:1001</span></code> is closure-local. Multi-process
+cluster runs (per-shard) each pay 30–60 s of NUTS JIT compile. Set
+<code class="docutils literal notranslate"><span class="pre">jax.config.update(&quot;jax_compilation_cache_dir&quot;,</span> <span class="pre">&quot;...&quot;)</span></code> at cluster
+startup (in <code class="docutils literal notranslate"><span class="pre">hpc/gpu_config.py</span></code> or the SLURM wrapper). 32-shard runs
+save ~16–32 min total.</p>
+</section>
+<section id="perf-2-hoist-python-index-arrays-out-of-saha-two-stage-populations-high-s">
+<h3>perf-2 — Hoist Python index arrays out of <code class="docutils literal notranslate"><span class="pre">_saha_two_stage_populations</span></code> <strong>(HIGH / S)</strong><a class="headerlink" href="#perf-2-hoist-python-index-arrays-out-of-saha-two-stage-populations-high-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">kernels.py:218-244</span></code> runs three Python loops (<code class="docutils literal notranslate"><span class="pre">list.index</span></code>, NumPy array
+construction) on every leapfrog. Snapshot is frozen — the indices never
+change. Move to a <code class="docutils literal notranslate"><span class="pre">&#64;staticmethod</span></code> on <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot.__post_init__</span></code>,
+pass pre-computed fields. ~10–25% Python-overhead reduction.</p>
+</section>
+<section id="perf-3-store-atomicsnapshot-arrays-at-float64-directly-high-s">
+<h3>perf-3 — Store <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> arrays at float64 directly <strong>(HIGH / S)</strong><a class="headerlink" href="#perf-3-store-atomicsnapshot-arrays-at-float64-directly-high-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">AtomicDataArrays</span></code> stores all line/species arrays as <code class="docutils literal notranslate"><span class="pre">jnp.float32</span></code>. The
+forward model at <code class="docutils literal notranslate"><span class="pre">kernels.py:262-263</span></code> upcasts to the tracer dtype
+(float64 under MCMC) on every call. Storing at float64 eliminates the
+per-call promotion kernel and ~1 GB of unnecessary float conversions
+over a full chain.</p>
+</section>
+<section id="perf-4-replace-singlezonelteplasma-species-dict-with-a-flat-pytree-array-high-m">
+<h3>perf-4 — Replace <code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma.species</span></code> dict with a flat pytree array <strong>(HIGH / M)</strong><a class="headerlink" href="#perf-4-replace-singlezonelteplasma-species-dict-with-a-flat-pytree-array-high-m" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">forward.py:318-328</span></code> allocates a Python dict on every leapfrog. Register
+<code class="docutils literal notranslate"><span class="pre">SingleZoneLTEPlasma</span></code> as a JAX pytree with concentrations as a flat
+1-D array; pass element-index map via <code class="docutils literal notranslate"><span class="pre">static_argnums</span></code>. Combined with
+perf-2 this is the dominant Python-layer overhead.</p>
+</section>
+<section id="perf-5-pre-compute-line-mass-amu-on-snapshot-construction-med-s">
+<h3>perf-5 — Pre-compute <code class="docutils literal notranslate"><span class="pre">line_mass_amu</span></code> on snapshot construction <strong>(MED / S)</strong><a class="headerlink" href="#perf-5-pre-compute-line-mass-amu-on-snapshot-construction-med-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">kernels.py:533-534</span></code> calls <code class="docutils literal notranslate"><span class="pre">_species_mass_array(snapshot)</span></code> plus a NumPy
+indexing op on every <code class="docutils literal notranslate"><span class="pre">forward_model</span></code> call. Cache once on snapshot
+build.</p>
+</section>
+<section id="perf-6-two-zone-path-computes-faddeeva-matrix-twice-med-s">
+<h3>perf-6 — Two-zone path computes Faddeeva matrix twice <strong>(MED / S)</strong><a class="headerlink" href="#perf-6-two-zone-path-computes-faddeeva-matrix-twice-med-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">forward.py:475-488</span></code> evaluates <code class="docutils literal notranslate"><span class="pre">_voigt_profile_kernel_jax</span></code> over the
+full <code class="docutils literal notranslate"><span class="pre">(N_wl</span> <span class="pre">×</span> <span class="pre">N_lines)</span></code> outer product once for core and once for shell,
+with identical <code class="docutils literal notranslate"><span class="pre">diff</span></code>. Hoist the profile matrix out; multiply by
+per-zone emissivities downstream. Halves the dominant kernel cost for
+two-zone inference.</p>
+</section>
+<section id="perf-7-hoist-from-import-statements-out-of-compute-spectrum-low-s">
+<h3>perf-7 — Hoist <code class="docutils literal notranslate"><span class="pre">from</span> <span class="pre">…</span> <span class="pre">import</span></code> statements out of <code class="docutils literal notranslate"><span class="pre">_compute_spectrum</span></code> <strong>(LOW / S)</strong><a class="headerlink" href="#perf-7-hoist-from-import-statements-out-of-compute-spectrum-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">forward.py:306-308</span></code> defers three imports inside the method (noqa
+PLC0415). Cheap per call, but the deferral was for circular-import
+breakage — resolve those cycles (arch-1 helps) and move imports up.</p>
+</section>
+<section id="perf-8-constant-fold-sqrt-2-sqrt-2-in-voigt-kernel-low-s">
+<h3>perf-8 — Constant-fold <code class="docutils literal notranslate"><span class="pre">sqrt(2)</span></code>, <code class="docutils literal notranslate"><span class="pre">sqrt(2π)</span></code> in Voigt kernel <strong>(LOW / S)</strong><a class="headerlink" href="#perf-8-constant-fold-sqrt-2-sqrt-2-in-voigt-kernel-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">profiles.py:580,593</span></code> emits <code class="docutils literal notranslate"><span class="pre">jnp.sqrt(jnp.asarray(...))</span></code> calls inside the
+<code class="docutils literal notranslate"><span class="pre">&#64;jit</span></code> kernel. XLA likely folds these already; verify with
+<code class="docutils literal notranslate"><span class="pre">jax.make_jaxpr</span></code> and replace with module-level dtype-keyed constants if
+not.</p>
+</section>
+<section id="perf-9-parquet-writer-two-pass-row-dict-pivot-low-s">
+<h3>perf-9 — Parquet writer two-pass row-dict pivot <strong>(LOW / S)</strong><a class="headerlink" href="#perf-9-parquet-writer-two-pass-row-dict-pivot-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">results.py:451-533</span></code> builds <code class="docutils literal notranslate"><span class="pre">List[Dict[str,</span> <span class="pre">Any]]</span></code> then transposes. At
+1000-spectrum scale this is ~50k Python dict writes. Return
+column-oriented <code class="docutils literal notranslate"><span class="pre">Dict[str,</span> <span class="pre">List]</span></code> directly.</p>
+</section>
+<section id="perf-10-baseline-scale-0-1-jnp-max-observed-re-computed-every-leapfrog-low-s">
+<h3>perf-10 — <code class="docutils literal notranslate"><span class="pre">baseline_scale</span> <span class="pre">=</span> <span class="pre">0.1</span> <span class="pre">*</span> <span class="pre">jnp.max(observed)</span></code> re-computed every leapfrog <strong>(LOW / S)</strong><a class="headerlink" href="#perf-10-baseline-scale-0-1-jnp-max-observed-re-computed-every-leapfrog-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">forward.py:615</span></code>. Pre-compute the constant from the NumPy observed
+array before <code class="docutils literal notranslate"><span class="pre">mcmc.run</span></code> and pass into <code class="docutils literal notranslate"><span class="pre">PriorConfig</span></code>.</p>
+</section>
+<section id="perf-11-dynesty-path-materializes-spectrum-on-host-per-likelihood-call-low-l">
+<h3>perf-11 — dynesty path materializes spectrum on host per likelihood call <strong>(LOW / L)</strong><a class="headerlink" href="#perf-11-dynesty-path-materializes-spectrum-on-host-per-likelihood-call-low-l" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">samplers.py:518-531</span></code>. dynesty isn’t JAX-aware. Either deprecate the
+dynesty backend in favor of NumPyro NUTS (already primary), or
+re-implement nested sampling with <code class="docutils literal notranslate"><span class="pre">jax.lax.while_loop</span></code>.</p>
+</section>
+<section id="perf-12-two-zone-partition-function-not-vectorized-low-s">
+<h3>perf-12 — Two-zone <code class="docutils literal notranslate"><span class="pre">partition_function</span></code> not vectorized <strong>(LOW / S)</strong><a class="headerlink" href="#perf-12-two-zone-partition-function-not-vectorized-low-s" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">atomic.py:330-335</span></code>. Align with <code class="docutils literal notranslate"><span class="pre">kernels.py:264</span></code> pattern (one call on
+the full <code class="docutils literal notranslate"><span class="pre">pf_all</span></code> matrix).</p>
+</section>
+<section id="perf-13-jnp-asarray-snapshot-line-stark-w-etc-on-every-call-low-s">
+<h3>perf-13 — <code class="docutils literal notranslate"><span class="pre">jnp.asarray(snapshot.line_stark_w)</span></code> etc. on every call <strong>(LOW / S)</strong><a class="headerlink" href="#perf-13-jnp-asarray-snapshot-line-stark-w-etc-on-every-call-low-s" title="Link to this heading"></a></h3>
+<p>8–10 conversions per leapfrog on frozen snapshot fields. Pre-convert
+once in <code class="docutils literal notranslate"><span class="pre">BayesianForwardModel.__init__</span></code>. Cheap individually, ~2M
+dispatch calls eliminated over a full chain.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="citation-gap-list">
+<h2>Citation gap list<a class="headerlink" href="#citation-gap-list" title="Link to this heading"></a></h2>
+<blockquote>
+<div><p><strong>STATUS: SUPERSEDED 2026-05-19</strong> — the 19 hanging citations cataloged
+in this section have been triaged via the docs-2 (<code class="docutils literal notranslate"><span class="pre">s5ba</span></code>) follow-up.
+14 are now verified and present in <code class="docutils literal notranslate"><span class="pre">paper/refs.bib</span></code>; 4 are flagged
+for follow-up; 1 was a year-typo. See the resolution manifest at
+<code class="docutils literal notranslate"><span class="pre">docs/literature/2026-05-19-citation-backfill-manifest.md</span></code> for the
+per-citation outcomes, DOI links, and NotebookLM ingestion order.
+The original gap table is retained below for historical traceability.</p>
+</div></blockquote>
+<section id="resolved-14">
+<h3>Resolved (14)<a class="headerlink" href="#resolved-14" title="Link to this heading"></a></h3>
+<p>All 14 verified citations and their per-paper landing URLs / cite-keys
+live in <a class="reference internal" href="../literature/2026-05-19-citation-backfill-manifest.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">docs/literature/2026-05-19-citation-backfill-manifest.md</span></code></span></a>.
+That manifest is the canonical source going forward — duplicate listing
+here was removed during the /simplify pass to prevent drift between
+the two docs.</p>
+</section>
+<section id="unverified-4-follow-up-needed">
+<h3>Unverified (4 — follow-up needed)<a class="headerlink" href="#unverified-4-follow-up-needed" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Citation as written</p></th>
+<th class="head"><p>File:line</p></th>
+<th class="head"><p>Likely scenario</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Black et al. 2024</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alias.py:1502</span></code></p></td>
+<td><p>Cannot locate; trace original reviewer or remove.</p></td>
+</tr>
+<tr class="row-odd"><td><p>El Sherbini et al. 2020</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">boltzmann.py:12</span></code></p></td>
+<td><p>Only the 2005 paper findable; may be a misattribution of year.</p></td>
+</tr>
+<tr class="row-even"><td><p>Landi &amp; Degl’Innocenti 1999</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">README.md:294</span></code></p></td>
+<td><p>Could not locate a specific 1999 paper; author works span 1994–2004.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Jochum 2022</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">usgs.py:333</span></code></p></td>
+<td><p>Likely a year typo for <code class="docutils literal notranslate"><span class="pre">JochumEtAl2016</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="year-typo-1">
+<h3>Year typo (1)<a class="headerlink" href="#year-typo-1" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">README.md:282</span></code> cites “Ciucci et al. (2009)”; the canonical CF-LIBS
+paper is <strong>Ciucci et al. (1999)</strong>, already in the bib as <code class="docutils literal notranslate"><span class="pre">Ciucci1999</span></code>.
+Pure year-correction; addressed by docs-1 or its own one-line PR.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="what-this-audit-deliberately-did-not-cover">
+<h2>What this audit deliberately did NOT cover<a class="headerlink" href="#what-this-audit-deliberately-did-not-cover" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Test-coverage gaps (would need its own coverage-tool run)</p></li>
+<li><p>Type-checker tightening (mypy is opt-in error-codes; ratcheting is a
+separate workstream)</p></li>
+<li><p>Physics correctness of the algorithms (deferred to the bead-tracked
+refactor work in <code class="docutils literal notranslate"><span class="pre">cf-libs-physics-optimization-roadmap</span></code>)</p></li>
+<li><p>Security review (no obvious surface; CF-LIBS doesn’t process untrusted
+inputs in production)</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="file-locations-referenced">
+<h2>File locations referenced<a class="headerlink" href="#file-locations-referenced" title="Link to this heading"></a></h2>
+<p>(For quick navigation when picking up items)</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/alias.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/identify/_protocol.py</span></code> and <code class="docutils literal notranslate"><span class="pre">_coverage.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/physics/{boltzmann,closure,cdsb,matrix_effects,line_selection,self_absorption,quality,uncertainty}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/{closed_form,iterative,bayesian/}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/runtime/{streaming,temporal}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/bayesian/{forward,samplers,atomic}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/radiation/{kernels,profiles}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/{unified,workflows,results,composition_eval,checkpoint}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmark/datasets/usgs.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/manifold/{generator,vector_index,basis_library}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/benchmarks/</span></code> (entire deprecated package)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/core/{platform_config,logging_config,jax_runtime,constants}.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">paper/refs.bib</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">README.md</span></code>, <code class="docutils literal notranslate"><span class="pre">CLAUDE.md</span></code>, <code class="docutils literal notranslate"><span class="pre">AGENTS.md</span></code>, <code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md</span></code>, <code class="docutils literal notranslate"><span class="pre">ROADMAP.md</span></code></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

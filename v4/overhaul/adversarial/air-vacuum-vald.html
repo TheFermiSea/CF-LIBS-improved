@@ -1,0 +1,254 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VERDICT &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">VERDICT</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/v4/overhaul/adversarial/air-vacuum-vald.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="verdict">
+<h1>VERDICT<a class="headerlink" href="#verdict" title="Link to this heading"></a></h1>
+<p><strong>flawed — medium severity</strong></p>
+<p>The ingest code (<code class="docutils literal notranslate"><span class="pre">ingest_vald_atomic.py</span></code>) correctly handles the actual VALD files (which are air-extracted). However, the module docstring in <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/wavelength_conversion.py</span></code> (line 7) is <strong>factually wrong</strong> — it states “VALD3 ship line wavelengths in vacuum,” but the actual VALD extraction files have header <code class="docutils literal notranslate"><span class="pre">WL_air(A)</span></code> and confirmed air values (Fe I at 404.5812 Å, matching NIST air to 0.1 pm vs 1143 pm from vacuum). More critically, <code class="docutils literal notranslate"><span class="pre">vald_auto_request.py</span></code> explicitly states it “relies on the account’s SAVED units” rather than enforcing air extraction — meaning a future operator whose VALD account is set to vacuum would silently ingest vacuum wavelengths with no detection or correction, producing a systematic +114 pm shift at 400 nm across all visible lines.</p>
+<hr class="docutils" />
+</section>
+<section id="ground-truth">
+<h1>GROUND TRUTH<a class="headerlink" href="#ground-truth" title="Link to this heading"></a></h1>
+<p><strong>VALD3 wavelength convention (authoritative source):</strong>
+VALD3 natively stores vacuum wavelengths. Users may extract in either vacuum or air; the air extraction applies the Morton (2000) formula for λ &gt; 2000 Å (200 nm) only. The column header always reads <code class="docutils literal notranslate"><span class="pre">WL_air(A)</span></code> when air is the chosen extraction unit, regardless of whether sub-200 nm values are actually air or vacuum.</p>
+<ul class="simple">
+<li><p>VALD wiki: https://www.astro.uu.se/valdwiki/Air-to-vacuum%20conversion — “VALD3 by default computes and stores wavelengths in vacuum. Depending on what the user chose at query time, wavelengths may be converted to air (for λ &gt; 2000 Å, using Morton 2000).”</p></li>
+<li><p>Morton, D.C. (2000), ApJS 130, 403 — IAU-adopted air/vacuum dispersion relation. DOI: 10.1086/317349</p></li>
+<li><p>NIST ASD: Fe I observed air wavelength 4045.813 Å (query: https://physics.nist.gov/cgi-bin/ASD/lines1.pl?spectra=Fe+I&amp;low_wl=4045&amp;high_wl=4047&amp;unit=0)</p></li>
+</ul>
+<p><strong>Verified production database:</strong> <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code> — 28,727 lines, zero VALD-backfill entries (stark_w_source has no ‘vald’ marker). The r4_nist_vald_backfill.db (935,193 lines, 906,466 with <code class="docutils literal notranslate"><span class="pre">stark_w_source='vald_backfill'</span></code>) is an output/staging artifact, not the runtime production DB.</p>
+<hr class="docutils" />
+</section>
+<section id="code-value-numerical">
+<h1>CODE VALUE (numerical)<a class="headerlink" href="#code-value-numerical" title="Link to this heading"></a></h1>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> <span class="o">&amp;&amp;</span> \
+<span class="n">PYTHONPATH</span><span class="o">=/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">worktrees</span><span class="o">/</span><span class="n">v4</span><span class="o">-</span><span class="n">m5</span> \
+<span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">brian</span><span class="o">/</span><span class="n">code</span><span class="o">/</span><span class="n">CF</span><span class="o">-</span><span class="n">LIBS</span><span class="o">-</span><span class="n">improved</span><span class="o">/.</span><span class="n">venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">python3</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sqlite3</span><span class="o">,</span><span class="w"> </span><span class="nn">gzip</span><span class="o">,</span><span class="w"> </span><span class="nn">glob</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cflibs.atomic.wavelength_conversion</span><span class="w"> </span><span class="kn">import</span> <span class="n">air_to_vacuum_nm</span><span class="p">,</span> <span class="n">vacuum_to_air_nm</span>
+
+<span class="c1"># 1. VALD file header check</span>
+<span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;/home/brian/code/CF-LIBS-improved/data/vald/BrianSquires.019710.gz&#39;</span><span class="p">,</span><span class="s1">&#39;rt&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">ln</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">i</span><span class="o">&lt;</span><span class="mi">2</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="n">ln</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()[:</span><span class="mi">80</span><span class="p">])</span>
+<span class="c1"># -&gt; &#39;Elm Ion  WL_air(A)  log gf* E_low(eV) ...&#39;</span>
+
+<span class="c1"># 2. Fe I 4045.813 A (NIST air) match in actual VALD file</span>
+<span class="c1"># BrianSquires.019848.gz: &#39;Fe 1&#39;, 4045.81188 A, loggf=0.280, ...</span>
+<span class="c1"># Delta vs NIST air: 0.0011 A = 0.1 pm  (proves file IS air)</span>
+<span class="c1"># Delta vs NIST vacuum: -1.144 A = 1144 pm (proves file is NOT vacuum)</span>
+
+<span class="c1"># 3. vald_complete.db (output of ingest):</span>
+<span class="n">conn</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">&#39;output/vald_complete.db&#39;</span><span class="p">)</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>\<span class="s2">&quot;SELECT wavelength_nm FROM lines WHERE element=&#39;Fe&#39; AND sp_num=1 ORDER BY ABS(wavelength_nm-404.5813) LIMIT 1</span><span class="se">\&quot;</span><span class="s2">).fetchone()</span>
+<span class="c1"># -&gt; (404.581188,)  delta to NIST air = 0.1 pm, delta to NIST vacuum = 114.3 pm</span>
+
+<span class="c1"># 4. Docstring claim: wavelength_conversion.py line 7</span>
+<span class="c1"># &#39;Kurucz and VALD3 ship line wavelengths in vacuum&#39;</span>
+<span class="c1"># WRONG for the actual VALD files produced by this account&#39;s extraction.</span>
+
+<span class="c1"># 5. Footgun quantification: if vacuum VALD were ingested</span>
+<span class="n">nist_air</span> <span class="o">=</span> <span class="mf">404.5813</span>
+<span class="n">nist_vac</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">air_to_vacuum_nm</span><span class="p">(</span><span class="n">nist_air</span><span class="p">))</span>  <span class="c1"># = 404.6956 nm</span>
+<span class="n">error_pm</span> <span class="o">=</span> <span class="p">(</span><span class="n">nist_vac</span> <span class="o">-</span> <span class="n">nist_air</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000</span>  <span class="c1"># = 114.3 pm</span>
+<span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p><strong>Actual output:</strong></p>
+<ul class="simple">
+<li><p>VALD file header: <code class="docutils literal notranslate"><span class="pre">Elm</span> <span class="pre">Ion</span>&#160; <span class="pre">WL_air(A)</span>&#160; <span class="pre">log</span> <span class="pre">gf*</span> <span class="pre">E_low(eV)</span>&#160; <span class="pre">...</span></code></p></li>
+<li><p>Fe I VALD value: 4045.81188 A — delta to NIST air: <strong>0.1 pm</strong>, delta to NIST vacuum: <strong>1144 pm</strong></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">vald_complete.db</span></code> Fe I closest: 404.581188 nm — confirmed air storage (0.1 pm from NIST air)</p></li>
+<li><p>Vacuum footgun shift: <strong>+114.3 pm</strong> at 400 nm (= 283 ppm)</p></li>
+<li><p>Production DB (<code class="docutils literal notranslate"><span class="pre">libs_production.db</span></code>): zero VALD entries — NIST-only, no exposure</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="delta-interpretation">
+<h1>DELTA &amp; INTERPRETATION<a class="headerlink" href="#delta-interpretation" title="Link to this heading"></a></h1>
+<p><strong>The ingest code is behaviorally correct for the current VALD files:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ingest_vald_atomic.py</span></code> lines 143–146 correctly treat VALD data as air for λ ≥ 200 nm (no conversion applied), which is the right behavior because the files ARE air-extracted.</p></li>
+<li><p>For λ &lt; 200 nm, the code calls <code class="docutils literal notranslate"><span class="pre">vacuum_to_air_nm</span></code>, which is an identity at ≤200 nm, so no error there.</p></li>
+<li><p>Fe I 4045.812 Å is stored as 404.581188 nm — matches NIST air to 0.1 pm.</p></li>
+</ul>
+<p><strong>Two real bugs:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Wrong docstring</strong> (<code class="docutils literal notranslate"><span class="pre">wavelength_conversion.py</span></code> line 7): states “VALD3 ship line wavelengths in vacuum.” This is incorrect for air-extracted VALD files. It is a documentation lie that will mislead any future developer who writes new VALD ingestion code following the docstring, causing them to apply <code class="docutils literal notranslate"><span class="pre">vacuum_to_air_nm</span></code> to already-air values — a double conversion producing a systematic −114 pm shift at 400 nm, which exceeds the typical line-matching tolerance (50–100 pm) and would cause widespread missed identifications.</p></li>
+<li><p><strong>No medium assertion</strong> (<code class="docutils literal notranslate"><span class="pre">vald_auto_request.py</span></code>, line 10): “UNITS: this does NOT set ‘Unit selections’ — it relies on the account’s SAVED units.” If a future operator’s VALD account defaults to vacuum units, the downloaded files would contain vacuum wavelengths. The ingest code would not detect this — no header check, no cross-validation against NIST anchors. All visible lines would be stored +114 pm high (at 400 nm; up to +220 pm at 800 nm), systematically breaking line identification in the VALD-backfill path.</p></li>
+</ol>
+<p><strong>Impact of the footgun if triggered:</strong></p>
+<ul class="simple">
+<li><p>Line match failure rate: systematic 114–220 pm offset across all LIBS visible lines (200–900 nm), exceeding the typical 50–100 pm matching window → most VALD lines would not match observed peaks → CF-LIBS would revert to NIST-only data implicitly (no crash, silent data quality loss).</p></li>
+<li><p>Temperature error: biased line selection (only the few lines that accidentally fall within tolerance would be used) → Boltzmann slope corrupted → T error potentially hundreds of K.</p></li>
+</ul>
+<hr class="docutils" />
+</section>
+<section id="fix">
+<h1>FIX<a class="headerlink" href="#fix" title="Link to this heading"></a></h1>
+<p><strong>Bug 1 — Wrong docstring</strong> (<code class="docutils literal notranslate"><span class="pre">cflibs/atomic/wavelength_conversion.py</span></code>, line 7):</p>
+<p>Change:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="o">**</span><span class="n">Kurucz</span><span class="o">**</span> <span class="ow">and</span> <span class="o">**</span><span class="n">VALD3</span><span class="o">**</span> <span class="n">ship</span> <span class="n">line</span> <span class="n">wavelengths</span> <span class="ow">in</span> <span class="o">**</span><span class="n">vacuum</span><span class="o">**.</span>
+</pre></div>
+</div>
+<p>To:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">-</span> <span class="o">**</span><span class="n">Kurucz</span><span class="o">**</span> <span class="n">ships</span> <span class="n">vacuum</span> <span class="n">wavelengths</span> <span class="k">for</span> <span class="nb">all</span> <span class="n">λ</span> <span class="p">(</span><span class="n">converts</span> <span class="ow">in</span> <span class="n">ingest</span> <span class="k">for</span> <span class="n">λ</span> <span class="err">≥</span> <span class="mi">200</span> <span class="n">nm</span><span class="p">)</span><span class="o">.</span>
+<span class="o">-</span> <span class="o">**</span><span class="n">VALD3</span><span class="o">**</span> <span class="n">stores</span> <span class="n">vacuum</span> <span class="n">internally</span> <span class="n">but</span> <span class="n">delivers</span> <span class="o">**</span><span class="n">air</span><span class="o">**</span> <span class="n">when</span> <span class="n">the</span> <span class="n">user</span> <span class="n">selects</span> <span class="n">air</span> <span class="n">units</span>
+  <span class="n">at</span> <span class="n">extraction</span> <span class="n">time</span> <span class="p">(</span><span class="n">the</span> <span class="n">default</span> <span class="k">for</span> <span class="n">this</span> <span class="n">project</span><span class="s1">&#39;s VALD account). The ingest script</span>
+  <span class="err">``</span><span class="n">scripts</span><span class="o">/</span><span class="n">ingest_vald_atomic</span><span class="o">.</span><span class="n">py</span><span class="err">``</span> <span class="n">assumes</span> <span class="n">air</span> <span class="nb">input</span> <span class="k">for</span> <span class="n">λ</span> <span class="err">≥</span> <span class="mi">200</span> <span class="n">nm</span> <span class="ow">and</span> <span class="n">treats</span> <span class="n">sub</span><span class="o">-</span><span class="mi">200</span> <span class="n">nm</span>
+  <span class="k">as</span> <span class="n">vacuum</span> <span class="p">(</span><span class="n">per</span> <span class="n">the</span> <span class="n">VALD</span> <span class="n">wiki</span><span class="p">:</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">www</span><span class="o">.</span><span class="n">astro</span><span class="o">.</span><span class="n">uu</span><span class="o">.</span><span class="n">se</span><span class="o">/</span><span class="n">valdwiki</span><span class="o">/</span><span class="n">Air</span><span class="o">-</span><span class="n">to</span><span class="o">-</span><span class="n">vacuum</span><span class="o">%</span><span class="mi">20</span><span class="n">conversion</span><span class="p">)</span><span class="o">.</span>
+  <span class="n">Always</span> <span class="n">verify</span> <span class="n">the</span> <span class="n">extraction</span> <span class="n">medium</span> <span class="n">by</span> <span class="n">checking</span> <span class="n">the</span> <span class="err">``</span><span class="n">WL_air</span><span class="p">(</span><span class="n">A</span><span class="p">)</span><span class="err">``</span> <span class="n">vs</span> <span class="err">``</span><span class="n">WL_vac</span><span class="p">(</span><span class="n">A</span><span class="p">)</span><span class="err">``</span> <span class="n">column</span>
+  <span class="n">header</span> <span class="n">before</span> <span class="n">ingesting</span> <span class="n">a</span> <span class="n">new</span> <span class="n">VALD</span> <span class="n">file</span><span class="o">.</span>
+</pre></div>
+</div>
+<p><strong>Bug 2 — No medium assertion</strong> (<code class="docutils literal notranslate"><span class="pre">scripts/ingest_vald_atomic.py</span></code>, after line 94 in <code class="docutils literal notranslate"><span class="pre">parse_vald</span></code>):</p>
+<p>Add a header-medium check at file open:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_detect_vald_medium</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return &#39;air&#39; or &#39;vacuum&#39; from the VALD file header, or raise ValueError.&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">_open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;WL_air&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="k">return</span> <span class="s1">&#39;air&#39;</span>
+            <span class="k">if</span> <span class="s1">&#39;WL_vac&#39;</span> <span class="ow">in</span> <span class="n">line</span> <span class="ow">or</span> <span class="s1">&#39;WL_vacuum&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="k">return</span> <span class="s1">&#39;vacuum&#39;</span>
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">):</span>
+                <span class="k">break</span>  <span class="c1"># hit data without finding header</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot determine wavelength medium from </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: no WL_air/WL_vac header found&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Then in <code class="docutils literal notranslate"><span class="pre">parse_vald</span></code>, after opening the file:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">medium</span> <span class="o">=</span> <span class="n">_detect_vald_medium</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">medium</span> <span class="o">!=</span> <span class="s1">&#39;air&#39;</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: VALD file is in VACUUM units (header: WL_vac). &quot;</span>
+        <span class="s2">&quot;Re-extract with air units from VALD (Unit selections page) or convert manually. &quot;</span>
+        <span class="s2">&quot;Ingesting vacuum wavelengths without conversion would shift all visible lines by ~+114 pm.&quot;</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<p>This converts a silent footgun into an immediate, informative error.</p>
+<p><strong>Also fix <code class="docutils literal notranslate"><span class="pre">vald_auto_request.py</span></code> line 10 comment</strong> to add explicit instruction:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># UNITS: this does NOT set &#39;Unit selections&#39; — it relies on the account&#39;s SAVED units.</span>
+<span class="c1"># REQUIRED: your VALD account MUST be set to air wavelengths (not vacuum) before running.</span>
+<span class="c1"># To verify: log into http://vald.astro.uu.se -&gt; Unit selections -&gt; confirm &quot;air&quot; is selected.</span>
+<span class="c1"># If you accidentally download vacuum files, ingest_vald_atomic.py will now detect and abort.</span>
+</pre></div>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

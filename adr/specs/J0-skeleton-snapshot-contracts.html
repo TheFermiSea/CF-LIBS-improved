@@ -1,0 +1,228 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J0 Implementation Spec — cflibs/jitpipe/ Skeleton, PipelineSnapshot Unification, Tolerance Contracts &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">J0 Implementation Spec — <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> Skeleton, <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> Unification, Tolerance Contracts</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/adr/specs/J0-skeleton-snapshot-contracts.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="j0-implementation-spec-cflibs-jitpipe-skeleton-pipelinesnapshot-unification-tolerance-contracts">
+<h1>J0 Implementation Spec — <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> Skeleton, <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> Unification, Tolerance Contracts<a class="headerlink" href="#j0-implementation-spec-cflibs-jitpipe-skeleton-pipelinesnapshot-unification-tolerance-contracts" title="Link to this heading"></a></h1>
+<p><strong>Bead:</strong> J0 (placeholder; real ID assigned at <code class="docutils literal notranslate"><span class="pre">bd</span> <span class="pre">create</span></code>) · <strong>ADR:</strong> <a class="reference internal" href="../ADR-0004-jittable-inversion-pipeline.html"><span class="std std-doc">ADR-0004</span></a> §8.1 row J0 · <strong>Track:</strong> spine (gates everything) · <strong>Depends:</strong> — · <strong>Estimated effort:</strong> 3–5 pd / 2–3 agent-sessions</p>
+<blockquote>
+<div><p>J0 is deliberately cheap and zero-contention: per ADR-0004 §8.4 it may start <em>before</em> the program start criteria hold, together with the J11 <code class="docutils literal notranslate"><span class="pre">custom_root</span></code> spike, to de-risk the two biggest unknowns (snapshot unification; implicit-diff viability).</p>
+</div></blockquote>
+<section id="goals">
+<h2>1. Goals<a class="headerlink" href="#goals" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Create <code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/</span></code> with the module-per-stage layout of ADR-0004 §5.1.1 (stage modules may be empty stubs with signatures + docstrings; <code class="docutils literal notranslate"><span class="pre">snapshot.py</span></code>, <code class="docutils literal notranslate"><span class="pre">params.py</span></code>, <code class="docutils literal notranslate"><span class="pre">host.py</span></code>, <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> get real implementations).</p></li>
+<li><p><strong>Unify the two snapshot types</strong> — <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/core/jax_runtime.py:430</span></code>, pytree-registered at <code class="docutils literal notranslate"><span class="pre">:553</span></code>, serves the forward kernel) and <code class="docutils literal notranslate"><span class="pre">_AtomicSnapshot</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/solve/iterative.py:381-540</span></code>, serves the lax solver) — into one frozen, pytree-registered <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> built host-only from a single SQLite scan.</p></li>
+<li><p>Define <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> (traced pytree: ALL continuous knobs — detection thresholds, windows, tolerances, score weights) and <code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code> (hashable statics: bucket id, broadening mode, padding constants, max_iters, B — the jit cache key), mirroring the static-vs-traced split documented at <code class="docutils literal notranslate"><span class="pre">cflibs/radiation/kernels.py:28-38</span></code>.</p></li>
+<li><p>Land the program’s contract documents: shape-bucketing + padding-constants policy (ADR-0004 §5.2 tables), tiered tolerance contracts K/S/D/B (§5.4), precision policy (§5.3).</p></li>
+<li><p>Enforce the boundary invariants from day one: import-hygiene test; no-SQLite-in-kernels test scaffolding.</p></li>
+<li><p>Fix the compile-cache default trap and apply the ADR-0001 §12 addendum.</p></li>
+</ul>
+</section>
+<section id="pipelinesnapshot-contents-measured-against-asd-da-libs-production-db-6-1-mb">
+<h2>2. <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> contents (measured against <code class="docutils literal notranslate"><span class="pre">ASD_da/libs_production.db</span></code>, 6.1 MB)<a class="headerlink" href="#pipelinesnapshot-contents-measured-against-asd-da-libs-production-db-6-1-mb" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Block</p></th>
+<th class="head"><p>Shape / dtype</p></th>
+<th class="head"><p>Size</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>lines</p></td>
+<td><p>28,727 rows × ~13 f64-equiv cols: element-idx i16, sp_num i8, wavelength, aki, ei_ev, ek_ev, gi, gk, stark_w, stark_alpha, stark_shift, aki_uncertainty, is_resonance bool, stark_source_class u8, gamma_vdw_log</p></td>
+<td><p>≈3.0 MB</p></td>
+<td><p>stark_source_class measured: konjevic-λ²-scaled 22,951 / interpolated 4,574 / hydrogenic 562 / <code class="docutils literal notranslate"><span class="pre">stark_b</span></code> 244 / null 396</p></td>
+</tr>
+<tr class="row-odd"><td><p>energy_levels</p></td>
+<td><p>(144, 676) g + E f64 + mask</p></td>
+<td><p>≈1.65 MB</p></td>
+<td><p>9,448 rows, max 676 levels/species (Fe II); uniform pad, no bucketing needed</p></td>
+</tr>
+<tr class="row-even"><td><p>partition polys</p></td>
+<td><p>146×5 f64</p></td>
+<td><p>6 KB</p></td>
+<td><p>NaN sentinel as in <code class="docutils literal notranslate"><span class="pre">iterative.py</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>canonical scalar fallbacks</p></td>
+<td><p>175×2</p></td>
+<td><p>3 KB</p></td>
+<td><p><strong>eager</strong> at build — the lazy probe at <code class="docutils literal notranslate"><span class="pre">iterative.py:479-490</span></code> becomes one-time cost; restores simple semantics</p></td>
+</tr>
+<tr class="row-even"><td><p>species_physics</p></td>
+<td><p>175×2 (ip_ev, atomic_mass)</p></td>
+<td><p>3 KB</p></td>
+<td><p>masses feed Doppler widths in J6 (<code class="docutils literal notranslate"><span class="pre">stark_ne.py:504-506</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>doublet pairs (for J5)</p></td>
+<td><p>(P, 2) i32 + ρ + r_thin</p></td>
+<td><p>&lt;0.5 MB</p></td>
+<td><p>atomic-data-static; pair constants per <code class="docutils literal notranslate"><span class="pre">physics/self_absorption.py:222-233</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>oxide stoichiometry</p></td>
+<td><p>per-candidate (E,) vectors</p></td>
+<td><p>negl.</p></td>
+<td><p>from <code class="docutils literal notranslate"><span class="pre">physics/closure.py:62-73</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Total ≈5–6 MB device-resident. Builder: <code class="docutils literal notranslate"><span class="pre">host.py</span></code>/<code class="docutils literal notranslate"><span class="pre">snapshot.py</span></code>, one SQLite scan, <code class="docutils literal notranslate"><span class="pre">.npz</span></code> cache keyed by a DB content hash (invalidation = hash mismatch). Per-bucket candidate-set assembly = element masks over the superset snapshot + the <code class="docutils literal notranslate"><span class="pre">_build_padded_arrays_from_obs</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:2986-3020</span></code>) / <code class="docutils literal notranslate"><span class="pre">reorder</span></code> (<code class="docutils literal notranslate"><span class="pre">:519-540</span></code>) gather pattern — the ONLY per-spectrum host↔device seam.</p>
+<p><strong>Bridging requirement:</strong> <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> must be constructible <em>from</em> and convertible <em>to</em> both existing snapshot types during the transition (J7 reuses the lax solve kernels verbatim; <code class="docutils literal notranslate"><span class="pre">forward.py</span></code> feeds <code class="docutils literal notranslate"><span class="pre">kernels.forward_model</span></code> which consumes <code class="docutils literal notranslate"><span class="pre">AtomicSnapshot</span></code> fields). Do not modify either existing type in J0.</p>
+</section>
+<section id="files-to-create">
+<h2>3. Files to create<a class="headerlink" href="#files-to-create" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/__init__.py</span></code> (public API: <code class="docutils literal notranslate"><span class="pre">run_batch</span></code>, <code class="docutils literal notranslate"><span class="pre">run_one</span></code>, <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code>, <code class="docutils literal notranslate"><span class="pre">StaticConfig</span></code>; clear <code class="docutils literal notranslate"><span class="pre">ImportError</span></code> with install guidance when JAX missing — jitpipe requires JAX by definition, ADR-0004 §5.5)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cflibs/jitpipe/snapshot.py</span></code>, <code class="docutils literal notranslate"><span class="pre">params.py</span></code>, <code class="docutils literal notranslate"><span class="pre">host.py</span></code>, <code class="docutils literal notranslate"><span class="pre">parity.py</span></code> (real), stage stubs <code class="docutils literal notranslate"><span class="pre">preprocess.py</span></code>, <code class="docutils literal notranslate"><span class="pre">detect.py</span></code>, <code class="docutils literal notranslate"><span class="pre">calibrate.py</span></code>, <code class="docutils literal notranslate"><span class="pre">identify.py</span></code>, <code class="docutils literal notranslate"><span class="pre">fit.py</span></code>, <code class="docutils literal notranslate"><span class="pre">selfabs.py</span></code>, <code class="docutils literal notranslate"><span class="pre">stark.py</span></code>, <code class="docutils literal notranslate"><span class="pre">solve.py</span></code>, <code class="docutils literal notranslate"><span class="pre">forward.py</span></code>, <code class="docutils literal notranslate"><span class="pre">pipeline.py</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/jitpipe/contracts.md</span></code> (tier table K/S/D/B + per-stage contract registry, seeded from ADR-0004 §4/§5.4) and <code class="docutils literal notranslate"><span class="pre">docs/jitpipe/shapes.md</span></code> (bucket + padding-constant tables, §5.2)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_import_hygiene.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_snapshot.py</span></code>, <code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_params_pytree.py</span></code></p></li>
+<li><p>Separate small PR items carried by this bead: flip <code class="docutils literal notranslate"><span class="pre">cflibs/core/platform_config.py:94</span></code> cache default from the uid-skewed <code class="docutils literal notranslate"><span class="pre">/cluster/shared/jax-cache</span></code> to a per-user path (<code class="docutils literal notranslate"><span class="pre">~/.cache/cflibs/jax</span></code>) + update <code class="docutils literal notranslate"><span class="pre">docs/jax-compile-cache.md</span></code> (pathology: hung jobs 1909/1914/1915, <code class="docutils literal notranslate"><span class="pre">.serena/memories/physics_invariants_and_gotchas.md:54-56</span></code>); apply the ADR-0001 §12 addendum text (ADR-0004 §9) to <code class="docutils literal notranslate"><span class="pre">ADR-0001-radis-jaxrts-pattern-survey.md</span></code>.</p></li>
+</ul>
+</section>
+<section id="acceptance-criteria">
+<h2>4. Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Package imports clean with and without CUDA; under <code class="docutils literal notranslate"><span class="pre">JAX_PLATFORMS=cpu</span></code> all tests pass (conftest already forces CPU+x64, <code class="docutils literal notranslate"><span class="pre">tests/conftest.py:20,25</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> round-trips through <code class="docutils literal notranslate"><span class="pre">jax.tree_util.tree_flatten/unflatten</span></code>; jit + vmap smoke over a function consuming it.</p></li>
+<li><p>Snapshot build is <strong>byte-stable</strong>: two builds from the same DB produce identical <code class="docutils literal notranslate"><span class="pre">.npz</span></code> (hash equality); cache hit skips the SQLite scan; cache invalidates on DB content change.</p></li>
+<li><p>Bridge tests: fields consumed by <code class="docutils literal notranslate"><span class="pre">kernels.forward_model</span></code> (<code class="docutils literal notranslate"><span class="pre">kernels.py:763</span></code>) and <code class="docutils literal notranslate"><span class="pre">_run_lax_while_loop</span></code> (<code class="docutils literal notranslate"><span class="pre">iterative.py:721</span></code>) are reachable from <code class="docutils literal notranslate"><span class="pre">PipelineSnapshot</span></code> with identical values vs the existing builders for a 15-element candidate set (measured reference: N_lines=12,008, N_species=30, level pad (30,676) via <code class="docutils literal notranslate"><span class="pre">AtomicDatabase.snapshot</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs/atomic/database.py:846</span></code>).</p></li>
+<li><p>Import-hygiene test green: no module under <code class="docutils literal notranslate"><span class="pre">jitpipe/</span></code> except <code class="docutils literal notranslate"><span class="pre">host.py</span></code>/<code class="docutils literal notranslate"><span class="pre">snapshot.py</span></code>/<code class="docutils literal notranslate"><span class="pre">parity.py</span></code> imports <code class="docutils literal notranslate"><span class="pre">sqlite3</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs.atomic.database</span></code>, <code class="docutils literal notranslate"><span class="pre">cflibs.io</span></code>, or <code class="docutils literal notranslate"><span class="pre">jitpipe.host</span></code> (mirror <code class="docutils literal notranslate"><span class="pre">tests/test_jax_import_hygiene.py</span></code>; pattern documented at <code class="docutils literal notranslate"><span class="pre">kernels.py:72-78</span></code>). Nothing outside <code class="docutils literal notranslate"><span class="pre">jitpipe/</span></code> imports <code class="docutils literal notranslate"><span class="pre">jitpipe</span></code> (grep-based check).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PipelineParams</span></code> contains every continuous knob of <code class="docutils literal notranslate"><span class="pre">AnalysisPipelineConfig</span></code> (<code class="docutils literal notranslate"><span class="pre">cflibs/inversion/pipeline.py:90-152</span></code>) that the stage specs name; changing any leaf does <strong>not</strong> retrigger compilation (assert via <code class="docutils literal notranslate"><span class="pre">jax._src</span></code> compile-counter or cache-stats probe).</p></li>
+<li><p>Contracts + shapes docs reviewed and merged; eager-fallback semantics documented.</p></li>
+<li><p>ruff TID251 passes on the new package (physics-only constraint inherited automatically).</p></li>
+</ol>
+</section>
+<section id="test-plan">
+<h2>5. Test plan<a class="headerlink" href="#test-plan" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/jitpipe/test_snapshot.py</span></code> (build, cache, byte-stability, bridge parity vs both existing snapshot builders, no-SQLite-after-build query-count guard in the style of <code class="docutils literal notranslate"><span class="pre">test_iterative_lax.py:415-429</span></code>); <code class="docutils literal notranslate"><span class="pre">test_params_pytree.py</span></code> (flatten/unflatten, zero-recompile on leaf change, StaticConfig hashability); <code class="docutils literal notranslate"><span class="pre">test_import_hygiene.py</span></code>. All CPU-x64, well under the 600 s watchdog.</p>
+</section>
+<section id="risks">
+<h2>6. Risks<a class="headerlink" href="#risks" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Two-snapshot impedance mismatch</strong> (different element ordering, level-padding conventions): mitigated by the bridge tests in AC-4 and by not modifying either existing type.</p></li>
+<li><p><strong>Eager canonical fallbacks change prefetch cost</strong>: one-time at snapshot build (process-level), not per-solve; assert build time &lt; 5 s in tests.</p></li>
+<li><p><strong>Scope creep into stage logic</strong>: stage modules are stubs only; any stage implementation belongs to J1–J7.</p></li>
+</ul>
+</section>
+<section id="dependencies">
+<h2>7. Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading"></a></h2>
+<p>None. Enables everything. Files touched outside <code class="docutils literal notranslate"><span class="pre">jitpipe/</span></code>: <code class="docutils literal notranslate"><span class="pre">cflibs/core/platform_config.py</span></code> (cache default), <code class="docutils literal notranslate"><span class="pre">docs/jax-compile-cache.md</span></code>, <code class="docutils literal notranslate"><span class="pre">docs/adr/ADR-0001-radis-jaxrts-pattern-survey.md</span></code> (§12 addendum) — each a separate commit.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

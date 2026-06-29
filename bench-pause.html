@@ -1,0 +1,248 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pausing the post-merge benchmark gate &mdash; CF-LIBS 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            CF-LIBS
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Quick_Start_For_Scientists.html">Quick Start for Scientists</a></li>
+<li class="toctree-l1"><a class="reference internal" href="User_Guide.html">CF-LIBS User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Database_Generation.html">Atomic Database Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Manifold_Generation_Guide.html">Manifold Generation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Hardware_Interfaces.html">Hardware Interfaces Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Echellogram_Processing_Guide.html">Echellogram Processing Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Deployment.html">CF-LIBS Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="API_Reference.html">CF-LIBS API Reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CF-LIBS_Codebase_Technical_Documentation.html">CF-LIBS Codebase Technical Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Evolution_Framework.html">Evolution Framework</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Analysis</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="REFERENCE_ANALYSIS_LIBSSA.html">Analysis of libssa (v2.5.1)</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">CF-LIBS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Pausing the post-merge benchmark gate</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/bench-pause.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pausing-the-post-merge-benchmark-gate">
+<h1>Pausing the post-merge benchmark gate<a class="headerlink" href="#pausing-the-post-merge-benchmark-gate" title="Link to this heading"></a></h1>
+<p><strong>Status:</strong> active since T1.4 (CF-LIBS-improved-5t6n), 2026-05-12.</p>
+<section id="background">
+<h2>Background<a class="headerlink" href="#background" title="Link to this heading"></a></h2>
+<p>Every architect-resolved PR to <code class="docutils literal notranslate"><span class="pre">dev</span></code> triggers a benchmark dispatch on
+vasp-03:</p>
+<ol class="arabic simple">
+<li><p>The orchestrator (<code class="docutils literal notranslate"><span class="pre">beefcake-swarm/python/run.py</span></code>) finishes the
+verifier and reads <code class="docutils literal notranslate"><span class="pre">&lt;worktree&gt;/.swarm/benchmark.toml</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">python/benchmark_gate.py::run_gate()</span></code> invokes
+<code class="docutils literal notranslate"><span class="pre">beefcake-swarm/scripts/post-merge-benchmark.sh</span> <span class="pre">classify</span></code> to decide
+whether the change is <code class="docutils literal notranslate"><span class="pre">skip</span></code> / <code class="docutils literal notranslate"><span class="pre">light</span></code> / <code class="docutils literal notranslate"><span class="pre">heavy</span></code>.</p></li>
+<li><p>For <code class="docutils literal notranslate"><span class="pre">light</span></code> / <code class="docutils literal notranslate"><span class="pre">heavy</span></code>, the gate calls <code class="docutils literal notranslate"><span class="pre">post-merge-benchmark.sh</span> <span class="pre">run</span></code>,
+which <strong>drains llama.cpp inference on vasp-03</strong>, rsyncs the worktree
+to NFS, and runs a 30 - 90 minute GPU benchmark.</p></li>
+</ol>
+<p>During multi-day parameter sweeps and 24-hour analysis-pipeline loops
+(<code class="docutils literal notranslate"><span class="pre">scripts/loop_24h_driver.sh</span></code>), this auto-fired benchmark contends with
+the sweep for the same V100 and ruins the wall-time budget. We need a
+way to suspend the gate for the duration of the experiment without
+modifying <code class="docutils literal notranslate"><span class="pre">benchmark.toml</span></code> (which would create per-PR diffs every time
+we pause/resume).</p>
+</section>
+<section id="mechanism">
+<h2>Mechanism<a class="headerlink" href="#mechanism" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">post-merge-benchmark.sh</span></code> checks two signals at the top of <code class="docutils literal notranslate"><span class="pre">do_classify</span></code>
+and <code class="docutils literal notranslate"><span class="pre">do_run</span></code>:</p>
+<ul class="simple">
+<li><p>File flag: <code class="docutils literal notranslate"><span class="pre">/tmp/cf-libs-bench-paused</span></code> exists.</p></li>
+<li><p>Env var: <code class="docutils literal notranslate"><span class="pre">BENCH_PAUSED=1</span></code>.</p></li>
+</ul>
+<p>If either is present, the script:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">classify</span></code> → echoes <code class="docutils literal notranslate"><span class="pre">&quot;skip&quot;</span></code> (the orchestrator gate treats this as
+“no benchmark needed”, same as docs-only PRs).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">run</span></code> → logs <code class="docutils literal notranslate"><span class="pre">&quot;paused,</span> <span class="pre">skipping</span> <span class="pre">(flag=$FLAG,</span> <span class="pre">BENCH_PAUSED=$BENCH_PAUSED)&quot;</span></code>
+and returns <code class="docutils literal notranslate"><span class="pre">0</span></code> (the gate treats this as a pass, not a regression —
+PRs are not blocked).</p></li>
+</ul>
+<p>The flag must exist <strong>on the orchestrator host</strong> (where <code class="docutils literal notranslate"><span class="pre">run.py</span></code> lives
+— typically ai-proxy / <code class="docutils literal notranslate"><span class="pre">100.105.113.58</span></code>), not on vasp-03 or wherever
+the benchmark would have run, because the gate’s <code class="docutils literal notranslate"><span class="pre">subprocess.run</span></code> call
+happens in the orchestrator process and is what’s intercepted.</p>
+</section>
+<section id="helpers">
+<h2>Helpers<a class="headerlink" href="#helpers" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Pause the gate on the local host:</span>
+./scripts/bench-pause.sh
+
+<span class="c1"># Pause on the orchestrator host (ai-proxy) over ssh:</span>
+./scripts/bench-pause.sh<span class="w"> </span>--remote<span class="w">                    </span><span class="c1"># uses default brian@100.105.113.58</span>
+./scripts/bench-pause.sh<span class="w"> </span>--remote<span class="w"> </span>brian@ai-proxy<span class="w">     </span><span class="c1"># explicit host</span>
+./scripts/bench-pause.sh<span class="w"> </span>--remote<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;sweep T2.1 in progress&quot;</span>
+
+<span class="c1"># Resume (symmetric):</span>
+./scripts/bench-resume.sh
+./scripts/bench-resume.sh<span class="w"> </span>--remote
+./scripts/bench-resume.sh<span class="w"> </span>--remote<span class="w"> </span>brian@ai-proxy
+</pre></div>
+</div>
+<p>Pause is idempotent (no-op if already paused, same flag overwritten
+with fresh timestamp+reason). Resume is also idempotent (logs “already
+resumed” if no flag exists).</p>
+<p>The flag file contains a few annotation fields for postmortems:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">paused_at</span><span class="o">=</span><span class="mi">2026</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">12</span><span class="n">T14</span><span class="p">:</span><span class="mi">23</span><span class="p">:</span><span class="mi">00</span><span class="o">-</span><span class="mi">04</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">paused_by</span><span class="o">=</span><span class="n">brian</span><span class="nd">@ai</span><span class="o">-</span><span class="n">proxy</span>
+<span class="n">reason</span><span class="o">=</span><span class="n">sweep</span> <span class="n">T2</span><span class="mf">.1</span> <span class="ow">in</span> <span class="n">progress</span>
+</pre></div>
+</div>
+</section>
+<section id="acceptance-verification">
+<h2>Acceptance verification<a class="headerlink" href="#acceptance-verification" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 1. Pause and confirm no benchmark fires on the next PR-push to dev.</span>
+./scripts/bench-pause.sh<span class="w"> </span>--remote<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;acceptance test&quot;</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>dev:dev<span class="w">   </span><span class="c1"># or whatever push triggers a PR via the orchestrator</span>
+<span class="c1"># In the orchestrator log: gate emits &quot;paused, skipping (flag=...)&quot;; PR is</span>
+<span class="c1"># created with the benchmark section reporting &quot;skipped (paused)&quot;.</span>
+
+<span class="c1"># 2. Resume and confirm normal behaviour returns.</span>
+./scripts/bench-resume.sh<span class="w"> </span>--remote
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>dev:dev
+<span class="c1"># Orchestrator log shows classify → light/heavy → run on vasp-03 as before.</span>
+</pre></div>
+</div>
+</section>
+<section id="why-a-flag-file-and-not-just-an-env-var">
+<h2>Why a flag file (and not just an env var)<a class="headerlink" href="#why-a-flag-file-and-not-just-an-env-var" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">BENCH_PAUSED=1</span></code> works for one-shot invocations, but the orchestrator
+process is long-running (<code class="docutils literal notranslate"><span class="pre">dogfood.py</span></code> loops for days). To pause an
+already-running orchestrator without restarting it, we need a signal
+that the <em>child subprocess</em> picks up at invocation time. A filesystem
+flag is the simplest signal that survives across subprocess boundaries
+without restarting the parent.</p>
+</section>
+<section id="interaction-with-the-parameter-sweep-loop">
+<h2>Interaction with the parameter-sweep loop<a class="headerlink" href="#interaction-with-the-parameter-sweep-loop" title="Link to this heading"></a></h2>
+<p>The 24-hour loop driver (<code class="docutils literal notranslate"><span class="pre">scripts/loop_24h_driver.sh</span></code>) doesn’t itself
+trigger the post-merge benchmark — it just runs <code class="docutils literal notranslate"><span class="pre">run_unified_benchmark.py</span></code>
+directly. The auto-fired benchmark only fires when a PR is being created
+by the swarm orchestrator. So in practice, the typical sequence is:</p>
+<ol class="arabic simple">
+<li><p>Pause: <code class="docutils literal notranslate"><span class="pre">./scripts/bench-pause.sh</span> <span class="pre">--remote</span></code></p></li>
+<li><p>Start sweep: <code class="docutils literal notranslate"><span class="pre">./scripts/loop_24h_driver.sh</span> <span class="pre">...</span></code></p></li>
+<li><p>Sweep runs uninterrupted; orchestrator can still resolve PRs but
+does not steal GPU on vasp-03.</p></li>
+<li><p>Sweep finishes; resume: <code class="docutils literal notranslate"><span class="pre">./scripts/bench-resume.sh</span> <span class="pre">--remote</span></code></p></li>
+</ol>
+<p>If you forget to resume, the gate stays paused until somebody notices
+the PRs are landing without the usual benchmark validation. Recommend
+setting a calendar reminder or wrapping the sweep driver in a <code class="docutils literal notranslate"><span class="pre">trap</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>./scripts/bench-pause.sh<span class="w"> </span>--remote<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;24h sweep&quot;</span>
+<span class="nb">trap</span><span class="w"> </span><span class="s1">&#39;&quot;$PWD/scripts/bench-resume.sh&quot; --remote&#39;</span><span class="w"> </span>EXIT<span class="w"> </span>INT<span class="w"> </span>TERM
+./scripts/loop_24h_driver.sh<span class="w"> </span><span class="m">2026</span>-05-12<span class="w"> </span><span class="m">24</span><span class="w"> </span><span class="m">0</span><span class="w"> </span>cuda
+</pre></div>
+</div>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">scripts/bench-pause.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/bench-resume.sh</span></code> — helpers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">beefcake-swarm/scripts/post-merge-benchmark.sh</span></code> — the gate that
+honors the flag (<code class="docutils literal notranslate"><span class="pre">do_classify</span></code> / <code class="docutils literal notranslate"><span class="pre">do_run</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tests/scripts/test_bench_pause.py</span></code> — exercises the short-circuit.</p></li>
+<li><p>T1.4 issue: CF-LIBS-improved-5t6n.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, CF-LIBS Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
