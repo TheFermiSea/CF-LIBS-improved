@@ -19,6 +19,7 @@ from cflibs.core.constants import (
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
 from cflibs.inversion.physics.boltzmann import LineObservation
+from cflibs.inversion.physics.line_selection import compute_db_isolation_weights
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.self_absorption_observable import (
     ObservableSAResult,
@@ -959,6 +960,11 @@ class IterativeCFLIBSSolver:
         degeneracy_min_elements: int = 4,
         assess_quality: bool = True,
         fixed_temperature_K: Optional[float] = None,
+        db_isolation_gate: bool = False,
+        db_isolation_fwhm_nm: float = 0.1,
+        db_isolation_window_n_fwhm: float = 1.5,
+        db_isolation_blend_fraction: float = 0.15,
+        db_isolation_min_lines_per_element: int = 3,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
         # c5-solver-flags). ``use_lax_while_loop`` chooses between the CPU
@@ -1044,6 +1050,43 @@ class IterativeCFLIBSSolver:
         # K), while it monotonically corrects the ChemCam over-attribution.
         # Set to 0 (or any non-positive value) to disable.
         self.boltzmann_weight_cap = float(boltzmann_weight_cap)
+        # DB-aware spectral-isolation gate on the solver's Boltzmann line set.
+        # OPT-IN (default False) -> byte-identical legacy behaviour when off.
+        #
+        # The per-element intercept q_s = y_mean - slope*x_mean is a weighted mean
+        # of y = ln(I*lambda/(g*A)). When a measured peak integrates flux from >=2
+        # transitions separated by less than the instrument FWHM, the numerator I is
+        # the SUM of the blended lines, so every blended point is shifted *up* by
+        # dy = ln(I_blend/I_true) > 0. Because the closure maps C_s ∝ exp(q_s), this
+        # additive shift on the densest-spectrum elements (transition metals Fe/Ti,
+        # which have the most DB lines per nm) becomes multiplicative
+        # over-attribution. Inverse-variance A_ki weighting cannot remove it (a
+        # blended line's A_ki is well characterized even though its *intensity* is
+        # corrupted), and the existing detected-peak isolation test is blind to the
+        # unresolved DB neighbors that do the blending. The
+        # ``boltzmann_weight_cap`` bounds a single bright line's leverage but does
+        # NOT see DB blends, so the two levers are orthogonal (the cap caps weight
+        # magnitude; this gate inflates sigma for DB-contaminated lines).
+        #
+        # When enabled, ``_apply_db_isolation_gate`` queries the atomic DB for every
+        # transition (of any solved element) within
+        # ``±db_isolation_window_n_fwhm`` FWHM of each candidate line and
+        # down-weights lines whose strongest predicted neighbor exceeds
+        # ``db_isolation_blend_fraction`` of the candidate's own predicted
+        # emissivity, recomputed against the prior-iteration (T, n_e,
+        # concentrations) each pass. It is element-agnostic (triggers on local
+        # spectral density, never identity) and down-weights (rather than
+        # hard-dropping) so sparse cations near the min-lines floor are preserved.
+        #
+        # HOST-ONLY: enabling the gate forces the Python while-loop path (it is not
+        # traced into the lax kernel), mirroring the saha_boltzmann_graph / Stark
+        # diagnostics handling in ``solve``. Default-off keeps the lax path
+        # byte-identical, so tests/jitpipe host/lax parity is unaffected.
+        self.db_isolation_gate = bool(db_isolation_gate)
+        self.db_isolation_fwhm_nm = float(db_isolation_fwhm_nm)
+        self.db_isolation_window_n_fwhm = float(db_isolation_window_n_fwhm)
+        self.db_isolation_blend_fraction = float(db_isolation_blend_fraction)
+        self.db_isolation_min_lines_per_element = int(db_isolation_min_lines_per_element)
         # Saha-Boltzmann GRAPH intercept extraction (Aguilera & Aragon 2004,
         # *Spectrochim. Acta B* 59, 1861, "saha-boltzmann plot" / CD-SB graph).
         #
@@ -1355,6 +1398,82 @@ class IterativeCFLIBSSolver:
         else:
             scatter = 0.0
         return ne_median, len(values), scatter
+
+    def _apply_db_isolation_gate(
+        self,
+        obs_by_element: Dict[str, List[LineObservation]],
+        T_K: float,
+        n_e: float,
+        concentrations: Dict[str, float],
+    ) -> Dict[str, List[LineObservation]]:
+        """Down-weight DB-blended lines before the Boltzmann/closure fit.
+
+        Computes a per-line isolation weight against the full atomic-database
+        transition list (see
+        :func:`cflibs.inversion.physics.line_selection.compute_db_isolation_weights`)
+        and folds it into each line's intensity uncertainty. Inflating ``sigma_I``
+        by ``1/sqrt(w)`` lowers the line's inverse-variance fit weight
+        ``w_fit = 1/sigma_y^2`` in :meth:`_fit_common_boltzmann_plane` (and the
+        Saha-Boltzmann graph fit) by exactly the factor ``w`` — because
+        ``LineObservation.y_uncertainty = intensity_uncertainty / intensity`` — so a
+        blended line's additive ``+dy`` pull on the weighted intercept ``q_s`` is
+        suppressed in proportion to how badly it is contaminated. Lines the gate
+        leaves at weight 1.0 are returned unchanged (the common case).
+
+        When ``db_isolation_gate`` is False this returns the *same* mapping object
+        unchanged, so the default solve path is byte-identical. Otherwise a new
+        mapping is returned; the input is never mutated. ``n_e`` is accepted for
+        signature symmetry with the other per-iteration transforms and to allow a
+        future n_e-dependent window; it is currently unused.
+        """
+        if not self.db_isolation_gate or self.atomic_db is None:
+            return obs_by_element
+
+        flat = [o for lst in obs_by_element.values() for o in lst]
+        if not flat:
+            return obs_by_element
+
+        try:
+            weights = compute_db_isolation_weights(
+                flat,
+                self.atomic_db,
+                elements=list(obs_by_element.keys()),
+                T_K=T_K,
+                concentrations=concentrations,
+                fwhm_nm=self.db_isolation_fwhm_nm,
+                window_n_fwhm=self.db_isolation_window_n_fwhm,
+                blend_fraction=self.db_isolation_blend_fraction,
+                min_lines_per_element=self.db_isolation_min_lines_per_element,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("DB isolation gate failed (%s); skipping", exc)
+            return obs_by_element
+
+        gated: Dict[str, List[LineObservation]] = defaultdict(list)
+        for el, obs_list in obs_by_element.items():
+            for obs in obs_list:
+                w = weights.get(id(obs), 1.0)
+                if w >= 1.0 or w <= 0.0:
+                    gated[el].append(obs)
+                    continue
+                # Inflate sigma_I by 1/sqrt(w) so the fit weight w_fit ~ 1/sigma^2
+                # is multiplied by w. y/x/atomic data are untouched -- only the
+                # line's influence on the weighted intercept is reduced.
+                inflate = 1.0 / float(np.sqrt(w))
+                gated[el].append(
+                    LineObservation(
+                        wavelength_nm=obs.wavelength_nm,
+                        intensity=obs.intensity,
+                        intensity_uncertainty=obs.intensity_uncertainty * inflate,
+                        element=obs.element,
+                        ionization_stage=obs.ionization_stage,
+                        E_k_ev=obs.E_k_ev,
+                        g_k=obs.g_k,
+                        A_ki=obs.A_ki,
+                        aki_uncertainty=obs.aki_uncertainty,
+                    )
+                )
+        return dict(gated)
 
     def _apply_saha_correction(
         self,
@@ -1672,12 +1791,24 @@ class IterativeCFLIBSSolver:
         # The Stark n_e diagnostic is only wired into the Python reference loop
         # (the lax body's n_e update is a traced pressure-balance kernel), so a
         # supplied stark diagnostic forces the Python path.
+        #
+        # The DB-isolation gate is implemented only on the Python iteration body
+        # (it queries the atomic DB and rebuilds per-line uncertainties each pass,
+        # which is not traced into the lax common-slope kernel), so enabling it
+        # forces the Python loop — keeping the lax path byte-identical when the
+        # gate is off (default).
         diags: List["StarkDiagnosticLine"] = []
         if stark_diagnostic is not None:
             diags.append(stark_diagnostic)
         if stark_diagnostics:
             diags.extend(stark_diagnostics)
-        if HAS_JAX and self.use_lax_while_loop and not self.saha_boltzmann_graph and not diags:
+        if (
+            HAS_JAX
+            and self.use_lax_while_loop
+            and not self.saha_boltzmann_graph
+            and not self.db_isolation_gate
+            and not diags
+        ):
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)
             except _LaxFallback as exc:
@@ -1895,7 +2026,16 @@ class IterativeCFLIBSSolver:
 
         effective_ips = self._compute_effective_ips(ips, n_e, T_K)
 
-        sa_obs_by_element = obs_by_element
+        # DB-aware spectral-isolation gate (additive-bias removal at the source):
+        # down-weight lines blended by unresolved DB neighbors BEFORE the
+        # Boltzmann/closure fit, recomputed against the current (prior-iteration)
+        # plasma state so the gate tracks T/n_e/composition rather than the
+        # iteration-0 defaults. No-op (returns the same object) when
+        # ``db_isolation_gate`` is False or no line has a stronger predicted DB
+        # neighbor, so the default path is byte-identical.
+        sa_obs_by_element = self._apply_db_isolation_gate(
+            obs_by_element, T_K, n_e, concentrations
+        )
 
         # 3. Multi-species Boltzmann Fit.
         #
