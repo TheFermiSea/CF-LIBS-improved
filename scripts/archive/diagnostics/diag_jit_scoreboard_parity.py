@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.benchmark.scoreboard import _score_spectrum

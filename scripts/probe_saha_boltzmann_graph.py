@@ -21,7 +21,6 @@ Per-species CDSBPlotter (WRONG tool) gave RMSE 30 (per-species fits fail).
 """
 from __future__ import annotations
 import math
-import sys
 from pathlib import Path
 import numpy as np
 from cflibs.atomic.database import AtomicDatabase
@@ -78,7 +77,8 @@ def sb_graph_composition(obs, db, T, ne):
 
 
 def main():
-    cert = dict(CERT); cert_el = list(cert)
+    cert = dict(CERT)
+    cert_el = list(cert)
     db = AtomicDatabase(Path("/home/brian/code/CF-LIBS-improved/ASD_da/libs_production.db"))
     for spec in ["chemcam_bhvo2_loc1", "csa_bhvo2_1000pulse"]:
         wl, it = load_spectrum(f"/home/brian/code/CF-LIBS-improved/data/bhvo2_usgs/{spec}_spectrum.csv")

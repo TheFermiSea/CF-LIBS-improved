@@ -119,29 +119,18 @@ def test_atomic_database_close(atomic_db):
 
 
 def test_sql_injection_prevention(temp_db):
-    """Test that schema migration prevents SQL injection via invalid column names or types."""
+    """Test that schema migration prevents SQL injection via strict allowed queries."""
 
     class TestAtomicDatabase(AtomicDatabase):
         def _perform_migration(self, conn):
             cursor = conn.cursor()
-            cursor.execute("PRAGMA table_info(lines)")
-            columns = {row[1] for row in cursor.fetchall()}
+            # Try to pass an injection payload to the now-strict _add_line_column method
+            malicious_col = "stark_w; DROP TABLE lines;"
+            malicious_query = "ALTER TABLE lines ADD COLUMN stark_w REAL; DROP TABLE lines;"
 
-            # Simulate a malicious injection attempt in required_line_cols
-            required_line_cols = {
-                "stark_w; DROP TABLE lines;": "REAL",
-            }
-
-            valid_dtypes = {"REAL", "INTEGER", "TEXT", "BLOB", "NUMERIC"}
-            for col, dtype in required_line_cols.items():
-                if col not in columns:
-                    if not col.isidentifier():
-                        raise ValueError(f"Invalid column name for migration: {col}")
-                    if dtype.upper() not in valid_dtypes:
-                        raise ValueError(f"Invalid data type for migration: {dtype}")
-
-                    cursor.execute(f"ALTER TABLE lines ADD COLUMN {col} {dtype}")
+            # The allowed queries map is empty here for simplicity, so anything should raise ValueError
+            self._add_line_column(cursor, malicious_col, malicious_query, {"stark_w": "ALTER TABLE lines ADD COLUMN stark_w REAL"})
 
     # Now verify that initializing the patched DB class raises the expected error
-    with pytest.raises(ValueError, match="Invalid column name for migration"):
+    with pytest.raises(ValueError, match="Invalid column name or query for migration"):
         TestAtomicDatabase(temp_db)
