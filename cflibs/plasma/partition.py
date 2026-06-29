@@ -22,19 +22,21 @@ Two computation methods are provided:
 
    Stored in ``partition_functions`` (a0..a4, t_min, t_max, source).  Less
    accurate than direct summation when energy levels are available
-   (errors up to 66 % for some species) — use only as a fallback when the
-   ``energy_levels`` table is missing rows for a species.
+   (errors up to 66 % for some species) — use only as a genuine last resort
+   for the handful of species the ``energy_levels`` table cannot cover
+   (Si IV-class high ions).
 
-Historical note (2026-05-09 fix): the previous docstring ambiguously said
-"log U = Σ aₙ (log T)ⁿ" without specifying base.  The implementation has
-always used natural log (``np.log``), and the 13 partition_functions rows
-in the production DB at the time of audit were fit to that convention.
-The 30–60 % poly-vs-direct-sum discrepancy noted in the audit was caused
-by *stale fit data* (the polynomial coefficients were fit against an
-older energy_levels snapshot than the one currently in the DB), not by a
-math/convention mismatch.  Re-fitting from the current EL table — which
-is what :mod:`scripts.archive.migrations.populate_partition_functions` does — restores the
-consistency.
+**Authoritative path (M5 complete-DB ingest).** The ``energy_levels`` table
+now carries the complete NIST/Kurucz level lists across stages I/II/III, so
+the plasma-truncated direct sum (method 1) is the SINGLE source of truth for
+every levelled species — Ca I / Na I / K I / Na II / Fe I, historically
+truncated by the old lines-table scrape, all resolve via the direct sum now.
+The stored polynomial (method 2) and the
+:func:`canonical_partition_fallback` ladder are demoted to warned last-resorts
+that should be unreachable for any species the complete DB covers.  A level
+with an unassigned ``g_level`` (unknown ``g = 2J+1``) is excluded at the DB
+layer — it cannot contribute a known Boltzmann weight — so the direct sum no
+longer silently crashes and degrades to a stale polynomial.
 """
 
 from dataclasses import dataclass
@@ -202,16 +204,26 @@ def direct_sum_partition_function(
 # Direct-sum-preferred polynomial coefficient fit (manifold/Bayesian fallback)
 # ---------------------------------------------------------------------------
 
-# Fit grid + LIBS validation band for :func:`direct_sum_fit_coeffs`.  These
-# mirror the standalone regeneration recipe in
-# ``scripts/archive/migrations/regenerate_partition_functions.py`` so the load-time fallback and
-# the persisted DB rows agree by construction.
+# Fit grid + LIBS validation band for :func:`direct_sum_fit_coeffs`.  The
+# persisted DB rows agree with this load-time fit by construction: the
+# regeneration script ``scripts/regenerate_partition_functions_complete_db.py``
+# writes exactly what :func:`derive_partition_spec` (i.e. this fit) produces.
 _DSFIT_T_MIN = 2000.0
 _DSFIT_T_MAX = 25000.0
 _DSFIT_N_POINTS = 60
 _DSFIT_KEY_TEMPS = (5000.0, 10000.0, 15000.0, 20000.0)
 _DSFIT_BAND_LO = 6000.0
 _DSFIT_BAND_HI = 12000.0
+# Dense ps-LIBS-band sampling + weighting for the degree-4 ln-poly fit. The
+# original recipe (KEY temps weighted 10x, NO band samples) let steep-knee
+# light metals -- Mg I most acutely -- drift up to +15% above the band direct
+# sum because the over-weighted hot KEY temps (15000/20000 K) dominated the
+# curve shape. Sampling the 6000-12000 K band densely and weighting it above
+# the KEY anchors pins the fit where the gate measures it (worst band error
+# across all fittable species now <7%, vs the prior 15%).
+_DSFIT_BAND_N = 40
+_DSFIT_KEY_WEIGHT = 4.0
+_DSFIT_BAND_WEIGHT = 8.0
 
 
 def direct_sum_fit_coeffs(
@@ -269,15 +281,24 @@ def direct_sum_fit_coeffs(
 
     T_grid = np.unique(
         np.concatenate(
-            [np.linspace(_DSFIT_T_MIN, _DSFIT_T_MAX, _DSFIT_N_POINTS), np.array(_DSFIT_KEY_TEMPS)]
+            [
+                np.linspace(_DSFIT_T_MIN, _DSFIT_T_MAX, _DSFIT_N_POINTS),
+                np.array(_DSFIT_KEY_TEMPS),
+                np.linspace(_DSFIT_BAND_LO, _DSFIT_BAND_HI, _DSFIT_BAND_N),
+            ]
         )
     )
     Q_grid = np.array([_ds(T) for T in T_grid])
     ln_T = np.log(T_grid)
     ln_Q = np.log(np.maximum(Q_grid, 1e-12))
+    # Weight the ps-LIBS band above the wide-range KEY anchors so the degree-4
+    # ln-poly tracks the direct sum where the gate measures it (see the
+    # _DSFIT_BAND_* rationale above) rather than chasing the hot tail.
     w = np.ones_like(T_grid)
     for kt in _DSFIT_KEY_TEMPS:
-        w[np.isclose(T_grid, kt)] = 10.0
+        w[np.isclose(T_grid, kt)] = _DSFIT_KEY_WEIGHT
+    in_band = (T_grid >= _DSFIT_BAND_LO) & (T_grid <= _DSFIT_BAND_HI)
+    w[in_band] = np.maximum(w[in_band], _DSFIT_BAND_WEIGHT)
     coeffs = list(np.polynomial.polynomial.polyfit(ln_T, ln_Q, 4, w=w))
     coeffs = (coeffs + [0.0] * 5)[:5]
 
@@ -412,7 +433,16 @@ class PartitionFunctionSpec:
 # × 2-3 stages at build time; without this cache it would refit on every
 # snapshot/spectrum. Keyed on the same (db_path, element, stage) tuple as
 # ``_level_cache``.
-_spec_cache: Dict[Tuple[str, str, int], "PartitionFunctionSpec"] = {}
+_spec_cache: Dict[Tuple[str, str, int, int], "PartitionFunctionSpec"] = {}
+
+# Module-level provider cache keyed IDENTICALLY to ``_spec_cache`` on
+# ``(db_path, element, stage, cache_token)``.  ``spec.to_provider()`` rebuilds a
+# frozen provider and re-tuples every energy level on EVERY call (~30×/solve);
+# this was ~42 % of solve time.  Building the provider once and returning the
+# cached instance is bit-for-bit (the spec is immutable, so the provider it
+# vends is identical data each time).  Invalidated together with ``_spec_cache``
+# via :func:`clear_partition_module_caches` and the ``cache_token`` bump.
+_provider_cache: Dict[Tuple[str, str, int, int], "PartitionFunctionProvider"] = {}
 
 
 #: Stored ``partition_functions.source`` values that outrank the direct-sum
@@ -458,6 +488,7 @@ def derive_partition_spec(
     atomic_db: Any,
     element: str,
     ionization_stage: int,
+    cache_token: int = 0,
 ) -> Optional["PartitionFunctionSpec"]:
     """Derive the single :class:`PartitionFunctionSpec` for a species.
 
@@ -492,6 +523,7 @@ def derive_partition_spec(
         str(getattr(atomic_db, "db_path", id(atomic_db))),
         element,
         int(ionization_stage),
+        int(cache_token),
     )
     cached = _spec_cache.get(cache_key)
     if cached is not None:
@@ -509,7 +541,20 @@ def derive_partition_spec(
     ip_ev: Optional[float] = None
     try:
         levels = atomic_db.get_energy_levels(element, ionization_stage)
-    except Exception:  # pragma: no cover - defensive DB-shape guard
+    except Exception as exc:  # pragma: no cover - defensive DB-shape guard
+        # Do NOT silently degrade to the stored polynomial: the complete-DB
+        # direct sum is the authoritative path, so a level-fetch failure is a
+        # data/backend regression that must be loud (the codebase's own
+        # "silent wrong physics is the bug" principle).  ``get_energy_levels``
+        # already filters NULL/non-finite degeneracies, so reaching here means
+        # a genuine backend fault, not the historical int(NaN) crash.
+        logger.warning(
+            "Energy-level fetch failed for %s %s (%s); partition spec degrades "
+            "to the stored-polynomial fallback.",
+            element,
+            _roman(ionization_stage),
+            exc,
+        )
         levels = None
     if levels:
         try:
@@ -518,6 +563,7 @@ def derive_partition_spec(
             ip_ev = None
         if ip_ev is None:
             ip_ev = max((lev.energy_ev for lev in levels), default=0.0) + 1.0
+            _warn_ip_synthesis(element, ionization_stage, ip_ev)
         g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
         e_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
         fit = direct_sum_fit_coeffs(g_arr, e_arr, float(ip_ev))
@@ -550,12 +596,57 @@ def derive_partition_spec(
     return stored
 
 
+def provider_for(
+    atomic_db: Any,
+    element: str,
+    ionization_stage: int,
+    cache_token: int = 0,
+) -> Optional["PartitionFunctionProvider"]:
+    """Return a memoized CPU scalar :class:`PartitionFunctionProvider`.
+
+    Thin memoizing wrapper over :func:`derive_partition_spec` +
+    :meth:`PartitionFunctionSpec.to_provider`.  ``to_provider`` rebuilds a frozen
+    provider and re-tuples every energy level on each call, which the iterative
+    solver triggers ~30×/solve (~42 % of solve time).  The spec is immutable, so
+    its provider is identical data every time; caching the instance is therefore
+    bit-for-bit while removing the rebuild.
+
+    Keyed IDENTICALLY to :func:`derive_partition_spec`'s ``_spec_cache`` on
+    ``(db_path, element, stage, cache_token)`` so the ``cache_token`` invalidation
+    (DB-file mtime bump) drops both caches in lockstep.
+
+    Returns ``None`` when the species has neither energy levels nor a stored
+    polynomial row (same contract as :func:`derive_partition_spec`).
+    """
+    cache_key = (
+        str(getattr(atomic_db, "db_path", id(atomic_db))),
+        element,
+        int(ionization_stage),
+        int(cache_token),
+    )
+    cached = _provider_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    spec = derive_partition_spec(atomic_db, element, ionization_stage, cache_token=cache_token)
+    if spec is None:
+        return None
+    provider = spec.to_provider()
+    _provider_cache[cache_key] = provider
+    return provider
+
+
 # ---------------------------------------------------------------------------
 # Energy level cache for partition function evaluation
 # ---------------------------------------------------------------------------
 
-# Module-level cache: {(db_path, element, stage): (g_array, E_array, ip_ev)}
-_level_cache: Dict[Tuple[str, str, int], Tuple[np.ndarray, np.ndarray, float]] = {}
+# Module-level cache: {(db_path, element, stage, cache_token): (g_array, E_array, ip_ev)}
+# cache_token = AtomicDatabase._partition_cache_token (the DB-file mtime_ns) so an
+# in-place DB rewrite (e.g. a re-ingest) invalidates cached levels exactly the way
+# it invalidates _spec_cache. Without the token this cache served stale levels
+# until an explicit clear_partition_module_caches() — a real hazard now that
+# ingests rewrite the production DB in place.
+_level_cache: Dict[Tuple[str, str, int, int], Tuple[np.ndarray, np.ndarray, float]] = {}
 
 
 def get_levels_for_species(
@@ -568,7 +659,12 @@ def get_levels_for_species(
     Returns (g_array, E_array, ip_ev) or None if data is unavailable.
     Levels above the ionization potential are pre-filtered.
     """
-    cache_key = (str(getattr(atomic_db, "db_path", id(atomic_db))), element, ionization_stage)
+    cache_key = (
+        str(getattr(atomic_db, "db_path", id(atomic_db))),
+        element,
+        ionization_stage,
+        int(getattr(atomic_db, "_partition_cache_token", 0)),
+    )
     if cache_key in _level_cache:
         return _level_cache[cache_key]
 
@@ -586,6 +682,7 @@ def get_levels_for_species(
     if ip is None:
         # Fallback: use max level energy + 1 eV as rough IP
         ip = max(lev.energy_ev for lev in levels) + 1.0
+        _warn_ip_synthesis(element, ionization_stage, ip)
 
     g_arr = np.array([lev.g for lev in levels], dtype=np.float64)
     E_arr = np.array([lev.energy_ev for lev in levels], dtype=np.float64)
@@ -663,12 +760,14 @@ def get_ground_state_g(
 # Historically every consumer carried its own hardcoded U(T) fallback
 # (25.0 / 15.0 / 2.0 — and 10.0, ln 2, per-species dicts elsewhere) for
 # species the provider factory cannot resolve.  That was silently and
-# catastrophically wrong for closed-shell ions: the production DB has ZERO
-# energy levels and ZERO stored polynomials for Na II / Li II / H II, so the
-# stage-II constant 15.0 was used for Na II whose true U is ~1.00 (Ne-like
-# closed shell, first excited level ≈ 33 eV) — a ~15× error feeding straight
-# into the Saha multiplier of a basalt major (audit 2026-06-09, finding
-# 02-F1; bead CF-LIBS-improved-16m7).
+# catastrophically wrong for closed-shell ions when the level scrape was
+# incomplete: the pre-M5 DB had ZERO energy levels for Na II / Li II / H II, so
+# the stage-II constant 15.0 was used for Na II whose true U is ~1.00 (Ne-like
+# closed shell, first excited level ≈ 33 eV) — a ~15× error (audit 2026-06-09,
+# 02-F1; bead CF-LIBS-improved-16m7).  The M5 gold-standard ASD59 DB now carries
+# levels for every real I/II/III species, so the direct-sum provider resolves
+# them and this ladder is a genuine last resort (effectively only Si IV-class
+# < 2-level species) — retained as a loud, correct degrade, not a routine path.
 #
 # The ladder below replaces all of those sites:
 #
@@ -708,6 +807,52 @@ _GENERIC_PARTITION_FALLBACK_DEFAULT = 2.0
 
 # Warn-once registry so per-iteration solver loops do not spam the log.
 _FALLBACK_WARNED: set = set()
+
+# Warn-once registry for the IP=max(E)+1 synthesis fallback (see
+# :func:`_warn_ip_synthesis`).  Synthesising an ionization potential from the
+# highest tabulated level is a genuine data gap; warn once so a future missing
+# ``species_physics`` IP is loud rather than silent.
+_IP_SYNTH_WARNED: set = set()
+
+
+def _warn_ip_synthesis(element: str, ionization_stage: int, ip_ev: float) -> None:
+    """Warn once that an IP was synthesised as ``max(E_level) + 1`` eV.
+
+    Fires when ``species_physics`` has no ionization potential for the species
+    and the direct-sum cutoff had to be invented from the level list.  With the
+    complete DB this should not occur for any covered species; a warning here
+    flags a missing-data gap to ingest, not a value to trust.
+    """
+    key = (element, int(ionization_stage))
+    if key in _IP_SYNTH_WARNED:
+        return
+    _IP_SYNTH_WARNED.add(key)
+    logger.warning(
+        "No ionization potential in species_physics for %s %s; synthesising "
+        "IP = max(E_level) + 1 = %.3f eV for the direct-sum cutoff. Ingest the "
+        "IP for this species to silence this.",
+        element,
+        _roman(ionization_stage),
+        ip_ev,
+    )
+
+
+def clear_partition_module_caches() -> None:
+    """Clear the process-global partition caches (spec, level, warn-once).
+
+    These module-level dicts are keyed on ``(db_path, element, stage, token)``
+    and have no TTL. They MUST be cleared when the underlying ``energy_levels``
+    change (e.g. after a NIST ingest that rewrites the DB in place), otherwise a
+    long-lived process keeps serving the stale pre-ingest spec (e.g. a 0-1-level
+    species cached as ``provider=None``). Wired into
+    :func:`cflibs.core.cache.clear_all_caches`; also reachable via an
+    ``AtomicDatabase`` cache-token bump.
+    """
+    _spec_cache.clear()
+    _provider_cache.clear()
+    _level_cache.clear()
+    _FALLBACK_WARNED.clear()
+    _IP_SYNTH_WARNED.clear()
 
 
 def _closed_shell_partition_value(element: str, ionization_stage: int) -> Optional[float]:
@@ -852,6 +997,8 @@ def lookup_partition_function(
     element: str,
     ionization_stage: int,
     atomic_db: Any = None,
+    *,
+    T_K: Optional[float] = None,
 ) -> float:
     """Dict lookup with the canonical physics-grounded fallback.
 
@@ -864,6 +1011,21 @@ def lookup_partition_function(
     value = partition_funcs.get(element)
     if value is not None:
         return float(value)
+    # Dict miss: consult the DB for the FULL U(T) before any g0/generic fallback.
+    # A prebuilt single-temperature dict that misses a species must NOT silently
+    # return g0 (a strict lower bound, e.g. Fe I ~9 vs true U~50 at 10 kK) when
+    # the DB has the levels -- this is the user's "why a dict when we have the
+    # database?" complaint. Requires T_K (the evaluation temperature); callers
+    # that cannot supply it keep the legacy fallback. (Partition overhaul step 2.)
+    if T_K is not None and atomic_db is not None:
+        getter = getattr(atomic_db, "partition_function_for", None)
+        if getter is not None:
+            try:
+                provider = getter(element, ionization_stage)
+                if provider is not None:
+                    return float(provider.at(T_K))
+            except Exception:  # pragma: no cover - DB hiccup -> canonical fallback
+                pass
     return canonical_partition_fallback(element, ionization_stage, atomic_db)
 
 

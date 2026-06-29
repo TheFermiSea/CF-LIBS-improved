@@ -74,11 +74,12 @@ def test_build_shapes(db_path, tmp_path):
     snap = build_snapshot(db_path, cache=True, cache_dir=tmp_path)
     # Spec §2 measured values for libs_production.db.
     assert snap.n_lines > 20000, snap.n_lines
-    assert snap.n_species == 175, snap.n_species
-    # Padded level block: (175, 676) — Fe II has the most levels.
+    # Complete (gold-standard ASD59) DB: 324 species, 203k lines.
+    assert snap.n_species == 324, snap.n_species
+    # Padded level block: (324, 1027) on the complete DB.
     pad = snap.level_pad
-    assert pad[0] == 175
-    assert pad[1] == 676, pad
+    assert pad[0] == 324
+    assert pad[1] == 1027, pad
     # Every per-species block has the right first axis.
     for name in (
         "partition_coeffs",
@@ -89,7 +90,7 @@ def test_build_shapes(db_path, tmp_path):
         "partition_t_min",
         "partition_g0",
     ):
-        assert np.asarray(getattr(snap, name)).shape[0] == 175, name
+        assert np.asarray(getattr(snap, name)).shape[0] == 324, name
     # Doublet pairs + oxide present.
     assert snap.doublet_pairs.shape[1] == 2
     assert snap.doublet_pairs.shape[0] == snap.doublet_rho.shape[0]
@@ -255,8 +256,11 @@ def test_forward_bridge_parity(db_path, tmp_path):
     """``to_atomic_snapshot`` matches ``AtomicDatabase.snapshot`` field-for-field.
 
     The reference 15-element candidate set yields N_species=30, level pad
-    (30, 676) (AC4). We compare per-species IP, the canonical partition poly,
-    its validity window, and the full line wavelength set in the window.
+    (30, 1027) on the complete-DB / Kurucz M5 ingest (was (30, 676) before the
+    energy_levels table was expanded; the wider pad reflects the extra
+    tabulated levels, not a parity change). We compare per-species IP, the
+    canonical partition poly, its validity window, and the full line
+    wavelength set in the window.
     """
     from cflibs.jitpipe import build_snapshot
     from cflibs.jitpipe import parity
@@ -266,9 +270,9 @@ def test_forward_bridge_parity(db_path, tmp_path):
         CANDIDATE_ELEMENTS, WL_RANGE, db_path=db_path, include_levels=True
     )
 
-    # AC4 measured reference shapes.
+    # AC4 measured reference shapes (complete-DB / Kurucz M5 level pad).
     assert len(ref.species) == 30, len(ref.species)
-    assert np.asarray(ref.level_g).shape == (30, 676)
+    assert np.asarray(ref.level_g).shape == (30, 1027), np.asarray(ref.level_g).shape
 
     sp_to_row = {sp: i for i, sp in enumerate(snap.species)}
     ip_mine = np.asarray(snap.species_physics)[:, 0]

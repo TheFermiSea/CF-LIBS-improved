@@ -12,9 +12,9 @@ by more than 0.02 AND aggregate mean composition RMSE does not increase.
 Usage
 -----
     PYTHONPATH=$PWD python scripts/benchmarks/gate_flag.py \
-        --db ASD_da/libs_production.db --override use_odr=true \
+        --db ASD_da/libs_production.db --override saha_boltzmann_graph=true \
         --datasets aalto csa_planetary chemcam_calib silva2022 synthetic_fixedforward \
-        --max-spectra 100 --seed 20260610 --out output/gate/use_odr
+        --max-spectra 100 --seed 20260610 --out output/gate/saha_boltzmann_graph
 """
 
 from __future__ import annotations

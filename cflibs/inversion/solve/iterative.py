@@ -18,7 +18,7 @@ from cflibs.core.constants import (
 )
 from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
-from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
+from cflibs.inversion.physics.boltzmann import LineObservation
 from cflibs.inversion.physics.closure import ClosureEquation
 from cflibs.inversion.physics.self_absorption_observable import (
     ObservableSAResult,
@@ -30,6 +30,15 @@ from cflibs.inversion.physics.self_absorption_inputs import (
 )
 from cflibs.plasma.partition import canonical_partition_fallback, lookup_partition_function
 from cflibs.core.logging_config import get_logger
+
+# Physical temperature window for the Boltzmann slope→T inversion. T = -1/(slope*k)
+# blows up as the slope → 0⁻, so a shallow-but-negative slope that passes the R^2
+# gate can still yield a runaway T (>1e5 K, even ~1e6 K). Such a T is unphysical
+# for LIBS plasmas; outside this window the fit is flagged degenerate (T held at
+# the prior) and can never be reported as converged. This is NOT an R^2 bound —
+# it bounds the *inverted* temperature, the quantity the runaway actually escapes.
+T_PHYSICAL_MIN_K = 2000.0
+T_PHYSICAL_MAX_K = 50000.0
 
 
 def _jax_boltzmann_composition_enabled() -> bool:
@@ -127,12 +136,16 @@ class CFLIBSResult:
         ``quality_metrics["boltzmann_covariance_element"]``.
     overall_reliable : bool
         M7 refuse-to-report verdict (Lever 6, Cristoforetti 2010). True only
-        when the McWhirter LTE criterion is satisfied AND the Cristoforetti
-        multi-check ``quality_flag`` is acceptable-or-better. Defaults False
-        (conservative): a fallback/degenerate solve that never reached the
-        quality assessment is correctly not-reliable. Consumed by the CLI
-        refuse-to-report gate when ``CFLIBS_REFUSE_TO_REPORT`` is set; always
-        computed (a pure annotation — never alters T/n_e/composition).
+        when n_e was measured from a literature Stark-width line
+        (``ne_from_stark``) AND the McWhirter LTE criterion is satisfied AND
+        the Cristoforetti multi-check ``quality_flag`` is acceptable-or-better.
+        The Stark-provenance term is decisive: a pressure-balance fallback n_e
+        is physically invalid, and the McWhirter check runs on that same n_e so
+        it cannot catch the error. Defaults False (conservative): a
+        fallback/degenerate solve that never reached the quality assessment is
+        correctly not-reliable. Consumed by the CLI refuse-to-report gate when
+        ``CFLIBS_REFUSE_TO_REPORT`` is set; always computed (a pure annotation —
+        never alters T/n_e/composition).
     """
 
     temperature_K: float
@@ -148,6 +161,11 @@ class CFLIBSResult:
     boltzmann_covariance: Optional[np.ndarray] = field(default=None, repr=False)
     overall_reliable: bool = False
     per_element_reliability: Dict[str, str] = field(default_factory=dict)
+    #: Mass (weight) fractions, sum to 1. ``concentrations`` are number/mole
+    #: fractions on the peak-based path; this parallel field carries the
+    #: mass-fraction view so consumers compare wt% like-for-like (DED Gap 4).
+    #: Populated by ``run_pipeline``; empty if not yet computed.
+    mass_fractions: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -587,10 +605,23 @@ def _make_closure_callback(
     mode = closure_mode.lower()
     E = len(elements)
 
+    def _stable_rel(intercepts, U_I, mult):
+        """Overflow-safe rel = mult * U_I * exp(intercepts) via log-sum-exp.
+
+        Mirrors :func:`closure._stabilized_relative_concentrations`: forming the
+        relative abundances in log space and subtracting the max keeps large
+        intercepts from overflowing ``jnp.exp`` to ``inf`` (the partition
+        ``jnp.exp`` is already clipped to ``[-700, 700]``; the intercept ``exp``
+        was not). The common shift cancels under every closure normalization
+        below, so the normalized composition is unchanged.
+        """
+        log_rel = jnp.log(mult) + jnp.log(U_I) + intercepts
+        return jnp.exp(log_rel - jnp.max(log_rel))
+
     if mode in {"", "standard"}:
 
         def _standard(intercepts, U_I, mult):
-            rel = mult * U_I * jnp.exp(intercepts)
+            rel = _stable_rel(intercepts, U_I, mult)
             total = jnp.sum(rel)
             return jnp.where(total > 0.0, rel / jnp.where(total > 0.0, total, 1.0), 0.0)
 
@@ -602,7 +633,7 @@ def _make_closure_callback(
         if matrix_element not in elements:
             # Mirror ClosureEquation.apply_matrix_mode: fall through to standard
             def _matrix_fallback(intercepts, U_I, mult):
-                rel = mult * U_I * jnp.exp(intercepts)
+                rel = _stable_rel(intercepts, U_I, mult)
                 total = jnp.sum(rel)
                 return jnp.where(total > 0.0, rel / jnp.where(total > 0.0, total, 1.0), 0.0)
 
@@ -610,7 +641,7 @@ def _make_closure_callback(
         m_idx = elements.index(matrix_element)
 
         def _matrix(intercepts, U_I, mult):
-            rel = mult * U_I * jnp.exp(intercepts)
+            rel = _stable_rel(intercepts, U_I, mult)
             rel_m = rel[m_idx]
             F = rel_m / matrix_fraction
             return jnp.where(F > 0.0, rel / jnp.where(F > 0.0, F, 1.0), 0.0)
@@ -624,7 +655,7 @@ def _make_closure_callback(
         )
 
         def _oxide(intercepts, U_I, mult):
-            rel = mult * U_I * jnp.exp(intercepts)
+            rel = _stable_rel(intercepts, U_I, mult)
             total_oxide = jnp.sum(rel * factors)
             return jnp.where(
                 total_oxide > 0.0,
@@ -824,8 +855,17 @@ def _run_lax_while_loop(
         # fit (non-negative slope or R^2 < min_r2) hold T at the prior value
         # instead of running it to the legacy 50000 K clamp, which collapses the
         # closure into a raw-intensity softmax.
-        degenerate = jnp.logical_or(slope >= 0.0, r_squared < min_r2)
-        T_new = jnp.where(degenerate, T_prev, -1.0 / (slope * KB_EV))
+        T_candidate = -1.0 / (slope * KB_EV)
+        # Flag a runaway/unphysical inverted T (shallow-but-negative slope) the
+        # same way as slope>=0 / low-R^2: hold T at the prior instead of letting
+        # it escape the physical window. Mirrors the Python path.
+        t_out_of_window = jnp.logical_or(
+            T_candidate < T_PHYSICAL_MIN_K, T_candidate > T_PHYSICAL_MAX_K
+        )
+        degenerate = jnp.logical_or(
+            jnp.logical_or(slope >= 0.0, r_squared < min_r2), t_out_of_window
+        )
+        T_new = jnp.where(degenerate, T_prev, T_candidate)
         T_K = 0.5 * T_prev + 0.5 * T_new
 
         # Two-region corona: weighted T for Saha scaling matches the Python
@@ -917,25 +957,27 @@ class IterativeCFLIBSSolver:
         use_lax_while_loop: Optional[bool] = None,
         degeneracy_dominance_threshold: float = 0.8,
         degeneracy_min_elements: int = 4,
-        use_odr: bool = False,
-        odr_x_uncertainty: float = 0.0,
+        assess_quality: bool = True,
+        fixed_temperature_K: Optional[float] = None,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
-        # c5-solver-flags). These two flags choose between the CPU reference
-        # path and an opt-in JAX kernel for, respectively, the inner Boltzmann
-        # sigma-clip WLS step (``use_jax_boltzmann``) and the whole iterative
-        # solve loop via ``jax.lax.while_loop`` (``use_lax_while_loop``, T1-3 /
-        # ADR-0001). They were previously read silently from the process
-        # environment (``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` /
-        # ``CFLIBS_USE_LAX_WHILE_LOOP``) at construction/solve time, which made
-        # the active numerical path invisible to callers and to tests.
+        # c5-solver-flags). ``use_lax_while_loop`` chooses between the CPU
+        # reference path and the JAX ``jax.lax.while_loop`` kernel for the whole
+        # iterative solve loop (T1-3 / ADR-0001) and is read by ``solve``.
+        # ``use_jax_boltzmann`` records the
+        # ``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` env selection on the
+        # interface, mirroring the streaming FastAnalyzer's flag of the same
+        # name; it is retained as the queryable record of the env-selected path.
+        # Both flags were previously read silently from the process environment
+        # (``CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION`` / ``CFLIBS_USE_LAX_WHILE_LOOP``)
+        # at construction/solve time, which made the active numerical path
+        # invisible to callers and to tests.
         #
         # Default ``None`` SEEDS each flag from its env var, so default
         # construction is byte-identical to the historical env-driven behavior
         # and every existing ``CFLIBS_USE_*`` invocation is unchanged. Passing
         # an explicit ``True``/``False`` is AUTHORITATIVE and overrides the env
-        # var. ``solve`` and the Boltzmann-fitter wiring read ``self.use_*``
-        # instead of touching ``os.environ`` directly.
+        # var.
         self.use_jax_boltzmann = (
             _jax_boltzmann_composition_enabled()
             if use_jax_boltzmann is None
@@ -1072,11 +1114,32 @@ class IterativeCFLIBSSolver:
         # (binary alloys legitimately exceed 0.8: brass is ~90% Cu).
         self.degeneracy_dominance_threshold = float(degeneracy_dominance_threshold)
         self.degeneracy_min_elements = int(degeneracy_min_elements)
-        self.boltzmann_fitter = BoltzmannPlotFitter(
-            outlier_sigma=2.5,
-            use_jax=self.use_jax_boltzmann,
-            use_odr=use_odr,
-            odr_x_uncertainty=odr_x_uncertainty,
+        # Post-loop reliability re-fit gate (perf knob). When True (default,
+        # byte-identical legacy behaviour) ``_assemble_quality_metrics`` runs the
+        # Cristoforetti multi-check (``_assess_reliability``), which re-fits a
+        # per-element Boltzmann plot and re-evaluates U_I/U_II for every element
+        # — pure annotation that never touches T/n_e/composition but costs
+        # ~26-34% of a solve. When False the re-fit is SKIPPED and the
+        # reliability keys are emitted conservatively (quality_flag='unknown',
+        # consistency/scatter NaN, overall_reliable=False); the result-dict
+        # key-set is IDENTICAL across both paths so downstream / refuse-to-report
+        # consumers never KeyError. Default-False on the ded/batch/streaming
+        # presets where the annotation layer is not consumed.
+        self.assess_quality = bool(assess_quality)
+        # Optimal-temperature / OPC lever (real-steel L1; Zhao 2018, Plasma Sci.
+        # Technol. 20 035502). When set, the iterative solve HOLDS the plasma
+        # temperature at this fixed value instead of recovering it from the
+        # Boltzmann-plot slope. CF-LIBS composition is hypersensitive to T —
+        # an ion-only-biased fit drifts T low (~6700 K) and the Saha ion->total
+        # back-correction exp(E_ion/kT) then over-estimates trace minors. Fixing
+        # T at the matrix's optimal value (found by minimizing a matrix-matched
+        # standard's composition error) cuts that error substantially while the
+        # rest of the iteration (Saha shift, intercepts, closure, n_e) stays
+        # self-consistent at the held T. Default ``None`` => byte-identical
+        # legacy slope-recovered-T behaviour. Physics-only (a plasma temperature
+        # is a physical state variable, not a learned parameter).
+        self.fixed_temperature_K = (
+            float(fixed_temperature_K) if fixed_temperature_K is not None else None
         )
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
@@ -1876,14 +1939,30 @@ class IterativeCFLIBSSolver:
         # the fit as degenerate. Holding T (rather than clamping high) keeps
         # the Boltzmann factor exp(-E_k/kT) discriminating between lines so
         # the intercepts stay physically meaningful for the closure step.
-        boltzmann_degenerate = slope >= 0 or fit_r2 < self.min_boltzmann_r2
-        if boltzmann_degenerate:
-            T_new = T_prev  # hold at prior; slope carries no usable T
+        if self.fixed_temperature_K is not None:
+            # L1 optimal-T lever: hold T at the fixed value (no slope->T update,
+            # no damping). The Boltzmann fit still supplies the per-element
+            # intercepts; only the temperature is pinned. The slope is not used
+            # for T, so it does not gate degeneracy here.
+            boltzmann_degenerate = False
+            T_new = self.fixed_temperature_K
+            T_K = self.fixed_temperature_K
         else:
-            T_new = -1.0 / (slope * KB_EV)
+            boltzmann_degenerate = slope >= 0 or fit_r2 < self.min_boltzmann_r2
+            if boltzmann_degenerate:
+                T_new = T_prev  # hold at prior; slope carries no usable T
+            else:
+                T_new = -1.0 / (slope * KB_EV)
+                # Upper/lower physical clamp: a shallow-but-negative slope passing
+                # the R^2 gate can still invert to a runaway T (>1e5 K). Flag it
+                # degenerate and hold T at the prior rather than reporting an
+                # unphysical T as converged (do NOT silently clamp to 50000).
+                if not (T_PHYSICAL_MIN_K <= T_new <= T_PHYSICAL_MAX_K):
+                    boltzmann_degenerate = True
+                    T_new = T_prev
 
-        # Damping
-        T_K = 0.5 * T_prev + 0.5 * T_new
+            # Damping
+            T_K = 0.5 * T_prev + 0.5 * T_new
 
         if self.two_region:
             # Empirical two-region DOF reduction: take the cooler outer/corona
@@ -2221,16 +2300,43 @@ class IterativeCFLIBSSolver:
         # M7 Lever 6 refuse-to-report: Cristoforetti multi-check + overall_reliable.
         # Pure additive annotation — these keys never alter T/n_e/composition.
         # Computed on BOTH solve paths (shared builder) so key-set parity holds.
-        reliability = self._assess_reliability(observations, T_K, n_e, dict(concentrations))
-        quality_metrics["quality_flag"] = reliability["quality_flag"]
-        quality_metrics["saha_boltzmann_consistency"] = reliability["saha_boltzmann_consistency"]
-        quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
-        # overall_reliable = {McWhirter satisfied} AND {quality_flag >= acceptable}
-        # (roadmap M7c). 'unknown'/'poor'/'reject' are NOT reliable.
-        mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
-        quality_metrics["overall_reliable"] = bool(
-            mcwhirter_ok and reliability["quality_flag"] in ("excellent", "good", "acceptable")
-        )
+        #
+        # PERF GATE (assess_quality, default True): ``_assess_reliability`` re-fits
+        # a per-element Boltzmann plot and re-evaluates U_I/U_II for every element
+        # on EVERY solve (~26-34% of solve cost). When ``assess_quality`` is False
+        # (ded/batch/streaming presets) we SKIP that re-fit and emit conservative
+        # unknown/NaN reliability keys instead. The emitted KEY-SET is byte-for-byte
+        # identical across both branches — only the *values* differ — so downstream
+        # consumers and refuse-to-report logic never KeyError. T/n_e/composition are
+        # untouched either way (this is the annotation layer only).
+        if self.assess_quality:
+            reliability = self._assess_reliability(observations, T_K, n_e, dict(concentrations))
+            quality_metrics["quality_flag"] = reliability["quality_flag"]
+            quality_metrics["saha_boltzmann_consistency"] = reliability[
+                "saha_boltzmann_consistency"
+            ]
+            quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
+            # overall_reliable = {n_e from a Stark line} AND {McWhirter satisfied}
+            # AND {quality_flag >= acceptable} (roadmap M7c).
+            # 'unknown'/'poor'/'reject' flags are NOT reliable. The n_e-provenance
+            # term is decisive: when the canonical Stark-width diagnostic was
+            # unavailable the solver falls back to a physically-invalid 1-atm
+            # pressure balance, and the McWhirter LTE check is itself evaluated
+            # ON that fallback n_e, so it cannot catch a bad n_e. A result whose
+            # n_e is a pressure-balance guess is therefore never trustworthy.
+            mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
+            quality_metrics["overall_reliable"] = bool(
+                ne_from_stark
+                and mcwhirter_ok
+                and reliability["quality_flag"] in ("excellent", "good", "acceptable")
+            )
+        else:
+            quality_metrics["quality_flag"] = "unknown"
+            quality_metrics["saha_boltzmann_consistency"] = float("nan")
+            quality_metrics["inter_element_t_std_frac"] = float("nan")
+            # 'unknown' is never trustworthy, so the conservative verdict is False
+            # regardless of the (still-cheap) McWhirter check.
+            quality_metrics["overall_reliable"] = False
         return quality_metrics
 
     def _build_python_quality_metrics(
@@ -2277,7 +2383,9 @@ class IterativeCFLIBSSolver:
         unset (default) or when JAX is unavailable.
         """
         # 1. Initialization
-        T_K = 10000.0
+        # L1 fixed-T lever: seed the loop at the held temperature so the first
+        # Saha correction / closure already use it (default None => 10000 K seed).
+        T_K = 10000.0 if self.fixed_temperature_K is None else self.fixed_temperature_K
         T_corona = None
         n_e = 1.0e17
 
@@ -2359,6 +2467,11 @@ class IterativeCFLIBSSolver:
         # break left the loop's convergence flag set on a prior clean iteration.
         if closure_degenerate:
             self._warn_degenerate_composition(concentrations)
+        # Final-state T window guard: even if the loop's per-iteration flags were
+        # clean, a reported T outside the physical window is degenerate and must
+        # never be reported converged (mirrors the closure-degeneracy guard).
+        if not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K):
+            boltzmann_degenerate = True
         if boltzmann_degenerate or closure_degenerate:
             converged = False
 
@@ -2509,6 +2622,10 @@ class IterativeCFLIBSSolver:
         closure_degenerate = self._validate_composition_degeneracy(concentrations)
         if closure_degenerate:
             self._warn_degenerate_composition(concentrations)
+        # Final-state T window guard (mirrors the Python path): a reported T
+        # outside the physical window is degenerate and never converged.
+        if not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K):
+            boltzmann_degenerate = True
         if boltzmann_degenerate or closure_degenerate:
             converged_bool = False
 
@@ -2753,7 +2870,15 @@ class IterativeCFLIBSSolver:
         ips = {}
         for el in elements:
             ip = self.atomic_db.get_ionization_potential(el, 1)
-            ips[el] = ip if ip is not None else 15.0
+            if ip is None:
+                logger.warning(
+                    "No ionization potential for %s I in the DB; using 15.0 eV fallback. "
+                    "The complete ASD DB covers all I/II/III species, so this signals a "
+                    "data gap, not a normal fallback.",
+                    el,
+                )
+                ip = 15.0
+            ips[el] = float(ip)
 
         effective_ips = self._compute_effective_ips(ips, n_e, T_K)
 
@@ -2837,8 +2962,12 @@ class IterativeCFLIBSSolver:
                 new_qf = downgrade_quality_flag(qf, per_element_reliability)
                 quality_metrics["quality_flag"] = new_qf
                 mcw = bool(quality_metrics.get("lte_mcwhirter_satisfied", False))
+                # Preserve the n_e-provenance gate from _assemble_quality_metrics:
+                # a pressure-balance fallback n_e is never trustworthy (the
+                # McWhirter check runs on that same fallback n_e).
+                ne_ok = bool(quality_metrics.get("ne_from_stark", 0.0))
                 quality_metrics["overall_reliable"] = bool(
-                    mcw and new_qf in ("excellent", "good", "acceptable")
+                    ne_ok and mcw and new_qf in ("excellent", "good", "acceptable")
                 )
 
         return CFLIBSResult(

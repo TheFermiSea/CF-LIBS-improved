@@ -54,6 +54,16 @@ class AtomicDatabase:
             raise FileNotFoundError(f"Atomic database not found: {path}")
 
         self.db_path = path
+        # Partition cache token = DB file mtime. derive_partition_spec keys its
+        # process-global spec cache on this, so when the DB's energy_levels
+        # change (e.g. a NIST ingest rewrites the file -> new mtime) a fresh
+        # AtomicDatabase derives partitions from the NEW levels instead of
+        # serving a stale cached spec. (Long-lived daemons holding an old handle
+        # should additionally call cflibs.core.cache.clear_all_caches.)
+        try:
+            self._partition_cache_token = int(path.stat().st_mtime_ns)
+        except OSError:
+            self._partition_cache_token = 0
         # Use connection pool for better performance
         try:
             self._pool = get_pool(str(path), max_connections=5)
@@ -403,12 +413,18 @@ class AtomicDatabase:
 
         try:
             with self._get_connection() as conn:
-                df = pd.read_sql_query(query, conn, params=params)
+                cursor = conn.execute(query, params)
+                columns = [c[0] for c in cursor.description]
+                rows = cursor.fetchall()
         except Exception as e:
             logger.error(f"Error querying transitions: {e}")
             return []
 
-        transitions = [self._row_to_transition(row) for _, row in df.iterrows()]
+        # Plain-dict rows from sqlite3 instead of pd.read_sql_query + df.iterrows(): dict access is
+        # ~100x faster than pd.Series scalar access. The RANSAC wavelength calibration calls this
+        # thousands of times per inversion, so the old pandas path was the single largest CPU cost
+        # of the whole inversion (115k pd.Series.__getitem__ in profiling). Same data, same results.
+        transitions = [self._row_to_transition(dict(zip(columns, r))) for r in rows]
 
         logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
         return transitions
@@ -431,7 +447,16 @@ class AtomicDatabase:
                 aki_uncertainty, accuracy_grade
             FROM lines
             WHERE element = ?
+              AND aki IS NOT NULL AND aki > 0
+              AND ek_ev IS NOT NULL AND gk IS NOT NULL
         """
+        # The M5 complete-DB ingest added the full NIST line list, which includes
+        # ~74k observation-only transitions with NULL aki (and sometimes NULL
+        # upper-level ek_ev/gk). Those carry position+intensity for synthetic
+        # generation / beyond-CF-LIBS methods but cannot emit, so a Transition
+        # (which requires A_ki/E_k/g_k) is undefined for them -- exclude here so
+        # the forward model, RANSAC calibration and snapshot only see emitting
+        # lines (the old A-only DB made this filter implicit).
         params: list[object] = [element]
 
         if ionization_stage is not None:
@@ -454,49 +479,36 @@ class AtomicDatabase:
         return query, params
 
     @staticmethod
-    def _row_to_transition(row: "pd.Series") -> Transition:
-        """Convert a single ``lines`` query row into a :class:`Transition`."""
-        # Handle potential missing columns if something went wrong, defaulting to None
-        stark_w = float(row["stark_w"]) if "stark_w" in row and pd.notna(row["stark_w"]) else None
-        stark_alpha = (
-            float(row["stark_alpha"])
-            if "stark_alpha" in row and pd.notna(row["stark_alpha"])
-            else None
-        )
-        stark_shift = (
-            float(row["stark_shift"])
-            if "stark_shift" in row and pd.notna(row["stark_shift"])
-            else None
-        )
-        is_resonance = (
-            bool(row["is_resonance"])
-            if "is_resonance" in row and pd.notna(row["is_resonance"])
-            else False
-        )
+    def _row_to_transition(row: dict) -> Transition:
+        """Convert one ``lines`` row (a plain dict from sqlite3) into a :class:`Transition`.
 
-        aki_uncertainty = (
-            float(row["aki_uncertainty"]) if pd.notna(row["aki_uncertainty"]) else None
-        )
-        accuracy_grade = str(row["accuracy_grade"]) if pd.notna(row["accuracy_grade"]) else None
+        Plain-dict access replaces the former ``pd.Series`` path. SQLite NULL -> Python None
+        (no NaN coercion), so ``_nz`` only needs a None / NaN guard. Semantics are identical to
+        the old pandas version (same defaults: E_i_ev -> 0.0, g_i -> 1, is_resonance -> False)."""
 
+        def _nz(key):
+            v = row.get(key)
+            return None if v is None or (isinstance(v, float) and v != v) else v
+
+        ei, gi, ri = _nz("ei_ev"), _nz("gi"), _nz("rel_int")
+        sw, sa, ss = _nz("stark_w"), _nz("stark_alpha"), _nz("stark_shift")
+        res, au, ag = _nz("is_resonance"), _nz("aki_uncertainty"), _nz("accuracy_grade")
         return Transition(
             element=row["element"],
             ionization_stage=int(row["sp_num"]),
             wavelength_nm=float(row["wavelength_nm"]),
             A_ki=float(row["aki"]),
             E_k_ev=float(row["ek_ev"]),
-            E_i_ev=(0.0 if pd.isna(row.get("ei_ev", 0.0)) else float(row.get("ei_ev", 0.0))),
+            E_i_ev=0.0 if ei is None else float(ei),
             g_k=int(row["gk"]),
-            g_i=1 if pd.isna(row.get("gi", 1)) else int(row.get("gi", 1)),
-            relative_intensity=(
-                float(row.get("rel_int", 0.0)) if pd.notna(row.get("rel_int")) else None
-            ),
-            stark_w=stark_w,
-            stark_alpha=stark_alpha,
-            stark_shift=stark_shift,
-            is_resonance=is_resonance,
-            aki_uncertainty=aki_uncertainty,
-            accuracy_grade=accuracy_grade,
+            g_i=1 if gi is None else int(gi),
+            relative_intensity=None if ri is None else float(ri),
+            stark_w=None if sw is None else float(sw),
+            stark_alpha=None if sa is None else float(sa),
+            stark_shift=None if ss is None else float(ss),
+            is_resonance=False if res is None else bool(res),
+            aki_uncertainty=None if au is None else float(au),
+            accuracy_grade=None if ag is None else str(ag),
         )
 
     def get_energy_levels(self, element: str, ionization_stage: int) -> list[EnergyLevel]:
@@ -515,10 +527,21 @@ class AtomicDatabase:
         list[EnergyLevel]
             list of energy level objects
         """
+        # Filter NULL / non-positive g_level at the SQL layer.  A level whose
+        # total angular momentum J was never assigned has an UNKNOWN degeneracy
+        # g = 2J+1 and therefore cannot contribute a known Boltzmann weight to
+        # the direct-sum partition function; including it would crash the
+        # ``int(g_level)`` coercion below (``cannot convert float NaN to
+        # integer``) and, worse, that crash used to be swallowed upstream so the
+        # complete-DB direct sum silently degraded to a stale stored polynomial.
+        # The excluded rows are high-lying (near/above the IP) and contribute
+        # <0.1% in-band, so dropping them is physically correct, not a band-aid.
         query = """
             SELECT g_level, energy_ev
             FROM energy_levels
             WHERE element = ? AND sp_num = ?
+              AND g_level IS NOT NULL AND g_level > 0
+              AND energy_ev IS NOT NULL
             ORDER BY energy_ev
         """
         with self._get_connection() as conn:
@@ -526,11 +549,22 @@ class AtomicDatabase:
 
         levels = []
         for _, row in df.iterrows():
+            g_raw = row["g_level"]
+            e_raw = row["energy_ev"]
+            # Belt-and-suspenders for pluggable backends that don't honour the
+            # SQL filter (e.g. NIST-API / HDF5 sources): skip any row whose
+            # degeneracy or energy is missing / non-finite / non-positive g.
+            if pd.isna(g_raw) or pd.isna(e_raw):
+                continue
+            g_val = float(g_raw)
+            e_val = float(e_raw)
+            if not np.isfinite(g_val) or not np.isfinite(e_val) or g_val <= 0.0:
+                continue
             level = EnergyLevel(
                 element=element,
                 ionization_stage=ionization_stage,
-                energy_ev=float(row["energy_ev"]),
-                g=int(row["g_level"]),
+                energy_ev=e_val,
+                g=int(round(g_val)),
             )
             levels.append(level)
 
@@ -659,7 +693,9 @@ class AtomicDatabase:
         """
         from cflibs.plasma.partition import derive_partition_spec
 
-        return derive_partition_spec(self, element, ionization_stage)
+        return derive_partition_spec(
+            self, element, ionization_stage, cache_token=self._partition_cache_token
+        )
 
     def partition_function_for(
         self, element: str, ionization_stage: int
@@ -687,10 +723,11 @@ class AtomicDatabase:
         diagnosis.md`` § 2.1, ``2026-05-26-architecture-review.md`` § Candidate 4
         and ADR-0001 § B-P7.
         """
-        spec = self.partition_spec_for(element, ionization_stage)
-        if spec is None:
-            return None
-        return spec.to_provider()
+        from cflibs.plasma.partition import provider_for
+
+        return provider_for(
+            self, element, ionization_stage, cache_token=self._partition_cache_token
+        )
 
     def get_species_physics(self, element: str, ionization_stage: int) -> SpeciesPhysics | None:
         """

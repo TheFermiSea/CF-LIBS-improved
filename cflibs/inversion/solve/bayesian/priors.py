@@ -85,11 +85,21 @@ class PriorConfig:
         ``log_{10}(n_e)`` range (default 15-19; ``n_e`` in cm^-3).
     concentration_alpha : float
         Dirichlet prior concentration parameter (default 1.0 = uniform on simplex).
+        With ``nominal_mole_fracs`` set, this is the total Dirichlet concentration
+        ``sum(alpha)``; use ~50-80 for a WEAK feedstock prior (per-element sigma
+        ~2-3 wt%, larger than expected DED drift, so the posterior stays
+        data-dominated and the prior never pins the answer to nominal).
     baseline_degree : int
         Chebyshev polynomial baseline degree (0 = no baseline, max 5).
     baseline_scale : Optional[float]
         Prior scale for baseline coefficients. ``None`` -> auto
         ``0.1 * max(observed)`` at sampling time.
+    nominal_mole_fracs : Optional[np.ndarray]
+        Weakly-informative DED feedstock prior: number(mole) fractions aligned to
+        the forward model's element order (sum to 1). When set, the concentration
+        Dirichlet is centered on it (``alpha = concentration_alpha * x_nom``, mean
+        exactly ``x_nom``) instead of symmetric. ``None`` (default) -> symmetric
+        Dirichlet (no prior). Build it with :meth:`nominal_mole_fracs_from_wt`.
     """
 
     T_eV_range: Tuple[float, float] = (0.5, 3.0)
@@ -97,6 +107,28 @@ class PriorConfig:
     concentration_alpha: float = 1.0
     baseline_degree: int = 0
     baseline_scale: Optional[float] = None
+    nominal_mole_fracs: Optional[Any] = None
+
+    @staticmethod
+    def nominal_mole_fracs_from_wt(
+        nominal_wt: Dict[str, float], elements: Tuple[str, ...]
+    ) -> "np.ndarray":
+        """Build the nominal mole-fraction vector aligned to ``elements``.
+
+        Converts a feedstock wt% (or mass-fraction) composition to number
+        fractions ``x_i = (w_i/M_i) / sum_j(w_j/M_j)`` over the constrained set,
+        in the EXACT order the forward model uses, so the Dirichlet components
+        line up with the sampled concentrations.
+        """
+        from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
+
+        w = np.array([max(float(nominal_wt.get(e, 0.0)), 0.0) for e in elements])
+        m = np.array([float(STANDARD_ATOMIC_MASSES.get(e, 50.0)) for e in elements])
+        moles = np.where(m > 0, w / m, 0.0)
+        total = moles.sum()
+        if total <= 0:
+            raise ValueError("nominal composition has no mass on the given elements")
+        return moles / total
 
     @classmethod
     def geological(cls, **kwargs) -> "PriorConfig":

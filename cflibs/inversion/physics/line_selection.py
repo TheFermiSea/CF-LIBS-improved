@@ -100,18 +100,19 @@ Literature References
 
 from dataclasses import dataclass, field
 from collections import defaultdict
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Sequence, Tuple, Set
 import numpy as np
 
+from cflibs.core.constants import KB_EV, MCWHIRTER_CONST
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.boltzmann import LineObservation
 
 logger = get_logger("inversion.line_selection")
 
 # McWhirter criterion prefactor in the cgs/eV/K convention
-#   n_e [cm^-3] >= 1.6e12 * sqrt(T[K]) * (ΔE[eV])^3
+#   n_e [cm^-3] >= MCWHIRTER_CONST * sqrt(T[K]) * (ΔE[eV])^3
 # (McWhirter 1965; see e.g. Cristoforetti et al. 2010, Spectrochim. Acta B 65, 86)
-MCWHIRTER_PREFACTOR_CM3_K = 1.6e12
+MCWHIRTER_PREFACTOR_CM3_K = MCWHIRTER_CONST
 
 
 def mcwhirter_thermalization_limit_ev(
@@ -260,6 +261,9 @@ class LineSelector:
         exclude_resonance: bool = False,
         isolation_wavelength_nm: float = 0.1,
         max_lines_per_element: int = 20,
+        target_sigma_t: Optional[float] = None,
+        plasma_temperature_K: float = 10000.0,
+        reliability_ranked_selection: bool = False,
     ):
         """
         Initialize line selector.
@@ -282,6 +286,15 @@ class LineSelector:
             Minimum wavelength separation for isolation check
         max_lines_per_element : int
             Maximum lines to select per element (to avoid overweighting)
+        target_sigma_t : float, optional
+            Target RELATIVE temperature accuracy (σ_T/T). When set (gated,
+            default None=off), the SNR/spread/min-lines gates are DERIVED from
+            this target + the spectrum's measured energy spread via the verified
+            ``ErrorBudget`` (see ``derived_thresholds``), replacing the tuned
+            magic numbers. ``target_sigma_t≈0.10`` reproduces the legacy min_snr=10.
+        plasma_temperature_K : float
+            Representative plasma T for the σ_T → slope-target conversion
+            (τβ = σ_T/T / (kB·T)); only used when ``target_sigma_t`` is set.
         """
         self.min_snr = min_snr
         self.min_energy_spread_ev = min_energy_spread_ev
@@ -289,6 +302,9 @@ class LineSelector:
         self.exclude_resonance = exclude_resonance
         self.isolation_wavelength_nm = isolation_wavelength_nm
         self.max_lines_per_element = max_lines_per_element
+        self.target_sigma_t = target_sigma_t
+        self.plasma_temperature_K = plasma_temperature_K
+        self.reliability_ranked_selection = reliability_ranked_selection
 
     def select(
         self,
@@ -319,6 +335,16 @@ class LineSelector:
             atomic_uncertainties = {}
 
         warnings: list[str] = []
+
+        # Derived thresholds (gated): when a target σ_T/T is set, replace the tuned
+        # min_snr/min_energy_spread/min_lines gates with values DERIVED from the target +
+        # the spectrum's measured energy spread, via the verified ErrorBudget. No-op when off.
+        if self.target_sigma_t is not None:
+            (
+                self.min_snr,
+                self.min_energy_spread_ev,
+                self.min_lines_per_element,
+            ) = self._derive_thresholds(observations)
 
         # Score all lines
         scores = [
@@ -355,6 +381,48 @@ class LineSelector:
             warnings=warnings,
         )
 
+    def _derive_thresholds(self, observations: List[LineObservation]) -> Tuple[float, float, int]:
+        """Derive (min_snr, min_energy_spread_ev, min_lines) from the target σ_T/T and the
+        spectrum's measured per-element energy spread, via the verified ErrorBudget formulas
+        (``derived_thresholds``). The hard gate is min_snr: a line needs per-line ordinate
+        error ε ≤ ``max_per_line_error`` (= τβ·√(ssE/n)), i.e. SNR ≥ 1/ε_max. Falls back to
+        the configured values if no element has ≥2 lines with positive energy spread."""
+        from cflibs.core.constants import KB_EV
+        from cflibs.inversion.physics import derived_thresholds as dt
+
+        tau_beta = dt.slope_target_from_temp_rel(
+            self.target_sigma_t, KB_EV, self.plasma_temperature_K
+        )
+        by_el: Dict[str, List[LineObservation]] = defaultdict(list)
+        for o in observations:
+            by_el[o.element].append(o)
+        ns: list[float] = []
+        ss_es: list[float] = []
+        eps: list[float] = []
+        for obs in by_el.values():
+            energies = [o.E_k_ev for o in obs]
+            n = len(energies)
+            if n < 2:
+                continue
+            e_bar = sum(energies) / n
+            ss_e = sum((e - e_bar) ** 2 for e in energies)
+            if ss_e <= 0.0:
+                continue
+            ns.append(float(n))
+            ss_es.append(ss_e)
+            eps.extend(o.y_uncertainty for o in obs if o.y_uncertainty > 0)
+        if not ns:
+            return self.min_snr, self.min_energy_spread_ev, self.min_lines_per_element
+        n_med = float(np.median(ns))
+        ss_e_med = float(np.median(ss_es))
+        eps_med = float(np.median(eps)) if eps else 0.02
+        v_per_line = ss_e_med / n_med
+        eps_max = dt.max_per_line_error(tau_beta, n_med, ss_e_med)
+        derived_snr = (1.0 / eps_max) if eps_max > 0 else self.min_snr
+        derived_lines = max(2, int(np.ceil(dt.required_min_lines(tau_beta, eps_med, v_per_line))))
+        derived_spread = float(np.sqrt(dt.required_energy_spread(tau_beta, eps_med, n_med) / n_med))
+        return derived_snr, derived_spread, derived_lines
+
     def _partition_by_criteria(
         self,
         scores: List[LineScore],
@@ -386,8 +454,12 @@ class LineSelector:
         rejected_scores: List[LineScore],
         warnings: List[str],
     ) -> List[LineScore]:
-        """Per element: sort, warn on spread, take top lines, reject the excess."""
+        """Per element: keep the best lines up to the cap, reject the excess. With
+        ``reliability_ranked_selection`` the kept subset MAXIMIZES upper-level energy spread
+        (best temperature conditioning, ``twoLineBeta_stable_sharp``) when the cap binds;
+        otherwise the highest-scored lines. Only differs from the baseline when the cap binds."""
         selected_scores: List[LineScore] = []
+        cap = self.max_lines_per_element
         for element, elem_scores in by_element.items():
             # Sort by score descending
             elem_scores.sort(key=lambda s: s.score, reverse=True)
@@ -395,16 +467,46 @@ class LineSelector:
             # Check energy spread
             self._warn_energy_spread(element, elem_scores, warnings)
 
-            # Select top lines up to max
-            n_select = min(len(elem_scores), self.max_lines_per_element)
-            selected_scores.extend(elem_scores[:n_select])
+            if self.reliability_ranked_selection and len(elem_scores) > cap:
+                keep = self._max_spread_subset(elem_scores, cap)
+            else:
+                keep = elem_scores[:cap]
 
-            # Mark excess as rejected
-            for score in elem_scores[n_select:]:
-                score.rejection_reason = "Exceeded max lines per element"
-                rejected_scores.append(score)
+            keep_ids = {id(s) for s in keep}
+            selected_scores.extend(keep)
+            for score in elem_scores:
+                if id(score) not in keep_ids:
+                    score.rejection_reason = "Exceeded max lines per element"
+                    rejected_scores.append(score)
 
         return selected_scores
+
+    @staticmethod
+    def _max_spread_subset(scores: List[LineScore], k: int) -> List[LineScore]:
+        """Pick ``k`` lines maximizing upper-level energy spread via farthest-point sampling
+        on ``E_k``: seed with the two extremes (the best-conditioned pair,
+        ``twoLineBeta_stable_sharp``), then greedily add the line farthest from the chosen
+        set. Better temperature conditioning than a score-only top-k when the cap binds."""
+        if k >= len(scores):
+            return list(scores)
+        energies = [s.observation.E_k_ev for s in scores]
+        lo = min(range(len(scores)), key=lambda i: energies[i])
+        hi = max(range(len(scores)), key=lambda i: energies[i])
+        chosen = [lo] if lo == hi else [lo, hi]
+        chosen_set = set(chosen)
+        while len(chosen) < k:
+            best_i, best_d = None, -1.0
+            for i in range(len(scores)):
+                if i in chosen_set:
+                    continue
+                d = min(abs(energies[i] - energies[c]) for c in chosen)
+                if d > best_d:
+                    best_d, best_i = d, i
+            if best_i is None:
+                break
+            chosen.append(best_i)
+            chosen_set.add(best_i)
+        return [scores[i] for i in chosen]
 
     def _warn_energy_spread(
         self,
@@ -684,3 +786,554 @@ def identify_resonance_lines(
     # LineObservation dataclass. In practice, this would query the database.
     # For now, return empty set - caller should provide from database.
     return set()
+
+
+# ---------------------------------------------------------------------------
+# DB + window candidate-line selection policies (opt-in)
+# ---------------------------------------------------------------------------
+#
+# The ``LineSelector`` above scores already-extracted ``LineObservation``s. The
+# functions below operate one step earlier: they pick *candidate* atomic-data
+# lines per element directly from the atomic DB over a wavelength window, so a
+# downstream extractor knows where to integrate intensities. This is the entry
+# point used by the known-matrix / OPC mode.
+#
+# Two selection policies are offered via the ``policy`` argument of
+# :func:`select_lines_by_policy`:
+#
+# * ``"emissivity"`` (DEFAULT, current behavior): rank by Boltzmann-weighted
+#   emissivity over the neutral + singly-ionized stages, then take a wide
+#   upper-level-energy (E_k) spread of strong, isolated lines (resonance lines
+#   excluded with a too-few fallback). This mirrors the established
+#   ``tests/benchmarks/ded_precision/line_lists.select_lines`` behavior, so the
+#   default path is unchanged.
+# * ``"neutral_anchor"`` (opt-in): the real-steel accuracy lever L2 promoted
+#   from ``tests/benchmarks/real_steel/lever_l2_lines.select_l2_lines`` (see
+#   docs/research/real-steel-opc-promotion.md). Per element it prefers NEUTRAL
+#   (stage 1) lines with wide E_k spread so the Saha ion->total back-correction
+#   is applied on (or near) the neutral plane instead of extrapolated up from
+#   ion lines; admits a strong neutral *resonance* anchor when the element is
+#   effectively neutral-resonance-only; and DROPS an element that has no usable
+#   neutral line at all (better to omit a trace minor than let an ion-only Saha
+#   extrapolation soak the closure, e.g. Cu 0.2 wt% recovered as ~93%).
+#
+# Both policies are pure atomic-data + window functions (no measured intensity,
+# no recovered composition) — physics-only, no new dependencies.
+
+#: Selection temperature (K) for the emissivity ranking under the default
+#: ``"emissivity"`` policy. A fixed, physically reasonable alloy-plasma value;
+#: never fit per sample or tuned to any ground truth.
+DEFAULT_SELECT_T_K: float = 11000.0
+#: Selection temperature (K) for the ``"neutral_anchor"`` policy (lever L2).
+NEUTRAL_ANCHOR_SELECT_T_K: float = 8000.0
+#: Under ``"neutral_anchor"``, a neutral resonance line is admitted as an anchor
+#: only when the strongest neutral line is a resonance line that beats the best
+#: non-resonance neutral line by at least this factor (i.e. the element is
+#: effectively neutral-resonance-only; weak non-resonance neutrals will not
+#: extract from real spectra).
+RESONANCE_ANCHOR_RATIO: float = 8.0
+
+
+@dataclass(frozen=True)
+class SelectedLine:
+    """A candidate atomic-data line chosen from the DB by a selection policy.
+
+    This is the output of DB + window line selection: a pure atomic-data
+    candidate carrying no measured intensity (that is added later by the
+    extractor). Field set matches the benchmark ``LineSpec`` so existing line
+    extractors can consume it unchanged.
+    """
+
+    element: str
+    ionization_stage: int
+    wavelength_nm: float
+    E_k_ev: float
+    g_k: float
+    A_ki: float
+    aki_uncertainty: Optional[float] = None
+    is_resonance: bool = False
+
+
+def _emissivity_weight(transition, temperature_K: float) -> float:
+    """Boltzmann-weighted relative emissivity ``g_k * A_ki * exp(-E_k / kT)``."""
+    return float(
+        transition.g_k * transition.A_ki * np.exp(-transition.E_k_ev / (KB_EV * temperature_K))
+    )
+
+
+def _gather_candidate_transitions(
+    db,
+    element: str,
+    stages: Sequence[int],
+    window: Tuple[float, float],
+    temperature_K: float,
+    *,
+    allow_resonance: bool,
+) -> List:
+    """Collect usable transitions over ``stages`` in ``window``, emissivity-sorted.
+
+    Drops transitions with non-positive ``A_ki``/``g_k`` or a missing upper-level
+    energy, and (when ``allow_resonance`` is False) resonance lines. The result
+    is sorted by Boltzmann-weighted emissivity at ``temperature_K`` (descending).
+    """
+    wmin, wmax = window
+    out: List = []
+    for stage in stages:
+        for tr in db.get_transitions(
+            element, ionization_stage=stage, wavelength_min=wmin, wavelength_max=wmax
+        ):
+            if not tr.A_ki or tr.A_ki <= 0 or not tr.g_k or tr.g_k <= 0:
+                continue
+            if tr.E_k_ev is None:
+                continue
+            if not allow_resonance and getattr(tr, "is_resonance", False):
+                continue
+            out.append(tr)
+    out.sort(key=lambda t: _emissivity_weight(t, temperature_K), reverse=True)
+    return out
+
+
+def _spread_pick(
+    cands: List, n_lines: int, min_separation_nm: float, prefer_spread: bool = True
+) -> List:
+    """Take up to ``n_lines`` strong, isolated lines for the Boltzmann plane.
+
+    With ``prefer_spread`` (default), bin the strong-line pool by upper-level
+    energy and take the strongest isolated line per bin, so the chosen set is
+    well-conditioned for a single-element Boltzmann slope (falls back to a
+    strongest-first isolated greedy pick when the pool is too small or has no
+    energy spread). With ``prefer_spread=False`` always use the strongest-first
+    isolated greedy pick: when T is constrained jointly across elements (the
+    Saha-Boltzmann graph) each element only needs accurate, isolated intensities,
+    and forcing per-element E_k spread selects weak, blended high-E_k lines that
+    corrupt dense-spectrum elements (the DED constrained-extraction regime).
+    """
+
+    def _isolated(tr, picked: List) -> bool:
+        return all(abs(tr.wavelength_nm - c.wavelength_nm) >= min_separation_nm for c in picked)
+
+    pool = cands[: max(n_lines * 4, n_lines)]
+    eks = np.array([t.E_k_ev for t in pool], dtype=float)
+    chosen: List = []
+    if prefer_spread and len(pool) > n_lines and eks.size and float(eks.max() - eks.min()) > 0:
+        edges = np.linspace(eks.min(), eks.max(), n_lines + 1)
+        used: set = set()
+        for b in range(n_lines):
+            lo, hi = edges[b], edges[b + 1]
+            last = b == n_lines - 1
+            for i, tr in enumerate(pool):
+                if i in used:
+                    continue
+                ek = tr.E_k_ev
+                if (lo <= ek < hi) or (last and ek <= hi):
+                    if _isolated(tr, chosen):
+                        chosen.append(tr)
+                        used.add(i)
+                        break
+        for i, tr in enumerate(pool):
+            if len(chosen) >= n_lines:
+                break
+            if i not in used and _isolated(tr, chosen):
+                chosen.append(tr)
+                used.add(i)
+    else:
+        for tr in cands:
+            if _isolated(tr, chosen):
+                chosen.append(tr)
+            if len(chosen) >= n_lines:
+                break
+    return chosen
+
+
+def _to_selected_lines(element: str, transitions: List) -> List[SelectedLine]:
+    return [
+        SelectedLine(
+            element=element,
+            ionization_stage=int(tr.ionization_stage),
+            wavelength_nm=float(tr.wavelength_nm),
+            E_k_ev=float(tr.E_k_ev),
+            g_k=float(tr.g_k),
+            A_ki=float(tr.A_ki),
+            aki_uncertainty=getattr(tr, "aki_uncertainty", None),
+            is_resonance=bool(getattr(tr, "is_resonance", False)),
+        )
+        for tr in transitions
+    ]
+
+
+def _select_emissivity(
+    db,
+    element: str,
+    window: Tuple[float, float],
+    n_lines: int,
+    stages: Sequence[int],
+    select_temperature_K: float,
+    min_separation_nm: float,
+    exclude_resonance: bool,
+    prefer_spread: bool = True,
+) -> List[SelectedLine]:
+    """Default policy: emissivity-ranked, wide-E_k spread over ``stages``."""
+    cands = _gather_candidate_transitions(
+        db, element, stages, window, select_temperature_K, allow_resonance=not exclude_resonance
+    )
+    if exclude_resonance and len(cands) < max(2, n_lines // 2):
+        # Too few non-resonance lines: admit resonance lines as a fallback.
+        cands = _gather_candidate_transitions(
+            db, element, stages, window, select_temperature_K, allow_resonance=True
+        )
+    return _to_selected_lines(
+        element, _spread_pick(cands, n_lines, min_separation_nm, prefer_spread=prefer_spread)
+    )
+
+
+def _select_neutral_anchor(
+    db,
+    element: str,
+    window: Tuple[float, float],
+    n_lines: int,
+    select_temperature_K: float,
+    min_separation_nm: float,
+) -> List[SelectedLine]:
+    """Lever-L2 policy: neutral-anchored, wide-E_k selection (stage 1 only).
+
+    Returns an empty list when the element has no usable neutral line in band
+    (so the caller drops it from the closure rather than observing it ion-only).
+    """
+    neutral = _gather_candidate_transitions(
+        db, element, (1,), window, select_temperature_K, allow_resonance=True
+    )
+    nonres = [t for t in neutral if not getattr(t, "is_resonance", False)]
+    res = [t for t in neutral if getattr(t, "is_resonance", False)]
+
+    if len(nonres) >= 2:
+        pool = list(nonres)
+        # Admit the neutral resonance lines as an anchor only when the strongest
+        # neutral line overall is a much stronger resonance line (the element is
+        # effectively neutral-resonance-only in real spectra).
+        if res and neutral and getattr(neutral[0], "is_resonance", False):
+            best_res = _emissivity_weight(res[0], select_temperature_K)
+            best_nonres = _emissivity_weight(nonres[0], select_temperature_K)
+            if best_nonres <= 0 or best_res / best_nonres >= RESONANCE_ANCHOR_RATIO:
+                pool = list(neutral)
+    elif neutral:
+        pool = list(neutral)  # too few non-resonance: admit resonance anchor
+    else:
+        return []  # no neutral line in band -> drop element from closure
+
+    return _to_selected_lines(element, _spread_pick(pool, n_lines, min_separation_nm))
+
+
+def select_lines_by_policy(
+    db,
+    element: str,
+    window: Tuple[float, float],
+    n_lines: int = 8,
+    *,
+    policy: str = "emissivity",
+    stages: Sequence[int] = (1, 2),
+    select_temperature_K: Optional[float] = None,
+    min_separation_nm: float = 0.12,
+    exclude_resonance: bool = True,
+    prefer_spread: bool = True,
+) -> List[SelectedLine]:
+    """Pick up to ``n_lines`` candidate lines for ``element`` from the DB + window.
+
+    Pure atomic-data + window selection (no measured intensity, no recovered
+    composition). The ``policy`` argument selects the strategy; the default keeps
+    the current emissivity-spread behavior so existing callers are unaffected.
+
+    Parameters
+    ----------
+    db
+        Atomic database exposing
+        ``get_transitions(element, ionization_stage, wavelength_min, wavelength_max)``.
+    element : str
+        Element symbol.
+    window : tuple of float
+        ``(wavelength_min_nm, wavelength_max_nm)`` selection window.
+    n_lines : int, default 8
+        Maximum number of lines to return for the element.
+    policy : {"emissivity", "neutral_anchor"}, default "emissivity"
+        ``"emissivity"`` (default, unchanged behavior): emissivity-ranked,
+        wide-E_k spread over ``stages``. ``"neutral_anchor"``: the opt-in
+        real-steel lever-L2 policy (neutral-plane anchored, ion-only minors
+        dropped); ``stages`` is ignored (neutral stage 1 only).
+    stages : sequence of int, default (1, 2)
+        Ionization stages to consider under the ``"emissivity"`` policy.
+    select_temperature_K : float, optional
+        Boltzmann-weighting temperature for the emissivity ranking. Defaults to
+        a policy-appropriate fixed value (``DEFAULT_SELECT_T_K`` for
+        ``"emissivity"``, ``NEUTRAL_ANCHOR_SELECT_T_K`` for ``"neutral_anchor"``).
+    min_separation_nm : float, default 0.12
+        Minimum wavelength separation between selected lines (isolation).
+    exclude_resonance : bool, default True
+        Under ``"emissivity"``, exclude resonance lines (with a too-few
+        fallback). Ignored by ``"neutral_anchor"`` (which manages resonance
+        anchoring itself).
+    prefer_spread : bool, default True
+        Under ``"emissivity"``, force a wide upper-level-energy (E_k) spread for
+        a single-element Boltzmann slope. Set ``False`` to take the strongest,
+        cleanest isolated lines instead (the DED constrained-extraction regime,
+        where T is constrained jointly across elements via the Saha-Boltzmann
+        graph so per-element spread-forcing only admits weak/blended high-E_k
+        lines). Ignored by ``"neutral_anchor"``.
+
+    Returns
+    -------
+    list of SelectedLine
+        Selected candidate lines (possibly empty under ``"neutral_anchor"`` when
+        the element has no usable neutral line in band).
+
+    Raises
+    ------
+    ValueError
+        If ``policy`` is not a recognized value.
+    """
+    if policy == "emissivity":
+        temp = DEFAULT_SELECT_T_K if select_temperature_K is None else select_temperature_K
+        return _select_emissivity(
+            db,
+            element,
+            window,
+            n_lines,
+            stages,
+            temp,
+            min_separation_nm,
+            exclude_resonance,
+            prefer_spread=prefer_spread,
+        )
+    if policy == "neutral_anchor":
+        temp = NEUTRAL_ANCHOR_SELECT_T_K if select_temperature_K is None else select_temperature_K
+        return _select_neutral_anchor(db, element, window, n_lines, temp, min_separation_nm)
+    raise ValueError(
+        f"Unknown line-selection policy: {policy!r} (expected 'emissivity' or 'neutral_anchor')"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Matrix-isolation filter for dominant-matrix alloys (opt-in)
+# ---------------------------------------------------------------------------
+#
+# In a dominant-matrix alloy (e.g. Ti-6Al-4V: Ti ~90 at.%, Al ~6 %, V ~4 %) the
+# matrix element emits a dense forest of lines. A trace/minor element's analytical
+# line that falls within the instrument resolution element of a strong matrix
+# transition is *blended*: the extracted integrated intensity is contaminated by
+# matrix emission, biasing the trace element high (V over-attribution) -- a
+# per-line error that no per-element OPC scalar ``F`` can undo. Classical CF-LIBS
+# line-selection guidance (Tognoni et al. 2006; Aragón & Aguilera 2008) requires
+# *isolated, interference-free* analytical lines for exactly this reason.
+#
+# :func:`filter_matrix_blended_lines` removes the trace-element observations that
+# are blended with a comparable-or-stronger matrix transition, while leaving the
+# matrix element's own lines untouched. It is a pure atomic-data + window function
+# (queries the DB for matrix transitions in the resolution window; never reads a
+# recovered composition) -- physics-only, opt-in, default path unchanged.
+
+#: Default assumed matrix:trace abundance ratio for the matrix-isolation filter.
+#: An order-of-magnitude property of a "dominant-matrix" alloy (the matrix
+#: element vastly outnumbers the traces) -- NOT a per-sample composition. Because
+#: the matrix is this many times more abundant, a matrix transition need only
+#: carry ~1/MATRIX_DOMINANCE of a trace line's per-atom emissivity to contribute
+#: equally to a blended peak, so even a per-atom-weak matrix line contaminates.
+DEFAULT_MATRIX_DOMINANCE: float = 15.0
+
+
+def _instrument_fwhm_nm(
+    wavelength_nm: float,
+    resolving_power: Optional[float],
+    fwhm_nm: Optional[float],
+) -> float:
+    """Instrument FWHM (nm) at ``wavelength_nm`` from an explicit value or R."""
+    if fwhm_nm is not None and fwhm_nm > 0:
+        return float(fwhm_nm)
+    if resolving_power is not None and resolving_power > 0:
+        return float(wavelength_nm) / float(resolving_power)
+    return 0.0
+
+
+def _matrix_contamination_ratio(
+    obs: LineObservation,
+    db,
+    matrix_element: str,
+    *,
+    half_window_nm: float,
+    matrix_dominance: float,
+    abundance_prior: Optional[Dict[str, float]],
+    select_temperature_K: float,
+    stages: Sequence[int],
+) -> Optional[float]:
+    """Largest matrix:trace blend-contribution ratio inside the window.
+
+    Returns the maximum, over matrix transitions within ``half_window_nm`` of the
+    trace line ``obs``, of the abundance-scaled per-atom-emissivity ratio
+    ``(g_k A_ki e^{-E_k/kT})_matrix * a_matrix / ((g_k A_ki e^{-E_k/kT})_trace *
+    a_trace)``. ``a_*`` come from ``abundance_prior`` when both elements are
+    present, else the scalar ``matrix_dominance`` (= a_matrix / a_trace). Returns
+    ``None`` when the ratio cannot be judged (zero window, non-positive trace
+    emissivity, or no matrix transition in band) so the caller keeps the line.
+    """
+    if half_window_nm <= 0.0:
+        return None
+    trace_w = float(obs.g_k * obs.A_ki * np.exp(-obs.E_k_ev / (KB_EV * select_temperature_K)))
+    if trace_w <= 0.0:
+        return None
+
+    if abundance_prior is not None:
+        a_matrix = float(abundance_prior.get(matrix_element, 0.0))
+        a_trace = float(abundance_prior.get(obs.element, 0.0))
+        dominance = (a_matrix / a_trace) if a_trace > 0 else matrix_dominance
+    else:
+        dominance = matrix_dominance
+
+    lo, hi = obs.wavelength_nm - half_window_nm, obs.wavelength_nm + half_window_nm
+    best: Optional[float] = None
+    for stage in stages:
+        for tr in db.get_transitions(
+            matrix_element, ionization_stage=stage, wavelength_min=lo, wavelength_max=hi
+        ):
+            if not tr.A_ki or tr.A_ki <= 0 or not tr.g_k or tr.g_k <= 0 or tr.E_k_ev is None:
+                continue
+            matrix_w = float(tr.g_k * tr.A_ki * np.exp(-tr.E_k_ev / (KB_EV * select_temperature_K)))
+            ratio = matrix_w * dominance / trace_w
+            if best is None or ratio > best:
+                best = ratio
+    return best
+
+
+def filter_matrix_blended_lines(
+    observations: List[LineObservation],
+    db,
+    matrix_element: str,
+    *,
+    resolving_power: Optional[float] = None,
+    fwhm_nm: Optional[float] = None,
+    n_fwhm: float = 1.0,
+    contamination_ratio: float = 0.3,
+    matrix_dominance: float = DEFAULT_MATRIX_DOMINANCE,
+    abundance_prior: Optional[Dict[str, float]] = None,
+    select_temperature_K: float = DEFAULT_SELECT_T_K,
+    stages: Sequence[int] = (1, 2),
+    min_lines_per_element: int = 1,
+) -> Tuple[List[LineObservation], List[LineObservation]]:
+    """Drop trace-element lines blended with a strong matrix-element transition.
+
+    For a dominant-matrix alloy (one element vastly more abundant than the rest),
+    each non-``matrix_element`` observation is tested for blending: if a matrix
+    transition lies within ``n_fwhm`` instrument-FWHM of the trace line AND its
+    abundance-scaled per-atom emissivity is at least ``contamination_ratio`` of
+    the trace line's contribution (see :func:`_matrix_contamination_ratio`), the
+    trace line's extracted intensity is contaminated by matrix emission and the
+    line is dropped. Matrix-element observations are always kept.
+
+    A per-element floor protects against over-pruning: if filtering would leave a
+    trace element with fewer than ``min_lines_per_element`` lines, its
+    *least-contaminated* dropped lines are restored up to the floor (a faint but
+    least-blended line still anchors the element's abundance on the shared
+    Saha-Boltzmann plane). The default ``1`` keeps every element that had at
+    least one line.
+
+    Pure atomic-data + window function: it queries the DB for matrix transitions
+    and computes Boltzmann-weighted emissivities, never a recovered composition.
+    Physics-only and opt-in -- callers that do not invoke it are unaffected.
+
+    Parameters
+    ----------
+    observations : list of LineObservation
+        Detected/selected lines (mixed elements).
+    db
+        Atomic database exposing ``get_transitions(element, ionization_stage,
+        wavelength_min, wavelength_max)``.
+    matrix_element : str
+        The dominant matrix element (e.g. ``"Ti"``). Its lines are never dropped.
+    resolving_power : float, optional
+        Instrument resolving power R; the FWHM at each trace line is ``lambda/R``.
+        Ignored when ``fwhm_nm`` is given.
+    fwhm_nm : float, optional
+        Explicit instrument FWHM (nm), constant across the band. Overrides
+        ``resolving_power`` when provided.
+    n_fwhm : float, default 1.0
+        Blend half-window in instrument FWHM: a matrix transition within
+        ``n_fwhm * FWHM`` of a trace line is a potential blend.
+    contamination_ratio : float, default 0.3
+        Drop a trace line when the matrix:trace blend-contribution ratio (see
+        :func:`_matrix_contamination_ratio`) is at least this value, i.e. the
+        matrix contributes >= 30 % of the trace line's expected signal.
+    matrix_dominance : float, default ``DEFAULT_MATRIX_DOMINANCE``
+        Assumed matrix:trace abundance ratio used when ``abundance_prior`` is not
+        supplied. An order-of-magnitude "dominant matrix" property, not a sample
+        composition.
+    abundance_prior : dict, optional
+        Per-element number-fraction prior (e.g. a known feedstock spec). When it
+        contains both the matrix and a trace element, their ratio replaces
+        ``matrix_dominance`` for that trace. ``None`` (default) uses the scalar.
+    select_temperature_K : float, default ``DEFAULT_SELECT_T_K``
+        Boltzmann-weighting temperature for the per-atom emissivities.
+    stages : sequence of int, default (1, 2)
+        Matrix ionization stages searched for contaminating transitions.
+    min_lines_per_element : int, default 1
+        Per-trace-element floor restored from the least-contaminated drops.
+
+    Returns
+    -------
+    (kept, dropped) : tuple of list of LineObservation
+        ``kept`` preserves the input order; ``dropped`` are the removed blended
+        trace lines.
+    """
+    half_base = float(n_fwhm)
+    kept: List[LineObservation] = []
+    # (obs, contamination_ratio) for trace lines flagged as blended, by element.
+    flagged: Dict[str, List[Tuple[LineObservation, float]]] = defaultdict(list)
+    kept_count: Dict[str, int] = defaultdict(int)
+
+    for obs in observations:
+        if obs.element == matrix_element:
+            kept.append(obs)
+            continue
+        fwhm = _instrument_fwhm_nm(obs.wavelength_nm, resolving_power, fwhm_nm)
+        ratio = _matrix_contamination_ratio(
+            obs,
+            db,
+            matrix_element,
+            half_window_nm=half_base * fwhm,
+            matrix_dominance=matrix_dominance,
+            abundance_prior=abundance_prior,
+            select_temperature_K=select_temperature_K,
+            stages=stages,
+        )
+        if ratio is not None and ratio >= contamination_ratio:
+            flagged[obs.element].append((obs, ratio))
+        else:
+            kept.append(obs)
+            kept_count[obs.element] += 1
+
+    # Restore the least-contaminated flagged lines for any element left below the
+    # per-element floor, so the filter never silently deletes an element.
+    dropped: List[LineObservation] = []
+    restore: Set[int] = set()
+    for element, items in flagged.items():
+        deficit = min_lines_per_element - kept_count[element]
+        if deficit > 0:
+            for obs, _ratio in sorted(items, key=lambda t: t[1])[:deficit]:
+                restore.add(id(obs))
+
+    if restore:
+        # Re-emit in original order with restored lines kept.
+        kept_ids = {id(o) for o in kept}
+        kept = [o for o in observations if id(o) in kept_ids or id(o) in restore]
+        for items in flagged.values():
+            for obs, _ratio in items:
+                if id(obs) not in restore:
+                    dropped.append(obs)
+    else:
+        for items in flagged.values():
+            for obs, _ratio in items:
+                dropped.append(obs)
+
+    if dropped:
+        logger.info(
+            "matrix-isolation filter (matrix=%s): dropped %d blended trace line(s), kept %d.",
+            matrix_element,
+            len(dropped),
+            len(kept),
+        )
+    return kept, dropped

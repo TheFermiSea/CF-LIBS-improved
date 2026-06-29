@@ -45,6 +45,39 @@ else:  # pragma: no cover
     dist = None  # type: ignore[assignment]
 
 
+#: Floor on each Dirichlet alpha component. A zero nominal fraction would give
+#: alpha=0 -- a degenerate Dirichlet that forces that element to exactly 0 and
+#: forbids detecting an unexpected element/contaminant (Codex review). The floor
+#: keeps such an element weakly sparse but detectable; it is far below the alphas
+#: of present elements (c*x ~ O(1-50) for c~60), so it never perturbs them.
+_ALPHA_FLOOR = 1e-2
+
+
+def _concentration_dirichlet_alpha(prior_config, n_elements):
+    """Dirichlet concentration ``alpha`` for the composition prior.
+
+    Symmetric (``ones * concentration_alpha``) by default. When
+    ``prior_config.nominal_mole_fracs`` is set (DED feedstock prior), the
+    Dirichlet is centered on it: ``alpha = concentration_alpha * x_nom`` so the
+    prior MEAN is (essentially) ``x_nom`` and the total concentration
+    (``sum(alpha) = concentration_alpha``) sets the spread. A weak
+    concentration (~50-80) keeps the posterior data-dominated, so the prior aids
+    conditioning without ever pinning the estimate to nominal. Components are
+    floored at :data:`_ALPHA_FLOOR` so a zero-nominal element is never hard-
+    pinned to 0.
+    """
+    x_nom = getattr(prior_config, "nominal_mole_fracs", None)
+    if x_nom is None:
+        return jnp.ones(n_elements) * prior_config.concentration_alpha
+    x = jnp.asarray(x_nom)
+    if int(x.shape[0]) != int(n_elements):
+        raise ValueError(
+            f"nominal_mole_fracs length {int(x.shape[0])} != n_elements {int(n_elements)}"
+        )
+    x = x / jnp.sum(x)
+    return jnp.maximum(prior_config.concentration_alpha * x, _ALPHA_FLOOR)
+
+
 def bayesian_model(
     forward_model: "BayesianForwardModel",
     observed,
@@ -81,7 +114,7 @@ def bayesian_model(
         dist.Uniform(prior_config.log_ne_range[0], prior_config.log_ne_range[1]),
     )
 
-    alpha = jnp.ones(n_elements) * prior_config.concentration_alpha
+    alpha = _concentration_dirichlet_alpha(prior_config, n_elements)
     concentrations = numpyro.sample("concentrations", dist.Dirichlet(alpha))
 
     predicted = forward_model.forward(T_eV, log_ne, concentrations)
@@ -127,6 +160,12 @@ def bayesian_model(
     numpyro.sample("obs", dist.Normal(pred_safe, sigma), obs=observed)
 
 
+#: Stiffness (per eV^2) of the smooth T_core > T_shell ordering penalty in the
+#: two-zone model. Large enough to strongly enforce ordering while keeping the
+#: potential C^1 (HMC-differentiable); approaches a hard truncation as it grows.
+_T_ORDERING_PENALTY_SCALE = 1.0e4
+
+
 def two_zone_bayesian_model(
     forward_model: "TwoZoneBayesianForwardModel",
     observed,
@@ -149,7 +188,18 @@ def two_zone_bayesian_model(
     )
 
     if prior_config.enforce_T_ordering:
-        numpyro.factor("T_ordering", jnp.where(T_core_eV > T_shell_eV, 0.0, -1e6))
+        # Smooth one-sided penalty enforcing T_core > T_shell. The previous
+        # ``jnp.where(T_core>T_shell, 0.0, -1e6)`` is a flat cliff: ZERO gradient
+        # on both sides plus a discontinuity at the boundary, so NUTS gets no
+        # restoring force and diverges when a trajectory crosses it (audit C6).
+        # A quadratic hinge ``-k*max(T_shell-T_core,0)^2`` is C^1 with a genuine
+        # restoring gradient ``2k*(T_shell-T_core)`` in the violated region and
+        # recovers the hard truncation as k grows, while staying differentiable.
+        # (Reparameterizing T_core onto (T_shell, hi] is the tuning-free ideal,
+        # but it changes the sample sites and the marginal T_shell prior, so it
+        # is deferred to the Step-4 MCMC sampling-quality validation.)
+        violation = jnp.maximum(T_shell_eV - T_core_eV, 0.0)
+        numpyro.factor("T_ordering", -_T_ORDERING_PENALTY_SCALE * jnp.square(violation))
 
     log_ne = numpyro.sample(
         "log_ne",
@@ -165,7 +215,7 @@ def two_zone_bayesian_model(
         )
         numpyro.factor("mcwhirter_lte", penalty)
 
-    alpha = jnp.ones(n_elements) * prior_config.concentration_alpha
+    alpha = _concentration_dirichlet_alpha(prior_config, n_elements)
     concentrations = numpyro.sample("concentrations", dist.Dirichlet(alpha))
 
     shell_fraction = numpyro.sample(

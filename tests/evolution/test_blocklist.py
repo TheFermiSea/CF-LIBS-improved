@@ -236,3 +236,25 @@ def test_dynamic_import_calls_registry_covers_common_forms() -> None:
 def test_assert_physics_only_raises_on_dynamic_import() -> None:
     with pytest.raises(BlocklistViolationError):
         assert_physics_only('__import__("sklearn")')
+
+
+# exec / eval / compile evasion (M1-20)
+def test_exec_with_forbidden_import_rejected() -> None:
+    dyn = [v for v in scan_source('exec("import torch")') if v.kind == "dynamic_import"]
+    assert len(dyn) == 1 and dyn[0].module == "exec"
+
+
+def test_eval_with_forbidden_import_rejected() -> None:
+    dyn = [v for v in scan_source("eval(\"__import__('sklearn')\")") if v.kind == "dynamic_import"]
+    assert dyn and ({v.module for v in dyn} & {"eval", "__import__"})
+
+
+def test_compile_with_forbidden_import_rejected() -> None:
+    dyn = [
+        v for v in scan_source("compile('import keras', '', 'exec')") if v.kind == "dynamic_import"
+    ]
+    assert len(dyn) == 1 and dyn[0].module == "compile"
+
+
+def test_exec_eval_compile_in_registry() -> None:
+    assert {"exec", "eval", "compile"} <= set(DYNAMIC_IMPORT_CALLS)

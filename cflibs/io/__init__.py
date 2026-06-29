@@ -17,6 +17,7 @@ from cflibs.io.exporters import (
     export_to_csv,
     export_to_json,
 )
+from cflibs.io.opc import load_opc_calibration, save_opc_calibration
 
 __all__ = [
     # Spectrum I/O
@@ -31,4 +32,7 @@ __all__ = [
     "create_exporter",
     "export_to_csv",
     "export_to_json",
+    # OPC calibration persistence
+    "load_opc_calibration",
+    "save_opc_calibration",
 ]

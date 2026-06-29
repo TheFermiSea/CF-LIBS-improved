@@ -104,7 +104,14 @@ def _poisson_cash_log_likelihood(
     shot = jnp.sum(n * jnp.log(mu) - mu - gammaln(n + 1.0))
     readout_var = noise_params.readout_noise**2
     if readout_var > 0.0:
-        residual = observed - mu
+        # The Gaussian readout term is the additive detector read-noise FLOOR on
+        # the measured signal, so its residual is the model misfit in measurement
+        # space, ``observed - predicted`` (consistent with the gaussian branch's
+        # ``observed - pred_safe``). The previous ``observed - mu`` referenced the
+        # gain-scaled electron expectation, which wrongly makes the read-noise
+        # penalty depend on ``gain``/``dark_current`` — read noise is added after
+        # the gain stage and is independent of them (audit C5).
+        residual = observed - predicted
         readout = -0.5 * jnp.sum(jnp.log(2.0 * jnp.pi * readout_var) + residual**2 / readout_var)
     else:
         readout = 0.0

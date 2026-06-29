@@ -44,7 +44,9 @@ def test_matrix_closure():
         intercepts, partition_funcs, matrix_element="Fe", matrix_fraction=0.9
     )
 
-    assert res.concentrations["Fe"] == 0.9
+    # Log-sum-exp stabilization is identical up to floating-point rounding
+    # (~1 ULP); the closure parity gate is defined at 1e-12.
+    assert abs(res.concentrations["Fe"] - 0.9) < 1e-12
     assert abs(res.concentrations["Ti"] - (49.46 / 75.51)) < 0.01
 
 
@@ -78,8 +80,10 @@ def test_standard_closure_applies_abundance_multipliers():
     expected_cu = 1.0 * 10.0 * math.exp(1.0)
     expected_total = expected_fe + expected_cu
 
-    assert res.concentrations["Fe"] == expected_fe / expected_total
-    assert res.concentrations["Cu"] == expected_cu / expected_total
+    # Log-sum-exp stabilization is identical up to floating-point rounding
+    # (~1 ULP); the closure parity gate is defined at 1e-12.
+    assert abs(res.concentrations["Fe"] - expected_fe / expected_total) < 1e-12
+    assert abs(res.concentrations["Cu"] - expected_cu / expected_total) < 1e-12
 
 
 def test_validate_degeneracy_flags_dominant_element():

@@ -443,3 +443,32 @@ def test_speed_benchmark(mock_db):
     speedup = t_iter / t_cf
     # Record but don't hard-assert; wall-clock varies in CI
     print(f"Closed-form speedup: {speedup:.1f}×  (iter={t_iter:.3f}s, cf={t_cf:.3f}s)")
+
+
+def test_non_physical_slope_holds_prior_not_clamp():
+    """Audit C2: a non-negative Boltzmann slope holds T at the prior, not 50000 K.
+
+    A non-negative slope is unphysical (populations rising with E_k). The old
+    code clamped T=50000 K, which both collapses the closure to a raw-intensity
+    softmax and — passing the pass-1 1000<T<100000 range gate — silently became
+    the reported temperature. The fix holds T at the caller's prior and flags
+    the solve non-physical (mirroring the iterative solver).
+    """
+    prior_T_K = 8500.0
+
+    # Non-negative slope -> non-physical -> hold prior.
+    theta_bad = np.array([0.5, 0.0])  # theta[0] = slope >= 0
+    T_K, _comps, physical = ClosedFormILRSolver._extract_parameters(
+        theta_bad, 2, ["Fe", "Ca"], prior_T_K=prior_T_K
+    )
+    assert physical is False
+    assert T_K == pytest.approx(prior_T_K)
+    assert T_K != 50000.0
+
+    # Physical (negative) slope -> T derived from the slope, not the prior.
+    theta_ok = np.array([-1.0, 0.0])
+    T_ok, _c, phys_ok = ClosedFormILRSolver._extract_parameters(
+        theta_ok, 2, ["Fe", "Ca"], prior_T_K=prior_T_K
+    )
+    assert phys_ok is True
+    assert T_ok > 0.0 and T_ok != pytest.approx(prior_T_K)

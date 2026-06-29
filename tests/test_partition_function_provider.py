@@ -97,14 +97,21 @@ def test_provider_reproduces_direct_sum_within_tolerance(db, element, stage):
 
 
 def test_factory_falls_back_to_stored_poly_when_no_levels(db):
-    """Species WITHOUT energy_levels use the stored polynomial (never fabricated)."""
-    # Nb I/II have a stored partition_functions row but zero energy_levels.
-    assert db.get_energy_levels("Nb", 1) == []
-    spec = db.partition_spec_for("Nb", 1)
+    """A species the direct-sum fit can't handle uses the stored polynomial (never fabricated).
+
+    After the M5 complete-DB ingest every real species with >= 2 levels resolves
+    via the direct-sum fit (Nb I, the old fixture here, gained 378 levels), so
+    the genuine fallback case is now a species with too FEW fittable levels.
+    Si IV has a single tabulated level (< 2, the fit floor) plus a stored
+    ``partition_functions`` row, so it exercises the stored-polynomial fallback
+    branch of ``derive_partition_spec``.
+    """
+    assert len(db.get_energy_levels("Si", 4)) < 2  # too few to fit a direct sum
+    spec = db.partition_spec_for("Si", 4)
     assert spec is not None
     assert spec.from_direct_sum is False
     assert spec.source != "direct_sum_fit"
-    stored = db.get_partition_coefficients("Nb", 1)
+    stored = db.get_partition_coefficients("Si", 4)
     assert stored is not None
     assert np.allclose(spec.coefficients, stored.coefficients, atol=1e-9)
 

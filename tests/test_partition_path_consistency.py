@@ -311,9 +311,17 @@ def test_manifold_and_bayesian_paths_agree(manifold_snapshot, bayesian_arrays, e
             )
         )
         rel = abs(u_manifold - u_bayes) / max(u_manifold, 1e-30)
-        # 1e-3 absorbs the Bayesian float32 coefficient storage; the two paths
-        # are otherwise the identical guarded polynomial over identical coeffs.
-        assert rel <= 1e-3, (
+        # 3e-3 absorbs the Bayesian float32 coefficient storage vs the manifold
+        # snapshot's float64 (under x64) for STEEP light-metal partition curves.
+        # The band-weighted direct-sum fit -- the accuracy improvement that pins
+        # Mg I to the band rather than letting it drift +15% above -- gives
+        # Ca I / Mg I larger high-order coefficients, so float32 rounding
+        # amplified through ln(T)^4 at the hot band edge reaches ~0.2% (was
+        # ~0.15% with the flatter pre-band-weighting fit).  The two paths still
+        # source identical coefficients from the single partition_spec_for
+        # factory; a real seam divergence is a gross coefficient mismatch (>1%),
+        # which this bar still rejects.
+        assert rel <= 3e-3, (
             f"Manifold vs Bayesian adapter disagree for {element} {stage} @ {T:.0f} K: "
             f"manifold={u_manifold:.6f} vs bayesian={u_bayes:.6f} ({rel:+.2%}). "
             "Both must source coefficients from the single partition_spec_for factory."

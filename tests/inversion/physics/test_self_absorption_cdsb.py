@@ -32,6 +32,7 @@ from cflibs.inversion.physics.self_absorption import (
     CDSBResult,
     cdsb_quantify,
     column_density_from_optical_depth,
+    optical_depth_from_column_density,
 )
 
 # ---------------------------------------------------------------------------
@@ -159,6 +160,26 @@ def test_column_density_roundtrip_is_exact():
     )
     # Algebraic inverse -> machine-precision agreement.
     assert n_rec == pytest.approx(n_true, rel=1e-9)
+
+
+def test_optical_depth_from_column_density_matches_reference_and_roundtrips():
+    """Production forward tau_0 (used to fix temporal.py's 1e-18x no-op) equals
+    the independent reference forward, is physical, and exactly inverts the
+    CD-SB column-density recovery."""
+    A, gk, gi, wl, T, M = 3.6e8, 6, 6, 279.5, 9000.0, 56.0
+    for n_il in (1.0e13, 5.0e15, 1.0e17):
+        tau_prod = optical_depth_from_column_density(
+            n_il, A_ki=A, g_k=gk, g_i=gi, wavelength_nm=wl, temperature_K=T, mass_amu=M
+        )
+        # matches the test's independent reference forward implementation
+        assert tau_prod == pytest.approx(_forward_tau0(n_il, A, gk, gi, wl, T, M), rel=1e-12)
+        # physical magnitude, not the old ~1e-16 SCALE_FACTOR no-op
+        assert tau_prod > 1e-3
+        # exact algebraic inverse of the CD-SB recovery
+        n_rec = column_density_from_optical_depth(
+            tau_0=tau_prod, A_ki=A, g_k=gk, g_i=gi, wavelength_nm=wl, temperature_K=T, mass_amu=M
+        )
+        assert n_rec == pytest.approx(n_il, rel=1e-9)
 
 
 def test_cdsb_recovers_temperature_better_than_thin_fit():

@@ -448,6 +448,7 @@ def _build_observation_from_fit(
         E_k_ev=transition.E_k_ev,
         g_k=transition.g_k,
         A_ki=transition.A_ki,
+        aki_uncertainty=transition.aki_uncertainty,
     )
 
     is_resonance = transition.is_resonance
@@ -529,6 +530,7 @@ def _build_observation(
         E_k_ev=transition.E_k_ev,
         g_k=transition.g_k,
         A_ki=transition.A_ki,
+        aki_uncertainty=transition.aki_uncertainty,
     )
 
     is_resonance = transition.is_resonance

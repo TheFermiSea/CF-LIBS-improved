@@ -834,6 +834,10 @@ class StandardAnalyzer(BaseStreamingAnalyzer):
             max_iterations=max_iter,
             t_tolerance_k=200.0,  # Relaxed for speed
             ne_tolerance_frac=0.15,
+            # Real-time streaming: skip the post-loop reliability re-fit
+            # (~26-34% of solve). T/n_e/composition unchanged; reliability keys
+            # are emitted conservatively (unknown/NaN/overall_reliable=False).
+            assess_quality=False,
         )
 
     def analyze_spectrum(

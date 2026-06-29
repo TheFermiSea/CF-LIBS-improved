@@ -31,6 +31,13 @@ def apply_instrument_function(
     array
         Convolved intensity spectrum
     """
+    # A non-positive sigma means no instrument broadening. The kernel would be
+    # degenerate — kernel = exp(-0.5*(0/0)^2) = NaN — so return the input
+    # unchanged, matching SpectrumModel._apply_instrument_convolution's
+    # sigma<=0 short-circuit (audit M1-A2 / instrument F10).
+    if sigma_nm <= 0:
+        return np.asarray(intensity)
+
     # Check if wavelength grid is evenly spaced
     dwl = np.diff(wavelength)
     if not np.allclose(dwl, dwl[0], rtol=1e-6):
@@ -77,6 +84,10 @@ def apply_instrument_function_jax(
     """
     if not HAS_JAX:
         raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
+
+    # Non-positive sigma => no broadening (degenerate NaN kernel otherwise).
+    if sigma_nm <= 0:
+        return np.asarray(intensity)
 
     wavelength_j = jnp.asarray(wavelength)
     intensity_j = jnp.asarray(intensity)

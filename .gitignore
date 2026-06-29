@@ -129,3 +129,21 @@ data/qu2025_marscode_eqm/
 # Guard against accidental nested test symlinks (machine-specific)
 ASD_da/ASD_da
 data/data
+
+# Atomic line-list dumps (multi-MB, fetched offline; do not commit)
+data/kurucz/
+data/vald/
+data/exomol/
+output/
+.arbor/
+
+# session artifacts: data symlink (gitignored as dir above misses the symlink) + arbor run outputs
+data/supercam_calib
+arbor_metrics.json
+/.arbor/
+arbor_*.json
+REPORT.md
+.autoresearch/
+.coordinator/
+results/
+cache_old_*/

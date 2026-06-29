@@ -126,6 +126,13 @@ class ManifoldGenerator:
 
         # Build query for all elements (including Stark parameters)
         placeholders = ",".join(["?"] * len(self.config.elements))
+        # The M5 complete-DB ingest added the full NIST line list, which includes
+        # ~74k observation-only transitions with NULL aki (and sometimes NULL
+        # upper-level ek_ev/gk). Those cannot emit in LTE -- the emissivity
+        # epsilon = (hc/4pi lambda) * A_ki * n_k is undefined without A_ki/E_k/g_k
+        # -- and a single NaN aki poisons the whole summed snapshot (every pixel
+        # becomes NaN). Filter them out here, identical to the canonical
+        # AtomicDatabase.get_transitions query (database.py:450).
         query = f"""
             SELECT
                 l.element, l.sp_num, l.wavelength_nm, l.aki, l.ek_ev, l.gk,
@@ -134,6 +141,8 @@ class ManifoldGenerator:
             JOIN species_physics sp ON l.element = sp.element AND l.sp_num = sp.sp_num
             WHERE l.wavelength_nm BETWEEN ? AND ?
             AND l.element IN ({placeholders})
+            AND l.aki IS NOT NULL AND l.aki > 0
+            AND l.ek_ev IS NOT NULL AND l.gk IS NOT NULL
             ORDER BY l.wavelength_nm
         """
         params = [
@@ -799,9 +808,17 @@ class ManifoldGenerator:
             atomic_data,
         )
 
+        # n_upper from the Saha-Boltzmann solver is in cm⁻³ (project convention,
+        # SAHA_CONST_CM3). The emissivity uses SI constants (H_PLANCK J·s,
+        # C_LIGHT m/s, l_wl in m), so n_upper must be in m⁻³ — the same * 1.0e6
+        # conversion applied in kernels.forward_model and the two-zone Bayesian
+        # forward (forward.py:519). Omitting it underscaled every emissivity
+        # (and thus every stored manifold) by 1e6.
+        n_upper_m3 = n_upper * 1.0e6
+
         # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
 
-        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper_m3
 
         # --- Proper Voigt Broadening (Phase 2) ---
 
@@ -922,8 +939,10 @@ class ManifoldGenerator:
             atomic_data,
         )
 
+        # cm⁻³ -> m⁻³ before the SI-constant emissivity (see _compute_spectrum_snapshot).
+        n_upper_m3 = n_upper * 1.0e6
         # Line emissivity: epsilon = (hc / 4pi lambda) * A * n_upper
-        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper
+        epsilon = (H_PLANCK * C_LIGHT / (4 * jnp.pi * l_wl * 1e-9)) * l_aki * n_upper_m3
 
         # Doppler sigma + instrument floor. ``sigma_inst`` is threaded in
         # from ``ManifoldConfig.instrument_fwhm_nm`` (D3 fix; previously the

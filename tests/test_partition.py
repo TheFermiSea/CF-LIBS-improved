@@ -290,3 +290,43 @@ def test_database_has_expanded_coefficients():
     conn.close()
 
     assert count >= 106, f"Database has {count} coefficient sets, expected >= 106"
+
+
+def test_spec_cache_invalidates_on_token_bump(partition_db):
+    """A cache_token bump forces re-derivation, so a DB change (new mtime token)
+    is picked up instead of serving the stale pre-change spec (overhaul step 1)."""
+    from cflibs.plasma import partition as _P
+    from cflibs.plasma.partition import derive_partition_spec
+
+    _P._spec_cache.clear()
+    derive_partition_spec(partition_db, "XA", 1, cache_token=0)
+    n0 = len(_P._spec_cache)
+    assert n0 == 1
+    derive_partition_spec(partition_db, "XA", 1, cache_token=0)  # same token -> hit
+    assert len(_P._spec_cache) == n0
+    derive_partition_spec(partition_db, "XA", 1, cache_token=1)  # bumped -> new entry
+    assert len(_P._spec_cache) == n0 + 1
+
+
+@pytest.mark.requires_db
+@pytest.mark.slow
+def test_lookup_miss_uses_provider_not_g0():
+    """On a dict miss WITH T_K, lookup_partition_function returns the full DB
+    U(T), not the g0 lower bound (partition overhaul step 2; the user's core
+    complaint). Without T_K it keeps the legacy g0/fallback."""
+    from cflibs.plasma.partition import lookup_partition_function
+
+    for c in (
+        Path(__file__).resolve().parents[1] / "ASD_da" / "libs_production.db",
+        Path(__file__).resolve().parents[1] / "libs_production.db",
+    ):
+        if c.exists():
+            db = AtomicDatabase(str(c))
+            break
+    else:
+        pytest.skip("libs_production.db not available")
+
+    g0_path = lookup_partition_function({}, "Fe", 1, db)  # no T_K -> g0/fallback
+    full = lookup_partition_function({}, "Fe", 1, db, T_K=10000.0)  # -> provider U(T)
+    assert full > 30.0, f"Fe I U(10kK)={full} should be ~50 (direct sum), not g0"
+    assert full > 2.0 * g0_path, f"full U {full} should dwarf g0 path {g0_path}"

@@ -500,8 +500,6 @@ def test_use_jax_boltzmann_seeds_from_env_by_default(mock_db, monkeypatch, env_v
     solver = IterativeCFLIBSSolver(mock_db, max_iterations=20)
     assert solver.use_jax_boltzmann is expected
     assert solver.use_jax_boltzmann == iterative_mod._jax_boltzmann_composition_enabled()
-    # The selector is plumbed all the way into the Boltzmann fitter.
-    assert solver.boltzmann_fitter.use_jax == expected
 
 
 def test_constructor_flag_overrides_env_lax(mock_db, monkeypatch):
@@ -534,11 +532,9 @@ def test_constructor_flag_overrides_env_jax_boltzmann(mock_db, monkeypatch):
 
     solver_on = IterativeCFLIBSSolver(mock_db, max_iterations=20, use_jax_boltzmann=True)
     assert solver_on.use_jax_boltzmann is True
-    assert solver_on.boltzmann_fitter.use_jax is True
 
     monkeypatch.setenv("CFLIBS_USE_JAX_BOLTZMANN_COMPOSITION", "1")
     assert iterative_mod._jax_boltzmann_composition_enabled() is True
 
     solver_off = IterativeCFLIBSSolver(mock_db, max_iterations=20, use_jax_boltzmann=False)
     assert solver_off.use_jax_boltzmann is False
-    assert solver_off.boltzmann_fitter.use_jax is False

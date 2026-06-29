@@ -305,31 +305,45 @@ class ClosedFormILRSolver:
     def _solve_wls(
         X: np.ndarray, y: np.ndarray, W: np.ndarray
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """Solve weighted least squares: θ = (X'WX)⁻¹ X'Wy."""
-        WX = X * W[:, np.newaxis]
-        XtWX = X.T @ WX
-        XtWy = WX.T @ y
+        """Solve weighted least squares via QR/SVD on sqrt(W)-scaled rows.
 
-        try:
-            theta = np.linalg.solve(XtWX, XtWy)
-        except np.linalg.LinAlgError:
-            logger.warning("WLS solve failed (singular matrix)")
+        Solves the scaled-row system ``Aw θ = yw`` (``Aw = X·sqrt(W)``) with
+        ``np.linalg.lstsq`` instead of forming-and-solving the normal equations
+        ``X'WX θ = X'Wy``. This keeps the working condition number at
+        ``cond(Aw)`` rather than squaring it to ``cond(X'WX)``. On healthy
+        well-conditioned data the result is algebraically identical to the old
+        normal-equations solve; on a rank-deficient system we return ``None``
+        (matching the previous singular-matrix fallback) rather than a garbage
+        "converged" θ.
+        """
+        sw = np.sqrt(W)
+        Aw = X * sw[:, np.newaxis]
+        yw = y * sw
+
+        n_cols = X.shape[1]
+        theta, _resid, rank, _sv = np.linalg.lstsq(Aw, yw, rcond=None)
+        if rank < n_cols:
+            logger.warning("WLS solve failed (rank-deficient: rank %d < %d cols)", rank, n_cols)
             return None, None
 
         residuals = y - X @ theta
         dof = max(len(y) - len(theta), 1)
         sigma2_hat = float(np.sum(W * residuals**2)) / dof
 
+        # cov(θ) = σ²·(X'WX)⁻¹ = σ²·R⁻¹R⁻ᵀ from the QR factor of Aw
+        # (X'WX = AwᵀAw = RᵀR), avoiding the squared-condition normal-matrix inv.
         try:
-            cov_theta = sigma2_hat * np.linalg.inv(XtWX)
+            R = np.linalg.qr(Aw, mode="r")
+            R_inv = np.linalg.solve(R, np.eye(n_cols))
+            cov_theta = sigma2_hat * (R_inv @ R_inv.T)
         except np.linalg.LinAlgError:
-            cov_theta = np.full((len(theta), len(theta)), np.nan)
+            cov_theta = np.full((n_cols, n_cols), np.nan)
 
         return theta, cov_theta
 
     @staticmethod
     def _extract_parameters(
-        theta: np.ndarray, D: int, element_order: List[str]
+        theta: np.ndarray, D: int, element_order: List[str], prior_T_K: float
     ) -> Tuple[float, Dict[str, float], bool]:
         """Extract T and compositions from regression parameters.
 
@@ -338,13 +352,27 @@ class ClosedFormILRSolver:
         tuple
             (T_K, compositions, physical) where physical is False if the
             fitted slope was non-negative (indicating a non-physical fit).
+
+        On a non-physical (non-negative) slope the temperature is HELD at
+        ``prior_T_K`` (the caller's current best estimate) and ``physical`` is
+        set False — mirroring the iterative solver, which holds T at the prior
+        and marks the solve non-converged. Previously this clamped T to 50000 K,
+        which drives the Boltzmann factors toward 1 and collapses the closure to
+        a raw-intensity softmax ("keystone collapse"); worse, since 50000 K
+        passes the pass-1 ``1000 < T < 100000`` range gate it silently became the
+        reported temperature and propagated into the partition/Saha multipliers
+        of the n_e refinement (audit C2).
         """
         m = theta[0]
         physical = True
         if m >= 0:
-            T_K = 50000.0
+            T_K = prior_T_K
             physical = False
-            logger.warning("Non-negative slope; clamping T to 50000 K")
+            logger.warning(
+                "Non-negative Boltzmann slope (non-physical); holding T at the "
+                "prior %.0f K and flagging the solve non-physical.",
+                prior_T_K,
+            )
         else:
             T_K = -1.0 / (m * KB_EV)
 
@@ -443,7 +471,9 @@ class ClosedFormILRSolver:
         theta1, _ = self._solve_wls(X1, y1, W1)
         if theta1 is None:
             return T_K
-        T_pass1, _, _ = self._extract_parameters(theta1, len(neutral_elements), neutral_elements)
+        T_pass1, _, _ = self._extract_parameters(
+            theta1, len(neutral_elements), neutral_elements, prior_T_K=T_K
+        )
         if 1000 < T_pass1 < 100000:
             return T_pass1
         return T_K
@@ -602,7 +632,7 @@ class ClosedFormILRSolver:
         if theta is None:
             return None
 
-        T_K, compositions, physical = self._extract_parameters(theta, D, elements)
+        T_K, compositions, physical = self._extract_parameters(theta, D, elements, prior_T_K=T_K)
         if not physical:
             converged = False
 

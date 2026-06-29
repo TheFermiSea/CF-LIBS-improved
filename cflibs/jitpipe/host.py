@@ -372,12 +372,26 @@ def _scan_species(conn: sqlite3.Connection) -> tuple[tuple[str, int], ...]:
 def _scan_lines(
     conn: sqlite3.Connection, species_idx: dict[tuple[str, int], int]
 ) -> dict[str, object]:
-    """Read the full ``lines`` table into the §2 line block (sorted, stable)."""
+    """Read the EMITTING ``lines`` into the §2 line block (sorted, stable).
+
+    Mirrors the reference forward path's emitting-line filter in
+    ``AtomicDatabase._build_transitions_query`` (``get_transitions``): only
+    rows with a usable spontaneous-emission rate and upper level
+    (``aki > 0`` and non-NULL ``ek_ev``/``gk``) belong in the CF-LIBS line
+    pool. The M5 complete-DB ingest added ~74k observation-only transitions
+    with NULL ``aki`` (and sometimes NULL ``ek_ev``/``gk``) that carry
+    position+intensity but cannot emit; without this cut the snapshot line
+    block would carry tens of thousands of non-emitting lines that the
+    reference snapshot/forward/detect path never sees -- a line-set parity
+    break (J0 AC4) and a polluted detection/identification catalog.
+    """
     rows = conn.execute("""
         SELECT element, sp_num, wavelength_nm, aki, ei_ev, ek_ev, gi, gk,
                stark_w, stark_alpha, stark_shift, aki_uncertainty,
                is_resonance, stark_w_source, gamma_vdw_log
         FROM lines
+        WHERE aki IS NOT NULL AND aki > 0
+          AND ek_ev IS NOT NULL AND gk IS NOT NULL
         ORDER BY element, sp_num, wavelength_nm, id
         """).fetchall()
 
@@ -1062,6 +1076,24 @@ def run_front_end(wavelength, intensity, atomic_db, pipeline) -> FrontEndResult:
         global_shift_scan_nm=pipeline.global_shift_scan_nm,
         affine_coverage_gate=pipeline.affine_coverage_gate,
         line_residual_gate=pipeline.line_residual_gate,
+        # Forward the SAME calibration/selection knobs the reference
+        # ``run_pipeline`` passes (pipeline.py): without these the delegated
+        # front-end silently fell back to ``detect_and_select_lines`` defaults
+        # and was NOT byte-faithful to the reference (M1 parity break).
+        # ``ransac_early_exit`` in particular is True in the raw preset, so
+        # omitting it ran a different RANSAC wavelength calibration -> a
+        # different matched-line set -> diverging concentrations on real
+        # ChemCam spectra.
+        calib_pool_cache=pipeline.calib_pool_cache,
+        hough_calib_seed=pipeline.hough_calib_seed,
+        ransac_early_exit=(pipeline.ransac_early_exit or None),
+        grade_aware_selection=pipeline.grade_aware_selection,
+        target_sigma_t=pipeline.target_sigma_t,
+        plasma_temperature_K=pipeline.plasma_temperature_K,
+        reliability_ranked_selection=pipeline.reliability_ranked_selection,
+        matrix_isolation_element=pipeline.matrix_isolation_element,
+        matrix_isolation_n_fwhm=pipeline.matrix_isolation_n_fwhm,
+        matrix_isolation_contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
         detection_overrides=pipeline.detection_overrides,
         return_diagnostics=True,
     )

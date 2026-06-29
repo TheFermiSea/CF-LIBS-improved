@@ -42,10 +42,18 @@ FORBIDDEN_PREFIXES: tuple[str, ...] = (
 # Callables that smuggle imports past static analysis. Evolved candidates
 # have no legitimate reason to use them; any occurrence is flagged as a
 # ``dynamic_import`` violation regardless of the argument.
+#
+# ``exec``, ``eval``, and ``compile`` are included because a candidate can
+# bypass the static import scanner with ``exec("import torch")`` or
+# ``eval("__import__('sklearn')")``.  Evolved physics solvers never have a
+# legitimate reason to call these builtins.
 DYNAMIC_IMPORT_CALLS: tuple[str, ...] = (
     "__import__",
     "importlib.import_module",
     "importlib.__import__",
+    "exec",
+    "eval",
+    "compile",
 )
 
 
@@ -249,12 +257,23 @@ def assert_benchmark_relevance(diff: str, exercised_files: set[str]) -> None:
     """
 
     # Extract touched files from a unified diff (e.g. '--- a/path/to/file')
+    # Also handle binary-diff lines of the form:
+    #   "Binary files a/path/to/file and b/path/to/file differ"
+    # which contain no ---/+++ lines but should count as touching that file.
     touched = set()
     for line in diff.splitlines():
         if line.startswith("--- a/"):
             touched.add(line[6:])
         elif line.startswith("+++ b/"):
             touched.add(line[6:])
+        elif line.startswith("Binary files "):
+            # "Binary files a/<path> and b/<path> differ"
+            #  parts:  0      1      2          3    4          5
+            parts = line.split()
+            if len(parts) >= 5 and parts[2].startswith("a/"):
+                touched.add(parts[2][2:])
+            if len(parts) >= 5 and parts[4].startswith("b/"):
+                touched.add(parts[4][2:])
 
     if not touched.intersection(exercised_files):
         raise RuntimeError(

@@ -282,6 +282,34 @@ class TestJointOptimizer:
         total_conc = sum(result.concentrations.values())
         np.testing.assert_allclose(total_conc, 1.0, rtol=1e-6)
 
+    @pytest.mark.parametrize("method", ["L-BFGS-B", "CG", "BFGS"])
+    def test_optimize_documented_methods_work(self, optimizer, synthetic_spectrum, method):
+        """All documented methods actually optimize (audit C4).
+
+        jax.scipy.optimize.minimize implements only BFGS, so "L-BFGS-B"/"CG"
+        previously hit ``ValueError`` inside _run_minimization's try/except and
+        silently returned the warm start (status FAILED) — the documented API was
+        a no-op. They now route through scipy.optimize.minimize and genuinely
+        converge, so each method must recover the true parameters.
+        """
+        data = synthetic_spectrum
+        rng = np.random.default_rng(42)
+        noisy = np.maximum(data["spectrum"] + rng.normal(0, 5, len(data["spectrum"])), 1.0)
+
+        result = optimizer.optimize(
+            noisy,
+            uncertainties=np.sqrt(noisy),
+            initial_T_eV=1.0,
+            initial_n_e=1e17,
+            method=method,
+        )
+
+        # Genuinely optimized (not the silent warm-start no-op): recovers T and
+        # the dominant element, and the simplex constraint holds.
+        np.testing.assert_allclose(result.temperature_eV, data["T_true"], rtol=0.3)
+        assert result.concentrations["Fe"] > 0.5  # true 0.7
+        np.testing.assert_allclose(sum(result.concentrations.values()), 1.0, rtol=1e-5)
+
     def test_optimize_with_default_init(self, optimizer, synthetic_spectrum):
         """Test optimization with default initial values."""
         data = synthetic_spectrum

@@ -45,7 +45,7 @@ class LRUCache:
         key_data = pickle.dumps((args, sorted(kwargs.items())))
         return hashlib.md5(key_data).hexdigest()
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str, default: Any = None) -> Any:
         """
         Get item from cache.
 
@@ -53,15 +53,21 @@ class LRUCache:
         ----------
         key : str
             Cache key
+        default : Any, optional
+            Value returned on a miss/expiry (default ``None``). Pass a distinct
+            sentinel to distinguish a cached ``None`` value from a cache miss —
+            the decorator does this so functions that legitimately return
+            ``None`` (e.g. ``get_ionization_potential`` for an absent species)
+            are cached instead of re-queried on every call.
 
         Returns
         -------
-        Any or None
-            Cached value, or None if not found or expired
+        Any
+            Cached value, or ``default`` if not found or expired.
         """
         if key not in self.cache:
             self.misses += 1
-            return None
+            return default
 
         value, timestamp = self.cache[key]
 
@@ -72,7 +78,7 @@ class LRUCache:
                 del self.cache[key]
                 self.misses += 1
                 logger.debug(f"Cache entry expired: {key[:16]}...")
-                return None
+                return default
 
         # Move to end (most recently used)
         self.cache.move_to_end(key)
@@ -138,6 +144,11 @@ _transition_cache = LRUCache(max_size=512, ttl_seconds=1800)  # 30 min TTL
 _ionization_cache = LRUCache(max_size=128, ttl_seconds=1800)  # 30 min TTL
 
 
+# Distinct miss sentinel so a cached ``None`` (a legitimate function result,
+# e.g. an absent species) is returned as a hit instead of being re-computed.
+_MISS = object()
+
+
 def _make_cache_decorator(cache: LRUCache) -> Callable:
     """Create a caching decorator backed by the given LRUCache instance."""
 
@@ -145,8 +156,8 @@ def _make_cache_decorator(cache: LRUCache) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             cache_key = cache._make_key(*args, **kwargs)
-            cached_value = cache.get(cache_key)
-            if cached_value is not None:
+            cached_value = cache.get(cache_key, _MISS)
+            if cached_value is not _MISS:
                 return cached_value
 
             result = func(*args, **kwargs)
@@ -189,4 +200,13 @@ def clear_all_caches() -> None:
     _partition_function_cache.clear()
     _transition_cache.clear()
     _ionization_cache.clear()
+    # Also clear the process-global partition spec/level caches (no TTL); lazy
+    # import + guard against the partition<->cache import cycle. Without this a
+    # long-lived process keeps stale U(T) after the DB's energy_levels change.
+    try:
+        from cflibs.plasma.partition import clear_partition_module_caches
+
+        clear_partition_module_caches()
+    except Exception:  # pragma: no cover - never let cache-clear hard-fail
+        pass
     logger.info("All caches cleared")

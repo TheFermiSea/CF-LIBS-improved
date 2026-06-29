@@ -452,6 +452,26 @@ class TestTemporalSelfAbsorptionCorrector:
 
         assert tau >= 0.0
 
+    def test_optical_depth_is_physical_not_scale_factor_noop(self, default_evolution_model):
+        """Regression: the old tau = 1e-25 * A_ki * lambda^3 * n_lower * L scaling
+        gave tau ~ 1e-16 for every line (all optically thin -> temporal SA
+        correction silently disabled). The verified Doppler curve-of-growth
+        optical depth must be physical for a strong line at high density."""
+        corrector = TemporalSelfAbsorptionCorrector(default_evolution_model)
+        tau = corrector.optical_depth_at_time(
+            time_ns=200.0,
+            wavelength_nm=500.0,
+            A_ki=1e8,
+            g_k=9,
+            E_lower_eV=0.0,
+            concentration=0.5,
+            total_number_density_cm3=1e18,
+            partition_func=25.0,
+            mass_amu=55.85,
+        )
+        assert np.isfinite(tau)
+        assert tau > 1e-3, f"tau={tau:.3e} unphysically small (SCALE_FACTOR no-op)"
+
     def test_optical_depth_decreases_with_time(self, default_evolution_model):
         """Test that optical depth decreases with time.
 

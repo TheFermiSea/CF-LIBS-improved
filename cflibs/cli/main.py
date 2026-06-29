@@ -441,10 +441,33 @@ def invert_cmd(args):
     wavelength, intensity = load_spectrum(args.spectrum)
     atomic_db = AtomicDatabase(db_path)
 
+    # Optional known-matrix OPC calibration (opt-in): load + pass via overrides
+    # so the resolved config records it like every other knob. Resolved relative
+    # to the config file when one is given (like atomic_database / response_curve).
+    overrides: dict = {}
+    opc_path = getattr(args, "opc", None) or (
+        analysis_cfg.get("opc", {}).get("calibration_path")
+        if isinstance(analysis_cfg.get("opc"), dict)
+        else None
+    )
+    if opc_path:
+        from cflibs.io.opc import load_opc_calibration
+
+        resolved_opc = _resolve_existing_path(opc_path, relative_to=args.config)
+        calibration = load_opc_calibration(resolved_opc)
+        overrides["opc"] = calibration
+        logger.info(
+            "Loaded OPC calibration from %s (robust_T=%.0f K, %d factors).",
+            resolved_opc,
+            calibration.robust_T_K,
+            len(calibration.F),
+        )
+
     pipeline = _build_pipeline_config(
         elements,
         preset=getattr(args, "preset", None),
         analysis_cfg=analysis_cfg,
+        overrides=overrides or None,
         saha_boltzmann_graph=getattr(args, "saha_boltzmann_graph", None),
         closure_mode=getattr(args, "closure_mode", None),
         apply_self_absorption=getattr(args, "apply_self_absorption", None),
@@ -459,6 +482,112 @@ def invert_cmd(args):
     result, diagnostics = _run_pipeline(wavelength, intensity, atomic_db, pipeline)
 
     _output_invert_result(result, args, diagnostics)
+
+
+def calibrate_opc_cmd(args):
+    """Build a known-matrix one-point-calibration (OPC) from certified standards.
+
+    Reads a standards spec (YAML/JSON) listing certified reference spectra plus
+    their certified compositions, derives a robust per-element relative-sensitivity
+    factor ``F`` and a robust fixed temperature ``T*`` via the shipped, physics-only
+    :func:`cflibs.inversion.physics.opc.calibrate_opc`, and writes the calibration
+    to a small JSON reusable by ``cflibs invert --opc``.
+
+    Structural honesty: the calibration is derived ONLY from the supplied
+    standards' own spectra + own certified compositions (an in-sample-only
+    conditioning gate). It never sees an unknown sample, so held-out leakage is
+    impossible by construction.
+
+    Standards spec schema::
+
+        atomic_database: ASD_da/libs_production.db   # optional; else --db
+        preset: metallic                             # optional (default metallic)
+        elements: [Fe, Cr, Ni, Si, Mn, Mo, Cu]       # optional; default = union
+        standards:
+          - name: std1
+            spectrum: std1.csv
+            composition: {Fe: 70.0, Cr: 18.0, Ni: 8.0, ...}
+    """
+    from cflibs.atomic.database import AtomicDatabase
+    from cflibs.core.config import load_config
+    from cflibs.inversion.physics.opc import Standard, StandardRecovery, calibrate_opc
+    from cflibs.io.opc import save_opc_calibration
+    from cflibs.io.spectrum import load_spectrum
+
+    logger.info("Calibrate-OPC command (known-matrix one-point calibration)")
+    spec = load_config(args.standards)
+    if not isinstance(spec, dict) or not spec.get("standards"):
+        raise ValueError(
+            f"Standards spec {args.standards!s} must be a mapping with a non-empty 'standards' list."
+        )
+
+    db_path = _resolve_db_path(args.db or spec.get("atomic_database"), relative_to=args.standards)
+    if not db_path.exists():
+        raise FileNotFoundError(_missing_db_message(db_path))
+    atomic_db = AtomicDatabase(db_path)
+    preset = args.preset or spec.get("preset") or "metallic"
+
+    def _make_recover(wavelength, intensity, elements):
+        # Recover this standard's composition through the SAME shipped pipeline
+        # that ``invert`` uses, held at a fixed T. F is therefore derived on the
+        # exact pipeline it will later correct (consistent, not double-counted).
+        # Reads only this standard's own spectrum -> the calibration is un-peekable.
+        def _recover(T_K: float) -> StandardRecovery:
+            pipeline = _build_pipeline_config(
+                elements,
+                preset=preset,
+                overrides={"fixed_temperature_K": float(T_K)},
+            )
+            try:
+                result, _diag = _run_pipeline(wavelength, intensity, atomic_db, pipeline)
+            except Exception as exc:  # noqa: BLE001 - a failed solve = not converged
+                logger.warning("Standard recovery failed at T=%.0f K: %r", T_K, exc)
+                return StandardRecovery(composition={}, converged=False, degenerate=True)
+            mass = result.mass_fractions or {}
+            composition = {el: 100.0 * float(v) for el, v in mass.items()}
+            degenerate = (
+                float((result.quality_metrics or {}).get("degenerate_composition", 0.0)) >= 0.5
+            )
+            return StandardRecovery(
+                composition=composition,
+                converged=bool(result.converged),
+                degenerate=degenerate,
+            )
+
+        return _recover
+
+    standards = []
+    for entry in spec["standards"]:
+        name = str(entry["name"])
+        spectrum_path = _resolve_existing_path(entry["spectrum"], relative_to=args.standards)
+        wavelength, intensity = load_spectrum(spectrum_path)
+        certified = {str(el): float(v) for el, v in dict(entry["composition"]).items()}
+        elements = list(spec.get("elements") or certified.keys())
+        standards.append(
+            Standard(
+                name=name,
+                certified=certified,
+                recover=_make_recover(wavelength, intensity, elements),
+            )
+        )
+        logger.info("Loaded standard %s (%d certified elements)", name, len(certified))
+
+    calibration = calibrate_opc(standards)
+    out_path = save_opc_calibration(calibration, args.output)
+    logger.info(
+        "Wrote OPC calibration to %s: robust_T=%.0f K, %d factors, %d selected standards.",
+        out_path,
+        calibration.robust_T_K,
+        len(calibration.F),
+        len(calibration.selected_standards),
+    )
+    print(f"OPC calibration written to {out_path}")
+    print(f"  robust_T_K: {calibration.robust_T_K:.0f}")
+    print(
+        f"  selected standards ({len(calibration.selected_standards)}): "
+        f"{', '.join(calibration.selected_standards)}"
+    )
+    print(f"  F: {calibration.F}")
 
 
 def analyze_cmd(args):
@@ -1150,8 +1279,51 @@ def main():
         default=None,
         help="Output file path for results (default: print to stdout)",
     )
+    invert_parser.add_argument(
+        "--opc",
+        type=str,
+        default=None,
+        help=(
+            "Path to a known-matrix one-point-calibration JSON (see "
+            "'cflibs calibrate-opc'). When given, detected line intensities are "
+            "rescaled by the per-element factor F and the solve is held at the "
+            "calibrated robust temperature. Opt-in: without --opc the default "
+            "calibration-free path is unchanged."
+        ),
+    )
     _add_pipeline_flags(invert_parser)
     invert_parser.set_defaults(func=invert_cmd)
+
+    # Calibrate-OPC command (known-matrix one-point calibration from standards)
+    calibrate_opc_parser = subparsers.add_parser(
+        "calibrate-opc",
+        help="Build a known-matrix OPC calibration JSON from certified standards",
+    )
+    calibrate_opc_parser.add_argument(
+        "standards",
+        type=str,
+        help="Path to a standards spec (YAML/JSON): reference spectra + certified compositions",
+    )
+    calibrate_opc_parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="Output path for the OPC calibration JSON (e.g. steel_opc.json)",
+    )
+    calibrate_opc_parser.add_argument(
+        "--db",
+        type=str,
+        default=None,
+        help="Atomic database path (overrides 'atomic_database' in the standards spec)",
+    )
+    calibrate_opc_parser.add_argument(
+        "--preset",
+        type=str,
+        choices=sorted(ANALYSIS_PRESETS),
+        default=None,
+        help="Analysis preset used to recover each standard (default: spec 'preset' or 'metallic')",
+    )
+    calibrate_opc_parser.set_defaults(func=calibrate_opc_cmd)
 
     # Analyze command (end-to-end with defaults)
     analyze_parser = subparsers.add_parser(

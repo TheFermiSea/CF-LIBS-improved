@@ -23,11 +23,15 @@ The CLI keeps thin backward-compatible aliases (``_build_pipeline_config``,
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.self_absorption_observable import normalize_self_absorption_mode
+
+if TYPE_CHECKING:
+    from cflibs.inversion.physics.opc import OPCCalibration
 
 logger = get_logger("inversion.pipeline")
 
@@ -38,6 +42,14 @@ logger = get_logger("inversion.pipeline")
 
 #: Closure modes accepted by the iterative solver / CLI.
 CLOSURE_MODES = ("standard", "matrix", "oxide", "ilr", "pwlr", "dirichlet_residual")
+
+#: Solver backends the unified pipeline supports end-to-end (peak-based
+#: ``iterative`` plus the full-spectrum ``joint``/``bayesian`` fits).
+SOLVER_BACKENDS = ("iterative", "joint", "bayesian")
+#: All solver names ``build_pipeline_config`` accepts. ``closed_form`` is an
+#: additional peak-based backend; ``coarse_to_fine`` is reserved for the
+#: manifold path (``_dispatch_solver`` raises NotImplementedError until wired).
+_VALID_SOLVERS = SOLVER_BACKENDS + ("closed_form", "coarse_to_fine")
 
 #: Preset bundles for the accuracy-critical solver knobs, measured on real
 #: ChemCam BHVO-2 (docs/audit/2026-06-09-overhaul/04-pipeline-defaults.md):
@@ -72,6 +84,32 @@ ANALYSIS_PRESETS = {
         "residual_shift_scan_nm": 0.0,
         "affine_coverage_gate": True,
         "line_residual_gate": True,
+    },
+    # DED constrained-known-element-set preset (DED-PLAN Edit B). Tuned to keep
+    # a small fixed element set (e.g. {Ti,Al,V} for Ti-6Al-4V) intact end to
+    # end: metallic sum-to-one closure (no oxide), Stark n_e to break the
+    # T/n_e degeneracy, the degeneracy guard armed for K>=2, and the per-element
+    # selection floors relaxed so a faint minor element (Al/V at extreme drift)
+    # is never dropped. ``constrained_elements`` (the hard no-drop switch) is
+    # added to this preset in DED-PLAN step 7 once the field exists.
+    "metallic_ded": {
+        "saha_boltzmann_graph": True,
+        "closure_mode": "standard",
+        "stark_ne": True,
+        "residual_shift_scan_nm": 0.0,
+        "affine_coverage_gate": True,
+        "line_residual_gate": True,
+        "degeneracy_min_elements": 2,
+        "min_lines_per_element": 1,
+        "min_snr": 5.0,
+        "min_energy_spread_ev": 1.5,
+        "degeneracy_dominance_threshold": 0.95,
+        "max_lines_per_element": 30,
+        "top_k_per_element": 40,
+        # DED runs on a known/constrained element set and track composition drift;
+        # the post-loop Cristoforetti reliability annotation is not consumed, so
+        # skip the ~26-34% re-fit (T/n_e/composition are unaffected).
+        "assess_quality": False,
     },
     "raw": {
         "saha_boltzmann_graph": False,
@@ -137,6 +175,29 @@ class AnalysisPipelineConfig:
     min_lines_per_element: int = 3
     isolation_wavelength_nm: float = 0.1
     max_lines_per_element: int = 20
+    grade_aware_selection: bool = False
+    #: Target relative temperature accuracy σ_T/T (gated, default None=off). When set, the
+    #: line-selection SNR/spread/min-lines gates are DERIVED from this target via the verified
+    #: ErrorBudget (cflibs.inversion.physics.derived_thresholds), replacing the tuned magic
+    #: numbers. ~0.10 reproduces the legacy min_snr=10.
+    target_sigma_t: Optional[float] = None
+    #: Representative plasma T (K) for the σ_T -> slope-target conversion; only used with target_sigma_t.
+    plasma_temperature_K: float = 10000.0
+    #: Reliability-ranked selection (gated): when the per-element max-lines cap binds, keep
+    #: the max-energy-spread subset (best T-conditioning, twoLineBeta_stable_sharp) instead
+    #: of the top-scored lines. No-op when the cap does not bind.
+    reliability_ranked_selection: bool = False
+    #: Opt-in dominant-matrix line filter (default None = off). Set to the matrix
+    #: element symbol (e.g. "Ti" for Ti-6Al-4V) to drop trace-element lines
+    #: blended with a comparable-or-stronger matrix transition inside the
+    #: instrument resolution element, removing the matrix-contamination intensity
+    #: bias on the traces (V over-attribution). The matrix element's own lines are
+    #: untouched. Pure atomic-data + window; default path byte-identical.
+    matrix_isolation_element: Optional[str] = None
+    #: Blend half-window in instrument FWHM for the matrix-isolation filter.
+    matrix_isolation_n_fwhm: float = 1.0
+    #: Matrix:trace blend-contribution ratio at/above which a trace line is dropped.
+    matrix_isolation_contamination_ratio: float = 0.3
     wavelength_calibration: bool = True
     shift_coherence_veto: bool = True
     #: Residual comb shift-scan half-width (nm) AFTER a quality-passed
@@ -160,9 +221,23 @@ class AnalysisPipelineConfig:
     #: consensus residual shift (bead ye6t): kills contaminated matches and
     #: lucky-coherent FP line sets that survive the element-level veto.
     line_residual_gate: bool = True
+    #: Build the wavelength-calibration reference line pool ONCE over the full
+    #: axis and slice it per segment (flag ``CFLIBS_CALIB_POOL_CACHE``), instead
+    #: of re-querying SQLite + re-ranking per segment. Parity-exact with the
+    #: per-segment build; default ``False`` (also honours the env var so the
+    #: benchmark can toggle without editing config).
+    calib_pool_cache: bool = False
     #: Optional path to a spectral-response curve E(lambda); identity when None
     #: (audit 02-F5 — ChemCam CCS data arrive response-corrected upstream).
     response_curve: Optional[str] = None
+    #: Deterministic Hough coarse-dispersion seed for the RANSAC wavelength
+    #: calibrator (RASCAL-style, arXiv:1912.05883). ``None`` (default) defers to
+    #: the ``CFLIBS_HOUGH_CALIB`` env var (off when unset), keeping the
+    #: calibration path byte-identical to the legacy RNG-only RANSAC. When
+    #: enabled a consensus affine seed warm-starts RANSAC and the loop runs a
+    #: small polishing pass instead of the full cold-start budget (faster; NOT
+    #: parity-exact -> benchmark-gated).
+    hough_calib_seed: Optional[bool] = None
     # Iterative-solver knobs (mirror ``IterativeCFLIBSSolver``).
     max_iterations: int = 20
     t_tolerance_k: float = 100.0
@@ -178,14 +253,53 @@ class AnalysisPipelineConfig:
     #: Stark-broadening n_e diagnostic (bead pxex): measure n_e from observed
     #: literature-grade line widths; falls back (with warning) when none qualify.
     stark_ne: bool = True
-    #: Errors-in-variables (orthogonal distance regression) Boltzmann / Saha-
-    #: Boltzmann slope fit (Boggs & Rodgers 1990): accounts for E_k-axis
-    #: uncertainty, removing the OLS regression-dilution bias on T. Default off
-    #: mirrors the standard weighted-OLS fit (Track B B1; benchmark-gated).
-    use_odr: bool = False
-    #: Scalar 1-sigma E_k uncertainty (eV) for the ODR fit when per-line E_k
-    #: uncertainties are unavailable; 0.0 degenerates ODR to weighted OLS.
-    odr_x_uncertainty: float = 0.0
+    # --- Solver dispatch (unified solver seam) ---
+    #: Which solver implementation run_pipeline dispatches to. Peak-based
+    #: solvers ({"iterative", "closed_form"}) consume the detected+identified
+    #: ``observations`` list; full-spectrum solvers ({"joint", "bayesian"})
+    #: consume the raw wavelength+intensity spectrum via a JAX forward model.
+    #: ``"coarse_to_fine"`` is reserved (needs a prebuilt manifold) and raises
+    #: NotImplementedError for now. The solver axis is orthogonal to
+    #: ``pipeline_impl`` — select it via ``config_overrides={"solver": ...}``.
+    solver: str = "iterative"
+    #: Solver-specific sub-config passed verbatim to the dispatched solver's
+    #: factory branch (e.g. ClosedFormConfig fields, joint loss_type/n_starts,
+    #: bayesian num_samples/priors). Read only inside ``_dispatch_solver`` so
+    #: unknown joint/bayesian keys never trip build_pipeline_config's whitelist.
+    solver_overrides: dict = field(default_factory=dict)
+    # --- Iterative-solver knobs not previously sweepable (lifted onto the
+    #     config so they ride config_overrides / the Optuna knob space) ---
+    #: Apply ionization-potential depression in the Saha balance.
+    apply_ipd: bool = False
+    #: Fit a two-region (core + corona) Boltzmann plane.
+    two_region: bool = False
+    #: Weight Boltzmann ordinates by A_ki transition-probability uncertainty.
+    aki_uncertainty_weighting: bool = True
+    #: Fraction of closure mass a single element may soak before the solve is
+    #: flagged as a degenerate composition.
+    degeneracy_dominance_threshold: float = 0.8
+    #: Minimum candidate-element count for the degeneracy guard to fire.
+    degeneracy_min_elements: int = 4
+    #: Run the post-loop Cristoforetti reliability re-fit (perf knob). Default
+    #: True preserves the M7 refuse-to-report annotation (quality_flag /
+    #: saha_boltzmann_consistency / inter_element_t_std_frac / overall_reliable
+    #: with real values). When False the solver skips the per-element Boltzmann
+    #: re-fit + U_I/U_II re-eval (~26-34% of a solve) and emits the SAME keys with
+    #: conservative unknown/NaN values; T/n_e/composition are byte-identical. The
+    #: ``metallic_ded`` preset sets this False (drift-tracking on a known element
+    #: set does not consume the annotation).
+    assess_quality: bool = True
+    #: Enable the adaptive RANSAC early-exit rule in robust wavelength
+    #: calibration (prototype, default off; flag ``CFLIBS_RANSAC_EARLY_EXIT``).
+    #: The sampling loop stops once the inlier-count plateaus (no improvement
+    #: for ``patience`` iters) or the standard RANSAC confidence bound is met,
+    #: instead of always running the full fixed iteration budget. PARITY-
+    #: AFFECTING on hard low-inlier cases (a late lucky sample can be skipped),
+    #: so it is benchmark-gated. Default ``False`` reproduces the legacy loop.
+    #: The active runtime toggle is the env var (read inside the calibrator) so
+    #: the benchmark can flip it without editing code; this field declares the
+    #: default-off knob and is resolved/logged like every other knob.
+    ransac_early_exit: bool = False
     #: Extra keyword overrides passed verbatim to ``detect_line_observations``
     #: (Campaign 1 knob plumbing, docs/audit/2026-06-10-goalfirst/
     #: optimization-program-design.md §3.1-B). Plain data only — keys must be
@@ -194,6 +308,81 @@ class AnalysisPipelineConfig:
     #: ``shift_scan_nm`` is NOT accepted here: the global scan width is the
     #: first-class ``global_shift_scan_nm`` field above. Empty in production.
     detection_overrides: dict = field(default_factory=dict)
+    # --- Known-matrix / OPC mode (opt-in; default path byte-identical) ---
+    #: Hold the plasma temperature (K) at this value in the iterative solve
+    #: instead of recovering it from the Boltzmann slope. ``None`` (default) =
+    #: recover T as today (byte-identical). Set directly, or supplied
+    #: automatically from ``opc.robust_T_K`` when an OPC calibration is given.
+    fixed_temperature_K: Optional[float] = None
+    #: Optional known-matrix one-point calibration (``cflibs.inversion.physics
+    #: .opc.OPCCalibration``). When supplied, ``run_pipeline`` rescales each
+    #: detected observation's intensity by the per-element factor ``F`` and holds
+    #: the solve at ``robust_T_K`` (unless ``fixed_temperature_K`` is set
+    #: explicitly). ``None`` (default) leaves the calibration-free path unchanged.
+    opc: Optional["OPCCalibration"] = None
+    #: Opt-in optically-thin line filter for the known-matrix / OPC mode (real-steel
+    #: L5 winning lever). When True AND an ``opc`` calibration is supplied,
+    #: ``run_pipeline`` drops the width-broadened (self-absorbed) lines of each
+    #: optically-thick element and anchors the closure on the optically-thin subset
+    #: BEFORE the OPC ``F`` rescale (``cflibs.inversion.physics.opc
+    #: .select_optically_thin_lines``). It is a line-SELECTION change, so it composes
+    #: cleanly with the OPC scalar ``F`` (no double-correction). Held-out real-steel
+    #: 10.124 -> 9.561 wt%. ``False`` (default) leaves the OPC path byte-identical.
+    #: The OPC ``F`` should be calibrated on the matching (thin-filtered) recovery
+    #: pipeline so the calibration and inference selections agree.
+    opc_thin_filter: bool = False
+    #: Opt-in Columnar-Density Saha-Boltzmann (CD-SB) matrix mode for the known-matrix
+    #: / OPC path (real-steel L6 winning lever). When True AND an ``opc`` calibration is
+    #: supplied, ``run_pipeline`` KEEPS the width-broadened (self-absorbed) lines of the
+    #: optically-thick matrix element and REPLACES each one's solver ordinate with a
+    #: width-derived columnar-density value (``cflibs.inversion.physics.opc
+    #: .apply_cdsb_matrix``) BEFORE the OPC ``F`` rescale, using the calibration's
+    #: ``robust_T_K`` and global unit scale ``cdsb_scale`` (standards only). It is an
+    #: ordinate REPLACEMENT, not an intensity scale, so it composes cleanly with the OPC
+    #: scalar ``F`` (no double-correction) -- the categorical difference from a per-line
+    #: intensity boost. Reads only the measured line widths -- never a recovered
+    #: composition. Held-out real-steel 9.561 -> 8.383 wt% (Fe 19.6 -> 16.5). ``False``
+    #: (default) leaves the OPC path byte-identical. This is an ALTERNATIVE to
+    #: ``opc_thin_filter`` (which discards the same lines CD-SB uses); the OPC ``F`` must
+    #: be calibrated on the matching CD-SB recovery pipeline.
+    opc_cdsb_matrix: bool = False
+    # --- Constrained known-feedstock force-extraction (opt-in; default off) ---
+    #: When True, BYPASS generic peak detection + element identification and
+    #: instead force-extract at the KNOWN feedstock element set's catalog line
+    #: positions (peak-locked windowed integration;
+    #: ``cflibs.inversion.physics.constrained_extraction.constrained_extract``).
+    #: This is the validated DED known-feedstock path: it guarantees every known
+    #: minor element is measured every spectrum (generic detection drops dense-
+    #: matrix-blended minors), composing with the opt-in matrix-isolation filter
+    #: and OPC. ``False`` (default) leaves the generic-detection path byte-
+    #: identical. Use with the ``metallic_ded`` preset (standard sum-to-one
+    #: closure) for an alloy.
+    constrained_extraction: bool = False
+    #: Optional override of the KNOWN feedstock element set used by the
+    #: constrained extraction. ``None`` (default) falls back to ``elements``.
+    known_elements: Optional[list] = None
+    #: Per-element maximum line count for the constrained line list (e.g.
+    #: ``{"Ti": 12, "Al": 4, "V": 6}``). Elements absent use
+    #: ``constrained_default_budget``. Empty (default) uses the default budget
+    #: for every element.
+    constrained_line_budget: dict = field(default_factory=dict)
+    #: Per-element line budget when ``constrained_line_budget`` omits an element.
+    constrained_default_budget: int = 8
+    #: Emissivity-ranking temperature (K) for the constrained line list.
+    constrained_select_temperature_K: float = 10000.0
+    #: Optional ``(min_nm, max_nm)`` selection window for the constrained line
+    #: list; ``None`` (default) uses the spectrum's own min/max.
+    constrained_window_nm: Optional[tuple] = None
+    #: Optional spectrometer detector gaps ``[(lo, hi), ...]`` (nm); constrained
+    #: lines inside a gap are dropped (e.g. ``constrained_extraction
+    #: .SUPERCAM_DETECTOR_GAPS`` for a SuperCam-class instrument). ``None``
+    #: (default) applies no gap filtering.
+    constrained_detector_gaps: Optional[list] = None
+    #: Instrument line FWHM (nm) for the constrained peak-locked integration.
+    constrained_instrument_fwhm_nm: float = 0.18
+    #: Peak-lock search half-width (nm) for the constrained extraction (the
+    #: maximum per-spectrometer wavelength offset to tolerate).
+    constrained_search_tol_nm: float = 0.35
 
 
 #: Sentinel marking "knob not provided at this tier". Unlike ``None`` it lets
@@ -248,8 +437,10 @@ def build_pipeline_config(
     residual_shift_scan_nm: Optional[float] = None,
     affine_coverage_gate: Optional[bool] = None,
     line_residual_gate: Optional[bool] = None,
+    calib_pool_cache: Optional[bool] = None,
     response_curve: Optional[str] = None,
     stark_ne: Optional[bool] = None,
+    hough_calib_seed: Optional[bool] = None,
 ) -> AnalysisPipelineConfig:
     """Resolve the shared pipeline configuration for analyze/invert/batch.
 
@@ -294,14 +485,33 @@ def build_pipeline_config(
     preset_knobs = ANALYSIS_PRESETS[preset_name]
 
     def knob(key, flag_value, *fallbacks):
-        """Resolve one knob: overrides > CLI flag > YAML > fallbacks."""
-        return _resolve(ov.get(key, _UNSET), _flag(flag_value), cfg.get(key, _UNSET), *fallbacks)
+        """Resolve one knob: overrides > CLI flag > YAML > preset > fallbacks.
+
+        The preset bundle is consulted as documented tier 4 for *every* knob
+        (not only the handful wired with an explicit ``preset_knobs[...]``
+        fallback), so a preset can set any config field. Backward-compatible:
+        presets that omit a key yield ``_UNSET`` here and fall through to the
+        built-in default exactly as before.
+        """
+        return _resolve(
+            ov.get(key, _UNSET),
+            _flag(flag_value),
+            cfg.get(key, _UNSET),
+            preset_knobs.get(key, _UNSET),
+            *fallbacks,
+        )
 
     resolved_closure_mode = knob("closure_mode", closure_mode, preset_knobs["closure_mode"])
     if resolved_closure_mode not in CLOSURE_MODES:
         raise ValueError(
             f"Unknown closure mode {resolved_closure_mode!r}. "
             f"Valid modes: {list(CLOSURE_MODES)}"
+        )
+
+    solver_name = str(knob("solver", None, "iterative"))
+    if solver_name not in _VALID_SOLVERS:
+        raise ValueError(
+            f"Unknown solver backend {solver_name!r}; choose from {sorted(_VALID_SOLVERS)}."
         )
 
     pipeline = AnalysisPipelineConfig(
@@ -322,6 +532,15 @@ def build_pipeline_config(
         min_lines_per_element=knob("min_lines_per_element", None, 3),
         isolation_wavelength_nm=knob("isolation_wavelength_nm", None, 0.1),
         max_lines_per_element=knob("max_lines_per_element", None, 20),
+        grade_aware_selection=bool(knob("grade_aware_selection", None, False)),
+        target_sigma_t=knob("target_sigma_t", None, None),
+        plasma_temperature_K=knob("plasma_temperature_K", None, 10000.0),
+        reliability_ranked_selection=bool(knob("reliability_ranked_selection", None, False)),
+        matrix_isolation_element=knob("matrix_isolation_element", None, None),
+        matrix_isolation_n_fwhm=float(knob("matrix_isolation_n_fwhm", None, 1.0)),
+        matrix_isolation_contamination_ratio=float(
+            knob("matrix_isolation_contamination_ratio", None, 0.3)
+        ),
         wavelength_calibration=bool(knob("wavelength_calibration", wavelength_calibration, True)),
         shift_coherence_veto=bool(knob("shift_coherence_veto", shift_coherence_veto, True)),
         residual_shift_scan_nm=float(
@@ -338,7 +557,9 @@ def build_pipeline_config(
         line_residual_gate=bool(
             knob("line_residual_gate", line_residual_gate, preset_knobs["line_residual_gate"])
         ),
+        calib_pool_cache=bool(knob("calib_pool_cache", calib_pool_cache, False)),
         response_curve=knob("response_curve", response_curve),
+        hough_calib_seed=knob("hough_calib_seed", hough_calib_seed, None),
         max_iterations=knob("max_iterations", None, 20),
         t_tolerance_k=knob("t_tolerance_k", None, 100.0),
         ne_tolerance_frac=knob("ne_tolerance_frac", None, 0.1),
@@ -356,9 +577,31 @@ def build_pipeline_config(
         matrix_element=knob("matrix_element", None),
         oxide_elements=knob("oxide_elements", None),
         stark_ne=bool(knob("stark_ne", stark_ne, preset_knobs["stark_ne"])),
-        use_odr=bool(knob("use_odr", None, False)),
-        odr_x_uncertainty=float(knob("odr_x_uncertainty", None, 0.0)),
+        solver=solver_name,
+        solver_overrides=dict(ov.get("solver_overrides", None) or {}),
+        apply_ipd=bool(knob("apply_ipd", None, False)),
+        two_region=bool(knob("two_region", None, False)),
+        aki_uncertainty_weighting=bool(knob("aki_uncertainty_weighting", None, True)),
+        degeneracy_dominance_threshold=float(knob("degeneracy_dominance_threshold", None, 0.8)),
+        degeneracy_min_elements=int(knob("degeneracy_min_elements", None, 4)),
+        assess_quality=bool(knob("assess_quality", None, True)),
+        ransac_early_exit=bool(knob("ransac_early_exit", None, True)),
         detection_overrides=dict(ov.get("detection_overrides", None) or {}),
+        fixed_temperature_K=knob("fixed_temperature_K", None, None),
+        opc=ov.get("opc", None),
+        opc_thin_filter=bool(knob("opc_thin_filter", None, False)),
+        opc_cdsb_matrix=bool(knob("opc_cdsb_matrix", None, False)),
+        constrained_extraction=bool(knob("constrained_extraction", None, False)),
+        known_elements=knob("known_elements", None, None),
+        constrained_line_budget=dict(knob("constrained_line_budget", None, {}) or {}),
+        constrained_default_budget=int(knob("constrained_default_budget", None, 8)),
+        constrained_select_temperature_K=float(
+            knob("constrained_select_temperature_K", None, 10000.0)
+        ),
+        constrained_window_nm=knob("constrained_window_nm", None, None),
+        constrained_detector_gaps=knob("constrained_detector_gaps", None, None),
+        constrained_instrument_fwhm_nm=float(knob("constrained_instrument_fwhm_nm", None, 0.18)),
+        constrained_search_tol_nm=float(knob("constrained_search_tol_nm", None, 0.35)),
     )
     _log_pipeline_config(pipeline)
     return pipeline
@@ -441,6 +684,16 @@ def detect_and_select_lines(
     global_shift_scan_nm: float = 0.5,
     affine_coverage_gate: bool = True,
     line_residual_gate: bool = True,
+    calib_pool_cache: bool = False,
+    hough_calib_seed: Optional[bool] = None,
+    ransac_early_exit: Optional[bool] = None,
+    grade_aware_selection: bool = False,
+    target_sigma_t: Optional[float] = None,
+    plasma_temperature_K: float = 10000.0,
+    reliability_ranked_selection: bool = False,
+    matrix_isolation_element: Optional[str] = None,
+    matrix_isolation_n_fwhm: float = 1.0,
+    matrix_isolation_contamination_ratio: float = 0.3,
     detection_overrides: Optional[dict] = None,
     return_diagnostics: bool = False,
 ):
@@ -531,6 +784,35 @@ def detect_and_select_lines(
         Drop individual matched lines whose residual is incoherent with the
         consensus residual shift (see ``detect_line_observations``). Default
         True (bead ye6t).
+    calib_pool_cache : bool
+        Build the wavelength-calibration reference line pool once over the full
+        axis and slice it per segment (flag ``CFLIBS_CALIB_POOL_CACHE``; see
+        :func:`calibrate_wavelength_axis_segmented`). Parity-exact; default
+        False. Also honoured via the ``CFLIBS_CALIB_POOL_CACHE`` env var.
+    hough_calib_seed : bool or None
+        Deterministic Hough coarse-dispersion warm start for the RANSAC
+        calibrator (flag ``CFLIBS_HOUGH_CALIB``; RASCAL-style). ``None`` (default)
+        defers to the env var (off when unset). NOT parity-exact ->
+        benchmark-gated.
+    ransac_early_exit : bool or None
+        Adaptive RANSAC early-exit on inlier-count plateau / confidence bound
+        (flag ``CFLIBS_RANSAC_EARLY_EXIT``). ``None`` (default) defers to the env
+        var (off when unset). Parity-affecting -> benchmark-gated.
+    matrix_isolation_element : str or None
+        Opt-in dominant-matrix line filter (default ``None`` = off). When set to
+        the matrix element symbol (e.g. ``"Ti"`` for Ti-6Al-4V), trace-element
+        lines blended with a comparable-or-stronger matrix transition inside the
+        instrument resolution element are dropped after selection
+        (:func:`cflibs.inversion.physics.line_selection.filter_matrix_blended_lines`),
+        removing the matrix-contamination intensity bias on the traces (e.g. V
+        over-attribution). The matrix element's own lines are untouched. Pure
+        atomic-data + window; default path byte-identical.
+    matrix_isolation_n_fwhm : float
+        Blend half-window in instrument FWHM for the matrix-isolation filter
+        (default 1.0). Only used when ``matrix_isolation_element`` is set.
+    matrix_isolation_contamination_ratio : float
+        Matrix:trace blend-contribution ratio at/above which a trace line is
+        dropped (default 0.3). Only used when ``matrix_isolation_element`` is set.
     detection_overrides : dict or None
         Extra keyword overrides forwarded verbatim to
         ``detect_line_observations`` (Campaign 1 knob plumbing; see
@@ -600,6 +882,9 @@ def detect_and_select_lines(
                 atomic_db=atomic_db,
                 elements=elements,
                 affine_coverage_gate=affine_coverage_gate,
+                calib_pool_cache=calib_pool_cache,
+                hough_calib_seed=hough_calib_seed,
+                ransac_early_exit=ransac_early_exit,
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning(f"Wavelength calibration failed ({exc!r}); using raw axis.")
@@ -687,17 +972,59 @@ def detect_and_select_lines(
         exclude_resonance=exclude_resonance,
         isolation_wavelength_nm=isolation_wavelength_nm,
         max_lines_per_element=max_lines_per_element,
+        target_sigma_t=target_sigma_t,
+        plasma_temperature_K=plasma_temperature_K,
+        reliability_ranked_selection=reliability_ranked_selection,
     )
+
+    # Lever 1B (grade-aware selection, gated default-off): feed grade-derived A_ki
+    # uncertainties into the selector so the per-element top-N prefers high-grade
+    # (A/B) lines over D/U. Without this the selector defaults every line to 0.10
+    # (grade-blind), so a completeness DB's many D/U lines pollute the analytical
+    # set. Unknown grade (aki_uncertainty None) -> worst (1.0), NOT the optimistic
+    # 0.10 default, so 'U' lines are downweighted rather than treated as accurate.
+    atomic_uncertainties: Optional[dict] = None
+    if grade_aware_selection:
+        atomic_uncertainties = {}
+        for o in detection.observations:
+            unc = o.aki_uncertainty
+            if unc is None or not math.isfinite(unc) or unc <= 0.0:
+                unc = 1.0
+            atomic_uncertainties[(o.element, o.ionization_stage, o.wavelength_nm)] = float(unc)
 
     selection = selector.select(
         detection.observations,
         resonance_lines=detection.resonance_lines,
+        atomic_uncertainties=atomic_uncertainties,
     )
+
+    selected_lines = selection.selected_lines
+    matrix_dropped: list = []
+    # Matrix-isolation filter (opt-in, default-off): on a dominant-matrix alloy
+    # the dense forest of matrix-element lines blends with the trace elements'
+    # analytical lines, contaminating their extracted intensity (e.g. V over-
+    # attribution in Ti-6Al-4V). When ``matrix_isolation_element`` is set, drop
+    # the trace-element lines blended with a comparable-or-stronger matrix
+    # transition inside the instrument resolution element. Pure atomic-data +
+    # window function; the matrix element's own lines are untouched.
+    if matrix_isolation_element is not None:
+        from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+        selected_lines, matrix_dropped = filter_matrix_blended_lines(
+            selected_lines,
+            atomic_db,
+            matrix_isolation_element,
+            resolving_power=resolving_power,
+            n_fwhm=matrix_isolation_n_fwhm,
+            contamination_ratio=matrix_isolation_contamination_ratio,
+            min_lines_per_element=max(1, min_lines_per_element),
+        )
+
     if not return_diagnostics:
-        return selection.selected_lines
+        return selected_lines
 
     detected_elements = {o.element for o in detection.observations}
-    selected_elements = {o.element for o in selection.selected_lines}
+    selected_elements = {o.element for o in selected_lines}
     dropped: dict = {}
     for el in elements:
         if el not in detected_elements:
@@ -709,6 +1036,11 @@ def detect_and_select_lines(
         "detected_elements": sorted(detected_elements),
         "selected_elements": sorted(selected_elements),
         "dropped_elements": dropped,
+        # Trace lines removed by the opt-in matrix-isolation filter (blended with
+        # the dominant matrix element); empty when the filter is disabled.
+        "matrix_isolation_dropped": [
+            (o.element, o.ionization_stage, o.wavelength_nm) for o in matrix_dropped
+        ],
         # Per-line residual-gate diagnostics (bead ye6t): consensus residual,
         # band, and the contaminated matches dropped at observation build.
         "residual_gate": detection.residual_gate,
@@ -717,7 +1049,85 @@ def detect_and_select_lines(
         # scoreboard); ``run_pipeline`` folds this into ``stage_timings``.
         "calibration_s": calibration_s,
     }
-    return selection.selected_lines, diagnostics
+    return selected_lines, diagnostics
+
+
+def _constrained_detect_and_extract(wavelength, intensity, atomic_db, pipeline):
+    """Constrained known-feedstock force-extraction path for ``run_pipeline``.
+
+    Replaces generic detection + identification with force-extraction at the
+    KNOWN feedstock element set's catalog line positions (peak-locked windowed
+    integration), then composes the opt-in matrix-isolation filter. Returns the
+    same ``(observations, diagnostics)`` contract ``detect_and_select_lines``
+    does (so the rest of ``run_pipeline`` is unchanged), including a
+    ``calibration_s`` key (always 0.0 — no RANSAC wavelength calibration runs in
+    this mode; the peak-lock handles the per-spectrometer offset directly).
+
+    Only reached when ``pipeline.constrained_extraction`` is True; the default
+    generic-detection path is byte-identical.
+    """
+    from cflibs.inversion.physics.constrained_extraction import constrained_extract
+
+    elements = list(pipeline.known_elements or pipeline.elements)
+    window = pipeline.constrained_window_nm
+    if window is not None:
+        window = (float(window[0]), float(window[1]))
+
+    observations, specs = constrained_extract(
+        wavelength,
+        intensity,
+        atomic_db,
+        elements,
+        window=window,
+        budget=pipeline.constrained_line_budget or None,
+        default_budget=pipeline.constrained_default_budget,
+        select_temperature_K=pipeline.constrained_select_temperature_K,
+        detector_gaps=pipeline.constrained_detector_gaps,
+        instrument_fwhm_nm=pipeline.constrained_instrument_fwhm_nm,
+        search_tol_nm=pipeline.constrained_search_tol_nm,
+        return_specs=True,
+    )
+
+    # Matrix-isolation filter (opt-in; composes with constrained extraction). On a
+    # dominant-matrix alloy the dense matrix forest blends with the trace lines,
+    # contaminating their extracted intensity; drop the trace lines blended with a
+    # comparable-or-stronger matrix transition. The matrix element's own lines are
+    # untouched. Pure atomic-data + window; skipped when the knob is unset.
+    matrix_dropped: list = []
+    if pipeline.matrix_isolation_element is not None:
+        from cflibs.inversion.physics.line_selection import filter_matrix_blended_lines
+
+        observations, matrix_dropped = filter_matrix_blended_lines(
+            observations,
+            atomic_db,
+            pipeline.matrix_isolation_element,
+            resolving_power=pipeline.resolving_power,
+            n_fwhm=pipeline.matrix_isolation_n_fwhm,
+            contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
+            min_lines_per_element=max(1, pipeline.min_lines_per_element),
+        )
+
+    detected_elements = {o.element for o in observations}
+    dropped: dict = {el: "constrained_extraction" for el in elements if el not in detected_elements}
+    diagnostics = {
+        "requested_elements": list(elements),
+        "detected_elements": sorted(detected_elements),
+        "selected_elements": sorted(detected_elements),
+        "dropped_elements": dropped,
+        "matrix_isolation_dropped": [
+            (o.element, o.ionization_stage, o.wavelength_nm) for o in matrix_dropped
+        ],
+        "constrained_extraction": {
+            "n_line_specs": len(specs),
+            "n_observations": len(observations),
+            "window_nm": list(window) if window is not None else None,
+            "elements": list(elements),
+        },
+        # No wavelength-calibration stage in constrained mode (peak-lock absorbs
+        # the per-spectrometer offset); keep the key so run_pipeline can pop it.
+        "calibration_s": 0.0,
+    }
+    return observations, diagnostics
 
 
 def _finalize_closure_kwargs(pipeline: AnalysisPipelineConfig, observations) -> dict:
@@ -797,6 +1207,345 @@ def _solve_analyze_result(
         )
 
 
+# ---------------------------------------------------------------------------
+# Unified solver dispatch (the single solver-selection fork)
+# ---------------------------------------------------------------------------
+
+#: Closure modes the closed-form solver accepts (it constructs the closure at
+#: __init__ time, not as a solve() kwarg; ``matrix`` needs a global element
+#: absent per-spectrum, and the ILR/PWLR/dirichlet variants are not part of
+#: its closed-form regression). The factory clamps anything else to standard.
+_CLOSED_FORM_CLOSURES = ("standard", "oxide")
+
+
+def _number_to_mass_fractions(concentrations: dict) -> dict:
+    """Convert a number/atom-fraction simplex to mass fractions.
+
+    The Saha-Boltzmann forward model (and the Dirichlet MCMC prior / softmax
+    joint closure that feed it) treat ``concentrations`` as **number/mole
+    fractions**. The benchmark scoreboard scores ``result.concentrations``
+    directly as mass fractions (``predicted_wt = 100 * c``), so a full-spectrum
+    solver's number-fraction output MUST be converted here or every wt% RMSE is
+    silently mis-scored.
+
+    ``C_mass_i = C_i * AW_i / sum_j (C_j * AW_j)`` with atomic weights from
+    :data:`cflibs.atomic.masses.STANDARD_ATOMIC_MASSES`.
+    """
+    from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
+
+    weighted = {
+        el: max(float(c), 0.0) * STANDARD_ATOMIC_MASSES.get(el, 50.0)
+        for el, c in concentrations.items()
+    }
+    total = sum(weighted.values())
+    if total <= 0.0:
+        return {el: 0.0 for el in concentrations}
+    return {el: w / total for el, w in weighted.items()}
+
+
+#: Physically meaningful floors for a LIBS plasma solution. Unbounded BFGS (the
+#: only method jax.scipy.optimize.minimize implements) can drive T/n_e to a
+#: tiny-but-positive value (~1e-6 K, ~1e-38 cm^-3) that is non-physical yet
+#: passes a bare ``> 0`` test. A LIBS plasma is several thousand K with
+#: n_e well above 1e10 cm^-3.
+_T_FLOOR_K = 1000.0
+_NE_FLOOR_CM3 = 1e10
+
+
+def _physical_solution(temperature_K, electron_density_cm3) -> bool:
+    """True when T and n_e are finite and above the LIBS-plasma floors.
+
+    A collapsed optimizer result (T ~ 0, n_e ~ 0, or NaN) must be scored as a
+    failure rather than a misleadingly finite composition RMSE.
+    """
+    import math
+
+    try:
+        T = float(temperature_K)
+        ne = float(electron_density_cm3)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(T) and math.isfinite(ne) and T >= _T_FLOOR_K and ne >= _NE_FLOOR_CM3
+
+
+def _to_cflibs_result(
+    *,
+    concentrations_mass: dict,
+    temperature_K: float,
+    electron_density_cm3: float,
+    converged: bool,
+    failed: bool,
+    iterations: int = 0,
+    extra_quality: Optional[dict] = None,
+):
+    """Adapt a full-spectrum solver result to the :class:`CFLIBSResult` contract.
+
+    ``_score_spectrum`` reads a fixed surface off the returned object:
+    ``concentrations`` (scored as mass fractions), ``temperature_K``,
+    ``electron_density_cm3``, ``converged``, and ``quality_metrics`` (whose
+    ``failed`` key gates the all-FN failure branch). We synthesize exactly that
+    surface so the joint/bayesian branches plug into the same scoring path as
+    the peak-based solvers.
+    """
+    from cflibs.inversion.solve.iterative import CFLIBSResult
+
+    quality_metrics = {"failed": 1.0 if failed else 0.0}
+    if extra_quality:
+        quality_metrics.update(extra_quality)
+    return CFLIBSResult(
+        temperature_K=float(temperature_K),
+        temperature_uncertainty_K=0.0,
+        electron_density_cm3=float(electron_density_cm3),
+        concentrations=dict(concentrations_mass),
+        concentration_uncertainties={el: 0.0 for el in concentrations_mass},
+        iterations=int(iterations),
+        converged=bool(converged),
+        quality_metrics=quality_metrics,
+    )
+
+
+def _failed_full_spectrum_result(elements, reason: str):
+    """All-FN result mirroring the scoreboard's failure-policy parity branch."""
+    logger.warning("Full-spectrum solver produced no usable composition: %s", reason)
+    return _to_cflibs_result(
+        concentrations_mass={el: 0.0 for el in elements},
+        temperature_K=0.0,
+        electron_density_cm3=0.0,
+        converged=False,
+        failed=True,
+    )
+
+
+def _run_peak_based_solver(
+    pipeline: AnalysisPipelineConfig,
+    observations,
+    atomic_db,
+    stark_diagnostics,
+    uncertainty_mode: str,
+):
+    """Iterative / closed-form solvers: consume the identified observations."""
+    if pipeline.solver == "iterative":
+        from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
+
+        solver = IterativeCFLIBSSolver(
+            atomic_db=atomic_db,
+            max_iterations=pipeline.max_iterations,
+            t_tolerance_k=pipeline.t_tolerance_k,
+            ne_tolerance_frac=pipeline.ne_tolerance_frac,
+            pressure_pa=pipeline.pressure_pa,
+            apply_self_absorption=pipeline.apply_self_absorption,
+            min_boltzmann_r2=pipeline.min_boltzmann_r2,
+            boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
+            saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
+            apply_ipd=pipeline.apply_ipd,
+            two_region=pipeline.two_region,
+            aki_uncertainty_weighting=pipeline.aki_uncertainty_weighting,
+            degeneracy_dominance_threshold=pipeline.degeneracy_dominance_threshold,
+            degeneracy_min_elements=pipeline.degeneracy_min_elements,
+            assess_quality=pipeline.assess_quality,
+            fixed_temperature_K=pipeline.fixed_temperature_K,
+        )
+        closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
+        return _solve_analyze_result(
+            solver,
+            observations,
+            pipeline.closure_mode,
+            closure_kwargs,
+            uncertainty_mode,
+            stark_diagnostics=stark_diagnostics,
+        )
+
+    # closed_form: ClosedFormILRSolver builds its closure at construction time
+    # and ``solve()`` takes NO closure_mode/stark_diagnostics/**closure_kwargs,
+    # so we call it directly (bypassing _solve_analyze_result).
+    from cflibs.inversion.solve.closed_form import ClosedFormConfig, ClosedFormILRSolver
+
+    ov = dict(pipeline.solver_overrides)
+    cf_closure = ov.get("cf_closure_mode", pipeline.closure_mode)
+    if cf_closure not in _CLOSED_FORM_CLOSURES:
+        cf_closure = "standard"
+
+    config_kwargs: dict = {
+        "closure_mode": cf_closure,
+        "saha_passes": int(ov.get("saha_passes", 2)),
+        "partition_refine": bool(ov.get("partition_refine", True)),
+        "ne_mode": str(ov.get("ne_mode", "pressure")),
+        "pressure_pa": float(ov.get("cf_pressure_pa", pipeline.pressure_pa)),
+        "apply_ipd": bool(ov.get("cf_apply_ipd", pipeline.apply_ipd)),
+    }
+    if cf_closure == "oxide":
+        oxide_stoich = _finalize_closure_kwargs(pipeline, observations).get("oxide_stoichiometry")
+        if oxide_stoich is not None:
+            config_kwargs["oxide_stoichiometry"] = oxide_stoich
+
+    solver = ClosedFormILRSolver(atomic_db, config=ClosedFormConfig(**config_kwargs))
+    return solver.solve(
+        observations,
+        initial_T_K=float(ov.get("initial_T_K", 10000.0)),
+        initial_ne_cm3=float(ov.get("initial_ne_cm3", 1e17)),
+    )
+
+
+def _run_full_spectrum_solver(
+    wavelength,
+    intensity,
+    atomic_db,
+    pipeline: AnalysisPipelineConfig,
+    *,
+    warm_start,
+    diagnostics: dict,
+):
+    """Run the SVD-conditioned, chunked full-spectrum fit on the iterative warm start.
+
+    The iterative ``warm_start`` (a :class:`CFLIBSResult`) supplies the initial
+    ``T``, ``n_e`` and composition.  The full-spectrum solver
+    (:func:`cflibs.inversion.solve.full_spectrum.solve_full_spectrum`) fits the
+    measured spectrum in a low-dimensional SVD basis using the
+    memory-efficient chunked forward kernel.  Both the warm-start and the
+    converged-fit accounting are written into ``diagnostics['full_spectrum']``
+    so callers can honestly report whether a *real* converged fit was reached
+    and whether it improved on the iterative warm start.
+
+    Returns a :class:`CFLIBSResult`.  When the full-spectrum optimiser does not
+    produce a real converged optimum, the warm start is returned UNCHANGED (the
+    honest "fell back" outcome).
+    """
+    from cflibs.inversion.solve.full_spectrum import solve_full_spectrum
+
+    warm_concentrations = {
+        el: float(c) for el, c in warm_start.concentrations.items() if float(c) > 0.0
+    }
+    fit_elements = sorted(warm_concentrations) or list(pipeline.elements)
+
+    try:
+        fs = solve_full_spectrum(
+            wavelength,
+            intensity,
+            fit_elements,
+            str(atomic_db.db_path),
+            warm_start_T_K=float(warm_start.temperature_K),
+            warm_start_ne_cm3=float(warm_start.electron_density_cm3),
+            warm_start_concentrations=warm_concentrations,
+            resolving_power=pipeline.resolving_power,
+            method=pipeline.solver,
+        )
+    except Exception as exc:  # noqa: BLE001 — never crash the pipeline on the fit
+        logger.warning(
+            "Full-spectrum solver (%s) raised %r; keeping the iterative warm start.",
+            pipeline.solver,
+            exc,
+        )
+        diagnostics["full_spectrum"] = {
+            "solver": pipeline.solver,
+            "error": f"{type(exc).__name__}: {exc}",
+            "converged_fit": False,
+            "adopted_fit": False,
+        }
+        return warm_start
+
+    diagnostics["full_spectrum"] = {
+        "solver": pipeline.solver,
+        "converged_fit": bool(fs.converged),
+        "adopted_fit": bool(fs.adopted_fit),
+        "initial_objective": fs.initial_objective,
+        "final_objective": fs.final_objective,
+        "iterations": fs.iterations,
+        "gradient_norm": fs.gradient_norm,
+        "warm_start_T_K": fs.warm_start_temperature_K,
+        "warm_start_ne_cm3": fs.warm_start_electron_density_cm3,
+        "fit_T_K": fs.fit_temperature_K,
+        "fit_ne_cm3": fs.fit_electron_density_cm3,
+        "warm_start_concentrations": dict(fs.warm_start_concentrations),
+        "fit_concentrations": dict(fs.fit_concentrations),
+        **{f"diag_{k}": v for k, v in fs.diagnostics.items()},
+    }
+    logger.info(
+        "Full-spectrum %s: converged_fit=%s adopted=%s obj %.4g -> %.4g "
+        "(%d iters, |grad|=%.2g), T %.0f->%.0f K",
+        pipeline.solver,
+        fs.converged,
+        fs.adopted_fit,
+        fs.initial_objective,
+        fs.final_objective,
+        fs.iterations,
+        fs.gradient_norm,
+        fs.warm_start_temperature_K,
+        fs.fit_temperature_K,
+    )
+
+    if not fs.adopted_fit:
+        # Honest fall-back: the optimiser did not beat the warm start. Return
+        # the iterative result unchanged so the reported composition is the
+        # one that was actually solved for.
+        return warm_start
+
+    # Adopt the converged fit. Re-wrap into the CFLIBSResult contract so the
+    # rest of the pipeline (scoreboard, CLI trust report) is unchanged.
+    quality_metrics = dict(getattr(warm_start, "quality_metrics", {}) or {})
+    quality_metrics["full_spectrum_converged"] = 1.0
+    quality_metrics["full_spectrum_adopted"] = 1.0
+    return warm_start.__class__(
+        temperature_K=float(fs.temperature_K),
+        temperature_uncertainty_K=float(getattr(warm_start, "temperature_uncertainty_K", 0.0)),
+        electron_density_cm3=float(fs.electron_density_cm3),
+        concentrations=dict(fs.concentrations),
+        concentration_uncertainties=dict(
+            getattr(warm_start, "concentration_uncertainties", {}) or {}
+        ),
+        iterations=int(fs.iterations),
+        converged=bool(fs.converged),
+        quality_metrics=quality_metrics,
+        overall_reliable=getattr(warm_start, "overall_reliable", False),
+    )
+
+
+def _dispatch_solver(
+    pipeline: AnalysisPipelineConfig,
+    observations,
+    atomic_db,
+    wavelength,
+    intensity,
+    stark_diagnostics,
+    uncertainty_mode: str,
+):
+    """Select and run the configured solver, returning a :class:`CFLIBSResult`.
+
+    The single solver-selection fork: peak-based solvers (iterative,
+    closed_form) consume the already-built ``observations``; full-spectrum
+    solvers (joint, bayesian) consume the raw ``wavelength``/``intensity`` via a
+    JAX forward model. ``coarse_to_fine`` is reserved (needs a manifold).
+    """
+    solver = pipeline.solver
+    if solver in ("iterative", "closed_form"):
+        return _run_peak_based_solver(
+            pipeline, observations, atomic_db, stark_diagnostics, uncertainty_mode
+        )
+    if solver in ("joint", "bayesian"):
+        from dataclasses import replace as _dc_replace
+
+        # Warm-start the full-spectrum fit from a quick iterative solve on the
+        # same observations (the converged solver refines it; falls back to it).
+        warm = _run_peak_based_solver(
+            _dc_replace(pipeline, solver="iterative"),
+            observations,
+            atomic_db,
+            stark_diagnostics,
+            uncertainty_mode,
+        )
+        return _run_full_spectrum_solver(
+            wavelength, intensity, atomic_db, pipeline, warm_start=warm, diagnostics={}
+        )
+    if solver == "coarse_to_fine":
+        raise NotImplementedError(
+            "coarse_to_fine solver needs a prebuilt manifold (manifold backlog); "
+            "not yet wired into the unified dispatch."
+        )
+    raise ValueError(
+        f"Unknown solver {solver!r}; choose from "
+        "{iterative, closed_form, joint, bayesian, coarse_to_fine}."
+    )
+
+
 def run_pipeline(
     wavelength,
     intensity,
@@ -815,11 +1564,9 @@ def run_pipeline(
     solve, in seconds) for the goal-metric scoreboard (bead A1).
     """
     # Function-local imports preserve the module's light import-time contract:
-    # ``IterativeCFLIBSSolver`` is lazy to avoid a circular import (see module
-    # docstring), and ``time`` is kept local alongside it.
+    # Solver imports are lazy (inside ``_dispatch_solver``) to avoid a circular
+    # import (see module docstring); ``time`` is kept local for stage timings.
     import time
-
-    from cflibs.inversion.solve.iterative import IterativeCFLIBSSolver
 
     _t_start = time.perf_counter()
 
@@ -843,33 +1590,54 @@ def run_pipeline(
         )
 
     _t_detect0 = time.perf_counter()
-    observations, diagnostics = detect_and_select_lines(
-        wavelength,
-        intensity,
-        atomic_db,
-        pipeline.elements,
-        min_relative_intensity=pipeline.min_relative_intensity,
-        top_k_per_element=pipeline.top_k_per_element,
-        resolving_power=pipeline.resolving_power,
-        wavelength_tolerance_nm=pipeline.wavelength_tolerance_nm,
-        min_peak_height=pipeline.min_peak_height,
-        peak_width_nm=pipeline.peak_width_nm,
-        apply_self_absorption=pipeline.apply_self_absorption,
-        exclude_resonance=pipeline.exclude_resonance,
-        min_snr=pipeline.min_snr,
-        min_energy_spread_ev=pipeline.min_energy_spread_ev,
-        min_lines_per_element=pipeline.min_lines_per_element,
-        isolation_wavelength_nm=pipeline.isolation_wavelength_nm,
-        max_lines_per_element=pipeline.max_lines_per_element,
-        wavelength_calibration=pipeline.wavelength_calibration,
-        shift_coherence_veto=pipeline.shift_coherence_veto,
-        residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
-        global_shift_scan_nm=pipeline.global_shift_scan_nm,
-        affine_coverage_gate=pipeline.affine_coverage_gate,
-        line_residual_gate=pipeline.line_residual_gate,
-        detection_overrides=pipeline.detection_overrides,
-        return_diagnostics=True,
-    )
+    if pipeline.constrained_extraction:
+        # Opt-in constrained known-feedstock force-extraction: bypass generic
+        # detection + identification and measure the KNOWN element set at its
+        # catalog line positions (peak-locked). Default path untouched.
+        observations, diagnostics = _constrained_detect_and_extract(
+            wavelength, intensity, atomic_db, pipeline
+        )
+    else:
+        observations, diagnostics = detect_and_select_lines(
+            wavelength,
+            intensity,
+            atomic_db,
+            pipeline.elements,
+            min_relative_intensity=pipeline.min_relative_intensity,
+            top_k_per_element=pipeline.top_k_per_element,
+            resolving_power=pipeline.resolving_power,
+            wavelength_tolerance_nm=pipeline.wavelength_tolerance_nm,
+            min_peak_height=pipeline.min_peak_height,
+            peak_width_nm=pipeline.peak_width_nm,
+            apply_self_absorption=pipeline.apply_self_absorption,
+            exclude_resonance=pipeline.exclude_resonance,
+            min_snr=pipeline.min_snr,
+            min_energy_spread_ev=pipeline.min_energy_spread_ev,
+            min_lines_per_element=pipeline.min_lines_per_element,
+            isolation_wavelength_nm=pipeline.isolation_wavelength_nm,
+            max_lines_per_element=pipeline.max_lines_per_element,
+            wavelength_calibration=pipeline.wavelength_calibration,
+            shift_coherence_veto=pipeline.shift_coherence_veto,
+            residual_shift_scan_nm=pipeline.residual_shift_scan_nm,
+            global_shift_scan_nm=pipeline.global_shift_scan_nm,
+            affine_coverage_gate=pipeline.affine_coverage_gate,
+            line_residual_gate=pipeline.line_residual_gate,
+            calib_pool_cache=pipeline.calib_pool_cache,
+            hough_calib_seed=pipeline.hough_calib_seed,
+            # ``False`` (the default) -> ``None`` so the ``CFLIBS_RANSAC_EARLY_EXIT``
+            # env var is still consulted inside the calibrator (config True forces on;
+            # config False defers to the env var, matching the prototype's behaviour).
+            ransac_early_exit=(pipeline.ransac_early_exit or None),
+            grade_aware_selection=pipeline.grade_aware_selection,
+            target_sigma_t=pipeline.target_sigma_t,
+            plasma_temperature_K=pipeline.plasma_temperature_K,
+            reliability_ranked_selection=pipeline.reliability_ranked_selection,
+            matrix_isolation_element=pipeline.matrix_isolation_element,
+            matrix_isolation_n_fwhm=pipeline.matrix_isolation_n_fwhm,
+            matrix_isolation_contamination_ratio=pipeline.matrix_isolation_contamination_ratio,
+            detection_overrides=pipeline.detection_overrides,
+            return_diagnostics=True,
+        )
     _detect_s = time.perf_counter() - _t_detect0
     diagnostics["preset"] = pipeline.preset
     diagnostics["saha_boltzmann_graph"] = pipeline.saha_boltzmann_graph
@@ -889,6 +1657,96 @@ def run_pipeline(
 
     if len(observations) == 0:
         raise ValueError("No usable spectral lines detected for inversion.")
+
+    # Known-matrix / OPC pre-solve step (opt-in; default path untouched). When a
+    # calibration is supplied, rescale each detected observation's intensity by
+    # the per-element relative-sensitivity factor F and hold the solve at the
+    # calibrated robust temperature (unless an explicit fixed_temperature_K was
+    # already set). apply_opc reads ONLY the observations + the calibration — it
+    # never sees a recovered composition, so there is no positive-feedback loop
+    # (the failure the 2026-06-09 audit condemned). When pipeline.opc is None the
+    # whole block is skipped and the calibration-free path is byte-identical.
+    opc = pipeline.opc
+    if opc is not None:
+        from dataclasses import replace as _dc_replace
+
+        from cflibs.inversion.physics.opc import apply_opc
+
+        # Optically-thin line filter (opt-in; real-steel L5 winning lever). Drop the
+        # width-broadened (self-absorbed) matrix lines and anchor the closure on the
+        # optically-thin subset BEFORE the OPC F-rescale. A line-SELECTION change (not
+        # an intensity correction), so it composes cleanly with the OPC scalar F (no
+        # double-counting). Reads only the measured line widths -- never a recovered
+        # composition. Off by default (OPC path byte-identical when False).
+        if pipeline.opc_thin_filter:
+            from cflibs.inversion.physics.opc import select_optically_thin_lines
+
+            thin = select_optically_thin_lines(wavelength, intensity, observations)
+            n_dropped = len(observations) - len(thin)
+            if thin and n_dropped > 0:
+                observations = thin
+                observation_counts = {}
+                for obs in observations:
+                    element = getattr(obs, "element", None)
+                    if element is not None:
+                        observation_counts[element] = observation_counts.get(element, 0) + 1
+                diagnostics["observation_counts"] = observation_counts
+                diagnostics["n_observations"] = len(observations)
+                diagnostics["opc_thin_filter"] = {
+                    "n_dropped": int(n_dropped),
+                    "n_kept": int(len(thin)),
+                }
+                logger.info(
+                    "OPC optically-thin filter dropped %d self-absorbed line(s), kept %d.",
+                    n_dropped,
+                    len(thin),
+                )
+
+        # Columnar-Density Saha-Boltzmann (CD-SB) matrix ordinate (opt-in; real-steel
+        # L6 winning lever). KEEP the width-broadened (self-absorbed) matrix lines and
+        # REPLACE each one's solver ordinate with a width-derived columnar-density value
+        # BEFORE the OPC F-rescale, using the calibration's robust_T and global unit
+        # scale ``cdsb_scale`` (standards only). An ordinate REPLACEMENT (not an
+        # intensity scale), so it composes cleanly with the OPC scalar F (no double-
+        # counting). Reads only the measured line widths -- never a recovered
+        # composition. Off by default (OPC path byte-identical when False). It is an
+        # ALTERNATIVE to opc_thin_filter (which discards the lines CD-SB uses).
+        if pipeline.opc_cdsb_matrix:
+            from cflibs.inversion.physics.opc import apply_cdsb_matrix
+
+            n_cdsb, max_raw = apply_cdsb_matrix(
+                wavelength, intensity, observations, opc.robust_T_K, opc.cdsb_scale
+            )
+            if n_cdsb > 0:
+                diagnostics["opc_cdsb_matrix"] = {
+                    "n_replaced": int(n_cdsb),
+                    "cdsb_scale": float(opc.cdsb_scale),
+                    "max_raw": float(max_raw),
+                }
+                logger.info(
+                    "OPC CD-SB matrix ordinate replaced %d self-absorbed matrix "
+                    "line(s) (scale=%.4g).",
+                    n_cdsb,
+                    opc.cdsb_scale,
+                )
+
+        apply_opc(observations, opc)
+        if pipeline.fixed_temperature_K is None:
+            pipeline = _dc_replace(pipeline, fixed_temperature_K=opc.robust_T_K)
+        diagnostics["opc"] = {
+            "robust_T_K": float(opc.robust_T_K),
+            "fixed_temperature_K": float(pipeline.fixed_temperature_K),
+            "selected_standards": list(opc.selected_standards),
+            "F": {str(el): float(f) for el, f in opc.F.items()},
+            "conditioning_rule": opc.conditioning_rule,
+        }
+        logger.info(
+            "Applied known-matrix OPC calibration: robust_T=%.0f K, %d per-element factors, "
+            "%d selected standards.",
+            opc.robust_T_K,
+            len(opc.F),
+            len(opc.selected_standards),
+        )
 
     # Stark-broadening n_e diagnostic (bead pxex; audit 02-F2): measure n_e
     # from the widths of observed literature-grade lines so it enters the Saha
@@ -933,29 +1791,15 @@ def run_pipeline(
                 stark_diagnostics = stark_result.diagnostics
     _stark_s = time.perf_counter() - _t_stark0
 
-    solver = IterativeCFLIBSSolver(
-        atomic_db=atomic_db,
-        max_iterations=pipeline.max_iterations,
-        t_tolerance_k=pipeline.t_tolerance_k,
-        ne_tolerance_frac=pipeline.ne_tolerance_frac,
-        pressure_pa=pipeline.pressure_pa,
-        apply_self_absorption=pipeline.apply_self_absorption,
-        min_boltzmann_r2=pipeline.min_boltzmann_r2,
-        boltzmann_weight_cap=pipeline.boltzmann_weight_cap,
-        saha_boltzmann_graph=pipeline.saha_boltzmann_graph,
-        use_odr=pipeline.use_odr,
-        odr_x_uncertainty=pipeline.odr_x_uncertainty,
-    )
-
-    closure_kwargs = _finalize_closure_kwargs(pipeline, observations)
     _t_solve0 = time.perf_counter()
-    result = _solve_analyze_result(
-        solver,
+    result = _dispatch_solver(
+        pipeline,
         observations,
-        pipeline.closure_mode,
-        closure_kwargs,
+        atomic_db,
+        wavelength,
+        intensity,
+        stark_diagnostics,
         uncertainty_mode,
-        stark_diagnostics=stark_diagnostics,
     )
     _solve_s = time.perf_counter() - _t_solve0
 
@@ -979,4 +1823,15 @@ def run_pipeline(
     for el in pipeline.elements:
         if el not in dropped and result.concentrations.get(el, 0.0) <= 0.0:
             dropped[el] = "solve"
+
+    # Number->mass fractions (DED Gap 4): the peak-based solvers emit number/mole
+    # fractions; the full-spectrum (joint/bayesian) path already returns mass.
+    # Expose a consistent mass-fraction view so consumers compare wt% like-for-
+    # like. For a metal-alloy known set there is no oxygen, so the conversion is
+    # clean (unlike the geological O-excluded case).
+    if not result.mass_fractions:
+        if pipeline.solver in ("joint", "bayesian"):
+            result.mass_fractions = dict(result.concentrations)
+        else:
+            result.mass_fractions = _number_to_mass_fractions(result.concentrations)
     return result, diagnostics

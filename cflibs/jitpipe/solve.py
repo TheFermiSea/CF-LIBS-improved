@@ -49,7 +49,10 @@ import jax
 import jax.numpy as jnp
 
 from cflibs.core.constants import EV_TO_K, KB, KB_EV, SAHA_CONST_CM3
+from cflibs.core.jax_runtime import check_jax64bit
 from cflibs.inversion.solve.iterative import (
+    T_PHYSICAL_MAX_K,
+    T_PHYSICAL_MIN_K,
     LoopState,
     _common_slope_kernel,
     _eval_partition_jax,
@@ -295,8 +298,13 @@ def _solve_iteration(
     intercepts = fit["intercepts"]
     r_squared = fit["r_squared"]
 
-    degenerate = jnp.logical_or(slope >= 0.0, r_squared < min_r2)
-    T_new = jnp.where(degenerate, T_prev, -1.0 / (slope * KB_EV))
+    T_candidate = -1.0 / (slope * KB_EV)
+    # Runaway/unphysical inverted-T guard (mirrors the reference lax body): a
+    # shallow-but-negative slope passing the R^2 gate can still escape the
+    # physical window; flag it degenerate and hold T at the prior.
+    t_out_of_window = jnp.logical_or(T_candidate < T_PHYSICAL_MIN_K, T_candidate > T_PHYSICAL_MAX_K)
+    degenerate = jnp.logical_or(jnp.logical_or(slope >= 0.0, r_squared < min_r2), t_out_of_window)
+    T_new = jnp.where(degenerate, T_prev, T_candidate)
     T_K = 0.5 * T_prev + 0.5 * T_new
 
     # Corona weighting is a no-op unless two_region; deferred per spec §11.
@@ -635,6 +643,11 @@ def joint_wls_solve(
     -------
     JointWLSResult
     """
+    # Fail fast if x64 was not enabled: the entire WLS/Saha math below hard-codes
+    # ``jnp.float64`` and a silent fp32 downcast on a non-x64 backend would
+    # quietly degrade the lstsq conditioning (host-side config check; no traced
+    # ops, safe under jit tracing).
+    check_jax64bit()
     E = inp.x.shape[0]
     D = E
     if oxide_factors is None:
@@ -737,13 +750,25 @@ def joint_wls_solve(
         return y_shift + per_row
 
     def _wls(y_adj: Any):
-        WX = X * W[:, None]
-        XtWX = X.T @ WX
-        XtWy = WX.T @ y_adj
+        # QR/SVD-based weighted least squares on sqrt(W)-scaled rows instead of
+        # forming-and-solving the normal equations X'WX θ = X'Wy. Solving the
+        # scaled-row system Aw θ = yw via ``lstsq`` keeps the working condition
+        # number at cond(Aw) instead of squaring it to cond(X'WX). On healthy
+        # well-conditioned data this is algebraically identical (parity-exact);
+        # on ill-conditioned/rank-deficient data it degrades gracefully (SVD
+        # min-norm solution) instead of returning a garbage "converged" θ.
+        sw = jnp.sqrt(W)
+        Aw = X * sw[:, None]
+        yw = y_adj * sw
         if lm_damping > 0.0:
-            XtWX = XtWX + lm_damping * jnp.eye(n_cols, dtype=jnp.float64)
-        theta = jnp.linalg.solve(XtWX, XtWy)
-        return theta, XtWX
+            # Tikhonov damping as augmented rows: stacking sqrt(λ)·I / 0 makes
+            # AwᵀAw = X'WX + λI, matching the previous diagonal-damped normal
+            # matrix without re-forming it.
+            damp_rows = jnp.sqrt(lm_damping) * jnp.eye(n_cols, dtype=jnp.float64)
+            Aw = jnp.concatenate([Aw, damp_rows], axis=0)
+            yw = jnp.concatenate([yw, jnp.zeros(n_cols, dtype=jnp.float64)], axis=0)
+        theta = jnp.linalg.lstsq(Aw, yw, rcond=None)[0]
+        return theta, Aw
 
     def _one_gn_step(theta_in: Any) -> Any:
         """One GN/LM step: re-freeze U_s/M_s at the running T, re-solve WLS."""
@@ -794,12 +819,18 @@ def joint_wls_solve(
     T_K = jnp.where(physical, -1.0 / (m * KB_EV), 50000.0)
     T_final = jnp.where(jnp.asarray(refine_saha) & (n_extra > 0), T_K, jnp.asarray(init_T_K))
     y_adj_last = _y_adj_for(T_final, n_e_pinned)
-    _, XtWX = _wls(y_adj_last)
+    _, Aw_last = _wls(y_adj_last)
 
     residuals = y_adj_last - X @ theta
     dof = jnp.maximum(jnp.sum(W > 0.0) - n_cols, 1.0)
     sigma2 = jnp.sum(W * residuals**2) / dof
-    XtWX_inv = jnp.linalg.inv(XtWX)
+    # cov(θ) = σ²·(X'WX)⁻¹ derived from the R factor of the scaled design Aw:
+    # X'WX = AwᵀAw = RᵀR, so (X'WX)⁻¹ = R⁻¹R⁻ᵀ. Inverting the n_cols×n_cols
+    # upper-triangular R (cond(R) = sqrt of the normal-matrix cond) instead of
+    # the squared-condition X'WX keeps the covariance numerically honest.
+    R = jnp.linalg.qr(Aw_last, mode="r")
+    R_inv = jnp.linalg.solve(R, jnp.eye(n_cols, dtype=jnp.float64))
+    XtWX_inv = R_inv @ R_inv.T
     cov_theta = sigma2 * XtWX_inv
 
     # Stark MAD-scatter penalty (ADR-0004 §6.1, D>1): n_e is pinned, but its
@@ -839,9 +870,14 @@ def joint_wls_solve(
     else:
         n_e_out = n_e_pinned
 
-    # Convergence flag, reported hard (ADR-0004 §6.4): physical slope and a
-    # finite, non-degenerate simplex.
-    converged = jnp.logical_and(physical, jnp.all(jnp.isfinite(comp)) & (jnp.sum(comp) > 0.0))
+    # Convergence flag, reported hard (ADR-0004 §6.4): physical slope, a T within
+    # the physical window (a shallow-but-negative slope inverts to a runaway T
+    # that must NOT be reported converged), and a finite, non-degenerate simplex.
+    t_in_window = jnp.logical_and(T_K >= T_PHYSICAL_MIN_K, T_K <= T_PHYSICAL_MAX_K)
+    converged = jnp.logical_and(
+        jnp.logical_and(physical, t_in_window),
+        jnp.all(jnp.isfinite(comp)) & (jnp.sum(comp) > 0.0),
+    )
 
     return JointWLSResult(
         theta=theta,

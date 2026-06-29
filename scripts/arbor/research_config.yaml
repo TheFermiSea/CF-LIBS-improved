@@ -1,0 +1,55 @@
+# Arbor research config for CF-LIBS optimization — OVERNIGHT CLUSTER run.
+# Headless launch:
+#   arbor run --yes "<task>" --yes-cwd "$PWD" --config scripts/arbor/research_config.yaml --max-cycles 40
+# Every candidate is evaluated ON THE vasp CLUSTER via scripts/arbor/cluster_eval.sh (srun on
+# vasp-01/02/03), NOT on ai-proxy. The model backend is the local CLIAPIProxy (OPENAI_BASE_URL).
+
+task: >
+  Optimize the CF-LIBS inversion. Evaluate EVERY candidate ON THE CLUSTER by running, from the
+  candidate's worktree root ($PWD):
+    bash scripts/arbor/cluster_eval.sh "$PWD" dev
+  It stages the candidate to the NFS and runs scripts/arbor/run_eval.py on a vasp compute node,
+  emitting JSON with `score` (HIGHER is better = lower composition RMSE; MAXIMIZE) and `valid`.
+  valid=false (score=-1e9) means the candidate FAILED the cflibs-formal oracle conformance OR the
+  physics-only import blocklist -- that is the correctness gate; such candidates MUST NOT merge.
+  For the MERGE decision use the HELD-OUT tier:
+    bash scripts/arbor/cluster_eval.sh "$PWD" test
+  Merge ONLY on a held-out (test-split) gain >= the merge_threshold. A candidate that wins on dev but
+  not on held-out is overfitting -- reject it (this has happened before: the self-absorption lever
+  won on dev and regressed held-out).
+
+  EXPLORE these levers (all others are benchmarked inert -- do not re-explore line-SELECTION gates
+  min_snr/max_lines/reliability-ranking):
+
+  A. WAVELENGTH-CALIBRATION levers (newly added, default-OFF; in cflibs/inversion/pipeline.py +
+     cflibs/inversion/preprocess/wavelength_calibration.py). These change the RANSAC calibration
+     result, so they can move accuracy AND speed. Enable by flipping the config default to True (or
+     setting the env var) and TUNE:
+       - hough_calib_seed (env CFLIBS_HOUGH_CALIB): RASCAL-style deterministic Hough coarse-dispersion
+         seed for RANSAC (1.40x faster). Tune the Hough accumulator: slope_bins {100,200,400}, the
+         slope search window, the post-seed iteration cap (currently 600->80).
+       - ransac_early_exit (env CFLIBS_RANSAC_EARLY_EXIT): adaptive RANSAC confidence-bound / patience
+         early-exit (1.27x faster). Tune patience and confidence. Composes with hough_calib_seed --
+         TEST THE COMBINATION (Hough seed + early-exit on the seeded loop).
+       - calib_pool_cache (env CFLIBS_CALIB_POOL_CACHE): parity-exact pool reuse (1.13x); safe to
+         leave ON in every candidate as a free speedup.
+     For these, the win condition is: held-out RMSE does NOT regress the baseline AND it is faster
+     (or held-out RMSE IMPROVES, e.g. the deterministic Hough seed beats noisy random sampling).
+
+  B. SELF-ABSORPTION correction (apply_self_absorption='observable'): explore optical-depth
+     estimation and per-line / per-element gating. NOTE it previously won on dev and REGRESSED
+     held-out -- only merge if it holds on the HELD-OUT tier this time.
+
+  C. ATOMIC-DATA / GRADE WEIGHTING in the Boltzmann fit: weight lines by accuracy_grade /
+     aki_uncertainty (the grade_aware path) and tune how strongly. (composition_error_bound: per-line
+     density error dominates on high-SNR data, so down-weighting low-grade lines is physically motivated.)
+
+  DO NOT touch: the eval harness (scripts/arbor/, cflibs/benchmark/), the datasets, tests/, the
+  cflibs-formal oracle. DO NOT add ML imports (sklearn/torch/jax.nn/...) to cflibs/ -- the blocklist
+  rejects them (score=-1e9). Keep every change physics-only and oracle-conformant. Commit each
+  candidate's diff before evaluating it.
+
+coordinator:
+  max_cycles: 40         # overnight budget across vasp-01/02/03
+  max_depth: 3           # Idea Tree depth (calibration + self-absorption + grade-weighting branches)
+  merge_threshold: 2.0   # require >= ~2% held-out RMSE reduction to merge (anti-overfit)

@@ -176,7 +176,14 @@ _CCCT_COMPOSITIONS: Dict[str, Dict[str, Optional[float]]] = {
         "Ti": 0.005,
         "O": None,
     },
-    # CCCT-9: Ti alloy (Ti-6Al-4V)
+    # CCCT-9: Ti alloy (Ti-6Al-4V) — Fabre/Wiens (2011/2013) CCCT designation.
+    # NOTE (verified 2026-06: full MSL-CHEMCAM-LIBS RDR archive scan): ChemCam does
+    # NOT publish this Ti plate's LIBS spectra (fired for wavelength-cal only,
+    # consumed internally to derive wave-cal coefficients). The PDS archive's
+    # "Cal Target 9" is a SILICATE (the archive's "Cal Target N" numbering differs
+    # from this Fabre/Wiens CCCT numbering). The composition below is correct for
+    # the Ti6Al4V plate, but the only OPEN real Ti-6Al-4V LIBS spectra are SuperCam
+    # SCCT_TITANIUM (data/supercam_calib/raw/scct/) — see benchmark_chemcam_ccct9.py.
     "CCCT9": {
         "Ti": 0.895,
         "Al": 0.061,

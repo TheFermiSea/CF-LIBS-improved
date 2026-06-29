@@ -453,7 +453,24 @@ class PipelineSnapshot:
             m = level_mask[row]
             if not np.any(m):
                 return np.empty(0), np.empty(0), False
-            return level_g[row][m], level_E[row][m], True
+            g = level_g[row][m]
+            E = level_E[row][m]
+            # Mirror the reference direct-sum level set
+            # (``cflibs.plasma.partition.get_levels_for_species``): sort by
+            # energy ascending and DROP autoionizing levels at/above the
+            # species' ionization potential. The superset block from
+            # ``_scan_levels`` keeps every tabulated level (the complete-DB /
+            # Kurucz M5 ingest now stores levels above the IP), so without this
+            # cut ``to_lax_snapshot`` would carry bound+autoionizing levels
+            # while ``_AtomicSnapshot.from_solver`` carries bound-only — a
+            # field-for-field parity break (J0 AC4). The lax kernel already
+            # masks ``E < ip`` at eval time, so this is representation-only and
+            # leaves the partition value unchanged.
+            order = np.argsort(E)
+            g = g[order]
+            E = E[order]
+            below_ip = E < float(ip_col[row])
+            return g[below_ip], E[below_ip], True
 
         for i, el in enumerate(elements):
             r1 = sp_to_row.get((el, 1))
