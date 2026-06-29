@@ -67,7 +67,9 @@ def _tr(element: str, wl: float, e_k: float = 4.0, a_ki: float = 1e8, g_k: int =
     )
 
 
-def _obs(element: str, wl: float, e_k: float = 4.0, a_ki: float = 1e8, g_k: int = 5) -> LineObservation:
+def _obs(
+    element: str, wl: float, e_k: float = 4.0, a_ki: float = 1e8, g_k: int = 5
+) -> LineObservation:
     return LineObservation(
         wavelength_nm=wl,
         intensity=1000.0,
@@ -232,9 +234,7 @@ def test_gate_on_inflates_sigma_of_blended_line_only():
     iso = [_obs("Fe", 510.0), _obs("Fe", 520.0), _obs("Fe", 530.0)]
     obs_by_element = {"Fe": [blended, *iso]}
 
-    out = solver._apply_db_isolation_gate(
-        obs_by_element, T_K=11000.0, n_e=1e17, concentrations={}
-    )
+    out = solver._apply_db_isolation_gate(obs_by_element, T_K=11000.0, n_e=1e17, concentrations={})
 
     assert out is not obs_by_element  # a new mapping when active
     gated = out["Fe"]

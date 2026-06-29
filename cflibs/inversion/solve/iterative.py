@@ -2033,9 +2033,7 @@ class IterativeCFLIBSSolver:
         # iteration-0 defaults. No-op (returns the same object) when
         # ``db_isolation_gate`` is False or no line has a stronger predicted DB
         # neighbor, so the default path is byte-identical.
-        sa_obs_by_element = self._apply_db_isolation_gate(
-            obs_by_element, T_K, n_e, concentrations
-        )
+        sa_obs_by_element = self._apply_db_isolation_gate(obs_by_element, T_K, n_e, concentrations)
 
         # 3. Multi-species Boltzmann Fit.
         #
