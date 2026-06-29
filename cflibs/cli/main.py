@@ -528,10 +528,17 @@ def calibrate_opc_cmd(args):
     preset = args.preset or spec.get("preset") or "metallic"
 
     def _make_recover(wavelength, intensity, elements):
+        from functools import lru_cache
+
         # Recover this standard's composition through the SAME shipped pipeline
         # that ``invert`` uses, held at a fixed T. F is therefore derived on the
         # exact pipeline it will later correct (consistent, not double-counted).
         # Reads only this standard's own spectrum -> the calibration is un-peekable.
+        # Memoized per standard: the OPC calibration scans the optimal-T grid and
+        # also probes the conditioning T (DEFAULT_COND_T_K); when that T is also in
+        # the grid the pipeline runs once for it instead of twice. Pure function of
+        # T_K, so the cache is behavior-preserving.
+        @lru_cache(maxsize=None)
         def _recover(T_K: float) -> StandardRecovery:
             pipeline = _build_pipeline_config(
                 elements,
