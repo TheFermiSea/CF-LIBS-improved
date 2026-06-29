@@ -28,6 +28,39 @@ the default `odr_x_uncertainty=0.0` and at a generous `odr_x_uncertainty=0.1` eV
 future non-graph preset), but is **not** adopted as a default. The gate did its job: it stopped a
 "high-leverage" literature method from being adopted as a no-op.
 
+## SA-observable — self-absorption correction (the #1 literature lever) → **REJECT (keep opt-in)**
+
+Full adoption gate, `apply_self_absorption="observable"` vs default-off, 9 datasets (incl. holdout), n≤100,
+seed 20260610, run on the cluster (jobs 3265 + 3267):
+
+| dataset | ΔF1 | composition RMSE base→SA |
+|---|---:|---|
+| chemcam_calib | 0 | 4.991 → **4.712** (−5.6%, better) |
+| csa_planetary | 0 | 22.428 → 22.428 (neutral) |
+| bhvo2_chemcam (holdout) | 0 | 2.486 → **2.547** (+2.5%, worse) |
+| supercam_labcal | −0.005 | 2.902 → **2.970** (+2.3%, worse) |
+| supercam_scct (holdout) | −0.003 | 4.064 → **4.343** (+6.8%, worse) |
+| emslibs2019 (holdout) | −0.002 | — |
+| aalto / silva2022 / synthetic_fixedforward | 0 | neutral / unchanged |
+
+**Verdict: matrix-dependent, net-negative → REJECT.** Observable-SA improves ChemCam-calib composition RMSE
+but **regresses BHVO-2, SuperCam-labcal, and SuperCam-SCCT**, and slightly degrades ID F1 on three datasets.
+Aggregate RMSE and F1 both worsen. Critically it **regressed BHVO-2 again — the exact dataset a prior SA
+path was deleted for** (audit `02-inversion-solver.md` F4). The gate caught the regression history about to
+repeat; a global default-flip would have been the 4th SA regression. `apply_self_absorption` stays opt-in.
+
+**Refined physical reading:** SA correction is real where self-absorption is strong (ChemCam-calib) but the
+current observable trigger **over-corrects where lines are near-thin** (BHVO-2 / SuperCam), injecting error.
+A genuine win needs a *sharper trigger* (correct a line only on strong, multi-observable self-absorption
+evidence — doublet-ratio AND Planck-ceiling AND Stark-width agreement), not the current wholesale mode. That
+is a real, well-scoped follow-up — but it is **not** a default we can flip today.
+
+## Two verdicts so far — the gate is doing its job
+Both literature methods gated to date were **rejected for verified reasons**: B1 ODR (inert — wrong code
+path + precise E_k) and SA-observable (matrix-dependent net regression). Zero regressions adopted; one
+historical regression (BHVO-2 SA) actively prevented. Honest negative results are the point — they stop the
+repo repeating the ungated-change regressions that motivated the gate.
+
 ## What a real accuracy win requires (next phase)
 
 The gate is proven to work end-to-end (plumbing → scoreboard → verdict). To demonstrate an actual
