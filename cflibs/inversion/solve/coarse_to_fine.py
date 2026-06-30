@@ -235,9 +235,7 @@ def _check_optimizer_result(
     diagnostics.optimizer_success = bool(converged)
     x_finite = bool(np.all(np.isfinite(np.asarray(final_x, dtype=float))))
     fun_finite = bool(np.isfinite(final_loss))
-    diagnostics.extra.update(
-        {"stage": stage, "x_finite": x_finite, "fun_finite": fun_finite}
-    )
+    diagnostics.extra.update({"stage": stage, "x_finite": x_finite, "fun_finite": fun_finite})
     if not (x_finite and fun_finite):
         diagnostics.failure_reason = (
             f"optimizer returned non-finite result (x_finite={x_finite}, "
@@ -485,9 +483,7 @@ class HybridInverter:
             Inversion results
         """
         eff_strict = self.strict if strict is None else bool(strict)
-        diagnostics = SolveDiagnostics(
-            solver="coarse_to_fine.HybridInverter", strict=eff_strict
-        )
+        diagnostics = SolveDiagnostics(solver="coarse_to_fine.HybridInverter", strict=eff_strict)
 
         measured = jnp.array(measured_spectrum)
 
@@ -525,8 +521,12 @@ class HybridInverter:
             # the manifold's parameter coverage; the seed (and any optimum near it)
             # is untrustworthy. coarse_similarity is recorded but never gated in the
             # production path -- gate it here.
-            if eff_strict and min_coarse_similarity is not None and (
-                not np.isfinite(coarse_similarity) or coarse_similarity < min_coarse_similarity
+            if (
+                eff_strict
+                and min_coarse_similarity is not None
+                and (
+                    not np.isfinite(coarse_similarity) or coarse_similarity < min_coarse_similarity
+                )
             ):
                 diagnostics.extra.update(
                     {
@@ -618,8 +618,12 @@ class HybridInverter:
         # finiteness; a diverged BFGS run silently yields NaN T/n_e. Refuse here.
         if eff_strict:
             _check_optimizer_result(
-                final_x, final_loss, converged, opt_status,
-                stage="fine", diagnostics=diagnostics,
+                final_x,
+                final_loss,
+                converged,
+                opt_status,
+                stage="fine",
+                diagnostics=diagnostics,
             )
 
         # Unpack final parameters
@@ -829,9 +833,7 @@ class SpectralFitter:
             Fitting results
         """
         eff_strict = self.strict if strict is None else bool(strict)
-        diagnostics = SolveDiagnostics(
-            solver="coarse_to_fine.SpectralFitter", strict=eff_strict
-        )
+        diagnostics = SolveDiagnostics(solver="coarse_to_fine.SpectralFitter", strict=eff_strict)
 
         measured = jnp.array(measured_spectrum)
 
@@ -883,8 +885,12 @@ class SpectralFitter:
 
         if eff_strict:
             _check_optimizer_result(
-                final_x, final_loss, converged, opt_status,
-                stage="fit", diagnostics=diagnostics,
+                final_x,
+                final_loss,
+                converged,
+                opt_status,
+                stage="fit",
+                diagnostics=diagnostics,
             )
 
         metadata: Dict = {"optimizer_backend": backend}
