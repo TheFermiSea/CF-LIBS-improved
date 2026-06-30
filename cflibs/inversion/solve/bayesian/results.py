@@ -14,7 +14,7 @@ under the 800 LOC limit imposed by ADR-0001 / T1-6 spec section 6.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -61,6 +61,10 @@ class MCMCResult:
     n_warmup: int = 0
 
     inference_data: Any = None
+
+    #: Number of divergent NUTS transitions (``None`` when not collected). Now
+    #: surfaced unconditionally; the strict gate raises when it is > 0.
+    n_divergences: Optional[int] = None
 
     @property
     def n_e_mean(self) -> float:
@@ -224,6 +228,13 @@ class NestedSamplingResult:
     n_iterations: int = 0
     n_calls: int = 0
 
+    #: Count of log-likelihood evaluations that raised an exception inside the
+    #: forward model (non-strict only — strict re-raises immediately). A non-zero
+    #: value means a real code/data failure was silently treated as -inf.
+    n_loglike_exceptions: int = 0
+    #: Count of non-finite log-likelihood evaluations (divergence regions).
+    n_nonfinite_loglike: int = 0
+
     @property
     def n_e_mean(self) -> float:
         """Mean electron density [cm^-3]."""
@@ -370,6 +381,9 @@ class TwoZoneMCMCResult:
     n_chains: int = 1
     n_warmup: int = 0
     inference_data: Any = None
+
+    #: Number of divergent NUTS transitions (``None`` when not collected).
+    n_divergences: Optional[int] = None
 
     @property
     def n_e_mean(self) -> float:

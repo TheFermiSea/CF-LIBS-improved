@@ -28,8 +28,32 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import (
+    NonIdentifiable,
+    SolveDiagnostics,
+    resolve_strict,
+)
 
 logger = get_logger("inversion.candidate_prefilter")
+
+
+class PrefilterError(NonIdentifiable):
+    """The mandatory NNLS top-K prefilter could not produce a usable candidate set.
+
+    Raised only in strict / no-fallback mode (``CFLIBS_NO_FALLBACK`` or
+    ``strict=True``). The prefilter is the mandatory tractability guard for
+    Bayesian MCMC (full-element MCMC is intractable); its silent collapse to
+    ``force_include``-or-``[]`` is the worst-masked failure in this path. A
+    :class:`PrefilterError` carries a :class:`SolveDiagnostics` recording *why*
+    nothing passed (max observed NNLS SNR / coefficient, the ``min_snr``
+    threshold, the number of pooled identification results) so the operator
+    learns the real cause instead of receiving an empty/forced set.
+
+    Subclasses :class:`~cflibs.inversion.common.strict.NonIdentifiable`: an empty
+    candidate set means the composition is not recoverable from the available
+    observations under the prefilter's basis/SNR contract.
+    """
+
 
 # Regex to extract base element symbol from species like "Fe I", "Fe II", etc.
 _ELEMENT_RE = re.compile(r"^([A-Z][a-z]?)")
@@ -46,6 +70,8 @@ def _collect_nnls_results(
     wavelength: np.ndarray,
     intensity: np.ndarray,
     multi_t_offsets: List[float],
+    *,
+    strict: bool = False,
 ) -> list:
     """Run NNLS at the base (T, ne) plus optional T-offset evaluations.
 
@@ -63,6 +89,11 @@ def _collect_nnls_results(
         Observed spectrum intensities.
     multi_t_offsets : list of float
         Temperature offsets in Kelvin for multi-T evaluation. Empty disables it.
+    strict : bool, default False
+        No-fallback mode. When ``True`` a failing multi-T offset evaluation is
+        re-raised as :class:`PrefilterError` instead of being silently skipped,
+        so systematic breakage of the off-nominal-T identification path is
+        visible. Default ``False`` preserves the best-effort skip behaviour.
 
     Returns
     -------
@@ -105,7 +136,13 @@ def _collect_nnls_results(
             try:
                 offset_result = id_copy.identify(wavelength, intensity)
                 all_results.append(offset_result)
-            except Exception:
+            except Exception as exc:
+                if strict:
+                    raise PrefilterError(
+                        f"Multi-T offset {offset:.0f} K NNLS evaluation failed in "
+                        f"strict mode: {exc!r} (refusing to silently weaken multi-T "
+                        f"robustness)"
+                    ) from exc
                 logger.debug("Multi-T offset %.0f K failed; skipping", offset)
 
     return all_results
@@ -114,6 +151,8 @@ def _collect_nnls_results(
 def _aggregate_element_coefficients(
     all_results: list,
     min_snr: float,
+    *,
+    strict: bool = False,
 ) -> Dict[str, float]:
     """Pool identifications, gate by SNR, aggregate MAX coefficient per element.
 
@@ -127,6 +166,12 @@ def _aggregate_element_coefficients(
         Identification results to pool (as produced by ``_collect_nnls_results``).
     min_snr : float
         Minimum NNLS coefficient SNR for inclusion.
+    strict : bool, default False
+        No-fallback mode. When ``True`` an identification missing the expected
+        ``nnls_snr`` / ``nnls_coefficient`` metadata raises
+        :class:`PrefilterError` (a loud identifier↔prefilter contract break)
+        rather than defaulting to ``0.0`` and silently failing the SNR gate.
+        Default ``False`` preserves the ``0.0``-default drop behaviour.
 
     Returns
     -------
@@ -137,6 +182,14 @@ def _aggregate_element_coefficients(
 
     for result in all_results:
         for eid in result.all_elements:
+            if strict and (
+                "nnls_snr" not in eid.metadata or "nnls_coefficient" not in eid.metadata
+            ):
+                raise PrefilterError(
+                    f"NNLS metadata missing for {eid.element!r} in strict mode "
+                    f"(have keys {sorted(eid.metadata)}); the identifier↔prefilter "
+                    f"contract requires 'nnls_snr' and 'nnls_coefficient'"
+                )
             snr = eid.metadata.get("nnls_snr", 0.0)
             coeff = eid.metadata.get("nnls_coefficient", 0.0)
 
@@ -154,6 +207,8 @@ def _pad_to_k_min(
     selected: List[str],
     element_coefficients: Dict[str, float],
     k_min: int,
+    *,
+    strict: bool = False,
 ) -> List[str]:
     """Pad ``selected`` from the ranked rejected pool until it reaches ``k_min``.
 
@@ -169,6 +224,11 @@ def _pad_to_k_min(
         Element symbol → aggregated NNLS coefficient (the full candidate pool).
     k_min : int
         Minimum number of candidates to return.
+    strict : bool, default False
+        No-fallback mode. When ``True`` and fewer than ``k_min`` elements survived
+        the SNR + adaptive-threshold filters, raise :class:`PrefilterError`
+        instead of injecting below-threshold (noise-level) elements that would
+        masquerade as genuine selections. Default ``False`` preserves padding.
 
     Returns
     -------
@@ -176,6 +236,12 @@ def _pad_to_k_min(
         The (in-place modified) ``selected`` list.
     """
     if len(selected) < k_min:
+        if strict:
+            raise PrefilterError(
+                f"only {len(selected)} elements survived the SNR/threshold filters "
+                f"< k_min={k_min}; refusing to pad with below-threshold elements "
+                f"(the spectrum does not support {k_min} candidates)"
+            )
         all_ranked = [
             el for el, _ in sorted(element_coefficients.items(), key=lambda x: x[1], reverse=True)
         ]
@@ -188,6 +254,46 @@ def _pad_to_k_min(
     return selected
 
 
+def _empty_prefilter_diagnostics(
+    all_results: list, min_snr: float, strict: bool
+) -> SolveDiagnostics:
+    """Build a :class:`SolveDiagnostics` explaining *why* nothing passed the gate.
+
+    Scans the pooled identification results (independent of the SNR gate) to
+    surface the maximum observed NNLS SNR / coefficient and the pool size, so the
+    strict-mode :class:`PrefilterError` reports the real cause (basis/spectrum
+    mismatch, over-strict SNR gate, bad basis library) rather than an opaque
+    empty set. Read-only — does not affect the (default) production path.
+    """
+    max_snr = 0.0
+    max_coeff = 0.0
+    n_elements_seen = 0
+    for result in all_results:
+        for eid in getattr(result, "all_elements", []):
+            n_elements_seen += 1
+            try:
+                max_snr = max(max_snr, float(eid.metadata.get("nnls_snr", 0.0)))
+                max_coeff = max(max_coeff, float(eid.metadata.get("nnls_coefficient", 0.0)))
+            except (TypeError, ValueError):
+                continue
+    diag = SolveDiagnostics(solver="candidate_prefilter", strict=strict)
+    diag.failure_reason = (
+        f"no element passed the SNR gate: max observed nnls_snr={max_snr:.4g} "
+        f"< min_snr={min_snr:.4g} (or coeff<=0) across {len(all_results)} pooled "
+        f"NNLS result(s), {n_elements_seen} candidate element row(s)"
+    )
+    diag.extra.update(
+        {
+            "max_observed_nnls_snr": max_snr,
+            "max_observed_nnls_coefficient": max_coeff,
+            "min_snr_threshold": float(min_snr),
+            "n_pooled_results": len(all_results),
+            "n_candidate_rows": n_elements_seen,
+        }
+    )
+    return diag
+
+
 def select_candidate_elements(
     identifier,
     wavelength: np.ndarray,
@@ -198,6 +304,7 @@ def select_candidate_elements(
     min_snr: float = 3.0,
     coeff_ratio: float = 1e-4,
     multi_t_offsets: Optional[List[float]] = None,
+    strict: Optional[bool] = None,
 ) -> List[str]:
     """Select top-K candidate elements for Bayesian MCMC inference.
 
@@ -237,12 +344,26 @@ def select_candidate_elements(
     multi_t_offsets : list of float, optional
         Temperature offsets in Kelvin for multi-T evaluation (default: [-1500, +1500]).
         Set to [] or None to disable.
+    strict : bool, optional
+        No-fallback mode (resolved via ``CFLIBS_NO_FALLBACK`` when ``None``).
+        When ``True`` the prefilter raises :class:`PrefilterError` instead of
+        silently degrading: an empty candidate set, a multi-T offset failure,
+        missing NNLS metadata, or sub-``k_min`` survivors each become a loud,
+        diagnostic-carrying error. Default (``False``/unset) is byte-identical to
+        current production behaviour.
 
     Returns
     -------
     list of str
         Selected element symbols, sorted by NNLS significance (descending).
+
+    Raises
+    ------
+    PrefilterError
+        In strict mode, when no element passes the SNR gate (the mandatory
+        tractability guard would otherwise collapse to ``force_include``-or-``[]``).
     """
+    strict = resolve_strict(strict)
     if force_include is None:
         force_include = []
     if multi_t_offsets is None:
@@ -253,13 +374,20 @@ def select_candidate_elements(
         raise ValueError(f"k_max must be at least 1, got {k_max}")
 
     # Steps 1-2: Run NNLS at base (T, ne) plus optional T-offset evaluations
-    all_results = _collect_nnls_results(identifier, wavelength, intensity, multi_t_offsets)
+    all_results = _collect_nnls_results(
+        identifier, wavelength, intensity, multi_t_offsets, strict=strict
+    )
 
     # Step 3: Pool all identifications, filter by SNR, aggregate by element
-    element_coefficients = _aggregate_element_coefficients(all_results, min_snr)
+    element_coefficients = _aggregate_element_coefficients(all_results, min_snr, strict=strict)
 
     # Step 4: Adaptive threshold
     if not element_coefficients:
+        if strict:
+            raise PrefilterError(
+                "no element passed the prefilter SNR gate",
+                _empty_prefilter_diagnostics(all_results, min_snr, strict),
+            )
         logger.warning("No elements passed SNR threshold; returning force_include only")
         return list(dict.fromkeys(force_include))[:k_max] or []
 
@@ -280,7 +408,7 @@ def select_candidate_elements(
     selected = list(forced_set) + dynamic_candidates[:dynamic_slots]
 
     # Step 7: Apply K_min floor — pad from rejected if needed
-    selected = _pad_to_k_min(selected, element_coefficients, k_min)
+    selected = _pad_to_k_min(selected, element_coefficients, k_min, strict=strict)
 
     logger.info(
         "Prefilter: %d/%d elements selected (threshold=%.2e, max_coeff=%.2e)",
