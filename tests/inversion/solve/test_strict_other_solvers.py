@@ -23,8 +23,6 @@ import pytest
 from cflibs.inversion.common.strict import (
     MissingAtomicData,
     NonIdentifiable,
-    NonPhysicalResult,
-    NotConverged,
     OptimizerFailure,
     SolverFailure,
     UnobservedStage,
@@ -76,9 +74,7 @@ class FakeBasisLibrary:
         self.elements = list(elements)
         self.wavelength = np.linspace(400.0, 410.0, n_pixels)
         centers = np.linspace(402.0, 408.0, len(self.elements))
-        self._basis = np.stack(
-            [np.exp(-0.5 * ((self.wavelength - c) / 0.5) ** 2) for c in centers]
-        )
+        self._basis = np.stack([np.exp(-0.5 * ((self.wavelength - c) / 0.5) ** 2) for c in centers])
 
     def get_basis_matrix_interp(self, _T_K: float, _ne_cm3: float) -> np.ndarray:
         return self._basis
@@ -175,7 +171,6 @@ class TestSpectralRefinerStrict:
         return SpectralRefiner(FakeBasisLibrary(), max_iterations=20, strict=strict)
 
     def _healthy_inputs(self, lib):
-        rng = np.random.default_rng(0)
         wl = lib.wavelength
         # An on-grid observed spectrum that the basis can fit.
         observed = 0.6 * lib._basis[0] + 0.4 * lib._basis[1]
@@ -273,9 +268,7 @@ class TestJointOptimizerStrict:
 
             return jnp.zeros_like(wavelength)
 
-        return JointOptimizer(
-            fwd, ["Fe", "Cu"], np.linspace(400.0, 410.0, 8), strict=strict
-        )
+        return JointOptimizer(fwd, ["Fe", "Cu"], np.linspace(400.0, 410.0, 8), strict=strict)
 
     def _trace_failing_loss(self):
         import jax.numpy as jnp
@@ -325,9 +318,7 @@ class TestJointOptimizerStrict:
         from cflibs.inversion.solve.joint_optimizer import create_simple_forward_model
 
         with pytest.raises(MissingAtomicData):
-            create_simple_forward_model(
-                ["Fe", "Cu"], {"Fe": [400.0]}, {"Fe": [1.0]}, strict=True
-            )
+            create_simple_forward_model(["Fe", "Cu"], {"Fe": [400.0]}, {"Fe": [1.0]}, strict=True)
 
 
 def test_resolve_strict_env(monkeypatch):

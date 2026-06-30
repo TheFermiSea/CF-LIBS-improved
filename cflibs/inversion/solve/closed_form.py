@@ -346,8 +346,15 @@ class ClosedFormILRSolver:
 
             for obs in obs_list:
                 built = self._design_row(
-                    obs, U_s, M_s, s_idx, D, n_cols, V,
-                    strict=self.strict, diagnostics=self._diag,
+                    obs,
+                    U_s,
+                    M_s,
+                    s_idx,
+                    D,
+                    n_cols,
+                    V,
+                    strict=self.strict,
+                    diagnostics=self._diag,
                 )
                 if built is None:
                     continue

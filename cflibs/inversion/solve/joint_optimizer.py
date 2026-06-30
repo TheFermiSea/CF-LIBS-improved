@@ -590,7 +590,11 @@ class JointOptimizer:
                 objective_final=float(final_loss),
             )
             diag.extra.update(
-                {"method": method, "iterations": int(iterations), "gradient_norm": float(gradient_norm)}
+                {
+                    "method": method,
+                    "iterations": int(iterations),
+                    "gradient_norm": float(gradient_norm),
+                }
             )
             raise NotConverged(
                 f"joint optimization did not converge (status={status.value}, "
@@ -845,7 +849,8 @@ class JointOptimizer:
                     f"(near-singular -> non-identifiable / degenerate parameters); "
                     f"refusing to silently drop uncertainties",
                     SolveDiagnostics(
-                        solver="JointOptimizer", strict=True,
+                        solver="JointOptimizer",
+                        strict=True,
                         failure_reason=f"hessian_cond={hessian_condition:.3e}>=1e12",
                     ),
                 )
@@ -897,7 +902,8 @@ class JointOptimizer:
                 raise OptimizerFailure(
                     f"Hessian/covariance computation failed: {type(e).__name__}: {e}",
                     SolveDiagnostics(
-                        solver="JointOptimizer", strict=True,
+                        solver="JointOptimizer",
+                        strict=True,
                         failure_reason=f"hessian_error: {e!r}",
                     ),
                 ) from e
@@ -955,7 +961,8 @@ class JointOptimizer:
                 raise OptimizerFailure(
                     f"OE diagnostics computation failed: {type(e).__name__}: {e}",
                     SolveDiagnostics(
-                        solver="JointOptimizer", strict=True,
+                        solver="JointOptimizer",
+                        strict=True,
                         failure_reason=f"oe_diagnostics_error: {e!r}",
                     ),
                 ) from e
@@ -1334,7 +1341,8 @@ class MultiStartJointOptimizer:
                     f"({n_conv}/{len(all_results)} converged of {self.n_starts} starts); "
                     f"refusing to return a non-converged best-of",
                     SolveDiagnostics(
-                        solver="MultiStartJointOptimizer", strict=True,
+                        solver="MultiStartJointOptimizer",
+                        strict=True,
                         failure_reason="no converged start",
                     ),
                 )
