@@ -84,6 +84,7 @@ def bayesian_model(
     prior_config: PriorConfig = PriorConfig(),
     noise_params: NoiseParameters = NoiseParameters(),
     likelihood_kind: str = "gaussian",
+    strict: bool = False,
 ):
     """NumPyro probabilistic model for single-zone CF-LIBS Bayesian inference.
 
@@ -95,6 +96,13 @@ def bayesian_model(
         uses the exact Poisson likelihood ``dist.Poisson(mu)`` for the shot
         term (``mu = predicted / gain + dark_current``), the unbiased
         source-recommended choice for shot-noise-dominated spectra.
+    strict : bool, default False
+        No-fallback mode. When ``False`` (production) a NaN/Inf forward-model
+        prediction is silently sanitized (NaN->1e-6, Inf->1e6) so the sample
+        gets a finite garbage likelihood and NUTS never sees the divergence.
+        When ``True`` the NaN/Inf replacement is skipped so the non-finite value
+        propagates into the likelihood and NUTS marks the transition diverging
+        (surfaced via ``extra_fields=('diverging',)``). Byte-identical default.
     """
     if not HAS_NUMPYRO:
         raise ImportError("NumPyro required. Install with: pip install numpyro")
@@ -141,8 +149,11 @@ def bayesian_model(
         predicted = predicted + baseline
 
     pred_safe = jnp.maximum(predicted, 1e-6)
-    pred_safe = jnp.where(jnp.isnan(pred_safe), 1e-6, pred_safe)
-    pred_safe = jnp.where(jnp.isinf(pred_safe), 1e6, pred_safe)
+    if not strict:
+        # Production sanitization (masks forward-model divergence). In strict
+        # mode the NaN/Inf are left to propagate so NUTS marks the transition.
+        pred_safe = jnp.where(jnp.isnan(pred_safe), 1e-6, pred_safe)
+        pred_safe = jnp.where(jnp.isinf(pred_safe), 1e6, pred_safe)
 
     if likelihood_kind == "poisson":
         # Exact Poisson shot-noise term (mu = predicted/gain + dark_current).
@@ -171,8 +182,14 @@ def two_zone_bayesian_model(
     observed,
     prior_config: TwoZonePriorConfig = TwoZonePriorConfig(),
     noise_params: NoiseParameters = NoiseParameters(),
+    strict: bool = False,
 ):
-    """NumPyro probabilistic model for two-zone CF-LIBS Bayesian inference."""
+    """NumPyro probabilistic model for two-zone CF-LIBS Bayesian inference.
+
+    ``strict`` (default ``False``) mirrors :func:`bayesian_model`: when ``True``
+    the NaN/Inf prediction sanitization is skipped so forward-model divergence
+    reaches the likelihood and NUTS marks the transition. Byte-identical default.
+    """
     if not HAS_NUMPYRO:
         raise ImportError("NumPyro required. Install with: pip install numpyro")
 
@@ -248,8 +265,9 @@ def two_zone_bayesian_model(
         predicted = predicted + baseline
 
     pred_safe = jnp.maximum(predicted, 1e-6)
-    pred_safe = jnp.where(jnp.isnan(pred_safe), 1e-6, pred_safe)
-    pred_safe = jnp.where(jnp.isinf(pred_safe), 1e6, pred_safe)
+    if not strict:
+        pred_safe = jnp.where(jnp.isnan(pred_safe), 1e-6, pred_safe)
+        pred_safe = jnp.where(jnp.isinf(pred_safe), 1e6, pred_safe)
 
     variance = (
         pred_safe / noise_params.gain + noise_params.readout_noise**2 + noise_params.dark_current

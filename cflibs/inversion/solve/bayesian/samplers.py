@@ -29,6 +29,12 @@ import numpy as np
 from scipy import stats
 
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import (
+    NotConverged,
+    OptimizerFailure,
+    SolveDiagnostics,
+    resolve_strict,
+)
 
 from .atomic import _as_jax_real
 from .forward import (
@@ -198,6 +204,121 @@ def _assess_convergence(
     return ConvergenceStatus.NOT_CONVERGED
 
 
+class BayesianConvergenceError(NotConverged):
+    """A NUTS run did not converge (or produced divergent transitions).
+
+    Raised only in strict / no-fallback mode (``CFLIBS_NO_FALLBACK`` or
+    ``strict=True``). In production the samplers ALWAYS return a fully-populated,
+    confident-looking posterior even when the chain is NOT_CONVERGED / UNKNOWN or
+    has divergent transitions; this error makes that pathology loud. Carries the
+    full diagnostics (status, ``max_rhat``, ``min_ess``, per-parameter r_hat/ess,
+    ``n_divergences``) so the caller sees *why* instead of a tight-CI illusion.
+
+    Subclasses :class:`~cflibs.inversion.common.strict.NotConverged` so callers
+    can also catch it as the generic foundation failure.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        diagnostics: "SolveDiagnostics | None" = None,
+        *,
+        status: "ConvergenceStatus | None" = None,
+        max_rhat: Optional[float] = None,
+        min_ess: Optional[float] = None,
+        n_divergences: Optional[int] = None,
+        r_hat: Optional[Dict[str, float]] = None,
+        ess: Optional[Dict[str, float]] = None,
+    ):
+        super().__init__(message, diagnostics)
+        self.status = status
+        self.max_rhat = max_rhat
+        self.min_ess = min_ess
+        self.n_divergences = n_divergences
+        self.r_hat = dict(r_hat) if r_hat else {}
+        self.ess = dict(ess) if ess else {}
+
+
+def _count_divergences(mcmc: Any) -> Optional[int]:
+    """Return the number of divergent transitions, or ``None`` if unavailable.
+
+    Reads NumPyro's ``get_extra_fields()['diverging']`` (collected by passing
+    ``extra_fields=('diverging',)`` to ``mcmc.run``). Divergences are the primary
+    signal that NUTS is sampling a pathological geometry; they were previously
+    never collected anywhere in this package. Best-effort: any failure (older
+    NumPyro, field absent) returns ``None`` so the default path is unaffected.
+    """
+    try:
+        extra = mcmc.get_extra_fields()
+    except Exception:  # pragma: no cover - depends on NumPyro internals
+        return None
+    div = extra.get("diverging") if isinstance(extra, dict) else None
+    if div is None:
+        return None
+    try:
+        return int(np.sum(np.asarray(div)))
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def _strict_convergence_gate(
+    *,
+    status: ConvergenceStatus,
+    r_hat: Dict[str, float],
+    ess: Dict[str, float],
+    n_divergences: Optional[int],
+    num_samples: int,
+    solver: str,
+    strict: bool = True,
+    diagnostics: Optional[SolveDiagnostics] = None,
+) -> SolveDiagnostics:
+    """Gate a completed NUTS run on convergence + divergences.
+
+    Records the full convergence provenance onto a :class:`SolveDiagnostics`
+    (populated in both modes for visibility). When ``strict`` and the chain is
+    NOT_CONVERGED / UNKNOWN *or* has any divergent transitions, raises
+    :class:`BayesianConvergenceError`. When not ``strict`` it only records.
+
+    Grounded in the same identifiability/error-budget criteria the foundation
+    gates cite: a non-mixing / divergent chain is not a trustworthy posterior.
+    """
+    diag = diagnostics or SolveDiagnostics(solver=solver, strict=strict)
+    max_rhat = max(r_hat.values()) if r_hat else None
+    min_ess = min(ess.values()) if ess else None
+    div = int(n_divergences) if n_divergences is not None else 0
+    diag.converged = status == ConvergenceStatus.CONVERGED
+    diag.extra.update(
+        {
+            "convergence_status": status.value,
+            "max_rhat": max_rhat,
+            "min_ess": min_ess,
+            "n_divergences": n_divergences,
+            "r_hat": dict(r_hat),
+            "ess": dict(ess),
+            "n_samples": num_samples,
+        }
+    )
+    bad_status = status in (ConvergenceStatus.NOT_CONVERGED, ConvergenceStatus.UNKNOWN)
+    if bad_status or div > 0:
+        reason = (
+            f"NUTS not trustworthy: status={status.value}, max_rhat={max_rhat}, "
+            f"min_ess={min_ess}, n_divergences={n_divergences}"
+        )
+        diag.failure_reason = reason
+        if strict:
+            raise BayesianConvergenceError(
+                reason,
+                diag,
+                status=status,
+                max_rhat=max_rhat,
+                min_ess=min_ess,
+                n_divergences=n_divergences,
+                r_hat=r_hat,
+                ess=ess,
+            )
+    return diag
+
+
 def _to_arviz(mcmc: Any) -> Any:
     """Convert MCMC results to ArviZ ``InferenceData``."""
     if not HAS_ARVIZ:
@@ -233,6 +354,7 @@ class MCMCSampler:
         forward_model: BayesianForwardModel,
         prior_config: PriorConfig = PriorConfig(),
         noise_params: NoiseParameters = NoiseParameters(),
+        strict: Optional[bool] = None,
     ):
         if not HAS_NUMPYRO:
             raise ImportError("NumPyro required. Install with: pip install numpyro")
@@ -241,6 +363,9 @@ class MCMCSampler:
         self.prior_config = prior_config
         self.noise_params = noise_params
         self.elements = forward_model.elements
+        # No-fallback mode (resolved via CFLIBS_NO_FALLBACK when None). Off by
+        # default -> .run() behaviour and numeric posterior are byte-identical.
+        self.strict = resolve_strict(strict)
 
         logger.info(
             f"MCMCSampler initialized: {len(self.elements)} elements, "
@@ -285,7 +410,13 @@ class MCMCSampler:
         n_elements = len(self.elements)
 
         def model(obs):
-            bayesian_model(self.forward_model, obs, self.prior_config, self.noise_params)
+            bayesian_model(
+                self.forward_model,
+                obs,
+                self.prior_config,
+                self.noise_params,
+                strict=self.strict,
+            )
 
         kernel = NUTS(
             model,
@@ -307,7 +438,12 @@ class MCMCSampler:
         logger.info(
             f"Starting MCMC: {num_chains} chains, {num_warmup} warmup, {num_samples} samples"
         )
-        mcmc.run(rng_key, observed_jax)
+        # Always collect divergent-transition diagnostics (extra_fields does NOT
+        # change the posterior / RNG consumption — sampling is byte-identical;
+        # it only requests the sampler-state field). Divergences are the primary
+        # NUTS pathology signal and were previously never collected.
+        mcmc.run(rng_key, observed_jax, extra_fields=("diverging",))
+        n_divergences = _count_divergences(mcmc)
 
         samples = mcmc.get_samples(group_by_chain=(num_chains > 1))
         T_samples = samples["T_eV"]
@@ -351,6 +487,7 @@ class MCMCSampler:
             n_chains=num_chains,
             n_warmup=num_warmup,
             inference_data=_to_arviz(mcmc),
+            n_divergences=n_divergences,
         )
 
         logger.info(
@@ -358,6 +495,18 @@ class MCMCSampler:
             f"n_e = {result.n_e_mean:.2e} cm^-3, "
             f"convergence={convergence_status.value}"
         )
+        # Strict / no-fallback gate: a NOT_CONVERGED/UNKNOWN or divergent chain is
+        # not a trustworthy posterior. Off by default -> result returned as-is.
+        if self.strict:
+            _strict_convergence_gate(
+                status=convergence_status,
+                r_hat=r_hat,
+                ess=ess,
+                n_divergences=n_divergences,
+                num_samples=num_samples,
+                solver="bayesian.mcmc",
+                strict=True,
+            )
         return result
 
     # ------------------------------------------------------------------
@@ -471,6 +620,7 @@ class NestedSampler:
         forward_model: BayesianForwardModel,
         prior_config: PriorConfig = PriorConfig(),
         noise_params: NoiseParameters = NoiseParameters(),
+        strict: Optional[bool] = None,
     ):
         if not HAS_DYNESTY:
             raise ImportError("dynesty required. Install with: pip install dynesty")
@@ -482,6 +632,12 @@ class NestedSampler:
         self.n_elements = len(self.elements)
         # T_eV + log_ne + (n_elements - 1) concentrations on the simplex.
         self.ndim = 2 + (self.n_elements - 1)
+        # No-fallback mode (resolved via CFLIBS_NO_FALLBACK when None).
+        self.strict = resolve_strict(strict)
+        # Likelihood-evaluation counters surfaced on the result. In strict mode a
+        # forward-model exception re-raises immediately; otherwise it is counted.
+        self._n_loglike_exceptions = 0
+        self._n_nonfinite_loglike = 0
 
         logger.info(
             f"NestedSampler initialized: {self.n_elements} elements, "
@@ -548,9 +704,24 @@ class NestedSampler:
             log_lik = -0.5 * np.sum(residuals**2 / variance + np.log(2 * np.pi * variance))
 
             if not np.isfinite(log_lik):
+                # Count divergence-region evaluations; this is NOT a code bug, so
+                # we keep -inf even in strict mode (dynesty just avoids the
+                # region) but the count is surfaced on the result.
+                self._n_nonfinite_loglike += 1
                 return -np.inf
             return float(log_lik)
-        except Exception:  # pragma: no cover
+        except Exception as exc:
+            # Split from the prior-boundary -inf above: a bare `except` here
+            # conflated a real forward-model BUG (DB error, shape mismatch, JAX
+            # failure) with a zero-probability parameter. In strict mode re-raise
+            # so the bug is loud; otherwise preserve the legacy -inf and count.
+            self._n_loglike_exceptions += 1
+            if self.strict:
+                raise OptimizerFailure(
+                    "forward model raised inside nested-sampling log-likelihood "
+                    f"(strict mode): {exc!r} -- this is a code/data failure, not a "
+                    "zero-probability region"
+                ) from exc
             return -np.inf
 
     def run(
@@ -567,6 +738,9 @@ class NestedSampler:
     ) -> NestedSamplingResult:
         """Run nested sampling."""
         observed_np = np.asarray(observed)
+        # Reset per-run likelihood-evaluation counters (surfaced on the result).
+        self._n_loglike_exceptions = 0
+        self._n_nonfinite_loglike = 0
 
         def loglike(params):
             return self._log_likelihood(params, observed_np)
@@ -641,6 +815,8 @@ class NestedSampler:
             n_live=nlive,
             n_iterations=int(results.niter),
             n_calls=int(np.sum(results.ncall)),
+            n_loglike_exceptions=self._n_loglike_exceptions,
+            n_nonfinite_loglike=self._n_nonfinite_loglike,
         )
 
         logger.info(
@@ -728,6 +904,7 @@ __all__ = [
     "DynestyNestedSampler",
     "MCMCSampler",
     "NestedSampler",
+    "BayesianConvergenceError",
     "run_mcmc",
     "HAS_ARVIZ",
     "HAS_DYNESTY",
