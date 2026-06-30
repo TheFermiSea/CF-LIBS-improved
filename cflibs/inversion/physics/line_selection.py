@@ -1516,3 +1516,188 @@ def filter_matrix_blended_lines(
             len(kept),
         )
     return kept, dropped
+
+
+def _transition_has_atomic_data(item) -> bool:
+    """True when ``item`` has positive ``A_ki``/``g_k`` and a finite ``E_k_ev``."""
+    a = getattr(item, "A_ki", None)
+    g = getattr(item, "g_k", None)
+    e = getattr(item, "E_k_ev", None)
+    return bool(a and a > 0 and g and g > 0 and e is not None)
+
+
+def compute_db_isolation_weights(
+    observations: List[LineObservation],
+    atomic_db,
+    *,
+    elements: Optional[List[str]] = None,
+    T_K: float = DEFAULT_SELECT_T_K,
+    concentrations: Optional[Dict[str, float]] = None,
+    fwhm_nm: float = 0.1,
+    window_n_fwhm: float = 1.5,
+    blend_fraction: float = 0.15,
+    min_lines_per_element: int = 3,
+) -> Dict[int, float]:
+    """Down-weight solver lines blended by unresolved atomic-database neighbors.
+
+    The per-element Boltzmann intercept ``q_s = y_mean - slope*x_mean`` is a
+    (weighted) mean of ``y = ln(I*lambda / (g*A))``. When a measured peak
+    integrates flux from two or more transitions whose separation is below the
+    instrument FWHM, the numerator ``I`` is the SUM of the blended lines, so every
+    blended point is shifted *up* by ``dy = ln(I_blend / I_true) > 0``. Because the
+    closure maps ``C_s ∝ exp(q_s)``, a systematic additive ``+dy`` on the
+    densest-spectrum elements (transition metals such as Fe and Ti, which have the
+    most DB lines per nm) becomes multiplicative over-attribution. Inverse-variance
+    A_ki weighting cannot remove this: a blended line's A_ki is well characterized
+    (low NIST sigma) even though its measured *intensity* is corrupted.
+
+    :class:`LineSelector._compute_isolation` measures separation only against other
+    *detected* peaks, so it is blind to the unresolved DB neighbors that do the
+    blending. :func:`filter_matrix_blended_lines` closes that gap but only for a
+    single designated dominant ``matrix_element`` and by hard-dropping lines. This
+    function is the softer, element-agnostic complement: for each observation it
+    queries the atomic database for every transition (of any solved element) within
+    ``±window_n_fwhm * fwhm_nm`` and compares each neighbor's *predicted* emissivity
+    (Boltzmann weight ``g_k A_ki e^{-E_k/kT}``, abundance-scaled — the same
+    per-atom-emissivity measure :func:`_contamination_from_transitions` uses) to the
+    candidate's. A line whose strongest contaminating neighbor exceeds
+    ``blend_fraction`` of its own predicted emissivity is down-weighted toward zero;
+    an isolated line keeps weight 1.
+
+    The gate is **element-agnostic**: it triggers purely on local spectral density
+    and predicted-neighbor intensity, never on element identity, so it survives the
+    generalization constraint. To avoid starving sparse cations, elements at or
+    below ``min_lines_per_element`` are protected — their lines are never driven
+    below a floor weight.
+
+    Parameters
+    ----------
+    observations
+        Candidate solver lines (element read from ``obs.element``).
+    atomic_db
+        Atomic database exposing ``get_transitions(element, wavelength_min,
+        wavelength_max)``.
+    elements
+        Solved elements whose DB transitions can act as contaminants. Defaults to
+        the distinct elements present in ``observations``.
+    T_K
+        Current plasma temperature [K] for the predicted-emissivity Boltzmann
+        factor. Pass the prior-iteration estimate so the gate tracks the plasma
+        state rather than gating on iteration-0 defaults.
+    concentrations
+        Current per-element number fractions, used to weight a contaminant neighbor
+        by its element's abundance (a trace element cannot blend a major). Empty or
+        absent (iteration 0) -> all elements weighted equally.
+    fwhm_nm
+        Instrument FWHM [nm]; sets the blend window. A non-positive value disables
+        the gate (all weights 1.0).
+    window_n_fwhm
+        Half-window in FWHM units. Neighbors within ``±window_n_fwhm * fwhm_nm`` of
+        the candidate are considered potential contaminants.
+    blend_fraction
+        A neighbor counts as a contaminant when its predicted emissivity exceeds
+        this fraction of the candidate's. Lower -> stricter gate.
+    min_lines_per_element
+        Floor below which an element's line count must not be effectively reduced;
+        its lines are clamped to a protective minimum weight.
+
+    Returns
+    -------
+    dict[int, float]
+        Map from ``id(observation)`` to a multiplicative weight in (0, 1]. 1.0 =
+        isolated (no action); < 1 = blended (down-weight in the fit). The input is
+        not mutated.
+    """
+    weights: Dict[int, float] = {id(o): 1.0 for o in observations}
+    if not observations or atomic_db is None or fwhm_nm <= 0.0:
+        return weights
+
+    if elements is None:
+        elements = sorted({o.element for o in observations if o.element})
+    conc = concentrations or {}
+    half_window = window_n_fwhm * fwhm_nm
+
+    # Per-element abundance weight for contaminants. Without a prior estimate
+    # (iteration 0) every solved element is treated as equally able to blend.
+    def _abundance(el: str) -> float:
+        if not conc:
+            return 1.0
+        return max(float(conc.get(el, 0.0)), 0.0)
+
+    obs_min = min(o.wavelength_nm for o in observations)
+    obs_max = max(o.wavelength_nm for o in observations)
+
+    # Cache the DB transition list for each element across the full observed band
+    # once (one query per element), then window in Python -- far cheaper than one
+    # windowed SQL query per observation.
+    db_lines: Dict[str, List[Tuple[float, float]]] = {}
+    for el in elements:
+        try:
+            trans = atomic_db.get_transitions(
+                el,
+                wavelength_min=obs_min - half_window,
+                wavelength_max=obs_max + half_window,
+            )
+        except Exception:  # pragma: no cover - DB backend variance
+            trans = []
+        scale = _abundance(el) if conc else 1.0
+        rows: List[Tuple[float, float]] = []
+        for t in trans:
+            if not _transition_has_atomic_data(t):
+                continue
+            eps = _emissivity_weight(t, T_K)
+            if eps <= 0.0:
+                continue
+            rows.append((float(t.wavelength_nm), eps * scale))
+        db_lines[el] = rows
+
+    # Count lines per element so we never starve sparse cations.
+    counts: Dict[str, int] = defaultdict(int)
+    for o in observations:
+        counts[o.element] += 1
+
+    for obs in observations:
+        # Candidate's own predicted emissivity (same Boltzmann-weight measure as
+        # the neighbors, abundance-scaled by its own element so the comparison is
+        # on equal footing). Fall back to measured intensity if atomic data is
+        # degenerate.
+        cand_scale = _abundance(obs.element) if conc else 1.0
+        if _transition_has_atomic_data(obs):
+            cand_eps = _emissivity_weight(obs, T_K) * cand_scale
+        else:
+            cand_eps = 0.0
+        if cand_eps <= 0.0:
+            cand_eps = max(float(getattr(obs, "intensity", 0.0)), 0.0)
+        if cand_eps <= 0.0:
+            continue
+
+        lo = obs.wavelength_nm - half_window
+        hi = obs.wavelength_nm + half_window
+        strongest_contaminant = 0.0
+        for el, rows in db_lines.items():
+            same_el = el == obs.element
+            for wl, eps in rows:
+                if wl < lo or wl > hi:
+                    continue
+                # Skip the candidate line itself (same element, ~same wavelength).
+                if same_el and abs(wl - obs.wavelength_nm) < 0.5 * fwhm_nm:
+                    continue
+                if eps > strongest_contaminant:
+                    strongest_contaminant = eps
+
+        ratio = strongest_contaminant / cand_eps if cand_eps > 0 else 0.0
+        if ratio <= blend_fraction:
+            continue  # isolated relative to threshold
+
+        # Down-weight smoothly: the more the contaminant dominates, the lower the
+        # weight. weight = blend_fraction / ratio in (0, 1), so a neighbor exactly
+        # at the threshold keeps weight ~1 and an equal-strength blend (ratio=1)
+        # drops to ~blend_fraction.
+        w = blend_fraction / ratio
+        # Protect sparse elements: clamp their lines to a floor so the element is
+        # not effectively removed from the fit.
+        if counts[obs.element] <= min_lines_per_element:
+            w = max(w, 0.5)
+        weights[id(obs)] = float(min(1.0, max(w, 1e-3)))
+
+    return weights
