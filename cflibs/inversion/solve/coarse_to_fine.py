@@ -20,6 +20,13 @@ import numpy as np
 
 from cflibs.core.constants import KB_EV, EV_TO_J, EV_TO_K, C_LIGHT
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import (
+    NonIdentifiable,
+    NotConverged,
+    OptimizerFailure,
+    SolveDiagnostics,
+    resolve_strict,
+)
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy, SoftmaxClosure
 
 logger = get_logger("inversion.hybrid")
@@ -79,12 +86,42 @@ def _hybrid_packed_bounds(bounds: Optional[Dict[str, Tuple[float, float]]], n_el
     return packed_bounds
 
 
+def _optimizer_status(result, backend: str) -> Dict:
+    """Capture the optimizer's *own* status/finiteness for strict diagnostics.
+
+    The production path re-derives convergence from heuristics and never consults
+    ``result.success``/``result.status``/``result.message``; this surfaces them so
+    strict (no_fallback) mode can refuse on a real optimizer failure instead of
+    laundering it into the warm seed.
+    """
+    try:
+        x_finite = bool(np.all(np.isfinite(np.asarray(result.x, dtype=float))))
+    except Exception:
+        x_finite = False
+    try:
+        fun_finite = bool(np.isfinite(float(result.fun)))
+    except Exception:
+        fun_finite = False
+    message = getattr(result, "message", None)
+    return {
+        "backend": backend,
+        "success": bool(getattr(result, "success", False)),
+        "status": getattr(result, "status", None),
+        "message": str(message) if message is not None else None,
+        "nit": int(getattr(result, "nit", 0) or 0),
+        "x_finite": x_finite,
+        "fun_finite": fun_finite,
+    }
+
+
 def _run_optimizer(
     loss_fn: Callable,
     x0: jnp.ndarray,
     method: str,
     max_iterations: int,
     bounds=None,
+    *,
+    return_status: bool = False,
 ) -> Tuple[jnp.ndarray, float, bool, int, str]:
     normalized_method = _normalize_optimizer_method(method)
 
@@ -96,7 +133,10 @@ def _run_optimizer(
             options={"maxiter": max_iterations},
         )
         iterations = int(getattr(result, "nit", max_iterations))
-        return result.x, float(result.fun), bool(result.success), iterations, "jax"
+        out = (result.x, float(result.fun), bool(result.success), iterations, "jax")
+        if return_status:
+            return out + (_optimizer_status(result, "jax"),)
+        return out
 
     if not HAS_SCIPY:
         raise ValueError(
@@ -121,13 +161,100 @@ def _run_optimizer(
     )
 
     iterations = int(getattr(result, "nit", 0) or 0)
-    return (
+    out = (
         jnp.asarray(result.x),
         float(result.fun),
         bool(result.success),
         iterations,
         "scipy",
     )
+    if return_status:
+        return out + (_optimizer_status(result, "scipy"),)
+    return out
+
+
+def _raise_optimizer_failure(
+    exc: Exception,
+    loss_fn: Callable,
+    x0,
+    method: str,
+    *,
+    stage: str,
+    diagnostics: SolveDiagnostics,
+) -> None:
+    """Strict-mode replacement for ``except Exception: return warm seed``.
+
+    Re-raises the swallowed optimizer crash as a typed :class:`OptimizerFailure`
+    carrying the real provenance (seed loss, seed finiteness, exception type) so
+    the failure is honest instead of laundered into "the fit equals the seed".
+    """
+    try:
+        loss_at_seed = float(loss_fn(x0))
+    except Exception:  # pragma: no cover - seed itself is degenerate
+        loss_at_seed = float("nan")
+    seed_finite = bool(np.all(np.isfinite(np.asarray(x0, dtype=float))))
+    backend = "jax" if _normalize_optimizer_method(method) == "BFGS" else "scipy"
+    diagnostics.optimizer_success = False
+    diagnostics.objective_initial = loss_at_seed
+    diagnostics.extra.update(
+        {
+            "stage": stage,
+            "backend": backend,
+            "method": method,
+            "loss_at_seed": loss_at_seed,
+            "seed_finite": seed_finite,
+            "exc_type": type(exc).__name__,
+            "exc_repr": repr(exc),
+        }
+    )
+    diagnostics.failure_reason = f"optimizer raised {type(exc).__name__}: {exc}"
+    raise OptimizerFailure(
+        f"strict mode: {stage}-stage optimizer ({backend}) crashed "
+        f"({type(exc).__name__}: {exc}); refusing to substitute the unrefined seed "
+        f"(loss_at_seed={loss_at_seed:.6g}, seed_finite={seed_finite}).",
+        diagnostics,
+    ) from exc
+
+
+def _check_optimizer_result(
+    final_x,
+    final_loss: float,
+    converged: bool,
+    opt_status: Optional[Dict],
+    *,
+    stage: str,
+    diagnostics: SolveDiagnostics,
+) -> None:
+    """Strict-mode finite/convergence guard on the optimizer's own result.
+
+    The production path returns ``result.x``/``result.fun`` verbatim (NaN included)
+    and re-derives "converged" from heuristics. Here we refuse a non-finite result
+    (``OptimizerFailure``) or a genuine non-success (``NotConverged``).
+    """
+    diagnostics.optimizer_status = opt_status
+    diagnostics.optimizer_success = bool(converged)
+    x_finite = bool(np.all(np.isfinite(np.asarray(final_x, dtype=float))))
+    fun_finite = bool(np.isfinite(final_loss))
+    diagnostics.extra.update({"stage": stage, "x_finite": x_finite, "fun_finite": fun_finite})
+    if not (x_finite and fun_finite):
+        diagnostics.failure_reason = (
+            f"optimizer returned non-finite result (x_finite={x_finite}, "
+            f"fun_finite={fun_finite})"
+        )
+        raise OptimizerFailure(
+            f"strict mode: {stage}-stage optimizer returned a non-finite result "
+            f"(x_finite={x_finite}, fun_finite={fun_finite}); a diverged run must not "
+            f"be reported as a fit.",
+            diagnostics,
+        )
+    if not converged:
+        msg = opt_status.get("message") if isinstance(opt_status, dict) else None
+        diagnostics.failure_reason = f"optimizer did not converge (success=False); {msg}"
+        raise NotConverged(
+            f"strict mode: {stage}-stage optimizer reported success=False "
+            f"(message={msg!r}); refusing to present an unconverged fit.",
+            diagnostics,
+        )
 
 
 @dataclass
@@ -261,13 +388,28 @@ class HybridInverter:
         max_iterations: int = 100,
         tolerance: float = 1e-6,
         closure: Optional[ClosureStrategy] = None,
+        strict: Optional[bool] = None,
+        allow_toy_forward_model: bool = False,
     ):
         if not HAS_JAX:
             raise ImportError(
                 "JAX is required for hybrid inversion. Install with: pip install jax jaxlib"
             )
 
+        # Strict / no-fallback mode (default off -> production behaviour byte-identical).
+        self.strict = resolve_strict(strict)
+
         self.manifold = manifold
+        # In strict mode, refuse to silently bind the toy `_default_forward_model`
+        # (5 fake Gaussian lines/element, invented upper energies, fixed 50 amu mass):
+        # it fabricates the physics and lets the optimizer "converge" to meaningless
+        # numbers. Tests can opt back in via allow_toy_forward_model=True.
+        if self.strict and forward_model is None and not allow_toy_forward_model:
+            raise ValueError(
+                "HybridInverter requires an explicit physics forward_model; the built-in "
+                "_default_forward_model is a demo placeholder and is disabled under strict "
+                "(no_fallback) mode. Pass forward_model=... or allow_toy_forward_model=True."
+            )
         self.forward_model = forward_model or self._default_forward_model
         self.max_iterations = max_iterations
         self.tolerance = tolerance
@@ -305,6 +447,8 @@ class HybridInverter:
         use_manifold_init: bool = True,
         initial_guess: Optional[Dict] = None,
         bounds: Optional[Dict] = None,
+        strict: Optional[bool] = None,
+        min_coarse_similarity: Optional[float] = None,
     ) -> HybridInversionResult:
         """
         Perform hybrid inversion on measured spectrum.
@@ -323,12 +467,24 @@ class HybridInverter:
             Override initial guess (T_eV, n_e, concentrations)
         bounds : dict, optional
             Parameter bounds
+        strict : bool, optional
+            Per-call override of the instance's no_fallback setting (``None`` =
+            inherit). When strict: refuse a fabricated default seed, refuse an
+            out-of-manifold seed below ``min_coarse_similarity``, and refuse a
+            crashed / non-finite / non-converged optimizer instead of silently
+            returning the coarse seed.
+        min_coarse_similarity : float, optional
+            Strict-only floor on the manifold cosine similarity; below it the
+            measurement is treated as outside the manifold and refused.
 
         Returns
         -------
         HybridInversionResult
             Inversion results
         """
+        eff_strict = self.strict if strict is None else bool(strict)
+        diagnostics = SolveDiagnostics(solver="coarse_to_fine.HybridInverter", strict=eff_strict)
+
         measured = jnp.array(measured_spectrum)
 
         # Set default uncertainties
@@ -354,22 +510,68 @@ class HybridInverter:
             coarse_T = coarse_params["T_eV"]
             coarse_ne = coarse_params["n_e_cm3"]
             coarse_conc = {el: coarse_params.get(el, 0.0) for el in self.elements}
+            init_source = "manifold"
 
             logger.info(
                 f"Coarse search: T={coarse_T:.3f} eV, n_e={coarse_ne:.2e}, "
                 f"similarity={coarse_similarity:.4f}"
             )
+
+            # Strict: a near-orthogonal best match means the measurement is outside
+            # the manifold's parameter coverage; the seed (and any optimum near it)
+            # is untrustworthy. coarse_similarity is recorded but never gated in the
+            # production path -- gate it here.
+            if (
+                eff_strict
+                and min_coarse_similarity is not None
+                and (
+                    not np.isfinite(coarse_similarity) or coarse_similarity < min_coarse_similarity
+                )
+            ):
+                diagnostics.extra.update(
+                    {
+                        "init_source": init_source,
+                        "coarse_similarity": float(coarse_similarity),
+                        "min_coarse_similarity": float(min_coarse_similarity),
+                        "best_idx": int(coarse_idx),
+                    }
+                )
+                diagnostics.failure_reason = (
+                    f"manifold match similarity {coarse_similarity:.4g} < floor "
+                    f"{min_coarse_similarity:.4g}; measurement likely outside manifold coverage"
+                )
+                raise NonIdentifiable(
+                    f"strict mode: best manifold similarity {coarse_similarity:.4g} below "
+                    f"min_coarse_similarity={min_coarse_similarity:.4g}; the coarse seed is "
+                    f"out-of-manifold and not a trustworthy starting point.",
+                    diagnostics,
+                )
         elif initial_guess is not None:
             coarse_T = initial_guess.get("T_eV", 1.0)
             coarse_ne = initial_guess.get("n_e", 1e17)
             coarse_conc = {el: initial_guess.get(el, 1.0 / self.n_elements) for el in self.elements}
             coarse_similarity = 0.0
+            init_source = "user"
         else:
+            # Strict: refuse the fabricated zero-provenance seed (T=1.0 eV,
+            # n_e=1e17, uniform C) -- there was no coarse search and no user guess,
+            # so we have no idea where to start.
+            if eff_strict:
+                diagnostics.extra["init_source"] = "default"
+                diagnostics.failure_reason = (
+                    "no manifold init and no initial_guess -> fabricated default seed refused"
+                )
+                raise ValueError(
+                    "strict mode: HybridInverter.invert requires a manifold init "
+                    "(use_manifold_init=True) or an explicit initial_guess; refusing the "
+                    "fabricated default seed (T=1.0 eV, n_e=1e17, uniform composition)."
+                )
             # Default initial guess
             coarse_T = 1.0
             coarse_ne = 1e17
             coarse_conc = {el: 1.0 / self.n_elements for el in self.elements}
             coarse_similarity = 0.0
+            init_source = "default"
 
         # Stage 2: Fine tuning via gradient descent
         # Pack parameters into array for optimization
@@ -385,21 +587,44 @@ class HybridInverter:
             return jnp.sum(residuals**2)
 
         # Run optimization
+        opt_status = None
         try:
-            final_x, final_loss, converged, iterations, backend = _run_optimizer(
+            opt_out = _run_optimizer(
                 loss_fn,
                 x0,
                 method=method,
                 max_iterations=self.max_iterations,
                 bounds=packed_bounds,
+                return_status=eff_strict,
             )
+            if eff_strict:
+                final_x, final_loss, converged, iterations, backend, opt_status = opt_out
+            else:
+                final_x, final_loss, converged, iterations, backend = opt_out
         except Exception as e:
+            if eff_strict:
+                # Do NOT launder the crash into "the fit equals the coarse seed".
+                _raise_optimizer_failure(
+                    e, loss_fn, x0, method, stage="fine", diagnostics=diagnostics
+                )
             logger.warning(f"Optimization failed: {e}, using coarse result")
             final_x = x0
             final_loss = float(loss_fn(x0))
             converged = False
             iterations = 0
             backend = "fallback"
+
+        # Strict: the production path never consults the optimizer's own success/
+        # finiteness; a diverged BFGS run silently yields NaN T/n_e. Refuse here.
+        if eff_strict:
+            _check_optimizer_result(
+                final_x,
+                final_loss,
+                converged,
+                opt_status,
+                stage="fine",
+                diagnostics=diagnostics,
+            )
 
         # Unpack final parameters
         final_T, final_ne, final_conc_arr = self._unpack_params(final_x)
@@ -409,6 +634,14 @@ class HybridInverter:
             f"Fine tuning: T={final_T:.3f} eV, n_e={final_ne:.2e}, "
             f"residual={final_loss:.2e}, converged={converged}"
         )
+
+        metadata: Dict = {"optimizer_backend": backend}
+        if eff_strict:
+            diagnostics.converged = bool(converged)
+            diagnostics.objective_final = float(final_loss)
+            metadata["init_source"] = init_source
+            metadata["coarse_similarity"] = float(coarse_similarity)
+            metadata["diagnostics"] = diagnostics.to_dict()
 
         return HybridInversionResult(
             temperature_eV=float(final_T),
@@ -422,7 +655,7 @@ class HybridInverter:
             converged=converged,
             iterations=iterations,
             method=method,
-            metadata={"optimizer_backend": backend},
+            metadata=metadata,
         )
 
     def _pack_params(
@@ -534,12 +767,15 @@ class SpectralFitter:
         elements: List[str],
         wavelength: np.ndarray,
         closure: Optional[ClosureStrategy] = None,
+        strict: Optional[bool] = None,
     ):
         if not HAS_JAX:
             raise ImportError(
                 "JAX is required for spectral fitting. Install with: pip install jax jaxlib"
             )
 
+        # Strict / no-fallback mode (default off -> production behaviour byte-identical).
+        self.strict = resolve_strict(strict)
         self.forward_model = forward_model
         self.elements = elements
         self.wavelength = jnp.array(wavelength)
@@ -565,6 +801,7 @@ class SpectralFitter:
         uncertainties: Optional[np.ndarray] = None,
         method: str = "BFGS",
         max_iterations: int = 100,
+        strict: Optional[bool] = None,
     ) -> HybridInversionResult:
         """
         Fit spectrum to data using gradient descent.
@@ -585,12 +822,19 @@ class SpectralFitter:
             Optimization method
         max_iterations : int
             Maximum iterations
+        strict : bool, optional
+            Per-call override of the instance's no_fallback setting (``None`` =
+            inherit). When strict: refuse a crashed / non-finite / non-converged
+            optimizer instead of silently returning the initial guess as the "fit".
 
         Returns
         -------
         HybridInversionResult
             Fitting results
         """
+        eff_strict = self.strict if strict is None else bool(strict)
+        diagnostics = SolveDiagnostics(solver="coarse_to_fine.SpectralFitter", strict=eff_strict)
+
         measured = jnp.array(measured_spectrum)
 
         if uncertainties is None:
@@ -610,15 +854,26 @@ class SpectralFitter:
             residuals = (measured - predicted) / uncertainties
             return jnp.sum(residuals**2)
 
+        opt_status = None
         try:
-            final_x, final_loss, converged, iterations, backend = _run_optimizer(
+            opt_out = _run_optimizer(
                 loss_fn,
                 x0,
                 method=method,
                 max_iterations=max_iterations,
+                return_status=eff_strict,
             )
+            if eff_strict:
+                final_x, final_loss, converged, iterations, backend, opt_status = opt_out
+            else:
+                final_x, final_loss, converged, iterations, backend = opt_out
             final_T, final_ne, final_conc = self._unpack(final_x)
         except Exception as e:
+            if eff_strict:
+                # Do NOT launder the crash into "the fit equals your initial guess".
+                _raise_optimizer_failure(
+                    e, loss_fn, x0, method, stage="fit", diagnostics=diagnostics
+                )
             logger.warning(f"Fitting failed: {e}")
             final_T = initial_T_eV
             final_ne = initial_n_e
@@ -627,6 +882,23 @@ class SpectralFitter:
             iterations = 0
             final_loss = float(loss_fn(x0))
             backend = "fallback"
+
+        if eff_strict:
+            _check_optimizer_result(
+                final_x,
+                final_loss,
+                converged,
+                opt_status,
+                stage="fit",
+                diagnostics=diagnostics,
+            )
+
+        metadata: Dict = {"optimizer_backend": backend}
+        if eff_strict:
+            diagnostics.converged = bool(converged)
+            diagnostics.objective_final = float(final_loss)
+            metadata["init_source"] = "user"
+            metadata["diagnostics"] = diagnostics.to_dict()
 
         return HybridInversionResult(
             temperature_eV=float(final_T),
@@ -640,7 +912,7 @@ class SpectralFitter:
             converged=converged,
             iterations=iterations,
             method=method,
-            metadata={"optimizer_backend": backend},
+            metadata=metadata,
         )
 
     def _pack(self, T_eV: float, n_e: float, concentrations: Dict[str, float]) -> jnp.ndarray:
