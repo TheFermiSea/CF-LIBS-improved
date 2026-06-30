@@ -148,7 +148,9 @@ def test_strict_allows_toy_forward_model_opt_in():
     inv = HybridInverter(
         FakeManifold(), forward_model=None, strict=True, allow_toy_forward_model=True
     )
-    assert inv.forward_model is inv._default_forward_model
+    # Bound methods are recreated per attribute access, so compare the underlying
+    # function rather than identity of the bound-method wrapper.
+    assert inv.forward_model.__func__ is HybridInverter._default_forward_model
 
 
 def test_strict_invert_optimizer_crash_raises(monkeypatch):
