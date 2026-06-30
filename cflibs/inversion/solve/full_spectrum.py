@@ -57,8 +57,22 @@ from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES
 from cflibs.core.constants import EV_TO_K, K_TO_EV
 from cflibs.core.jax_runtime import HAS_JAX
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import (
+    IllConditioned,
+    NonPhysicalResult,
+    OptimizerFailure,
+    SolveDiagnostics,
+    require_atomic_data,
+    resolve_strict,
+)
 
 logger = get_logger("inversion.solve.full_spectrum")
+
+# Forward-model intensity clip bounds (negatives -> 0, overflow -> _FORWARD_CLIP_HI).
+# In strict mode a value pinned at _FORWARD_CLIP_HI is treated as a divergence
+# (overflow masked by the clamp) rather than a legitimate spectrum.
+_FORWARD_CLIP_LO = 0.0
+_FORWARD_CLIP_HI = 1e12
 
 
 # ---------------------------------------------------------------------------
@@ -122,25 +136,62 @@ class FullSpectrumResult:
     gradient_norm: float
     diagnostics: Dict[str, Any] = field(default_factory=dict)
 
+    # --- strict / no-fallback visibility fields (additive, default-safe) ---
+    # ``failure_reason`` names the gate that would have triggered a silent
+    # fallback (set in both modes for visibility; only acted on in strict mode).
+    # ``fit_valid``/``fit_source`` make the provenance of ``fit_*`` explicit so
+    # ``fit_concentrations == warm_start_concentrations`` is never ambiguous
+    # ('fit genuinely landed at warm' vs 'fit never ran / was rejected').
+    failure_reason: Optional[str] = None
+    fit_valid: bool = True
+    fit_source: str = "optimizer"  # 'optimizer' | 'optimizer_rejected' | 'warm_fallback'
+
 
 # ---------------------------------------------------------------------------
 # Composition helpers
 # ---------------------------------------------------------------------------
 
 
+def _atomic_weight(element: str, *, strict: bool) -> float:
+    """Atomic weight for ``element``.
+
+    In strict mode a missing element is a data-completeness failure
+    (``MissingAtomicData``) — the ``AW=50.0`` default is a silent substitution of
+    a fabricated mass and is refused.  Non-strict mode keeps the production
+    ``.get(el, 50.0)`` default.
+    """
+    if strict:
+        require_atomic_data(
+            "atomic_mass", STANDARD_ATOMIC_MASSES.get(element), element, strict=True
+        )
+        return float(STANDARD_ATOMIC_MASSES[element])
+    return float(STANDARD_ATOMIC_MASSES.get(element, 50.0))
+
+
 def _number_to_mass_fractions(
     number_fractions: Dict[str, float],
+    *,
+    strict: bool = False,
 ) -> Dict[str, float]:
     """Convert number/mole fractions to mass fractions (sum to 1).
 
     ``C_mass_i = C_i * AW_i / sum_j (C_j * AW_j)``.
+
+    Strict mode refuses the fabricated ``AW=50.0`` default (``MissingAtomicData``)
+    and raises ``NonPhysicalResult`` on a non-normalisable (weighted total <= 0)
+    composition instead of returning an all-zero dict.  Non-strict mode is the
+    byte-identical production path.
     """
     weights = {
-        el: float(c) * float(STANDARD_ATOMIC_MASSES.get(el, 50.0))
-        for el, c in number_fractions.items()
+        el: float(c) * _atomic_weight(el, strict=strict) for el, c in number_fractions.items()
     }
     total = sum(weights.values())
     if total <= 0:
+        if strict:
+            raise NonPhysicalResult(
+                f"non-normalisable composition: weighted total {total:.3g} <= 0 "
+                f"(number fractions {number_fractions!r})"
+            )
         return {el: 0.0 for el in number_fractions}
     return {el: w / total for el, w in weights.items()}
 
@@ -148,12 +199,34 @@ def _number_to_mass_fractions(
 def _mass_to_number_fractions(
     mass_fractions: Dict[str, float],
     elements: Sequence[str],
+    *,
+    strict: bool = False,
 ) -> np.ndarray:
     """Convert mass fractions to a number-fraction array over ``elements``.
 
     ``C_i = (m_i / AW_i) / sum_j (m_j / AW_j)``.  Missing elements seed a small
     floor so the softmax warm start is non-degenerate.
+
+    Strict mode keeps genuinely-absent elements at zero (no ``1e-6`` phantom
+    mass), refuses the fabricated ``AW=50.0`` default (``MissingAtomicData``),
+    and raises ``NonPhysicalResult`` on a degenerate (total moles <= 0) warm
+    composition instead of fabricating a uniform mix.  Non-strict mode is the
+    byte-identical production path.
     """
+    if strict:
+        moles = np.array(
+            [
+                float(mass_fractions.get(el, 0.0)) / _atomic_weight(el, strict=True)
+                for el in elements
+            ],
+            dtype=np.float64,
+        )
+        total = moles.sum()
+        if total <= 0:
+            raise NonPhysicalResult(
+                "degenerate warm composition: total moles <= 0 " f"({dict(mass_fractions)!r})"
+            )
+        return moles / total
     moles = np.array(
         [
             max(float(mass_fractions.get(el, 0.0)), 1e-6)
@@ -173,11 +246,24 @@ def _mass_to_number_fractions(
 # ---------------------------------------------------------------------------
 
 
-def _normalise_spectrum(spec: np.ndarray) -> np.ndarray:
-    """Area-normalise a spectrum (drop arbitrary radiometric scale)."""
+def _normalise_spectrum(
+    spec: np.ndarray, *, strict: bool = False, what: str = "spectrum"
+) -> np.ndarray:
+    """Area-normalise a spectrum (drop arbitrary radiometric scale).
+
+    Strict mode raises ``NonPhysicalResult`` on a non-normalisable (all-zero or
+    fully-cancelling, ``area <= 0``) spectrum — a dead forward model / empty
+    observed spectrum — instead of silently returning the un-normalised zeros
+    that would corrupt the SVD basis and projection.  Non-strict mode is the
+    byte-identical production path.
+    """
     spec = np.asarray(spec, dtype=np.float64)
     area = float(np.sum(np.abs(spec)))
     if area <= 0:
+        if strict:
+            raise NonPhysicalResult(
+                f"non-normalisable {what}: area {area:.3g} <= 0 (dead forward / empty spectrum)"
+            )
         return spec
     return spec / area
 
@@ -188,6 +274,7 @@ def build_svd_basis(
     *,
     n_components: int = 20,
     variance_target: float = 0.99995,
+    strict: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, int]:
     """Build an SVD/PCA basis from a small library of candidate model spectra.
 
@@ -209,8 +296,8 @@ def build_svd_basis(
     lib = np.asarray(library, dtype=np.float64)
     if lib.ndim != 2:
         raise ValueError(f"library must be 2D (n_samples, n_wl); got {lib.shape}")
-    obs_n = _normalise_spectrum(observed)
-    rows = [_normalise_spectrum(row) for row in lib]
+    obs_n = _normalise_spectrum(observed, strict=strict, what="observed spectrum")
+    rows = [_normalise_spectrum(row, strict=strict, what="library row") for row in lib]
     rows.append(obs_n)
     X = np.vstack(rows)
     mean = X.mean(axis=0)
@@ -218,8 +305,21 @@ def build_svd_basis(
     # full_matrices=False → Vt is (min(n,p), p); rows are PC directions.
     _, S, Vt = np.linalg.svd(Xc, full_matrices=False)
     var = S**2
-    cum = np.cumsum(var) / max(float(np.sum(var)), 1e-300)
+    total_var = float(np.sum(var))
+    if strict and (total_var < 1e-300 or not np.isfinite(total_var)):
+        # The seed library spans no informative direction (rows identical /
+        # all-zero forward): the conditioned fit would run in a junk subspace.
+        raise IllConditioned(
+            f"degenerate SVD library: total singular-value variance {total_var:.3g} "
+            f"< floor — warm-start sweep produced indistinguishable spectra"
+        )
+    cum = np.cumsum(var) / max(total_var, 1e-300)
     k_var = int(np.searchsorted(cum, variance_target) + 1)
+    if strict and k_var < 1:
+        raise IllConditioned(
+            "degenerate SVD library: variance target reached in 0 components "
+            "(library does not span an informative direction)"
+        )
     k = max(1, min(n_components, k_var, Vt.shape[0]))
     return Vt[:k].copy(), mean, k
 
@@ -251,6 +351,7 @@ class _ChunkedForward:
         instrument_fwhm_nm: Optional[float] = None,
         nstitch: Optional[int] = None,
         overlap_sigma_nm: float = 2.0,
+        strict: bool = False,
     ) -> None:
         if not HAS_JAX:
             raise ImportError("JAX required for the full-spectrum solver")
@@ -265,6 +366,7 @@ class _ChunkedForward:
         self.elements = list(elements)
         self._jnp = jnp
         self._BroadeningMode = BroadeningMode
+        self._strict = bool(strict)
 
         wl = np.asarray(wavelength_grid, dtype=np.float64)
         self.fm = BayesianForwardModel(
@@ -340,7 +442,7 @@ class _ChunkedForward:
             apply_stark=True,
             total_species_density_cm3=total_density,
         )
-        return jnp.clip(intensity, 0.0, 1e12)
+        return jnp.clip(intensity, _FORWARD_CLIP_LO, _FORWARD_CLIP_HI)
 
     def spectrum_jit(self):
         """Return a cached ``jax.jit`` of :meth:`spectrum` (compile once, reuse).
@@ -366,7 +468,132 @@ class _ChunkedForward:
             jnp.asarray(float(log_ne)),
             jnp.asarray(np.asarray(number_fractions, dtype=np.float64)),
         )
-        return np.asarray(out, dtype=np.float64)
+        arr = np.asarray(out, dtype=np.float64)
+        if self._strict:
+            # The forward clip ([_FORWARD_CLIP_LO, _FORWARD_CLIP_HI]) turns an
+            # overflow into a finite plateau that the convergence checks accept.
+            # In strict mode treat saturation / non-finite as a forward
+            # divergence at the offending (T, n_e) rather than a valid spectrum.
+            n_saturated = int(np.count_nonzero(arr >= _FORWARD_CLIP_HI))
+            if n_saturated > 0 or not np.all(np.isfinite(arr)):
+                raise NonPhysicalResult(
+                    f"forward-model divergence: {n_saturated} pixels pinned at clip "
+                    f"bound {_FORWARD_CLIP_HI:.3g} (or non-finite) at "
+                    f"T_eV={float(T_eV):.4g}, log_ne={float(log_ne):.4g}"
+                )
+        return arr
+
+
+# ---------------------------------------------------------------------------
+# Strict / no-fallback decision helpers (pure — no JAX / DB; unit-testable)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _ConvergenceDecision:
+    """Whether the optimizer endpoint is a *real* converged fit, and why not."""
+
+    real_fit: bool
+    reason: Optional[str]  # None | 'nonfinite' | 'zero_iters' | 'no_move' | 'no_improvement'
+    fit_source: str  # 'optimizer' | 'optimizer_rejected'
+
+
+def _decide_convergence(
+    *, finite: bool, moved: bool, improved_obj: bool, iterations: int
+) -> _ConvergenceDecision:
+    """Classify the BFGS endpoint (site 619-636).
+
+    A *real fit* requires the optimizer to be finite, to have moved off the warm
+    start, to have improved the conditioned objective, and to have run >=1
+    iteration.  When it is not a real fit, the failed predicate is named so the
+    indistinguishable 'kept warm start' outcome becomes a typed reason — instead
+    of the coarse logged booleans the production path discards.
+    """
+    real_fit = bool(finite and moved and improved_obj and iterations > 0)
+    if real_fit:
+        return _ConvergenceDecision(True, None, "optimizer")
+    if not finite:
+        reason = "nonfinite"
+    elif iterations <= 0:
+        reason = "zero_iters"
+    elif not moved:
+        reason = "no_move"
+    else:
+        reason = "no_improvement"
+    # The optimizer ran (this branch is only reached when no exception was
+    # raised), so the real endpoint exists and should be surfaced, not warm.
+    return _ConvergenceDecision(False, reason, "optimizer_rejected")
+
+
+@dataclass
+class _AdoptionDecision:
+    """Adopted (T, n_e, composition) plus whether the fit was trusted."""
+
+    adopted: bool
+    temperature_K: float
+    electron_density_cm3: float
+    concentrations: Dict[str, float]
+    failure_reason: Optional[str]
+
+
+def _resolve_adoption(
+    *,
+    real_fit: bool,
+    physically_near: bool,
+    strict: bool,
+    fit_T_K: float,
+    fit_ne: float,
+    fit_mass: Dict[str, float],
+    warm_T_K: float,
+    warm_ne: float,
+    warm_mass: Dict[str, float],
+    T_ratio: float,
+    ne_ratio: float,
+    t_threshold: float,
+    ne_threshold: float,
+) -> _AdoptionDecision:
+    """Physical-plausibility adoption gate (site 653-684).
+
+    * A converged, physically-near fit is adopted (both modes).
+    * A converged fit that rode (T, n_e) to a box edge is the single most
+      diagnostic event for this solver (LIBS T<->composition degeneracy). The
+      production path silently reverts to the warm-start composition under a
+      ``converged=True`` banner; **strict mode surfaces the (untrusted) FIT
+      composition** with a ``failure_reason`` so the degenerate optimum is
+      visible — it never launders warm into the adopted slot.
+    * Otherwise (not a real fit, or non-strict implausible) keep the warm start
+      exactly as production does.
+    """
+    if real_fit and physically_near:
+        return _AdoptionDecision(True, fit_T_K, fit_ne, dict(fit_mass), None)
+    if real_fit and not physically_near and strict:
+        reason = (
+            f"adoption_degenerate: fit rode T/n_e to box edge "
+            f"(T_ratio={T_ratio:.3g} vs<{t_threshold:.3g}, "
+            f"ne_ratio={ne_ratio:.3g} vs<{ne_threshold:.3g}); "
+            f"surfacing untrusted fit composition instead of reverting to warm"
+        )
+        return _AdoptionDecision(False, fit_T_K, fit_ne, dict(fit_mass), reason)
+    return _AdoptionDecision(False, warm_T_K, warm_ne, dict(warm_mass), None)
+
+
+def _handle_optimizer_exception(
+    exc: BaseException, *, strict: bool, diagnostics: Optional[SolveDiagnostics] = None
+) -> None:
+    """Bare-except policy (site 637-638).
+
+    Production collapses every hard solver failure (crash, non-finite gradient,
+    device OOM, XLA compile error) into one indistinguishable 'kept warm start'
+    with the type/traceback only in a log line.  This records the failure on the
+    diagnostics in both modes and, in strict mode, re-raises a typed
+    :class:`OptimizerFailure` chaining the original instead of degrading.
+    """
+    reason = f"optimizer_exception: {type(exc).__name__}: {exc}"
+    if diagnostics is not None:
+        diagnostics.failure_reason = diagnostics.failure_reason or reason
+        diagnostics.extra["optimizer_exception_type"] = type(exc).__name__
+    if strict:
+        raise OptimizerFailure(reason, diagnostics) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +617,7 @@ def solve_full_spectrum(
     sweep_points: int = 9,
     fit_pixels: Optional[int] = 1500,
     method: str = "bayesian",
+    strict: Optional[bool] = None,
 ) -> FullSpectrumResult:
     """Run the memory-efficient, SVD-conditioned full-spectrum fit.
 
@@ -430,6 +658,21 @@ def solve_full_spectrum(
         (pure MAP-of-likelihood).  Both use the identical chunked forward and
         SVD loss — the difference is purely the regularisation, mirroring the
         joint-optimizer (no prior) vs Bayesian-MAP (informative prior) split.
+    strict : bool, optional
+        Strict / no-fallback mode (resolved via
+        :func:`cflibs.inversion.common.strict.resolve_strict` — defaults to the
+        ``CFLIBS_NO_FALLBACK`` env var, else ``False``).  When ``False`` (the
+        default) every path is byte-identical to production: silent warm-start
+        substitution, clamps, and the swallowed optimizer exception are
+        preserved (the new visibility fields are merely populated).  When
+        ``True`` the silent fallbacks become honest failures — a crashed
+        optimizer raises :class:`OptimizerFailure`, missing atomic masses raise
+        :class:`MissingAtomicData`, a dead forward / degenerate seed library
+        raises :class:`NonPhysicalResult` / :class:`IllConditioned`, a
+        non-converged endpoint is surfaced (not fabricated to equal warm) with
+        ``fit_valid=False``, and a box-edge degenerate optimum surfaces the
+        untrusted fit composition rather than reverting to warm under a
+        ``converged=True`` banner.
 
     Returns
     -------
@@ -440,6 +683,9 @@ def solve_full_spectrum(
     import jax  # noqa: PLC0415
     import jax.numpy as jnp  # noqa: PLC0415
     from jax.scipy.optimize import minimize as jax_minimize  # noqa: PLC0415
+
+    strict = resolve_strict(strict)
+    diag = SolveDiagnostics(solver="full_spectrum", strict=strict)
 
     elements = list(elements)
     n_el = len(elements)
@@ -461,8 +707,23 @@ def solve_full_spectrum(
 
     warm_mass = dict(warm_start_concentrations)
     warm_T_eV = float(warm_start_T_K) * K_TO_EV
+    # Warm-start input floors (sites 464 / 531-533): a non-physical iterative
+    # warm start (n_e<=1e10, T<=0.05 eV) is silently floored into a barely-
+    # physical seed in production. In strict mode validate it up front instead.
+    if strict and (not np.isfinite(warm_start_ne_cm3) or warm_start_ne_cm3 <= 1e10):
+        raise NonPhysicalResult(
+            f"non-physical warm-start n_e={warm_start_ne_cm3!r} (<=1e10); "
+            "refusing to floor a failed iterative warm start",
+            diag,
+        )
+    if strict and (not np.isfinite(warm_T_eV) or warm_T_eV <= 0.05):
+        raise NonPhysicalResult(
+            f"non-physical warm-start T={warm_start_T_K!r} K ({warm_T_eV:.3g} eV, <=0.05); "
+            "refusing to floor a failed iterative warm start",
+            diag,
+        )
     warm_log_ne = float(np.log10(max(warm_start_ne_cm3, 1e10)))
-    warm_numfrac = _mass_to_number_fractions(warm_mass, elements)
+    warm_numfrac = _mass_to_number_fractions(warm_mass, elements, strict=strict)
 
     fwd = _ChunkedForward(
         db_path,
@@ -470,6 +731,7 @@ def solve_full_spectrum(
         wl,
         resolving_power=resolving_power,
         instrument_fwhm_nm=instrument_fwhm_nm,
+        strict=strict,
     )
 
     # ---- Build the SVD library from a coarse warm-start-centred sweep ----
@@ -501,8 +763,8 @@ def solve_full_spectrum(
         lib_rows.append(fwd.spectrum_numpy(warm_T_eV * float(tf), warm_log_ne, warm_numfrac))
     library = np.vstack(lib_rows)
 
-    basis_np, mean_np, k = build_svd_basis(library, obs, n_components=n_components)
-    obs_norm = _normalise_spectrum(obs)
+    basis_np, mean_np, k = build_svd_basis(library, obs, n_components=n_components, strict=strict)
+    obs_norm = _normalise_spectrum(obs, strict=strict, what="observed spectrum")
     obs_proj_np = (obs_norm - mean_np) @ basis_np.T  # (k,)
 
     basis = jnp.asarray(basis_np)
@@ -518,7 +780,7 @@ def solve_full_spectrum(
     # at a good fit and a prior with sigma_logT~0.15 genuinely competes with a
     # T excursion. A floor keeps it from collapsing to zero on a perfect seed.
     warm_model = fwd.spectrum_numpy(warm_T_eV, warm_log_ne, warm_numfrac)
-    warm_proj = (_normalise_spectrum(warm_model) - mean_np) @ basis_np.T
+    warm_proj = (_normalise_spectrum(warm_model, strict=strict) - mean_np) @ basis_np.T
     warm_resid = warm_proj - obs_proj_np
     sigma_d = float(
         max(np.sqrt(np.mean(warm_resid**2)), 0.05 * (np.std(obs_proj_np) + 1e-12), 1e-12)
@@ -598,12 +860,19 @@ def solve_full_spectrum(
 
     objective_jit = jax.jit(objective)
     initial_objective = float(objective_jit(x0))
+    diag.objective_initial = initial_objective
 
     iterations = 0
     grad_norm = float("inf")
     final_x = x0
     final_objective = initial_objective
     real_fit = False
+    cand_x = None  # the actual optimizer endpoint (None iff it crashed)
+    moved_norm = float("nan")
+    delta_obj = float("nan")
+    bfgs_status = None
+    bfgs_success = None
+    convergence_reason: Optional[str] = None
     try:
         res = jax_minimize(
             objective_jit,
@@ -614,41 +883,92 @@ def solve_full_spectrum(
         cand_x = res.x
         cand_obj = float(res.fun)
         iterations = int(res.nit) if hasattr(res, "nit") else max_iterations
+        # The optimizer's own status/success — production NEVER consults these
+        # (convergence is re-derived from coarse heuristics). Capture them so a
+        # 'maxiter reached, still descending' is distinguishable from 'true min'.
+        bfgs_status = int(res.status) if hasattr(res, "status") else None
+        bfgs_success = bool(res.success) if hasattr(res, "success") else None
         grad_fn = jax.grad(objective_jit)
         grad_norm = float(jnp.linalg.norm(grad_fn(cand_x)))
         finite = bool(np.all(np.isfinite(np.asarray(cand_x)))) and np.isfinite(cand_obj)
         # A "real fit" means the optimiser actually moved and reduced the
         # conditioned objective (not a no-op / fall-back to the warm start).
-        moved = float(np.linalg.norm(np.asarray(cand_x) - np.asarray(x0))) > 1e-6
+        moved_norm = float(np.linalg.norm(np.asarray(cand_x) - np.asarray(x0)))
+        moved = moved_norm > 1e-6
+        delta_obj = initial_objective - cand_obj
         improved_obj = cand_obj < initial_objective - 1e-9
-        if finite and moved and improved_obj and iterations > 0:
-            real_fit = True
+        decision = _decide_convergence(
+            finite=finite, moved=moved, improved_obj=improved_obj, iterations=iterations
+        )
+        real_fit = decision.real_fit
+        convergence_reason = decision.reason
+        diag.optimizer_status = bfgs_status
+        diag.optimizer_success = bfgs_success
+        diag.objective_final = cand_obj
+        diag.extra.update(
+            {
+                "moved_norm": moved_norm,
+                "delta_obj": delta_obj,
+                "grad_norm": grad_norm,
+                "bfgs_status": bfgs_status,
+                "bfgs_success": bfgs_success,
+            }
+        )
+        if real_fit:
             final_x = cand_x
             final_objective = cand_obj
         else:
-            logger.warning(
-                "Full-spectrum fit did not produce a real converged optimum "
-                "(finite=%s moved=%s improved=%s iters=%d); keeping warm start.",
-                finite,
-                moved,
-                improved_obj,
-                iterations,
-            )
+            diag.failure_reason = diag.failure_reason or f"not_converged: {decision.reason}"
+            if not strict:
+                # Production path: log the coarse booleans and keep warm start.
+                logger.warning(
+                    "Full-spectrum fit did not produce a real converged optimum "
+                    "(finite=%s moved=%s improved=%s iters=%d); keeping warm start.",
+                    finite,
+                    moved,
+                    improved_obj,
+                    iterations,
+                )
     except Exception as exc:  # noqa: BLE001 — degrade to warm start, never crash
+        # Strict: re-raise a typed OptimizerFailure (chained). Non-strict: the
+        # production path logs once and keeps the warm start.
+        _handle_optimizer_exception(exc, strict=strict, diagnostics=diag)
         logger.warning("Full-spectrum optimisation failed (%r); keeping warm start.", exc)
 
+    # fit_* provenance (sites 640-645): production fabricates fit_* = warm when
+    # not real_fit, destroying the warm-vs-fit accounting. Strict mode never
+    # fabricates warm — it surfaces the actual optimizer endpoint (cand_x) and
+    # tags ``fit_source``/``fit_valid``. (A crash already raised in strict, so
+    # cand_x is guaranteed present on the strict ``elif`` branch.)
     if real_fit:
         T_eV_fit, log_ne_fit, conc_fit = jax.jit(_params)(final_x)
+        fit_source = "optimizer"
+        fit_valid = True
+    elif strict and cand_x is not None:
+        T_eV_fit, log_ne_fit, conc_fit = jax.jit(_params)(cand_x)
+        fit_source = "optimizer_rejected"
+        fit_valid = False
     else:
         T_eV_fit = jnp.asarray(warm_T_eV)
         log_ne_fit = jnp.asarray(warm_log_ne)
         conc_fit = jnp.asarray(warm_numfrac)
+        fit_source = "warm_fallback"
+        fit_valid = False
     fit_numfrac = {el: float(np.asarray(conc_fit)[i]) for i, el in enumerate(elements)}
-    fit_mass = _number_to_mass_fractions(fit_numfrac)
+    fit_mass = _number_to_mass_fractions(fit_numfrac, strict=strict)
     fit_T_K = float(np.asarray(T_eV_fit)) * EV_TO_K
     # log_ne_fit is tanh-bounded to warm_log_ne +/- box_logne, but clamp
-    # defensively so 10**log_ne can never overflow a Python float.
-    fit_ne = float(10.0 ** float(np.clip(np.asarray(log_ne_fit), 1.0, 25.0)))
+    # defensively so 10**log_ne can never overflow a Python float. (Site 649-651)
+    log_ne_raw = float(np.asarray(log_ne_fit))
+    log_ne_clamped = float(np.clip(log_ne_raw, 1.0, 25.0))
+    if strict and log_ne_clamped != log_ne_raw:
+        # The tanh box already bounds log_ne; a fired clamp means that invariant
+        # was violated, so surface it instead of silently substituting.
+        raise NonPhysicalResult(
+            f"tanh-box invariant violated: fit log_ne={log_ne_raw:.4g} outside [1, 25]",
+            diag,
+        )
+    fit_ne = float(10.0**log_ne_clamped)
 
     # Physical-plausibility adoption gate (truth-free). A *real* converged fit
     # is only ADOPTED into the returned composition when its (T, n_e) stayed
@@ -657,14 +977,16 @@ def solve_full_spectrum(
     # and rides T to whichever box edge minimises the spectral residual (a
     # classic LIBS T<->composition degeneracy); that is a real optimum of the
     # spectral objective but NOT a trustworthy composition, so it falls back to
-    # the warm start here. The informative-prior ``bayesian`` fit, which stays
-    # in the warm-start neighbourhood, is adopted. ``converged`` still records
-    # that a real fit ran; ``adopted_fit`` records whether it was trusted.
+    # the warm start here (non-strict). The informative-prior ``bayesian`` fit,
+    # which stays in the warm-start neighbourhood, is adopted. ``converged``
+    # still records that a real fit ran; ``adopted_fit`` records whether it was
+    # trusted. Strict mode surfaces the untrusted fit instead of laundering warm.
+    t_threshold = float(np.log(1.8))
+    ne_threshold = 0.7
     T_ratio = abs(np.log(max(fit_T_K, 1.0) / max(float(warm_start_T_K), 1.0)))
     ne_ratio = abs(np.log10(max(fit_ne, 1e1) / max(float(warm_start_ne_cm3), 1e1)))
-    physically_near = T_ratio < np.log(1.8) and ne_ratio < 0.7
-    adopted = bool(real_fit and physically_near)
-    if real_fit and not physically_near:
+    physically_near = T_ratio < t_threshold and ne_ratio < ne_threshold
+    if real_fit and not physically_near and not strict:
         logger.warning(
             "Full-spectrum fit converged but rode T/n_e to a degenerate "
             "edge (T %.0f vs warm %.0f K, n_e %.2e vs %.2e); not adopting "
@@ -674,14 +996,39 @@ def solve_full_spectrum(
             fit_ne,
             float(warm_start_ne_cm3),
         )
-    if adopted:
-        adopted_T_K = fit_T_K
-        adopted_ne = fit_ne
-        adopted_conc = fit_mass
-    else:
-        adopted_T_K = float(warm_start_T_K)
-        adopted_ne = float(warm_start_ne_cm3)
-        adopted_conc = dict(warm_mass)
+    adoption = _resolve_adoption(
+        real_fit=real_fit,
+        physically_near=physically_near,
+        strict=strict,
+        fit_T_K=fit_T_K,
+        fit_ne=fit_ne,
+        fit_mass=fit_mass,
+        warm_T_K=float(warm_start_T_K),
+        warm_ne=float(warm_start_ne_cm3),
+        warm_mass=warm_mass,
+        T_ratio=T_ratio,
+        ne_ratio=ne_ratio,
+        t_threshold=t_threshold,
+        ne_threshold=ne_threshold,
+    )
+    adopted = adoption.adopted
+    adopted_T_K = adoption.temperature_K
+    adopted_ne = adoption.electron_density_cm3
+    adopted_conc = adoption.concentrations
+    if adoption.failure_reason:
+        diag.failure_reason = diag.failure_reason or adoption.failure_reason
+    diag.converged = real_fit
+    diag.adopted = adopted
+    diag.extra.update(
+        {
+            "T_ratio": T_ratio,
+            "ne_ratio": ne_ratio,
+            "physically_near": physically_near,
+            "fit_source": fit_source,
+            "fit_valid": fit_valid,
+            "convergence_reason": convergence_reason,
+        }
+    )
 
     return FullSpectrumResult(
         temperature_K=adopted_T_K,
@@ -699,6 +1046,9 @@ def solve_full_spectrum(
         final_objective=final_objective,
         iterations=iterations,
         gradient_norm=grad_norm,
+        failure_reason=diag.failure_reason,
+        fit_valid=fit_valid,
+        fit_source=fit_source,
         diagnostics={
             "n_lines": fwd.n_lines,
             "n_wl": fwd.n_wl,
@@ -707,5 +1057,8 @@ def solve_full_spectrum(
             "overlap": fwd.plan.overlap,
             "method": method.lower(),
             "dense_matrix_mb": fwd.n_lines * fwd.n_wl * 8 / 1e6,
+            # Additive nested strict / no-fallback visibility (populated in both
+            # modes; the existing keys above keep their exact production values).
+            "strict_diagnostics": diag.to_dict(),
         },
     )
