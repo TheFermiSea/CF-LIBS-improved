@@ -30,6 +30,17 @@ from cflibs.inversion.physics.self_absorption_inputs import (
 )
 from cflibs.plasma.partition import canonical_partition_fallback, lookup_partition_function
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import (
+    GateResult,
+    IllConditioned,
+    NonIdentifiable,
+    NonPhysicalResult,
+    SolveDiagnostics,
+    SolverFailure,
+    require_atomic_data,
+    require_ion_stage_observed,
+    resolve_strict,
+)
 
 # Physical temperature window for the Boltzmann slope→T inversion. T = -1/(slope*k)
 # blows up as the slope → 0⁻, so a shallow-but-negative slope that passes the R^2
@@ -166,6 +177,17 @@ class CFLIBSResult:
     #: mass-fraction view so consumers compare wt% like-for-like (DED Gap 4).
     #: Populated by ``run_pipeline``; empty if not yet computed.
     mass_fractions: Dict[str, float] = field(default_factory=dict)
+    #: STRICT / no-fallback annotations (default ``False``/``None`` => production
+    #: byte-identical). ``failed`` is set on the FAILED-result path when strict
+    #: mode refuses to substitute (degenerate fit / unobserved n_e stage);
+    #: ``failure_reason`` is the human-readable cause; ``diagnostics`` carries the
+    #: :class:`~cflibs.inversion.common.strict.SolveDiagnostics` provenance (which
+    #: gate fired, the rejected slope/T/R^2, n_e provenance, would-be
+    #: substitutions). Populated for visibility in BOTH modes; never alters
+    #: T/n_e/composition.
+    failed: bool = False
+    failure_reason: Optional[str] = None
+    diagnostics: Optional[Dict[str, Any]] = field(default=None, repr=False)
 
 
 @dataclass
@@ -959,6 +981,7 @@ class IterativeCFLIBSSolver:
         degeneracy_min_elements: int = 4,
         assess_quality: bool = True,
         fixed_temperature_K: Optional[float] = None,
+        strict: Optional[bool] = None,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
         # c5-solver-flags). ``use_lax_while_loop`` chooses between the CPU
@@ -1141,6 +1164,22 @@ class IterativeCFLIBSSolver:
         self.fixed_temperature_K = (
             float(fixed_temperature_K) if fixed_temperature_K is not None else None
         )
+        # STRICT / no-fallback exploratory mode (bead: no-fallback-exploratory).
+        #
+        # Default ``None`` SEEDS the flag from ``CFLIBS_NO_FALLBACK`` (via
+        # :func:`resolve_strict`); when unset/false the solver is byte-identical
+        # to production — every silent fallback (IP=15.0 eV default, isobaric
+        # pressure-balance n_e, degenerate-fit R^2=1.0, held-seed T) is preserved
+        # exactly. When ``True`` the same fallback sites instead refuse: they
+        # raise a typed :class:`SolverFailure` (hard atomic-data gaps, unobserved
+        # n_e stage) or return a ``failed=True`` :class:`CFLIBSResult` carrying
+        # the real (not substituted) diagnostics, so exploration sees WHICH
+        # combination is failing and WHY instead of an opaque substituted answer.
+        # Passing explicit ``True``/``False`` is authoritative over the env var.
+        self.strict = resolve_strict(strict)
+        # Per-solve diagnostics record (populated in both modes for visibility;
+        # in strict mode a failed gate also raises). ``None`` between solves.
+        self._strict_diag: Optional[SolveDiagnostics] = None
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
         """Return fit-space uncertainty with optional A_ki contribution."""
@@ -1506,7 +1545,22 @@ class IterativeCFLIBSSolver:
         residuals = pooled_y - slope * pooled_x
         ss_res = float(np.sum(pooled_w * residuals**2))
         ss_tot = float(np.sum(pooled_w * pooled_y**2))
-        r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0.0 else 1.0
+        if ss_tot > 0.0:
+            r_squared = 1.0 - (ss_res / ss_tot)
+        elif self.strict:
+            # STRICT (site 3): ss_tot == 0 is a ZERO-VARIANCE (degenerate) fit —
+            # all centered y collapse to a point. The production substitution
+            # r_squared=1.0 reports a PERFECT score and thereby DEFEATS the very
+            # R^2 >= min_boltzmann_r2 degeneracy gate meant to catch it. Emit NaN
+            # so the gate fires (NaN < threshold is False -> boltzmann_degenerate
+            # via the slope-sign branch / host-boundary enforcement). Record the
+            # zero-variance cause for visibility.
+            r_squared = float("nan")
+            if self._strict_diag is not None:
+                self._strict_diag.extra["boltzmann_ss_tot"] = 0.0
+                self._strict_diag.extra["boltzmann_zero_variance"] = True
+        else:
+            r_squared = 1.0
 
         # The centered pooled fit is equivalent to y = a_element + m x, so the
         # residual variance must account for one common slope plus one intercept
@@ -1677,7 +1731,18 @@ class IterativeCFLIBSSolver:
             diags.append(stark_diagnostic)
         if stark_diagnostics:
             diags.extend(stark_diagnostics)
-        if HAS_JAX and self.use_lax_while_loop and not self.saha_boltzmann_graph and not diags:
+        # STRICT mode forces the Python reference path: the lax body has no Stark
+        # wiring and UNCONDITIONALLY applies the physically-invalid pressure-
+        # balance n_e (audit site 2), so the n_e-provenance refusal (site 1) is
+        # unreachable there. Routing to Python keeps that gate live. Default
+        # (strict off) leaves the lax fast-path selection byte-identical.
+        if (
+            HAS_JAX
+            and self.use_lax_while_loop
+            and not self.saha_boltzmann_graph
+            and not diags
+            and not self.strict
+        ):
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)
             except _LaxFallback as exc:
@@ -1696,8 +1761,22 @@ class IterativeCFLIBSSolver:
             # Need IP of neutral (I -> II)
             ip = self.atomic_db.get_ionization_potential(el, 1)
             if ip is None:
+                # STRICT (site 6): the IP=15.0 eV default papers over an
+                # incomplete atomic DB and directly biases the Saha shift
+                # x += IP*(z-1) and ratio exp(-IP/kT). Refuse rather than guess;
+                # the gate raises MissingAtomicData (density_identifiability) and
+                # records ip_provenance. Default path preserved exactly.
+                require_atomic_data(
+                    "ionization_potential",
+                    None,
+                    el,
+                    strict=self.strict,
+                    diagnostics=self._strict_diag,
+                )
                 logger.warning(f"No IP for {el} I, assuming high")
                 ip = 15.0  # Fallback
+                if self._strict_diag is not None:
+                    self._strict_diag.extra.setdefault("ip_defaulted", []).append(el)
             ips[el] = ip
         return ips
 
@@ -1779,6 +1858,16 @@ class IterativeCFLIBSSolver:
                 **closure_kwargs,
             )
         else:
+            # STRICT (site 12): an unknown / misspelled closure_mode silently
+            # falls through to standard closure and returns a DIFFERENT
+            # composition with no error. Refuse the silent substitution; the
+            # 'standard'/'' modes remain documented defaults handled below.
+            if self.strict and closure_mode not in ("", "standard"):
+                raise SolverFailure(
+                    f"[closure_mode] unknown closure_mode {closure_mode!r}; refusing "
+                    "silent fall-through to standard closure",
+                    self._strict_diag,
+                )
             return ClosureEquation.apply_standard(
                 intercepts,
                 partition_funcs,
@@ -1840,6 +1929,21 @@ class IterativeCFLIBSSolver:
             self._last_stark_stats = {"n_lines": n_lines, "scatter_cm3": scatter}
             return ne_stark, True
         self._last_stark_stats = {"n_lines": 0, "scatter_cm3": 0.0}
+        # STRICT (sites 1/2): no usable Stark n_e means there is NO physical
+        # electron-density measurement. The isobaric 1-atm pressure-balance
+        # value below is described in-code as "physically invalid for LIBS" yet
+        # is reported as electron_density_cm3 and feeds every Saha factor. Refuse
+        # the imputed n_e: the gate raises UnobservedStage
+        # (saha_joint_identifiability) recording the would-be pressure-balance
+        # value. Default (strict off) path is preserved exactly below.
+        if self.strict:
+            would_be = self._pressure_balance_ne(
+                concentrations, T_K, n_e, partition_funcs, partition_funcs_II, effective_ips
+            )
+            if self._strict_diag is not None:
+                self._strict_diag.extra["would_use_pressure_balance_ne"] = float(would_be)
+                self._strict_diag.extra["stark_n_lines"] = 0
+            require_ion_stage_observed("plasma", 0, strict=True, diagnostics=self._strict_diag)
         if stark_diagnostics:
             logger.warning(
                 "Stark diagnostic line(s) supplied but yielded no usable n_e "
@@ -1913,6 +2017,14 @@ class IterativeCFLIBSSolver:
         common_fit = self._select_common_fit(sa_obs_by_element, T_K, n_e, effective_ips)
         if common_fit is None:
             logger.warning("Insufficient points for fit")
+            if self._strict_diag is not None:
+                # Site 5: the fit never ran (under-determined / too few lines).
+                # Record so a held-seed result is distinguishable from a real one.
+                self._strict_diag.extra["no_fit"] = True
+                self._strict_diag.extra["n_elements"] = len(elements)
+                self._strict_diag.failure_reason = (
+                    "insufficient lines: common Boltzmann fit returned None"
+                )
             return _PythonIterationResult(
                 T_K=T_K,
                 n_e=n_e,
@@ -1963,6 +2075,24 @@ class IterativeCFLIBSSolver:
 
             # Damping
             T_K = 0.5 * T_prev + 0.5 * T_new
+
+        # Record the REAL fit verdict each iteration (cheap, both modes) so the
+        # rejected slope / R^2 / candidate-T behind a held-seed temperature is
+        # visible (sites 3/4/8/11). Overwritten each iteration => reflects the
+        # final iteration's fit.
+        if self._strict_diag is not None:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                t_candidate = float(-1.0 / (slope * KB_EV)) if slope < 0 else float("nan")
+            self._strict_diag.objective_final = fit_r2
+            self._strict_diag.extra.update(
+                {
+                    "boltzmann_slope": float(slope),
+                    "boltzmann_r_squared": float(fit_r2),
+                    "T_candidate_K": t_candidate,
+                    "boltzmann_degenerate": bool(boltzmann_degenerate),
+                    "fixed_temperature_K": self.fixed_temperature_K,
+                }
+            )
 
         if self.two_region:
             # Empirical two-region DOF reduction: take the cooler outer/corona
@@ -2383,6 +2513,10 @@ class IterativeCFLIBSSolver:
         unset (default) or when JAX is unavailable.
         """
         # 1. Initialization
+        # Fresh per-solve diagnostics record. Populated in BOTH modes (visibility);
+        # in strict mode failed gates additionally raise. Created here so the
+        # atomic-data / Stark / fit gates downstream can record onto it.
+        self._strict_diag = SolveDiagnostics(solver="iterative", strict=self.strict)
         # L1 fixed-T lever: seed the loop at the held temperature so the first
         # Saha correction / closure already use it (default None => 10000 K seed).
         T_K = 10000.0 if self.fixed_temperature_K is None else self.fixed_temperature_K
@@ -2470,10 +2604,69 @@ class IterativeCFLIBSSolver:
         # Final-state T window guard: even if the loop's per-iteration flags were
         # clean, a reported T outside the physical window is degenerate and must
         # never be reported converged (mirrors the closure-degeneracy guard).
-        if not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K):
+        t_out_of_window = not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K)
+        if t_out_of_window:
             boltzmann_degenerate = True
         if boltzmann_degenerate or closure_degenerate:
             converged = False
+
+        # STRICT host-boundary enforcement (sites 3/4/5/8). Both per-iteration
+        # flags converge here; this is the natural place to refuse rather than
+        # return a held-seed T / degenerate composition dressed as a result. The
+        # diagnostics already carry the rejected slope/R^2/T_candidate and the
+        # would-be pressure-balance n_e. Default (strict off) path skips this
+        # block entirely and is byte-identical.
+        diag = self._strict_diag
+        if self.strict and diag is not None:
+            diag.converged = converged
+            if last_common_fit is None:
+                # Site 5: no Boltzmann fit ever ran -> seed state would be
+                # returned. T is not identifiable from data that never fit.
+                raise NonIdentifiable(
+                    "[insufficient_lines] common Boltzmann fit never ran; "
+                    f"refusing seed-state result (n_elements={len(elements)})",
+                    diag,
+                )
+            if t_out_of_window:
+                # Site 8: a runaway/clamped T outside the physical window is
+                # returned with only a flag in production.
+                diag.record(
+                    GateResult(
+                        name="temperature_window",
+                        passed=False,
+                        theorem="boltzmann_plot_intensity",
+                        detail=f"T={T_K:.4g} K outside [{T_PHYSICAL_MIN_K},{T_PHYSICAL_MAX_K}] K",
+                        values={
+                            "T_K": float(T_K),
+                            "min": T_PHYSICAL_MIN_K,
+                            "max": T_PHYSICAL_MAX_K,
+                        },
+                    )
+                )
+                raise NonPhysicalResult(
+                    f"[temperature_window] reported T={T_K:.4g} K outside physical window "
+                    f"[{T_PHYSICAL_MIN_K},{T_PHYSICAL_MAX_K}] K",
+                    diag,
+                )
+            if boltzmann_degenerate:
+                # Sites 3/4: degenerate Boltzmann slope (positive slope, low/NaN
+                # R^2, or T runaway) -> production holds T at the prior/seed.
+                raise IllConditioned(
+                    "[boltzmann_degenerate] slope/R^2 gate rejected the temperature fit; "
+                    "production would return a held-seed T. "
+                    f"slope={diag.extra.get('boltzmann_slope')}, "
+                    f"r_squared={diag.extra.get('boltzmann_r_squared')}, "
+                    f"T_candidate_K={diag.extra.get('T_candidate_K')}",
+                    diag,
+                )
+            if closure_degenerate:
+                # Keystone-collapse: one element soaked the closure mass; the
+                # composition is off the meaningful simplex interior.
+                raise NonPhysicalResult(
+                    "[closure_degenerate] composition collapsed onto a single element "
+                    "(keystone collapse); refusing the degenerate concentration vector",
+                    diag,
+                )
 
         if self.two_region and T_corona is None:
             # Empirical two-region DOF-reduction: the cooler outer/corona zone is
@@ -2486,6 +2679,9 @@ class IterativeCFLIBSSolver:
         # measurement uncertainty — surface it (0.0 for a single line or the
         # pressure-balance fallback, whose uncertainty is unquantifiable).
         ne_uncertainty = float(quality_metrics.get("stark_ne_scatter_cm3", 0.0))
+
+        if diag is not None:
+            diag.converged = converged
 
         return CFLIBSResult(
             temperature_K=T_K,
@@ -2500,6 +2696,7 @@ class IterativeCFLIBSSolver:
             electron_density_uncertainty_cm3=ne_uncertainty,
             boltzmann_covariance=None,
             overall_reliable=bool(quality_metrics.get("overall_reliable", False)),
+            diagnostics=diag.to_dict() if diag is not None else None,
         )
 
     def _solve_lax(
