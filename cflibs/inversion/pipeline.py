@@ -1446,7 +1446,17 @@ def _run_full_spectrum_solver(
     produce a real converged optimum, the warm start is returned UNCHANGED (the
     honest "fell back" outcome).
     """
+    from cflibs.inversion.common.strict import (
+        NotConverged,
+        OptimizerFailure,
+        resolve_strict,
+    )
     from cflibs.inversion.solve.full_spectrum import solve_full_spectrum
+
+    # Strict / no-fallback (CFLIBS_NO_FALLBACK or pipeline.strict): surface the
+    # solver's real outcome instead of the pipeline's double-masking (bare-except
+    # -> warm and not-adopted -> warm). Default off = byte-identical production.
+    strict = resolve_strict(getattr(pipeline, "strict", None))
 
     warm_concentrations = {
         el: float(c) for el, c in warm_start.concentrations.items() if float(c) > 0.0
@@ -1464,8 +1474,18 @@ def _run_full_spectrum_solver(
             warm_start_concentrations=warm_concentrations,
             resolving_power=pipeline.resolving_power,
             method=pipeline.solver,
+            strict=strict,
         )
     except Exception as exc:  # noqa: BLE001 — never crash the pipeline on the fit
+        if strict:
+            # Surface the failure honestly (re-raises inner SolverFailure or wraps
+            # a genuine crash) instead of laundering it into "kept warm start".
+            if isinstance(exc, (OptimizerFailure, NotConverged)):
+                raise
+            raise OptimizerFailure(
+                f"full-spectrum solver ({pipeline.solver}) raised "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
         logger.warning(
             "Full-spectrum solver (%s) raised %r; keeping the iterative warm start.",
             pipeline.solver,
@@ -1510,6 +1530,18 @@ def _run_full_spectrum_solver(
     )
 
     if not fs.adopted_fit:
+        if strict:
+            # In exploratory strict mode the non-adoption IS the diagnostic (the
+            # T<->composition degeneracy firing, or the optimiser not beating the
+            # warm start). Surface it with the real fit values instead of silently
+            # returning the warm start under a converged banner.
+            raise NotConverged(
+                f"full-spectrum fit ({pipeline.solver}) not adopted "
+                f"(converged={fs.converged}): warm T={fs.warm_start_temperature_K:.0f}K "
+                f"ne={fs.warm_start_electron_density_cm3:.2e} -> fit "
+                f"T={fs.fit_temperature_K:.0f}K ne={fs.fit_electron_density_cm3:.2e}; "
+                f"obj {fs.initial_objective:.4g}->{fs.final_objective:.4g}"
+            )
         # Honest fall-back: the optimiser did not beat the warm start. Return
         # the iterative result unchanged so the reported composition is the
         # one that was actually solved for.
