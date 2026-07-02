@@ -2579,6 +2579,12 @@ class IterativeCFLIBSSolver:
         previously emitted only ``r_squared_last`` + LTE keys, letting
         ``converged=True`` coexist with ``boltzmann_r_squared=None``).
         """
+        # n_e provenance (Issue 4): a MEASURED n_e is one from the Saha-Boltzmann
+        # inter-stage offset ('sb_offset', preferred) or a Stark width ('stark').
+        # ``or ne_from_stark`` preserves back-compat for legacy callers that pass
+        # only the ne_from_stark flag (without the newer ne_source arg).
+        ne_measured = ne_source in ("sb_offset", "stark") or bool(ne_from_stark)
+
         # LTE validity check
         from cflibs.plasma.lte_validator import LTEValidator
 
@@ -2638,7 +2644,7 @@ class IterativeCFLIBSSolver:
             "ne_source": ne_source,
             # 1.0 when the final n_e was MEASURED (sb_offset or stark), 0.0 when
             # imputed by pressure balance. Decisive for ``overall_reliable``.
-            "ne_measured": float(ne_source in ("sb_offset", "stark")),
+            "ne_measured": float(ne_measured),
             # SB-offset diagnostics: element count combined for the n_e estimate
             # and their robust (1.4826*MAD) scatter.
             "sb_offset_n_elements": float(sb_offset_n_elements),
@@ -2688,8 +2694,8 @@ class IterativeCFLIBSSolver:
             # 'pressure_balance_imputed' n_e is a physically-invalid Earth-STP
             # guess, and the McWhirter LTE check is itself evaluated ON that n_e,
             # so it cannot catch a bad n_e. A result whose n_e is imputed is
-            # therefore NEVER trustworthy.
-            ne_measured = ne_source in ("sb_offset", "stark")
+            # therefore NEVER trustworthy. ``ne_measured`` was resolved above
+            # (SB-offset / Stark, with an ne_from_stark back-compat fallback).
             mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
             quality_metrics["overall_reliable"] = bool(
                 ne_measured
