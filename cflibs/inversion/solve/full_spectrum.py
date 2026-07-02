@@ -609,8 +609,9 @@ def _handle_optimizer_exception(
 
 def _self_absorption_line_mask(
     fwd: "_ChunkedForward",
-    wl: np.ndarray,
-    obs: np.ndarray,
+    fit_wl: np.ndarray,
+    measure_wl: np.ndarray,
+    measure_obs: np.ndarray,
     *,
     temperature_K: float,
     mask_tau_min: float,
@@ -624,6 +625,11 @@ def _self_absorption_line_mask(
     same observable corrector wired into the iterative path (doublet intensity
     ratios; no composition-derived optical depth, no fitted tau DOF).
 
+    Line intensities are measured on the NATIVE (high-resolution) spectrum
+    ``measure_wl``/``measure_obs`` — a coarsely-resampled fit grid under-samples
+    narrow lines and corrupts the integrated-intensity ratio — while the
+    returned ``keep`` mask is built on the fit grid ``fit_wl``.
+
     Best-effort: any failure (a stub forward without a snapshot, a degenerate
     catalog, etc.) yields an empty mask so the fit proceeds exactly as the
     optically-thin path would — the correction never crashes the solver.
@@ -636,36 +642,47 @@ def _self_absorption_line_mask(
         line_sp_idx = np.asarray(snap.line_species_index)
         line_elements = [species[j][0] for j in line_sp_idx]
         line_ion_stages = [int(species[j][1]) for j in line_sp_idx]
+        line_wl = np.asarray(snap.line_wavelengths_nm, dtype=np.float64)
 
-        # Instrument-scaled windows: cover the broadened line core (measure) and
-        # its wings (mask). Fall back to a few pixels when no instrument sigma.
-        mid_wl = float(0.5 * (np.min(wl) + np.max(wl)))
+        # Per-line instrument sigma: gives each line a wavelength-scaled
+        # measurement window that captures its full profile at both the narrow
+        # (blue) and broad (red) ends of a wide spectrum — a single fixed window
+        # mis-measures one end and fakes doublet-ratio deviations on thin data.
         inst = getattr(fwd, "instrument", None)
-        sigma_nm = 0.0
+        line_sigma_nm: Optional[np.ndarray] = None
         if inst is not None:
             try:
                 if getattr(inst, "is_resolving_power_mode", False):
-                    sigma_nm = float(inst.sigma_at_wavelength(mid_wl))
+                    line_sigma_nm = np.array(
+                        [float(inst.sigma_at_wavelength(float(w))) for w in line_wl],
+                        dtype=np.float64,
+                    )
                 else:
-                    sigma_nm = float(getattr(inst, "resolution_sigma_nm", 0.0) or 0.0)
+                    s = float(getattr(inst, "resolution_sigma_nm", 0.0) or 0.0)
+                    if s > 0:
+                        line_sigma_nm = np.full(line_wl.shape, s, dtype=np.float64)
             except Exception:  # noqa: BLE001 — instrument model is advisory here
-                sigma_nm = 0.0
-        pixel_nm = float(np.median(np.abs(np.diff(np.sort(wl))))) if wl.size > 1 else 0.0
-        measure_hw = max(1.5 * sigma_nm, 3.0 * pixel_nm, 0.05)
-        mask_hw = max(3.0 * sigma_nm, 5.0 * pixel_nm, 0.10)
+                line_sigma_nm = None
+        fit_pixel_nm = (
+            float(np.median(np.abs(np.diff(np.sort(fit_wl))))) if fit_wl.size > 1 else 0.0
+        )
+        # Mask windows on the fit grid: a few fit pixels, floored to cover a line.
+        mask_hw = max(5.0 * fit_pixel_nm, 0.15)
 
         return build_observed_thick_line_mask(
-            wl,
-            obs,
-            line_wavelengths_nm=np.asarray(snap.line_wavelengths_nm),
+            measure_wl,
+            measure_obs,
+            line_wavelengths_nm=line_wl,
             line_elements=line_elements,
             line_ion_stages=line_ion_stages,
             line_E_k_ev=np.asarray(snap.line_E_k_ev),
             line_g_k=np.asarray(snap.line_g_k),
             line_A_ki=np.asarray(snap.line_A_ki),
+            mask_wavelength_grid=fit_wl,
             corrector=corrector,
             temperature_K=temperature_K,
-            measure_half_width_nm=measure_hw,
+            line_sigma_nm=line_sigma_nm,
+            measure_half_width_nm=0.2,
             mask_half_width_nm=mask_hw,
             mask_tau_min=mask_tau_min,
         )
@@ -789,6 +806,11 @@ def solve_full_spectrum(
     n_el = len(elements)
     wl = np.asarray(wavelength, dtype=np.float64)
     obs = np.asarray(intensity, dtype=np.float64)
+    # Native (pre-resample) spectrum for observable line MEASUREMENT — the SA
+    # mask must measure narrow lines at full resolution even though the fit runs
+    # on the coarser resampled grid.
+    native_wl = wl.copy()
+    native_obs = obs.copy()
 
     # Resample onto a coarser uniform fit grid (CPU-tractable XLA compile/eval).
     # Real SuperCam axes have inter-spectrometer gaps; a uniform grid that spans
@@ -849,7 +871,12 @@ def solve_full_spectrum(
     sa_mask_diag: Dict[str, Any] = {"mode": sa_mode, "n_flagged": 0, "max_tau": 0.0}
     if sa_mode != "off":
         sa_mask = _self_absorption_line_mask(
-            fwd, wl, obs, temperature_K=float(warm_start_T_K), mask_tau_min=sa_mask_tau_min
+            fwd,
+            wl,
+            native_wl,
+            native_obs,
+            temperature_K=float(warm_start_T_K),
+            mask_tau_min=sa_mask_tau_min,
         )
         sa_mask_diag.update(
             {
