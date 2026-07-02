@@ -1474,6 +1474,7 @@ def _run_full_spectrum_solver(
             warm_start_concentrations=warm_concentrations,
             resolving_power=pipeline.resolving_power,
             method=pipeline.solver,
+            apply_self_absorption=pipeline.apply_self_absorption,
             strict=strict,
         )
     except Exception as exc:  # noqa: BLE001 — never crash the pipeline on the fit
