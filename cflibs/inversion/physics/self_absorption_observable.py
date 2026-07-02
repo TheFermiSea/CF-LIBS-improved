@@ -648,6 +648,267 @@ class ObservableSelfAbsorptionCorrector:
         return n_suspect
 
 
+@dataclass
+class ThickLineMask:
+    """Observable-anchored optically-thick line mask over a wavelength grid.
+
+    Produced by :func:`build_observed_thick_line_mask` for the raw-spectrum
+    (full-spectrum / joint) fit path, which — unlike the iterative Boltzmann
+    path — has no line list to hand to
+    :class:`ObservableSelfAbsorptionCorrector` and no saturation term in its
+    optically-thin forward. The mask carries the set of wavelength windows the
+    corrector's *observable* diagnostics (doublet intensity ratios; optional
+    Planck-ceiling COG) flagged as optically thick, so the caller can exclude
+    them from the residual on BOTH the observed and model side.
+
+    Attributes
+    ----------
+    keep : np.ndarray or None
+        Boolean array over the wavelength grid (``True`` = pixel retained in
+        the fit). ``None`` means *no line was flagged optically thick* — the
+        caller MUST then skip masking entirely so a thin spectrum reproduces
+        the un-masked fit bit-for-bit (the audit's required no-op).
+    flagged_wavelengths : list of float
+        Line-center wavelengths (nm) flagged optically thick by an observable.
+    max_tau : float
+        Largest observable line-center optical depth among flagged lines.
+    n_lines_measured : int
+        Number of catalog lines with a measurable peak that were handed to the
+        observable corrector.
+    n_flagged : int
+        Number of lines flagged optically thick.
+    corrections : dict
+        The corrector's per-line :class:`ObservableLineCorrection` records.
+    warnings : list of str
+        Non-fatal notes (e.g. mask disabled because it would remove too much).
+    """
+
+    keep: Optional[np.ndarray]
+    flagged_wavelengths: List[float]
+    max_tau: float
+    n_lines_measured: int
+    n_flagged: int
+    corrections: Dict[float, ObservableLineCorrection]
+    warnings: List[str] = field(default_factory=list)
+
+
+def _robust_noise_sigma(intensity: np.ndarray) -> float:
+    """Robust per-pixel noise sigma from the first-difference MAD.
+
+    ``sigma = 1.4826 * MAD(diff(I)) / sqrt(2)``. The first difference removes
+    the (smooth) line/continuum signal, leaving the pixel-to-pixel noise; the
+    ``/sqrt(2)`` undoes the variance doubling of differencing. Returns ``0.0``
+    for a spectrum too short to difference (then SNR gating is skipped).
+    """
+    arr = np.asarray(intensity, dtype=np.float64)
+    if arr.size < 3:
+        return 0.0
+    d = np.diff(arr)
+    mad = float(np.median(np.abs(d - np.median(d))))
+    return 1.4826 * mad / math.sqrt(2.0)
+
+
+def build_observed_thick_line_mask(
+    wavelength: np.ndarray,
+    intensity: np.ndarray,
+    *,
+    line_wavelengths_nm: Sequence[float],
+    line_elements: Sequence[str],
+    line_ion_stages: Sequence[int],
+    line_E_k_ev: Sequence[float],
+    line_g_k: Sequence[float],
+    line_A_ki: Sequence[float],
+    corrector: Optional["ObservableSelfAbsorptionCorrector"] = None,
+    temperature_K: Optional[float] = None,
+    peak_spectral_radiance: Optional[Dict[float, float]] = None,
+    measure_half_width_nm: float = 0.1,
+    mask_half_width_nm: float = 0.2,
+    mask_tau_min: float = 0.5,
+    min_peak_snr: float = 4.0,
+    baseline_percentile: float = 10.0,
+    max_lines: int = 400,
+    max_mask_fraction: float = 0.5,
+) -> ThickLineMask:
+    """Flag optically-thick line windows in a raw spectrum from observables.
+
+    This is the raw-spectrum companion to
+    :meth:`ObservableSelfAbsorptionCorrector.correct` (which needs a fitted
+    line list). It (1) measures each in-band catalog line's integrated
+    intensity from the *observed* spectrum, (2) hands the resulting
+    :class:`LineObservation` list to the SAME observable corrector, and
+    (3) turns every line the corrector flagged optically thick — via a
+    *measured* observable (doublet intensity ratio, or Planck-ceiling COG when
+    a calibrated peak radiance is supplied) — into an exclusion window.
+
+    Design constraints honoured (physics-first-principles audit, Issue 3,
+    "Corrected scope"): the flag is anchored ONLY to spectrum observables, never
+    to a composition-derived optical depth (the audited-harmful F4 feedback
+    loop), and no new fitted optical-depth degree of freedom is introduced. A
+    line whose *signature* looks SA-prone but has no usable observable
+    (``method == "suspect"`` with ``tau`` NaN) is deliberately NOT masked — that
+    is a risk heuristic, not a measurement, and masking on it would remove thin
+    resonance lines and break the thin-spectrum no-op.
+
+    Parameters
+    ----------
+    wavelength, intensity : ndarray
+        Observed spectrum (nm; arbitrary but self-consistent radiometric
+        units — the doublet-ratio observable is intensity-scale-independent).
+    line_wavelengths_nm, line_elements, line_ion_stages, line_E_k_ev, \
+    line_g_k, line_A_ki : sequences
+        Per-line catalog metadata (typically unpacked from an
+        :class:`~cflibs.core.jax_runtime.AtomicSnapshot`).
+    corrector : ObservableSelfAbsorptionCorrector, optional
+        Reuses the caller's configured corrector; a default one is built when
+        omitted.
+    temperature_K, peak_spectral_radiance : optional
+        Enable the Planck-ceiling observable (path (b)); require a
+        radiometrically calibrated spectrum, so they are ``None`` on the
+        area-normalised full-spectrum path and only the T-/scale-independent
+        doublet observable runs.
+    measure_half_width_nm : float
+        Half-width (nm) of the window used to integrate each line's intensity.
+    mask_half_width_nm : float
+        Half-width (nm) of the excluded window centred on each flagged line.
+    mask_tau_min : float
+        Minimum observable line-center optical depth for a line to be masked
+        (a tiny measured tau is not worth excluding).
+    min_peak_snr : float
+        A catalog line is only measured when its peak clears this multiple of
+        the estimated noise sigma (skips the thousands of absent catalog lines).
+    max_lines : int
+        Cap on the strongest measured lines handed to the corrector (bounds the
+        O(n^2) doublet scan on dense real spectra).
+    max_mask_fraction : float
+        Safety valve: if the mask would remove more than this fraction of
+        pixels the mask is disabled (``keep=None``) and a warning recorded, so a
+        pathological detection can never gut the fit.
+
+    Returns
+    -------
+    ThickLineMask
+    """
+    wl = np.asarray(wavelength, dtype=np.float64)
+    obs = np.asarray(intensity, dtype=np.float64)
+    lam = np.asarray(line_wavelengths_nm, dtype=np.float64)
+    empty = ThickLineMask(None, [], 0.0, 0, 0, {}, [])
+    if wl.size == 0 or obs.size == 0 or lam.size == 0 or wl.size != obs.size:
+        return empty
+
+    ek = np.asarray(line_E_k_ev, dtype=np.float64)
+    gk = np.asarray(line_g_k, dtype=np.float64)
+    aki = np.asarray(line_A_ki, dtype=np.float64)
+    n_cat = lam.size
+    if not (len(line_elements) == len(line_ion_stages) == n_cat == ek.size == gk.size == aki.size):
+        return empty
+
+    wl_lo, wl_hi = float(np.min(wl)), float(np.max(wl))
+    sigma_noise = _robust_noise_sigma(obs)
+
+    # --- (1) measure each in-band catalog line from the observed spectrum ----
+    measured: List[tuple] = []  # (idx, integrated_intensity, intensity_uncertainty)
+    for i in range(n_cat):
+        c = float(lam[i])
+        if c < wl_lo or c > wl_hi or aki[i] <= 0.0 or gk[i] <= 0.0:
+            continue
+        sel = np.abs(wl - c) <= measure_half_width_nm
+        if not np.any(sel):
+            continue
+        wseg = wl[sel]
+        seg = obs[sel]
+        order = np.argsort(wseg)
+        wseg = wseg[order]
+        seg = seg[order]
+        baseline = float(np.percentile(seg, baseline_percentile))
+        above = np.clip(seg - baseline, 0.0, None)
+        peak = float(np.max(above)) if above.size else 0.0
+        if peak <= 0.0:
+            continue
+        if sigma_noise > 0.0 and peak < min_peak_snr * sigma_noise:
+            continue
+        integrated = float(np.trapz(above, wseg)) if wseg.size > 1 else peak
+        if integrated <= 0.0:
+            continue
+        mean_dwl = float(np.mean(np.diff(wseg))) if wseg.size > 1 else 0.0
+        unc = sigma_noise * math.sqrt(float(wseg.size)) * mean_dwl
+        measured.append((i, integrated, unc))
+
+    if not measured:
+        return empty
+
+    # Keep the strongest lines (self-absorption is a strong-line effect) and
+    # bound the O(n^2) doublet scan on dense real catalogs.
+    measured.sort(key=lambda t: t[1], reverse=True)
+    if len(measured) > max_lines:
+        measured = measured[:max_lines]
+
+    observations = [
+        LineObservation(
+            wavelength_nm=float(lam[i]),
+            intensity=integ,
+            intensity_uncertainty=unc,
+            element=str(line_elements[i]),
+            ionization_stage=int(line_ion_stages[i]),
+            E_k_ev=float(ek[i]),
+            g_k=float(gk[i]),
+            A_ki=float(aki[i]),
+            aki_uncertainty=None,
+        )
+        for (i, integ, unc) in measured
+    ]
+
+    # --- (2) run the SAME observable corrector -------------------------------
+    if corrector is None:
+        corrector = ObservableSelfAbsorptionCorrector()
+    result = corrector.correct(
+        observations,
+        temperature_K=temperature_K,
+        peak_spectral_radiance=peak_spectral_radiance,
+    )
+
+    # --- (3) build the exclusion mask from OBSERVABLE thick flags only -------
+    # A line is masked iff the corrector measured a finite optical depth at or
+    # above ``mask_tau_min``. That covers doublet-corrected lines, Planck-ceiling
+    # lines, and doublet-forced suspects (tau finite from the pair). Signature-
+    # only suspects (tau NaN) and observably-thin doublets (tau <= 1e-3) are NOT
+    # masked, which is what preserves the thin-spectrum no-op.
+    keep = np.ones(wl.shape, dtype=bool)
+    flagged: List[float] = []
+    max_tau = 0.0
+    for w, corr in result.corrections.items():
+        if np.isfinite(corr.tau) and corr.tau >= mask_tau_min:
+            flagged.append(float(w))
+            max_tau = max(max_tau, float(corr.tau))
+            keep &= np.abs(wl - float(w)) > mask_half_width_nm
+
+    if not flagged:
+        return ThickLineMask(
+            None, [], 0.0, len(observations), 0, result.corrections, list(result.warnings)
+        )
+
+    masked_fraction = 1.0 - float(np.count_nonzero(keep)) / float(keep.size)
+    warnings = list(result.warnings)
+    if masked_fraction > max_mask_fraction:
+        warnings.append(
+            f"observable thick-line mask would remove {masked_fraction:.0%} of pixels "
+            f"(> {max_mask_fraction:.0%} guard); disabling mask (fit stays optically thin)"
+        )
+        return ThickLineMask(
+            None, flagged, max_tau, len(observations), len(flagged), result.corrections, warnings
+        )
+
+    logger.info(
+        "observable thick-line mask: measured=%d flagged=%d max_tau=%.3f masked_pixels=%.1f%%",
+        len(observations),
+        len(flagged),
+        max_tau,
+        100.0 * masked_fraction,
+    )
+    return ThickLineMask(
+        keep, flagged, max_tau, len(observations), len(flagged), result.corrections, warnings
+    )
+
+
 def normalize_self_absorption_mode(value) -> str:
     """Normalize the ``apply_self_absorption`` knob to ``'off'|'observable'``.
 
@@ -676,6 +937,8 @@ __all__ = [
     "ObservableSAResult",
     "ObservableSelfAbsorptionCorrector",
     "PlanckCorrection",
+    "ThickLineMask",
+    "build_observed_thick_line_mask",
     "correct_intensity_planck",
     "doppler_cog_escape_factor",
     "normalize_self_absorption_mode",
