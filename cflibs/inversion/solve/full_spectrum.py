@@ -65,6 +65,12 @@ from cflibs.inversion.common.strict import (
     require_atomic_data,
     resolve_strict,
 )
+from cflibs.inversion.physics.self_absorption_observable import (
+    ObservableSelfAbsorptionCorrector,
+    ThickLineMask,
+    build_observed_thick_line_mask,
+    normalize_self_absorption_mode,
+)
 
 logger = get_logger("inversion.solve.full_spectrum")
 
@@ -597,6 +603,95 @@ def _handle_optimizer_exception(
 
 
 # ---------------------------------------------------------------------------
+# Observable self-absorption mask (Issue 3: thin model vs thick data)
+# ---------------------------------------------------------------------------
+
+
+def _self_absorption_line_mask(
+    fwd: "_ChunkedForward",
+    fit_wl: np.ndarray,
+    measure_wl: np.ndarray,
+    measure_obs: np.ndarray,
+    *,
+    temperature_K: float,
+    mask_tau_min: float,
+    corrector: Optional[ObservableSelfAbsorptionCorrector] = None,
+) -> ThickLineMask:
+    """Observable-anchored optically-thick line mask for the raw-spectrum fit.
+
+    Unpacks the forward's atomic snapshot into per-line arrays and delegates to
+    :func:`cflibs.inversion.physics.self_absorption_observable.build_observed_thick_line_mask`,
+    which measures each in-band line from the OBSERVED spectrum and runs the
+    same observable corrector wired into the iterative path (doublet intensity
+    ratios; no composition-derived optical depth, no fitted tau DOF).
+
+    Line intensities are measured on the NATIVE (high-resolution) spectrum
+    ``measure_wl``/``measure_obs`` — a coarsely-resampled fit grid under-samples
+    narrow lines and corrupts the integrated-intensity ratio — while the
+    returned ``keep`` mask is built on the fit grid ``fit_wl``.
+
+    Best-effort: any failure (a stub forward without a snapshot, a degenerate
+    catalog, etc.) yields an empty mask so the fit proceeds exactly as the
+    optically-thin path would — the correction never crashes the solver.
+    """
+    snap = getattr(fwd, "snapshot", None)
+    if snap is None:
+        return ThickLineMask(None, [], 0.0, 0, 0, {}, ["no atomic snapshot; mask skipped"])
+    try:
+        species = list(snap.species)
+        line_sp_idx = np.asarray(snap.line_species_index)
+        line_elements = [species[j][0] for j in line_sp_idx]
+        line_ion_stages = [int(species[j][1]) for j in line_sp_idx]
+        line_wl = np.asarray(snap.line_wavelengths_nm, dtype=np.float64)
+
+        # Per-line instrument sigma: gives each line a wavelength-scaled
+        # measurement window that captures its full profile at both the narrow
+        # (blue) and broad (red) ends of a wide spectrum — a single fixed window
+        # mis-measures one end and fakes doublet-ratio deviations on thin data.
+        inst = getattr(fwd, "instrument", None)
+        line_sigma_nm: Optional[np.ndarray] = None
+        if inst is not None:
+            try:
+                if getattr(inst, "is_resolving_power_mode", False):
+                    line_sigma_nm = np.array(
+                        [float(inst.sigma_at_wavelength(float(w))) for w in line_wl],
+                        dtype=np.float64,
+                    )
+                else:
+                    s = float(getattr(inst, "resolution_sigma_nm", 0.0) or 0.0)
+                    if s > 0:
+                        line_sigma_nm = np.full(line_wl.shape, s, dtype=np.float64)
+            except Exception:  # noqa: BLE001 — instrument model is advisory here
+                line_sigma_nm = None
+        fit_pixel_nm = (
+            float(np.median(np.abs(np.diff(np.sort(fit_wl))))) if fit_wl.size > 1 else 0.0
+        )
+        # Mask windows on the fit grid: a few fit pixels, floored to cover a line.
+        mask_hw = max(5.0 * fit_pixel_nm, 0.15)
+
+        return build_observed_thick_line_mask(
+            measure_wl,
+            measure_obs,
+            line_wavelengths_nm=line_wl,
+            line_elements=line_elements,
+            line_ion_stages=line_ion_stages,
+            line_E_k_ev=np.asarray(snap.line_E_k_ev),
+            line_g_k=np.asarray(snap.line_g_k),
+            line_A_ki=np.asarray(snap.line_A_ki),
+            mask_wavelength_grid=fit_wl,
+            corrector=corrector,
+            temperature_K=temperature_K,
+            line_sigma_nm=line_sigma_nm,
+            measure_half_width_nm=0.2,
+            mask_half_width_nm=mask_hw,
+            mask_tau_min=mask_tau_min,
+        )
+    except Exception as exc:  # noqa: BLE001 — mask is a best-effort preprocessing step
+        logger.warning("Observable self-absorption mask failed (%r); fitting thin.", exc)
+        return ThickLineMask(None, [], 0.0, 0, 0, {}, [f"mask error: {exc!r}"])
+
+
+# ---------------------------------------------------------------------------
 # Public solver
 # ---------------------------------------------------------------------------
 
@@ -617,6 +712,8 @@ def solve_full_spectrum(
     sweep_points: int = 9,
     fit_pixels: Optional[int] = 1500,
     method: str = "bayesian",
+    apply_self_absorption: "bool | str" = "observable",
+    sa_mask_tau_min: float = 0.5,
     strict: Optional[bool] = None,
 ) -> FullSpectrumResult:
     """Run the memory-efficient, SVD-conditioned full-spectrum fit.
@@ -658,6 +755,24 @@ def solve_full_spectrum(
         (pure MAP-of-likelihood).  Both use the identical chunked forward and
         SVD loss — the difference is purely the regularisation, mirroring the
         joint-optimizer (no prior) vs Bayesian-MAP (informative prior) split.
+    apply_self_absorption : bool or str, optional
+        Observable-anchored self-absorption handling for the thin forward vs
+        thick data mismatch (physics-first-principles audit, Issue 3). The
+        optically-thin forward here has no saturation term, so a prior-free fit
+        fakes the missing saturation by riding ``T`` to a box edge. When
+        ``'observable'``/``True`` (default) the strongest OBSERVED lines that
+        the observable corrector (doublet intensity ratios — the same corrector
+        wired into the iterative path) measures as optically thick are EXCLUDED
+        from the SVD residual on both the observed and model side, so the fit is
+        never asked to reproduce a saturated line with a thin model. ``'off'``/
+        ``False`` disables the mask (byte-identical optically-thin fit) for A/B.
+        The flag mirrors the iterative solver's ``apply_self_absorption`` knob;
+        it is data-side only — no composition-derived optical depth and no
+        fitted optical-depth degree of freedom are introduced (the audited-
+        harmful F4 loop is explicitly avoided).
+    sa_mask_tau_min : float, optional
+        Minimum observable line-center optical depth for a line to be masked
+        (default 0.5). A tiny measured tau is not worth excluding a window for.
     strict : bool, optional
         Strict / no-fallback mode (resolved via
         :func:`cflibs.inversion.common.strict.resolve_strict` — defaults to the
@@ -691,6 +806,11 @@ def solve_full_spectrum(
     n_el = len(elements)
     wl = np.asarray(wavelength, dtype=np.float64)
     obs = np.asarray(intensity, dtype=np.float64)
+    # Native (pre-resample) spectrum for observable line MEASUREMENT — the SA
+    # mask must measure narrow lines at full resolution even though the fit runs
+    # on the coarser resampled grid.
+    native_wl = wl.copy()
+    native_obs = obs.copy()
 
     # Resample onto a coarser uniform fit grid (CPU-tractable XLA compile/eval).
     # Real SuperCam axes have inter-spectrometer gaps; a uniform grid that spans
@@ -734,6 +854,56 @@ def solve_full_spectrum(
         strict=strict,
     )
 
+    # ---- Observable self-absorption exclusion mask (audit Issue 3) ----------
+    # The forward here is optically THIN (apply_self_absorption=False); real
+    # data is optically thick in the strong resonance lines. Without a
+    # saturation term a prior-free fit fakes the missing saturation by riding T
+    # to a box edge. We exclude the observed-and-modelled windows of lines the
+    # OBSERVABLE corrector (doublet intensity ratios) measures as thick, so the
+    # fit is never asked to reproduce a saturated line with a thin model. This
+    # is data-side only: no composition-derived tau, no fitted optical-depth DOF
+    # (the audited-harmful F4 loop). ``keep_np is None`` (no line flagged, or SA
+    # off) means an EXACT no-op — the masking multiply is skipped entirely so a
+    # thin spectrum reproduces the un-masked fit bit-for-bit.
+    sa_mode = normalize_self_absorption_mode(apply_self_absorption)
+    keep_np: Optional[np.ndarray] = None
+    keep_jnp = None
+    sa_mask_diag: Dict[str, Any] = {"mode": sa_mode, "n_flagged": 0, "max_tau": 0.0}
+    if sa_mode != "off":
+        sa_mask = _self_absorption_line_mask(
+            fwd,
+            wl,
+            native_wl,
+            native_obs,
+            temperature_K=float(warm_start_T_K),
+            mask_tau_min=sa_mask_tau_min,
+        )
+        sa_mask_diag.update(
+            {
+                "n_lines_measured": sa_mask.n_lines_measured,
+                "n_flagged": sa_mask.n_flagged,
+                "max_tau": sa_mask.max_tau,
+                "flagged_wavelengths_nm": [round(w, 3) for w in sa_mask.flagged_wavelengths],
+            }
+        )
+        if sa_mask.warnings:
+            sa_mask_diag["warnings"] = list(sa_mask.warnings)
+        if sa_mask.keep is not None:
+            keep_np = sa_mask.keep.astype(np.float64)
+            keep_jnp = jnp.asarray(keep_np)
+            obs = obs * keep_np  # masked observed drives the basis + projection
+            logger.info(
+                "Full-spectrum SA mask active: %d/%d thick lines excluded (max_tau=%.2f)",
+                sa_mask.n_flagged,
+                sa_mask.n_lines_measured,
+                sa_mask.max_tau,
+            )
+    diag.extra["self_absorption_mask"] = sa_mask_diag
+
+    def _mask_np(spec: np.ndarray) -> np.ndarray:
+        """Apply the SA keep-mask to a pixel-space spectrum (no-op when None)."""
+        return spec if keep_np is None else spec * keep_np
+
     # ---- Build the SVD library from a coarse warm-start-centred sweep ----
     # Vary T (+/-30%) and log n_e (+/-0.5 dex) and a few single-element-boosted
     # compositions so the basis spans the directions the fit will move along.
@@ -742,7 +912,9 @@ def solve_full_spectrum(
     ne_offsets = np.linspace(-0.5, 0.5, 3)
     for tf in T_factors:
         for dne in ne_offsets:
-            lib_rows.append(fwd.spectrum_numpy(warm_T_eV * tf, warm_log_ne + dne, warm_numfrac))
+            lib_rows.append(
+                _mask_np(fwd.spectrum_numpy(warm_T_eV * tf, warm_log_ne + dne, warm_numfrac))
+            )
     # Composition perturbations: boost each element in turn. ALWAYS generated
     # (one per element) so the SVD basis spans composition directions. The 3x3
     # T/ne grid alone does not — without these rows the optimizer moves in
@@ -755,12 +927,14 @@ def solve_full_spectrum(
         boosted = warm_numfrac.copy()
         boosted[i] = boosted[i] * 3.0 + 0.05
         boosted = boosted / boosted.sum()
-        lib_rows.append(fwd.spectrum_numpy(warm_T_eV, warm_log_ne, boosted))
+        lib_rows.append(_mask_np(fwd.spectrum_numpy(warm_T_eV, warm_log_ne, boosted)))
     # `sweep_points` now requests OPTIONAL extra warm-centred T-refinement rows
     # beyond the base 3x3 T/ne grid + per-element composition rows.
     extra_tne = max(0, int(sweep_points) - 9)
     for tf in np.linspace(0.8, 1.2, extra_tne) if extra_tne else ():
-        lib_rows.append(fwd.spectrum_numpy(warm_T_eV * float(tf), warm_log_ne, warm_numfrac))
+        lib_rows.append(
+            _mask_np(fwd.spectrum_numpy(warm_T_eV * float(tf), warm_log_ne, warm_numfrac))
+        )
     library = np.vstack(lib_rows)
 
     basis_np, mean_np, k = build_svd_basis(library, obs, n_components=n_components, strict=strict)
@@ -779,7 +953,7 @@ def solve_full_spectrum(
     # matches the data to within this residual, so chi-square ~ k (the PC count)
     # at a good fit and a prior with sigma_logT~0.15 genuinely competes with a
     # T excursion. A floor keeps it from collapsing to zero on a perfect seed.
-    warm_model = fwd.spectrum_numpy(warm_T_eV, warm_log_ne, warm_numfrac)
+    warm_model = _mask_np(fwd.spectrum_numpy(warm_T_eV, warm_log_ne, warm_numfrac))
     warm_proj = (_normalise_spectrum(warm_model, strict=strict) - mean_np) @ basis_np.T
     warm_resid = warm_proj - obs_proj_np
     sigma_d = float(
@@ -837,6 +1011,11 @@ def solve_full_spectrum(
     def objective(x):
         T_eV, log_ne, conc = _params(x)
         model = fwd.spectrum(T_eV, log_ne, conc)
+        if keep_jnp is not None:
+            # Exclude observable-thick line windows from BOTH sides of the
+            # residual (obs_proj was built from the masked observed spectrum),
+            # so the thin model is never scored against a saturated line.
+            model = model * keep_jnp
         area = jnp.sum(jnp.abs(model)) + 1e-30
         model_norm = model / area
         resid = _proj(model_norm) - obs_proj
