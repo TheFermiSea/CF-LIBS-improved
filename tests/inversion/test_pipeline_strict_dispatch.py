@@ -30,7 +30,11 @@ def _warm():
 
 def _pipeline(strict=None):
     return types.SimpleNamespace(
-        solver="joint", elements=["Fe", "Cr"], resolving_power=5000.0, strict=strict
+        solver="joint",
+        elements=["Fe", "Cr"],
+        resolving_power=5000.0,
+        strict=strict,
+        apply_self_absorption="off",
     )
 
 
