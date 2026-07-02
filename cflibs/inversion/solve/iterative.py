@@ -215,11 +215,7 @@ class CFLIBSResult:
         # dominant (most abundant) element when a caller has not already set it.
         # Pure annotation: reads ``concentrations``, never writes T/n_e/comp.
         if not self.log_ratios_vs_dominant and self.concentrations:
-            finite = {
-                el: v
-                for el, v in self.concentrations.items()
-                if np.isfinite(v) and v > 0.0
-            }
+            finite = {el: v for el, v in self.concentrations.items() if np.isfinite(v) and v > 0.0}
             if len(finite) >= 2:
                 ref = max(finite, key=finite.__getitem__)
                 self.log_ratio_reference = ref

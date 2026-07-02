@@ -8,7 +8,6 @@ import pytest
 
 from cflibs.inversion.physics.closure import ClosureEquation, log_ratios
 
-
 # ---------------------------------------------------------------------------
 # Aitchison log-ratios (Issue 2 — matrix-invariant DED deliverable)
 # ---------------------------------------------------------------------------
