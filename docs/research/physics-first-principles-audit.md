@@ -289,3 +289,20 @@
 5. **Inverse Saha ladder truncates at stage II while the forward uses stage III** — a round-trip asymmetry that explains the perverse Cr-partition regression; make the inverse match the forward. **Impact: cheap; up to ~40% for hot-core/high-Z, few % at late-gate steel T.**
 
 **Report path:** `/home/brian/code/CF-LIBS-improved/.worktrees/no-fallback/docs/research/physics-first-principles-audit.md`
+
+---
+
+## Addendum (2026-07-02): Issue 1 anchoring arm — FALSIFIED where testable
+
+The Lawler/Den Hartog lifetime-anchoring experiment ran (overlay DB, 2,304 lab-anchored lines,
+production DB verifiably untouched). Result: **median ln(A_anchored/A_NIST) ≈ 0 for every
+covered species** — NIST ASD already sources the Wisconsin gf-values there, so no coherent
+scale correction exists to apply. The σ_rms table is a grade-weighted worst-case *bound*, not
+a realized bias. Coverage of the pipeline's actually-selected lines is the binding limiter
+(Fe I/Fe II: 0%); where covered, micro-improvements (Cr −0.49, Ni −0.19 RMSEP) but a net
+held-out regression (+0.40) via an Fe selection cascade → the overlay stays OPT-IN, off the
+default path. Reinterpretation: the ~0.171 real-data atomic-data loss is NOT Lawler-vs-NIST
+scale error; the remaining suspects are the specific older-source gf's of the selected
+persistent lines (testable per-line vs an independent Kurucz ingest) or a non-A_ki mechanism.
+The in-plasma relative-gA self-calibration (Issue 1a) is unaffected — it measures whatever
+lines are actually used.
