@@ -1,0 +1,13 @@
+id: physics-only-no-jax-nn
+valid:
+  # explicit jnp math (the sanctioned way)
+  - y = jnp.exp(-x) / (1.0 + jnp.exp(-x))
+  - from jax import jit, vmap
+  - import jax.numpy as jnp
+  - z = jax.numpy.dot(a, b)
+invalid:
+  - w = jax.nn.softmax(logits)
+  - from jax import nn
+  - import jax.nn
+  - h = jax.nn.sigmoid(x)
+  - from jax.experimental import stax

@@ -1,0 +1,13 @@
+id: standard-db-read-only
+valid:
+  # read-only URI open
+  - conn = sqlite3.connect("file:std.db?mode=ro", uri=True)
+  # read-only via f-string URI
+  - conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+  # not a sqlite connect at all
+  - conn = psycopg2.connect(dsn)
+invalid:
+  # read-write open of a path
+  - conn = sqlite3.connect(db_path)
+  # read-write open of a string literal
+  - conn = sqlite3.connect("ASD_da/libs_production.db")

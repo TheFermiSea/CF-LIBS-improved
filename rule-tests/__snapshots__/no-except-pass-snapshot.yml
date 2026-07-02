@@ -1,0 +1,34 @@
+id: no-except-pass
+snapshots:
+  ? |
+    try:
+        parse()
+    except KeyError:
+        pass
+  : labels:
+    - source: |-
+        except KeyError:
+            pass
+      style: primary
+      start: 17
+      end: 42
+    - source: pass
+      style: secondary
+      start: 38
+      end: 42
+  ? |
+    try:
+        risky()
+    except Exception:
+        pass
+  : labels:
+    - source: |-
+        except Exception:
+            pass
+      style: primary
+      start: 17
+      end: 43
+    - source: pass
+      style: secondary
+      start: 39
+      end: 43

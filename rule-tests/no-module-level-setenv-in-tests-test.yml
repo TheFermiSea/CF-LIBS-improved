@@ -1,0 +1,18 @@
+id: no-module-level-setenv-in-tests
+valid:
+  # inside a fixture -> scoped, allowed
+  - |
+    @pytest.fixture
+    def _env():
+        os.environ.setdefault("CFLIBS_X", "1")
+        yield
+  # inside a plain function
+  - |
+    def setup_module():
+        os.environ.setdefault("JAX_PLATFORMS", "cpu")
+  # a regular assignment, not setdefault
+  - os.environ["CFLIBS_X"] = "1"
+invalid:
+  # module-level setdefault -> collection-time pollution
+  - os.environ.setdefault("CFLIBS_USE_LAX_WHILE_LOOP", "1")
+  - os.environ.setdefault("JAX_PLATFORMS", "cpu")

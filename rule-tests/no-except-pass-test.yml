@@ -1,0 +1,33 @@
+id: no-except-pass
+valid:
+  # logs the failure instead of silently swallowing
+  - |
+    try:
+        risky()
+    except Exception:
+        logger.debug("ignored")
+  # annotated as intentionally ignorable
+  - |
+    try:
+        best_effort_cleanup()
+    except Exception:
+        pass  # fallback-ok: best-effort cleanup
+  # re-raises
+  - |
+    try:
+        risky()
+    except Exception:
+        raise
+invalid:
+  # pure silent swallow
+  - |
+    try:
+        risky()
+    except Exception:
+        pass
+  # narrowed exception, still a silent swallow
+  - |
+    try:
+        parse()
+    except KeyError:
+        pass

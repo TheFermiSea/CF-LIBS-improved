@@ -1,0 +1,24 @@
+id: physics-only-no-jax-nn
+language: python
+severity: error
+message: >-
+  Physics-only violation: `jax.nn` (neural-network primitives) used in the
+  shipped CF-LIBS algorithm.
+note: >-
+  WHY: the HARD physics-only constraint (CLAUDE.md; bead CF-LIBS-improved-3fy3)
+  bans jax.nn alongside the ML frameworks. Softmax/one-hot/sigmoid closures
+  must be written explicitly in `jnp` (see cflibs/jitpipe/autodiff.py, which
+  deliberately implements a stable logistic by hand). ML is permitted ONLY
+  under cflibs/evolution/ (excluded below).
+  This rule is a CI GATE: it is clean today and must stay clean.
+rule:
+  any:
+    - pattern: jax.nn.$FN
+    - pattern: from jax import nn
+    - pattern: import jax.nn
+    - pattern: from jax.experimental import stax
+    - pattern: jax.experimental.stax.$FN
+files:
+  - "cflibs/**"
+ignores:
+  - "cflibs/evolution/**"

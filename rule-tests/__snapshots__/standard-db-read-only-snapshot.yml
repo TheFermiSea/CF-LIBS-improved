@@ -1,0 +1,14 @@
+id: standard-db-read-only
+snapshots:
+  conn = sqlite3.connect("ASD_da/libs_production.db"):
+    labels:
+    - source: sqlite3.connect("ASD_da/libs_production.db")
+      style: primary
+      start: 7
+      end: 51
+  conn = sqlite3.connect(db_path):
+    labels:
+    - source: sqlite3.connect(db_path)
+      style: primary
+      start: 7
+      end: 31

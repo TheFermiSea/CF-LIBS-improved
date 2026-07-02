@@ -1,0 +1,41 @@
+id: no-silent-fallback-return
+valid:
+  # re-raises -> loud failure, allowed
+  - |
+    try:
+        risky()
+    except Exception as e:
+        raise RuntimeError("boom") from e
+  # bare re-raise
+  - |
+    try:
+        risky()
+    except Exception:
+        cleanup()
+        raise
+  # explicitly annotated as a legitimate fallback
+  - |
+    try:
+        probe_optional_capability()
+    except Exception:
+        return None  # fallback-ok: optional dependency probe
+  # logs and continues without returning a laundered value
+  - |
+    try:
+        risky()
+    except Exception:
+        logger.warning("failed, continuing")
+invalid:
+  # launders a default return value
+  - |
+    try:
+        risky()
+    except Exception:
+        return None
+  # logs then returns a fabricated numeric
+  - |
+    try:
+        risky()
+    except ValueError:
+        logger.warning("bad")
+        return 0.0

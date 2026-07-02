@@ -1,0 +1,15 @@
+id: no-stray-schema-mutation
+valid:
+  # read query
+  - cur.execute("SELECT * FROM lines WHERE element = ?")
+  # creating a brand-new table (build path, not a mutation of the standard schema)
+  - cur.execute("CREATE TABLE IF NOT EXISTS staging (id INTEGER)")
+  # unrelated string
+  - msg = "would you like to alter the table layout?"
+invalid:
+  # ALTER of the standard schema
+  - cur.execute("ALTER TABLE lines ADD COLUMN stark_w REAL")
+  # f-string ALTER
+  - cur.execute(f"ALTER TABLE energy_levels ADD COLUMN {name} {typ}")
+  # DROP of a standard table
+  - cur.execute("DROP TABLE lines")

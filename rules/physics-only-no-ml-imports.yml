@@ -1,0 +1,28 @@
+id: physics-only-no-ml-imports
+language: python
+severity: error
+message: >-
+  Physics-only violation: importing a banned ML framework
+  (sklearn/torch/tensorflow/keras/flax/equinox/transformers) in the shipped
+  CF-LIBS algorithm.
+note: >-
+  WHY: the HARD physics-only constraint (CLAUDE.md; bead CF-LIBS-improved-3fy3).
+  The shipped algorithm must contain zero machine learning. This is a
+  structural backstop to the ruff TID251 ban and the AST blocklist scanner in
+  cflibs/evolution/evaluator.py -- ML is permitted ONLY under cflibs/evolution/
+  (LLM-driven optimization tooling), which is excluded below.
+  This rule is a CI GATE: it is clean today and must stay clean.
+rule:
+  any:
+    - kind: import_statement
+    - kind: import_from_statement
+  has:
+    any:
+      - kind: dotted_name
+      - kind: identifier
+    regex: ^(sklearn|torch|tensorflow|keras|flax|equinox|transformers)(\.|$)
+    stopBy: end
+files:
+  - "cflibs/**"
+ignores:
+  - "cflibs/evolution/**"

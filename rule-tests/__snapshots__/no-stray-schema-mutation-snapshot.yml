@@ -1,0 +1,20 @@
+id: no-stray-schema-mutation
+snapshots:
+  cur.execute("ALTER TABLE lines ADD COLUMN stark_w REAL"):
+    labels:
+    - source: '"ALTER TABLE lines ADD COLUMN stark_w REAL"'
+      style: primary
+      start: 12
+      end: 55
+  cur.execute("DROP TABLE lines"):
+    labels:
+    - source: '"DROP TABLE lines"'
+      style: primary
+      start: 12
+      end: 30
+  cur.execute(f"ALTER TABLE energy_levels ADD COLUMN {name} {typ}"):
+    labels:
+    - source: f"ALTER TABLE energy_levels ADD COLUMN {name} {typ}"
+      style: primary
+      start: 12
+      end: 64

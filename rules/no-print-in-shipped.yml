@@ -1,0 +1,21 @@
+id: no-print-in-shipped
+language: python
+severity: warning
+message: >-
+  `print(...)` in shipped library code. Use the module logger so output is
+  controllable, routable, and suppressible in library/API/cluster contexts.
+note: >-
+  WHY: shipped code embedded in a pipeline, a notebook, an MCP tool, or a
+  cluster job cannot have raw stdout writes -- they corrupt structured output
+  and are unroutable. Use `logging` (cflibs/core has logging setup). The CLI
+  (cflibs/cli/**) is exempt because argparse subcommands legitimately print to
+  the user. Docstring `print(...)` usage examples are NOT matched (they are
+  string literals, not call expressions).
+  ANNOTATE: replace with `logger.info(...)` / `logger.debug(...)`; if a script
+  truly needs stdout, move it under cflibs/cli/ or scripts/.
+rule:
+  pattern: print($$$ARGS)
+files:
+  - "cflibs/**"
+ignores:
+  - "cflibs/cli/**"

@@ -1,0 +1,30 @@
+id: no-default-physics-constants
+language: python
+severity: warning
+message: >-
+  Hard-coded physics default: `dict.get(key, <number>)` on an
+  ionization-potential / partition / abundance / concentration table silently
+  substitutes a fabricated constant when the atomic data is missing.
+note: >-
+  WHY: the "IP = 15.0" class from docs/research/physics-first-principles-audit.md
+  (atomic-data completeness). Feeding a guessed ionization potential or
+  partition value into the Saha/Boltzmann balance biases T, n_e and every
+  downstream concentration -- and does so invisibly. Missing atomic data must
+  raise or be recorded, not defaulted to a magic number.
+  ANNOTATE: if the default is genuinely safe (a documented physical limit),
+  hoist it to a named constant with a comment justifying the value, or split
+  the lookup so the missing-key branch is explicit.
+rule:
+  pattern: $DICT.get($KEY, $DEFAULT)
+constraints:
+  # Target ionization-potential / partition tables specifically (the "IP=15.0"
+  # class). Deliberately EXCLUDES abundance/concentration dicts: their numeric
+  # defaults are usually physically correct (absent element -> 0.0, identity
+  # multiplier -> 1.0), so including them produced mostly false positives.
+  DICT:
+    regex: (?i)(ioniz|partition|potential|statistical_weight|energy_level|degenerac)
+  DEFAULT:
+    regex: ^-?[0-9]
+files:
+  - "cflibs/inversion/**"
+  - "cflibs/plasma/**"
