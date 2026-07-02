@@ -54,9 +54,7 @@ GF_TO_GKA_ANGSTROM = (2.0 * math.pi * E_CHARGE**2) / (M_E * C_LIGHT * _EPSILON_0
 
 # Target quantitation species for CF-LIBS (steel / DED / geology minors).
 DEFAULT_TARGET_SPECIES: tuple[tuple[str, int], ...] = tuple(
-    (el, sp)
-    for el in ("Ti", "Al", "V", "Fe", "Cr", "Mn", "Ni", "Cu", "Si", "Mo")
-    for sp in (1, 2)
+    (el, sp) for el in ("Ti", "Al", "V", "Fe", "Cr", "Mn", "Ni", "Cu", "Si", "Mo") for sp in (1, 2)
 )
 
 
@@ -275,7 +273,9 @@ class AnchorResult:
         if not self.per_line:
             return 0.0
         return float(
-            np.mean([abs(math.log(p["scale_ratio"])) for p in self.per_line if p["scale_ratio"] > 0])
+            np.mean(
+                [abs(math.log(p["scale_ratio"])) for p in self.per_line if p["scale_ratio"] > 0]
+            )
         )
 
 
@@ -452,9 +452,7 @@ def compare_aki_sources(
         a = _load_aki_by_transition(db_a, element, sp_num)
         b = _load_aki_by_transition(db_b, element, sp_num)
         shared = set(a) & set(b)
-        ln_ratios = [
-            math.log(a[k] / b[k]) for k in shared if a[k] > 0 and b[k] > 0
-        ]
+        ln_ratios = [math.log(a[k] / b[k]) for k in shared if a[k] > 0 and b[k] > 0]
         if not ln_ratios:
             continue
         arr = np.asarray(ln_ratios, dtype=float)
