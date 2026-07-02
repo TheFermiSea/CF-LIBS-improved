@@ -13,28 +13,7 @@
       "mcp__gpd-state",
       "mcp__gpd-verification",
       "mcp__plugin_serena_serena",
-      "mcp__claude_ai_Hugging_Face",
-      "WebSearch",
-      "WebFetch(domain:www.sciencedirect.com)",
-      "WebFetch(domain:arxiv.org)",
-      "WebFetch(domain:pubs.acs.org)",
-      "WebFetch(domain:www.aanda.org)",
-      "WebFetch(domain:pubmed.ncbi.nlm.nih.gov)",
-      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
-      "WebFetch(domain:www.semanticscholar.org)",
-      "WebFetch(domain:ui.adsabs.harvard.edu)",
-      "WebFetch(domain:www.researchgate.net)",
-      "WebFetch(domain:insu.hal.science)",
-      "WebFetch(domain:www.nature.com)",
-      "WebFetch(domain:pubs.rsc.org)",
-      "WebFetch(domain:www.academia.edu)",
-      "WebFetch(domain:www.ncbi.nlm.nih.gov)",
-      "WebFetch(domain:hal.science)",
-      "WebFetch(domain:link.aps.org)",
-      "WebFetch(domain:api.crossref.org)",
-      "WebFetch",
-      "WebSearch"
-    ],
-    "defaultMode": "bypassPermissions"
+      "mcp__claude_ai_Hugging_Face"
+    ]
   }
 }
