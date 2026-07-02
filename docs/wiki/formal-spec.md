@@ -120,7 +120,7 @@ symbol**. A page introducing a genuinely new symbol adds it *here* first.
 | $N_s$ | species (columnar) number density | cm⁻³ | `N` |
 | $n_e$ | electron density | cm⁻³ | `Saha.electronDensity` |
 | $A_{ki}$ | Einstein transition probability | s⁻¹ | `A` |
-| $\lambda$ | transition wavelength (VACUUM unless flagged air) | nm | `lambda` |
+| $\lambda$ | transition wavelength (air unless flagged vacuum) | nm | `lambda` |
 | $I_{ki}$ | integrated line intensity | inst. units | `intensity` (`lineIntensity`) |
 | $\tau$ | optical depth; escape factor $\mathrm{SA}(\tau)=(1-e^{-\tau})/\tau$ | – | `tau` (`selfAbsorbedIntensity`) |
 | $C_s$ | species mass/number fraction ($\sum_s C_s = 1$) | – | `composition` |

@@ -128,7 +128,7 @@ and folds in the instrument. It is the classic single-zone LTE emission model of
 | Ionization + excitation | `solver.solve_species_states` (`plasma/saha_boltzmann.py:502`) | Saha + Boltzmann |
 | Level → emissivity | `calculate_line_emissivity` (`radiation/emissivity.py:16`) | $\varepsilon = \frac{hc}{4\pi\lambda} A_{ki} n_k$ |
 | Line broadening | `profiles.py` / `kernels.py` | Gaussian / Voigt |
-| Instrument | `_apply_instrument_convolution` (`spectrum_model.py:280`) | fixed-FWHM or $R$ |
+| Instrument | `_apply_downstream_convolution` (`spectrum_model.py:268`) | fixed-FWHM or $R$ |
 
 The default broadening mode is `BroadeningMode.LEGACY` (`spectrum_model.py:65`). This is a
 **non-physical magic number**: `sigma = 0.01 * sqrt(T_eV / 0.86)` (`kernels.py:710,1093`),
@@ -157,7 +157,7 @@ the physics needs:
 | `species_densities_to_number_fractions` | 63 | $N_s$ → mol fraction |
 | `from_number_fractions` / `from_mass_fractions` | 265 / 305 | constructors |
 
-> [!CAUTION] DEAD-END / DO-NOT - `TwoRegionPlasma` (`state.py:390`) has **zero production callers** and its `__init__` uses a raw `isinstance(..., _JAX_TRACER)` guard (`state.py:436`) instead of the `_is_jax_tracer_or_array` helper, so a concrete JAX array temperature raises `ConcretizationTypeError`. Real defect, no observed failure site (`plasma.md` F5). Do not build on the two-region path without fixing the guard.
+> [!CAUTION] DEAD-END / DO-NOT - `TwoRegionPlasma` (`state.py:390`) has **zero production callers**. (An earlier `ConcretizationTypeError` concern is now FIXED: the `__init__` guard at `state.py:436` correctly calls `_is_jax_tracer_or_array(T_core)`, so a concrete JAX-array temperature no longer raises.) No observed failure site (`plasma.md` F5). Do not build on the two-region path without a concrete use case.
 
 ### 1.3 `SahaBoltzmannSolver` — ionization/excitation + IPD {#saha-boltzmann}
 
@@ -214,7 +214,7 @@ directly regression-tested (`radiation.md` Findings 3, 7).
 
 ### 1.7 Instrument model — fixed FWHM vs resolving power {#instrument}
 
-`cflibs/instrument/model.py:44` (`InstrumentModel`). Two modes: fixed
+`cflibs/instrument/model.py:17` (`InstrumentModel`). Two modes: fixed
 `resolution_fwhm_nm` (`model.py:39`, $\sigma = \text{FWHM}/2.355$) and resolving-power mode
 (`model.py:74`, $\sigma(\lambda) = \lambda/(R\cdot 2.355)$).
 
@@ -231,7 +231,7 @@ calibration is separately **73% of reference inversion cost** (per
 
 ### 2.1 Peak detection + sub-pixel centroiding {#peaks}
 
-`detect_peaks` (`preprocess/preprocessing.py:617`) wraps `scipy.signal.find_peaks` and
+`detect_peaks` (`preprocess/preprocessing.py:525`) wraps `scipy.signal.find_peaks` and
 `peak_widths`.
 
 > [!CAUTION] **No sub-pixel centroiding** (`inv-preprocess.md` Finding 2, HIGH): `detect_peaks` returns the wavelength grid value at the *integer* argmax, with no parabolic/Gaussian centroid. At 0.06–0.1 nm/px this is 0.03–0.05 nm RMS per anchor — comparable to the RANSAC inlier tolerance (0.08 nm). The FWHM data from `peak_widths` is already present to support a 3-point parabolic centroid. The `min_intensity_floor` semantics are also inverted (a "floor" that can *lower* the threshold, `preprocessing.py:586-589`, Finding 3), but default 0.0 means it never triggers.
@@ -270,7 +270,7 @@ identifiers is the design.
 | Correlation | `correlation.py` | Labutin 2013 [@labutin2013] | Saha-Boltzmann synthetic spectrum over $(T,n_e)$ grid, maximise Pearson correlation, then attribute peaks |
 | spectral_nnls | `spectral_nnls.py` | Miller 2018 [@miller2018] | non-negative least squares unmix vs pure-element library (Lawson–Hanson) |
 | hybrid / hybrid_consensus | `hybrid.py`, `hybrid_consensus.py` | (NNLS + ALIAS ensemble) | convex NNLS prefilter gates the ALIAS physics scorer |
-| BIC model_selection | `model_selection.py` | Hogg 2020 [@hogg2020ic]; Badiu 2017 [@badiu2017] | penalised-likelihood / information-criterion line-reality test |
+| BIC model_selection | `model_selection.py` | Webb et al. 2020 [@webb2020ic]; Badiu 2017 [@badiu2017] | penalised-likelihood / information-criterion line-reality test |
 
 ### 3.1 ALIAS detection threshold {#alias-threshold}
 
@@ -308,7 +308,7 @@ is Aguilera & Aragón [@aguilera2007]. Three code realisations must agree:
 
 | Impl | Path | Backend | Role |
 |------|------|---------|------|
-| `BoltzmannPlotFitter` | `physics/boltzmann.py:256` | NumPy | reference WLS + sigma-clip |
+| `BoltzmannPlotFitter` | `physics/boltzmann.py:42` | NumPy | reference WLS + sigma-clip |
 | `boltzmann_jax` | `physics/boltzmann_jax.py` | JAX | vmap/grad, manifold + Bayesian |
 | `jitpipe/fit.py` | `jitpipe/fit.py` | JAX (on-device) | segmented real-time |
 
@@ -386,7 +386,7 @@ The McWhirter LTE floor ($\delta E$ = resonance-line energy) is the correct conv
 ## 8. The IterativeCFLIBSSolver loop {#iterative}
 
 `cflibs/inversion/solve/iterative.py:` — **4160 LOC**, class `IterativeCFLIBSSolver`, result
-`CFLIBSResult` (`iterative.py:94`). The module docstring is one line, so this section is
+`CFLIBSResult` (`iterative.py:116`). The module docstring is one line, so this section is
 reconstructed from the class/method docstrings. This is the classic Ciucci–Corsi–Palleschi
 CF-LIBS loop [@ciucci1999], multi-element Saha-Boltzmann per Aguilera & Aragón [@aguilera2007]:
 
@@ -408,7 +408,7 @@ proposed "fix" to add $\ln(U_{II}/U_I)$ would have *introduced* a bug (`inv-solv
 `_apply_saha_correction` on that basis.
 
 **Critical defect (default path).** The McWhirter LTE gate uses $\delta E = \max(E_k)$ instead
-of the resonance-line energy (`lte_validator.py:387`; `iterative.py:2160-2167` leaves
+of the resonance-line energy (`lte_validator.py:387`; `iterative.py:2704-2719` leaves
 `delta_e_override=None` unless `CFLIBS_MCWHIRTER_RESONANCE_DE` is set). For Fe I, $\max(E_k)\approx$
 4–6 eV vs resonance ~2.48 eV — a 2–2.4× overestimate, an ~8–14× too-high $n_e$ floor
 ($\propto \delta E^3$). The correct behaviour is opt-in; the incorrect one is the default
@@ -426,7 +426,7 @@ not false passes) but it is still wrong.
 | F7/F8 | `solve_with_uncertainty` re-runs Saha + PF queries; `_apply_saha_correction` allocates new `LineObservation` for **all** lines per iteration | medium |
 
 `QualityAssessor` (`physics/quality.py`) is now **wired** into the solver
-(`iterative.py:2099,2112`) despite a stale docstring saying "NOT used" (`inv-physics.md` F6).
+(`_assess_reliability` def `iterative.py:2611`, import `:2637`, call site `:2792`) despite a stale docstring saying "NOT used" (`inv-physics.md` F6).
 
 ---
 

@@ -1,7 +1,7 @@
 % CF-LIBS wiki -- single source of truth for citations (Pandoc bibliography).
 % Consolidated + deduplicated by the wiki-integration agent 2026-07-02.
-% Every entry carries a verified DOI EXCEPT three flagged 'DOI VERIFICATION PENDING'
-% (djurovic2023, poggialini2023, zhao2018) -- see bibliography.md. Do not fabricate DOIs.
+% Every entry carries a verified DOI EXCEPT two flagged 'DOI VERIFICATION PENDING'
+% (djurovic2023, zhao2018) -- see bibliography.md. Do not fabricate DOIs.
 % Source fragments merged: references.bib + references/classical-quantification.bib.
 
 
@@ -16,11 +16,11 @@
 
 @article{aguilera2015,
   author  = {Aguilera, J. A. and Arag\'on, C. and Manrique, J.},
-  title   = {Curves of growth for lines emitted from laser-induced plasmas: Application to composition analysis},
+  title   = {Quantitative analysis by laser-induced breakdown spectroscopy based on generalized curves of growth},
   journal = {Spectrochimica Acta Part B},
-  year    = {2015}, volume = {110}, pages = {149--156},
+  year    = {2015}, volume = {110}, pages = {124--133},
   doi     = {10.1016/j.sab.2015.06.010},
-  note    = {verified: DOI-corrected in sota sweep 2026-06-19}
+  note    = {verified: DOI resolves to Arag\'on \& Aguilera generalized-curve-of-growth paper; title/pages corrected 2026-07-02}
 }
 
 @article{aitchison1982,
@@ -59,13 +59,13 @@
   note    = {verified: DOI resolved via WebSearch 2026-07-02}
 }
 
-@article{anderson2012,
-  author  = {Anderson, Ryan B. and Morris, Richard V. and Clegg, Samuel M. and Bell, James F. and Wiens, Roger C. and Humphries, Seth D. and Mertzman, Stanley A. and Graff, Trevor G. and McInroy, Rhonda},
+@article{dyar2012,
+  author  = {Dyar, M. D. and Carmosino, M. L. and Breves, E. A. and Ozanne, M. V. and Clegg, S. M. and Wiens, R. C.},
   title   = {Comparison of partial least squares and lasso regression techniques as applied to laser-induced breakdown spectroscopy of geological samples},
   journal = {Spectrochimica Acta Part B},
-  year    = {2012}, volume = {70}, pages = {24--32},
+  year    = {2012}, volume = {70}, pages = {51--67},
   doi     = {10.1016/j.sab.2012.04.011},
-  note    = {verified: DOI resolved 2026-07-02 (SOTA-doc corrected: survey .04.004 was wrong)}
+  note    = {verified: DOI 10.1016/j.sab.2012.04.011 resolves to Dyar et al. (pp 51--67); the old anderson2012 key conflated this PLS/lasso paper with Anderson et al. .04.004 (pp 24--32)}
 }
 
 @article{anderson2022,
@@ -129,15 +129,6 @@
   year    = {2019}, volume = {160}, pages = {105692},
   doi     = {10.1016/j.sab.2019.105692},
   note    = {verified: DOI-corrected in sota sweep 2026-06-19}
-}
-
-@article{bowman2024,
-  author  = {Bowman, C. and Mildner, J. M. and Pasley, J. and Wilson, S. R.},
-  title   = {Automated Bayesian high-throughput estimation of plasma temperature and density from emission spectroscopy},
-  journal = {Review of Scientific Instruments},
-  year    = {2024}, volume = {95}, pages = {073520},
-  doi     = {10.1063/5.0190924},
-  note    = {verified: DOI resolved 2026-07-02}
 }
 
 @article{bulajic2002,
@@ -245,7 +236,7 @@
   journal = {Spectrochimica Acta Part B},
   year    = {2024}, volume = {219}, pages = {107082},
   doi     = {10.1016/j.sab.2024.107082},
-  note    = {verified: DOI resolved 2026-07-02; phys-only-incompatible, reference-only}
+  note    = {verified: DOI resolved 2026-07-02 (Crossref publication year 2025, online 2024); phys-only-incompatible, reference-only}
 }
 
 @article{favre2024merlin,
@@ -254,7 +245,7 @@
   journal = {Journal of Quantitative Spectroscopy and Radiative Transfer},
   year    = {2024}, volume = {330}, pages = {109222},
   doi     = {10.1016/j.jqsrt.2024.109222},
-  note    = {verified: DOI resolved 2026-07-02}
+  note    = {verified: DOI resolved 2026-07-02 (Crossref publication year 2025, online 2024)}
 }
 
 @article{feng2014,
@@ -389,17 +380,16 @@
   title = {The No-U-Turn sampler: Adaptively setting path lengths in Hamiltonian Monte Carlo},
   journal = {Journal of Machine Learning Research},
   year = {2014}, volume = {15}, pages = {1593--1623},
-  doi = {10.5555/2627435.2638586},
-  note = {verified: DOI resolved 2026-07-02}
+  note = {JMLR has no registered DOI; see arXiv:1111.4246 (prior 10.5555/... ACM id did not resolve)}
 }
 
-@article{hogg2020ic,
-  author = {Hogg, D. W. and Villar, S. and others},
+@article{webb2020ic,
+  author = {Webb, J. K. and Lee, C.-C. and Carswell, R. F. and Milakovi\'c, D.},
   title = {Getting the model right: an information criterion for spectroscopy},
   journal = {Monthly Notices of the Royal Astronomical Society},
   year = {2020},
   doi = {10.1093/mnras/staa3551},
-  note = {verified: DOI resolved 2026-07-02}
+  note = {verified: DOI resolved 2026-07-02; author corrected (Hogg/Villar were wrong)}
 }
 
 @article{holtzman2015,
@@ -481,8 +471,8 @@
   title = {Experimental Stark widths and shifts for spectral lines of neutral and ionized atoms},
   journal = {Journal of Physical and Chemical Reference Data},
   year = {2002}, volume = {31}, number = {3}, pages = {819--927},
-  doi = {10.1063/1.1525443},
-  note = {verified: DOI resolved 2026-07-02}
+  doi = {10.1063/1.1517587},
+  note = {DOI corrected 2026-07-02 to the JPCRD 31(3):819--927 critical review (prior 10.1063/1.1525443 resolved to an unrelated AIP proceedings item)}
 }
 
 @misc{kramida2024nist,
@@ -587,7 +577,7 @@
 }
 
 @article{oliver2024,
-  author  = {Oliver, J. and Michoski, C. and Langendorf, S. and LaJoie, A.},
+  author  = {Oliver, T. A. and Michoski, C. and Langendorf, S. and LaJoie, A.},
   title   = {Automated Bayesian high-throughput estimation of plasma temperature and density from emission spectroscopy},
   journal = {Review of Scientific Instruments},
   year    = {2024},
@@ -602,15 +592,6 @@
   year = {1977}, volume = {17}, number = {2}, pages = {233--236},
   doi = {10.1016/0022-4073(77)90161-3},
   note = {verified: DOI resolved 2026-07-02}
-}
-
-@article{pace2025,
-  author  = {Pace, D. M. D. and others},
-  title   = {Self-absorption assessment from doublet line intensity ratios in laser-induced breakdown spectroscopy},
-  journal = {Spectrochimica Acta Part B},
-  year    = {2025}, pages = {107361},
-  doi     = {10.1016/j.sab.2025.107361},
-  note    = {DOI sourced from cflibs self_absorption module docstring; verify author list before quoting}
 }
 
 @article{pannier2019,
@@ -629,14 +610,6 @@
   year = {2010}, volume = {65}, number = {8}, pages = {616--626},
   doi = {10.1016/j.sab.2010.03.012},
   note = {verified: DOI resolved 2026-07-02}
-}
-
-@article{poggialini2023,
-  author  = {Poggialini, F. and Campanella, B. and Legnaioli, S. and Palleschi, V.},
-  title   = {Self-absorption correction by Planck-function (blackbody-radiation-referenced) methods in calibration-free LIBS},
-  journal = {Spectrochimica Acta Part B},
-  year    = {2023},
-  note    = {cited in libs-physics self-absorption table; DOI VERIFICATION PENDING 2026-07-02 -- do not quote as verified}
 }
 
 @article{qiu2026,
@@ -783,15 +756,6 @@
   note    = {verified: DOI resolved via arXiv:1903.08008 / Bayesian Analysis 16(2)}
 }
 
-@article{voelker2023multiplet,
-  author  = {Voelker, T. and Gornushkin, I. B.},
-  title   = {Extension of the Boltzmann plot method for multiplet emission lines},
-  journal = {Journal of Quantitative Spectroscopy and Radiative Transfer},
-  year    = {2023}, volume = {310}, pages = {108741},
-  doi     = {10.1016/j.jqsrt.2023.108741},
-  note    = {verified: DOI resolved 2026-07-02}
-}
-
 @article{volker2023,
   author  = {Völker, T. and Gornushkin, I. B.},
   title   = {Investigation of a Method for the Correction of Self-Absorption by Planck Function in Laser-Induced Breakdown Spectroscopy},
@@ -820,7 +784,7 @@
 }
 
 @article{volkerreview2023,
-  author  = {V\"olker, T.},
+  author  = {Poggialini, F. and Campanella, B. and Cocciaro, B. and Lorenzetti, G. and Palleschi, V. and Legnaioli, S.},
   title   = {Catching up on calibration-free LIBS},
   journal = {Journal of Analytical Atomic Spectrometry},
   year    = {2023},

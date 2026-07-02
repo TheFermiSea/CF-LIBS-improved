@@ -152,8 +152,9 @@ levels became authoritative and the Fe I ground-state degeneracy was corrected (
 
 > [!CAUTION] DO-NOT carry forward: "stage III is empty" / "Fe I has 425 levels." Both were
 > pre-reset artifacts of the lossy netCDF and the old lines-table scrape. The reset DB carries
-> **62,752 levels across stages I/II/III**; Fe I alone has 62,752-scale coverage across the union
-> (the per-stage Fe I count is in the tens of thousands, not 425). Nb, Mo, V III and Cr III are
+> **62,752 levels across all species and stages I/II/III**; Fe I alone now carries **847 levels**
+> (Fe I/II/III together ≈ 2,471) — hundreds-to-low-thousands, far above the stale 425 but nowhere
+> near the all-species 62,752 total. Nb, Mo, V III and Cr III are
 > **populated**. Any code path or doc asserting stage-III emptiness is stale.
 
 The first **valid** pipeline numbers on the reset DB (the DED-constrained deliverable — see
@@ -236,7 +237,7 @@ cutoff-aware tabulation (atoms H–U + 291 diatomics) wired in as an authoritati
 re-request).
 
 > [!NOTE] FORMAL — the Boltzmann level population that the partition sum normalizes is proven in
-> cflibs-formal: `lean:CflibsFormal/Boltzmann.lean#boltzmann_distribution`. The partition function
+> cflibs-formal: `lean:CflibsFormal/Boltzmann.lean#population_sum`. The partition function
 > is the normalization constant $U_s(T)$ of that distribution; see
 > [formal-spec.md](formal-spec.md).
 
@@ -329,8 +330,9 @@ are done; the outstanding *new* ask is STARK-B.
 | **TOPbase** | R-matrix gf, Z ≤ 26 only | web / XSAMS | theoretical | gap-fill low-Z only |
 
 **STARK-B is the single highest-value new request** because it is the electron-density lever. The
-reset DB has `stark_w` populated for 98.6% of lines, but `stark_w_source` shows only **244 lines
-(0.85%)** carry real STARK-B/[Konjević][@konjevic2002]-grade literature values; ~80% are
+reset DB has `stark_w` populated for 98.6% of the **203,695** lines, but of the ~28,727 A-valued
+lines that carry a `stark_w_source` only **244 (0.85%)** hold real STARK-B/[Konjević][@konjevic2002]-grade
+literature values; ~80% of that source-bearing set are
 `konjevic_lambda_sq_scaled` heuristics, the rest interpolated or hydrogenic. Stark widths feed the
 $n_e$ diagnostic that closes the Saha loop and the Voigt wings of the forward model; the current
 heuristic majority is why the pipeline still falls back on a 1-atm pressure-balance $n_e$
@@ -511,7 +513,7 @@ static arrays into the `PipelineSnapshot` / real-time hot kernel).
 
 `cflibs/instrument/model.py` supports two LSF parameterizations: fixed FWHM (nm) or resolving-power
 mode ($R = \lambda/\Delta\lambda$, so FWHM grows with $\lambda$). The resolving-power +
-Chebyshev-baseline path in `cflibs/inversion/solve/bayesian.py` is the prior art for *fittable*
+Chebyshev-baseline path in `cflibs/inversion/solve/bayesian/` is the prior art for *fittable*
 instrument terms — a self-calibrating Mode-C precursor. Response is applied multiplicatively by
 `apply_response`; the LSF convolution by `apply_instrument_function`. A physically motivated
 `NoiseModel` (shot + read + dark) sets the per-channel weights for any least-squares residual so

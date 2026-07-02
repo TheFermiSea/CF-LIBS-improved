@@ -62,7 +62,7 @@ verified dead-end so no future agent re-spends the budget on it. It is a review-
 equation-forward, cited, and organized as a structured register you read *instead of* re-deriving
 the same negative results.
 
-> [!IMPORTANT] PRE-RESET NUMBERS — the atomic DB was rebuilt (ASD59, 203k lines) on 2026-07-02;
+> [!IMPORTANT] PRE-RESET NUMBERS — the atomic DB was rebuilt 2026-06-26 (ASD59 reset baseline, wiki label 2026-07-02; 203k lines);
 > the composition/F1/RMSE figures below are **NOT current**. Every magnitude here predates the
 > reset. The **mechanisms, rankings, and falsification verdicts are retained**; treat the specific
 > wt%/RMSE magnitudes as dead and re-measure on the reset DB before quoting any number as current.
@@ -409,7 +409,7 @@ pre-reset *and* pre-identifier-fix, so the magnitudes are dead:
   devalues the most reliable high-intensity lines and leans on weak "unique" lines that are often
   noise — the "bag-of-lines" fallacy that ignores Saha-Boltzmann line coupling. **Lesson:** the
   "common" lines are the physically reliable ones; a purely statistical identifier that devalues
-  them craters precision on transition-metal matrices. [ALIAS: Noel et al. 2025 — citation-needed]
+  them craters precision on transition-metal matrices [@noel2025].
 
 ---
 
@@ -614,4 +614,5 @@ These were adversarially audited and **upheld**; changing them is regression ris
 ```
 
 <!-- UNVERIFIED — needs a DOI before it may be cited in prose; currently marked [citation-needed]:
-     Noel et al. 2025 (ALIAS); Vrábel 2020 soil benchmark; Aitchison 1986 (compositional data). -->
+     Vrábel 2020 soil benchmark; Aitchison 1986 (compositional data).
+     (Noel et al. 2025 ALIAS is now verified and cited as @noel2025.) -->

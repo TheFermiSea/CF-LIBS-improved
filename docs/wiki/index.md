@@ -61,7 +61,7 @@ operations → reference.** Reading order lives in frontmatter `order:`; slugs a
 | — | **Frontier** | | |
 | 6 | [frontier-methods.md](frontier-methods.md) | review | Nine theorem-licensed research thrusts: log-ratio tracking, measured $n_e$, in-plasma self-calibration, refuse-to-report, differentiable forward. |
 | — | **Code** | | |
-| 7 | [architecture/index.md](architecture/index.md) | handbook | The codebase: 29 packages, the two-backend (NumPy vs jitpipe) pipeline, ABCs, physics-only enforcement, target architecture. |
+| 7 | [architecture/index.md](architecture/index.md) | handbook | The codebase: 29 importable packages (20 top-level), the two-backend (NumPy vs jitpipe) pipeline, ABCs, physics-only enforcement, target architecture. |
 | 8 | [impl-literature-methods.md](impl-literature-methods.md) | code-walkthrough | Where each published method (forward model, RANSAC, the six identifiers, Boltzmann/closure, Stark, iterative/Bayesian/joint solvers) lives in `cflibs/`. |
 | 9 | [impl-novel-techniques.md](impl-novel-techniques.md) | code-walkthrough | Our in-house techniques: Lean-derived thresholds, observable-anchored self-absorption, log-ratio reporting, jitpipe, M7/M8 gates. |
 | — | **Data & operations** | | |
@@ -69,7 +69,7 @@ operations → reference.** Reading order lives in frontmatter `order:`; slugs a
 | 11 | [benchmarks-reliability-workflows.md](benchmarks-reliability-workflows.md) | handbook | Reliability gates, the five UQ surfaces, the benchmark harness + non-regression discipline, campaign-1 anti-overfit, the CLI, contributing, cluster deploy. |
 | — | **Reference** | | |
 | R1 | [glossary.md](glossary.md) | reference | Plain-language term index + the canonical symbol table. |
-| R2 | [bibliography.md](bibliography.md) | reference | The merged, de-duplicated, DOI-verified bibliography (96 entries). |
+| R2 | [bibliography.md](bibliography.md) | reference | The merged, de-duplicated, DOI-verified bibliography (92 entries). |
 | R3 | [MIGRATION.md](MIGRATION.md) | reference | The fate of the ~252 legacy docs: absorbed / archived / kept-live, and what this rebuild moved. |
 
 ## Conventions {#conventions}

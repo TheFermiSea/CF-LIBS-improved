@@ -151,17 +151,26 @@ Each chapter is one file; its frontmatter `summary` is the agent-readable releva
 | # | Chapter | Register | Summary (frontmatter) |
 |---|---------|----------|-----------------------|
 | 0 | [orientation.md](orientation.md) | orientation | This page: goals, error-budget thesis, reset line, reading routes, authoring contract, glossary. |
-| 1 | [libs-physics.md](libs-physics.md) | handbook | Saha ionization balance + Boltzmann level populations that fix line intensity in an LTE plasma — the forward-model core. |
-| 2 | [classical-quantification.md](classical-quantification.md) | review | Boltzmann and multi-element Saha-Boltzmann plots [@aguilera2007], closure ($\sum C_s=1$), one-point calibration, log-ratio reporting. |
-| 3 | [cf-libs-family.md](cf-libs-family.md) | review | The CF-LIBS algorithm lineage from Ciucci [@ciucci1999] through C-sigma / columnar-density self-absorption-tolerant variants. |
-| 4 | [frontier-methods.md](frontier-methods.md) | review | Monte-Carlo full-spectrum fitting, precomputed self-absorption + OPC, JAX manifold pre-computation, ML-adjacent (knowledge-only). |
-| 5 | [formal-spec.md](formal-spec.md) | reference | **Notation authority.** Every symbol pinned to a `cflibs-formal` Lean theorem; soundness envelopes for the estimators. |
-| 6 | [error-budget-and-falsification.md](error-budget-and-falsification.md) | review | The ranked error budget (inputs dominate) and the falsification ledger of every negative result + the do-not-do list. |
+| — | **Foundations** | | |
+| 1 | [formal-spec.md](formal-spec.md) | reference | **Notation authority.** Every symbol pinned to a `cflibs-formal` Lean theorem; soundness envelopes for the estimators. |
+| 2 | [error-budget-and-falsification.md](error-budget-and-falsification.md) | review | The ranked error budget (inputs dominate) and the falsification ledger of every negative result + the do-not-do list. |
+| — | **Physics & methods** | | |
+| 3 | [libs-physics.md](libs-physics.md) | review | Saha ionization balance + Boltzmann level populations that fix line intensity in an LTE plasma — the forward-model core. |
+| 4 | [classical-quantification.md](classical-quantification.md) | review | Boltzmann and multi-element Saha-Boltzmann plots [@aguilera2007], closure ($\sum C_s=1$), one-point calibration, log-ratio reporting. |
+| 5 | [cf-libs-family.md](cf-libs-family.md) | review | The CF-LIBS algorithm lineage from Ciucci [@ciucci1999] through C-sigma / columnar-density self-absorption-tolerant variants. |
+| — | **Frontier** | | |
+| 6 | [frontier-methods.md](frontier-methods.md) | review | Monte-Carlo full-spectrum fitting, precomputed self-absorption + OPC, JAX manifold pre-computation, ML-adjacent (knowledge-only). |
+| — | **Code** | | |
 | 7 | [architecture.md](architecture/index.md) | handbook | Module map, the six inversion sub-packages, the pluggable ABCs, the physics-only constraint enforcement. |
 | 8 | [impl-literature-methods.md](impl-literature-methods.md) | code-walkthrough | Where each published method (Boltzmann plot, Saha correction, Stark $n_e$, OPC, C-sigma) is implemented in `cflibs/`. |
 | 9 | [impl-novel-techniques.md](impl-novel-techniques.md) | code-walkthrough | In-house techniques: observable-anchored self-absorption, refuse-to-report reliability gate, manifold coarse-to-fine. |
-| 10 | [atomic-data-and-datasets.md](atomic-data-and-datasets.md) | reference | The ASD59 atomic DB (203,695 lines / 62,752 levels / 324 IPs) [@kramida2024nist], partition functions, and the benchmark datasets. |
+| — | **Data & operations** | | |
+| 10 | [atomic-data-and-datasets.md](atomic-data-and-datasets.md) | handbook | The ASD59 atomic DB (203,695 lines / 62,752 levels / 324 IPs) [@kramida2024nist], partition functions, and the benchmark datasets. |
 | 11 | [benchmarks-reliability-workflows.md](benchmarks-reliability-workflows.md) | handbook | Post-reset benchmark baselines, the reliability/adoption gates, and the day-to-day CLI + validation workflows. |
+| — | **Reference** | | |
+| R1 | [glossary.md](glossary.md) | reference | Plain-language term index + the canonical symbol table. |
+| R2 | [bibliography.md](bibliography.md) | reference | The merged, de-duplicated, DOI-verified bibliography. |
+| R3 | [MIGRATION.md](MIGRATION.md) | reference | The fate of the ~252 legacy docs: absorbed / archived / kept-live, and what this rebuild moved. |
 
 ---
 
@@ -196,7 +205,7 @@ Any page that cites a composition / F1 / RMSE number **must** set `benchmarks_pr
 
 ```
 > [!IMPORTANT] RESET LINE — numbers below are ASD59-reset baseline (2026-07-02); any pre-reset figure is labeled.
-> [!NOTE] FORMAL — proven in cflibs-formal: lean:CflibsFormal/Saha.lean#saha_ratio.
+> [!NOTE] FORMAL — proven in cflibs-formal: lean:CflibsFormal/Saha.lean#saha_relation.
 > [!WARNING] BENCHMARK-GATED — flag-gated; changing it requires a flag-off/flag-on scoreboard non-regression run.
 > [!CAUTION] DEAD-END / DO-NOT — verified dead-end; do not re-attempt.
 ```
@@ -227,9 +236,9 @@ This wiki is a contract, not prose. The blocks below are copied verbatim to the 
 | doc→doc (human) | relative Markdown **with `.md`** + stable anchor | `[Boltzmann balance](libs-physics.md#ionization-ratio)` |
 | doc→doc (agent graph) | frontmatter `related:` by slug | `related: [boltzmann-plot, lte-validity]` |
 | doc→code | frontmatter `code_refs:` (authoritative, depth-independent); in prose, monospace `path::Symbol` | `` `cflibs/plasma/saha_boltzmann.py::SahaBoltzmannSolver` `` |
-| doc→lean | frontmatter `lean_refs:`; in prose monospace `lean:File.lean#thm` | `` `lean:CflibsFormal/Saha.lean#saha_ratio` `` |
+| doc→lean | frontmatter `lean_refs:`; in prose monospace `lean:File.lean#thm` | `` `lean:CflibsFormal/Saha.lean#saha_relation` `` |
 
-`code→doc` and `lean→doc` are **never hand-written**: the generated `docs/wiki/code-map.md` inverts all `code_refs`/`lean_refs`. Regenerate it with `scripts/build_wiki_codemap.py` (reads frontmatter only) whenever frontmatter changes. On any heading that is a cross-reference target, add an explicit stable anchor (`{#anchor}`) so links survive heading-text edits.
+`code→doc` and `lean→doc` are **never hand-written**: they are meant to be inverted from every page's `code_refs`/`lean_refs` into a generated `docs/wiki/code-map.md`. That generator (`scripts/build_wiki_codemap.py`) and the `code-map.md` it would produce **do not exist yet** — codemap generation is out of scope for this rebuild (see [MIGRATION.md](MIGRATION.md)); until it lands, treat each page's frontmatter `code_refs`/`lean_refs` as the authoritative forward index. On any heading that is a cross-reference target, add an explicit stable anchor (`{#anchor}`) so links survive heading-text edits.
 
 ### Page shape
 
@@ -259,7 +268,7 @@ code_refs:                                # OPTIONAL but expected on impl/physic
   - cflibs/plasma/saha_boltzmann.py::SahaBoltzmannSolver
   - cflibs/plasma/partition.py
 lean_refs:                                # OPTIONAL. File.lean#theorem in cflibs-formal. Cite the theorem id; never paste Lean source.
-  - CflibsFormal/Saha.lean#saha_ratio
+  - CflibsFormal/Saha.lean#saha_relation
 related: [boltzmann-plot, lte-validity]   # OPTIONAL. Sibling slugs; renders as "See also".
 supersedes: []                            # OPTIONAL. Old repo paths this page absorbs; each gets a tombstone redirect on archive.
 ---
@@ -311,7 +320,7 @@ The single source of truth is [`references.bib`](references.bib). Inline a Pando
 | **$E_k$** | Upper-level energy (eV; stored as cm⁻¹ in the DB). |
 | **$g\cdot A$** | The product carrying a line's intrinsic strength; source-correlated $g\cdot A$ bias is the dominant real-data error (Cluster A). |
 | **Closure** | The constraint $\sum_s C_s = 1$ used to turn relative species densities into absolute fractions. |
-| **Log-ratio / Aitchison ratio** | $\ln(N_i/N_j)$; matrix- and detected-set-invariant, the preferred DED deliverable [citation-needed]. |
+| **Log-ratio / Aitchison ratio** | $\ln(N_i/N_j)$; matrix- and detected-set-invariant, the preferred DED deliverable [@aitchison1982]. |
 | **ILR** | Isometric log-ratio transform: an orthonormal coordinate system for compositional data. |
 | **OPC** | One-Point Calibration: a single reference point removes the CF-LIBS scale bias [`impl-literature-methods.md`]. |
 | **C-sigma / CD-SB** | C-sigma graphs and Columnar-Density Saha-Boltzmann: self-absorption-tolerant curve-of-growth CF variants. |

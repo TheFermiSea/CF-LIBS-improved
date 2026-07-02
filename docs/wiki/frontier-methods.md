@@ -42,7 +42,7 @@ code_refs:
   - cflibs/inversion/physics/stark_ne.py
   - cflibs/inversion/physics/closure.py::ClosureEquation
   - cflibs/inversion/solve/iterative.py::IterativeCFLIBSSolver
-  - cflibs/instrument/response_correction.py
+  - cflibs/inversion/preprocess/response_correction.py
 lean_refs:
   - CflibsFormal/SelfAbsorptionInverse.lean#selfAbsorption_breaks_identifiability
   - CflibsFormal/MatrixEffects.lean#recoveredComposition_ratio_matrix_invariant
@@ -135,7 +135,7 @@ Two further clusters — the **inverse Saha stage-III symmetry** (Cluster C) and
 correctness fixes covered inline under [Estimator routing](#estimator-routing-policy) and
 [Strict gates](#strict-gates); their *rejected* naive forms (composition-fed per-line $\tau$;
 single-gate cooling quadrature) are in
-[error-budget-and-falsification](error-budget-and-falsification.md#do-not-do), not repeated here.
+[error-budget-and-falsification](error-budget-and-falsification.md#part-3), not repeated here.
 
 ---
 
@@ -371,7 +371,7 @@ Two design changes attack the root cause:
    Kurucz beat NIST" **from your own plasma**, no external standard, and replaces the fabricated
    NIST-relative-intensity→grade uncertainty with a physically derived per-line error. It is
    unaffected by the anchoring falsification below because it measures whatever lines are actually
-   used. The multiplet-aware Boltzmann extension [@voelker2023multiplet] is the companion for
+   used. The multiplet-aware Boltzmann extension [@volker2023multiplet] is the companion for
    handling blended multiplets in the same fit.
 
 > [!CAUTION] FALSIFIED: Lifetime-anchoring (Lawler/Den Hartog overlay) yields a coherent scale correction on the pipeline's selected lines
@@ -459,7 +459,7 @@ $\propto n_e^0$), so a full-decade $n_e$ sweep moved Ti-6Al-4V by only ~1–2 % 
 $n_e$ work therefore matters for (i) the LTE/McWhirter trust surface and (ii) ion-observed minors
 (steel Cr) — **not** for the DED composition magnitude. Do **not** spend the accuracy budget chasing
 $n_e$ magnitude for DED (that dead-end is recorded in
-[error-budget-and-falsification](error-budget-and-falsification.md#do-not-do)); do it for trust and
+[error-budget-and-falsification](error-budget-and-falsification.md#part-3)); do it for trust and
 minors.
 
 ### Falsifiable first experiment
@@ -530,11 +530,11 @@ when a theorem licenses it and the trust gate clears.
 forward is optically thin with no fitted optical-depth degree of freedom, so the prior-free
 full-spectrum fit rides $T$ to a box edge to fake the missing saturation. The audited fix is to wire
 the **existing observable-anchored** corrector (doublet-ratio + Planck-ceiling curve-of-growth
-[@voelker2023multiplet], and the Planck-function $I_{\text{thin}} = -B\ln(1-I/B)$ inversion of
+[@volker2023multiplet], and the Planck-function $I_{\text{thin}} = -B\ln(1-I/B)$ inversion of
 Völker & Gornushkin, `@volker2023`) into the full-spectrum/joint/Bayesian objective — pre-correcting
 thick observed lines to their thin-equivalent intensities. The naive composition-fed per-line $\tau$
 is a **verified positive-feedback dead-end** (it made ChemCam BHVO-2 worse) and lives in
-[error-budget-and-falsification](error-budget-and-falsification.md#do-not-do), not here.
+[error-budget-and-falsification](error-budget-and-falsification.md#part-3), not here.
 
 ### Falsifiable first experiment
 
@@ -620,7 +620,7 @@ and the same-upper-level intensity-ratio identity used in [§4](#ga-self-cal).
 
 ### Effort / dependency
 
-Low–Med; the `SpectralResponseCorrection` math exists (`cflibs/instrument/response_correction.py`),
+Low–Med; the `SpectralResponseCorrection` math exists (`cflibs/inversion/preprocess/response_correction.py`),
 the work is the auto-recovery joint fit. **AUDIT-FIRST**: confirm default-off for vendor-corrected
 products before enabling anywhere. See [architecture](architecture/index.md) for how
 `InstrumentCalibration` threads every path.
@@ -788,7 +788,7 @@ each is a benchmark- or theorem-checkable obligation, not a stylistic preference
 - [ ] **Emit refuse-to-report as a structured, reasoned output** (M7) with per-element M8 flags; clear
   McWhirter and the Stark-Saha cross-check before certifying ([§6](#strict-gates)).
 - [ ] **Wire the observable-anchored SA corrector into the fit path**; never add composition-fed per-line
-  $\tau$ ([§6](#strict-gates); dead-end recorded in [error-budget-and-falsification](error-budget-and-falsification.md#do-not-do)).
+  $\tau$ ([§6](#strict-gates); dead-end recorded in [error-budget-and-falsification](error-budget-and-falsification.md#part-3)).
 - [ ] **Consume one provenance-tracked `InstrumentCalibration`** in every forward/inverse path; keep
   $E(\lambda)$ auto-recovery default-off for vendor-corrected products ([§7](#instrument-calibration-first-class)).
 - [ ] **Keep the manifold and differentiable-GN paths honest about scope** — speed, not accuracy;

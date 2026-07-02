@@ -28,7 +28,7 @@ sources:
   - "@cremers2013"
   - "@cavalcanti2013"
   - "@feng2014"
-  - "@anderson2012"
+  - "@dyar2012"
   - "@sun2009"
   - "@egozcue2003"
   - docs/REFERENCE_ANALYSIS_LIBSSA.md
@@ -243,7 +243,7 @@ composition on the whole spectrum from a labeled training set.
 | **PCA** | Unsupervised variance decomposition for exploration / outlier flagging / dimensionality reduction | Standard preprocessing/QC | Retained: `cflibs/inversion/common/` PCA pipeline is used for diagnostics, not regression |
 | **PCR** | Regress concentration on principal-component scores | Reduces collinearity; needs training set | None shipped |
 | **PLS / PLS-DA** | Latent-variable regression maximizing covariance with the target; the workhorse of quantitative chemometric LIBS | Best empirical accuracy with good coverage; opaque, extrapolation-fragile | Sparsity *prior* via NNLS / L1-regularized SciPy solves |
-| **LASSO / elastic net** | Sparse/shrinkage regression, automatic line selection under matrix effects | Strong for geological LIBS [@anderson2012] | NNLS / Tikhonov (`sklearn` barred) |
+| **LASSO / elastic net** | Sparse/shrinkage regression, automatic line selection under matrix effects | Strong for geological LIBS [@dyar2012] | NNLS / Tikhonov (`sklearn` barred) |
 
 The most transferable chemometric insight for a *physics-first* pipeline is the **dominant-factor
 hybrid**: use the physics forward model as the leading term and let a small multivariate model

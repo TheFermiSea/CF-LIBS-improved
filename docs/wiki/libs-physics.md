@@ -557,7 +557,7 @@ ratio.
 | Exclude resonance lines (default) | line list | cheapest defense | [@aragon2008] |
 | IRSAC (internal reference) | thin reference line, $T$ | restores linearity, no Stark $w$ | [@sun2009] |
 | COG iteration (Bulajić) | fit $T,n_e,\sigma,\gamma,L$ | moderate $\tau$ | [@bulajic2002] |
-| Planck-function (BRR-SAC) | $T$ only | simplest; unstable as $I/B\to1$ | [@poggialini2023] |
+| Planck-function (BRR-SAC) | $T$ only | simplest; unstable as $I/B\to1$ | [@volker2023] |
 | C-sigma graphs | $\ge4$ lines/species | exploits SA, joint $T,n_e$ | [@aragon2014] |
 | Two-layer (reversed lines) | profile shape | self-reversal only | [@amamou2003] |
 

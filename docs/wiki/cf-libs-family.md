@@ -47,16 +47,16 @@ code_refs:
   - cflibs/inversion/physics/self_absorption.py
   - cflibs/inversion/physics/self_absorption_observable.py
   - cflibs/plasma/saha_boltzmann.py::SahaBoltzmannSolver
-  - cflibs/inversion/solve/bayesian.py::BayesianForwardModel
+  - cflibs/inversion/solve/bayesian/forward.py::BayesianForwardModel
 lean_refs:
   - CflibsFormal/ForwardMap.lean#boltzmann_plot_intensity
   - CflibsFormal/ForwardMap.lean#temperature_from_two_lines
   - CflibsFormal/Saha.lean#saha_relation
-  - CflibsFormal/Saha.lean#sahaBoltzmann_plot
+  - CflibsFormal/SahaInverse.lean#sahaBoltzmann_plot
   - CflibsFormal/Closure.lean#composition_sum_one
   - CflibsFormal/Alt/CSigma.lean#csigmaComposition_eq_classicComposition
   - CflibsFormal/SelfAbsorption.lean#selfAbsorptionFactor_le_one
-  - CflibsFormal/SelfAbsorption.lean#selfAbsorption_breaks_identifiability
+  - CflibsFormal/SelfAbsorptionInverse.lean#selfAbsorption_breaks_identifiability
   - CflibsFormal/MatrixEffects.lean#recoveredComposition_ratio_matrix_invariant
   - CflibsFormal/CurveOfGrowth.lean#cogRatio_strictAntiOn
 related: [classical-quantification, error-budget-and-falsification, frontier-methods, formal-spec, impl-literature-methods, libs-physics]
@@ -115,7 +115,7 @@ replaces closure.
 | **C-sigma graphs** | generalized curve-of-growth, pool by ionization stage on $\log(C\sigma)$ vs $\log(I/B)$ | model (radiative transfer) | none | self-absorbed, geological | [@aragon2014; @aguilera2015] |
 | **CD-SB (columnar density)** | invert self-absorbed lines for column density $N_s\ell$ | exploit | none | resonance/strong lines, high $C$ | [@cdsb2013] |
 | **SA-corrected CF** | classic + escape-factor / Planck correction | correct (observable-anchored) | none | thick lines present | [@bulajic2002; @sun2009; @volker2023] |
-| **Bayesian / OE** | posterior over $(T,n_e,C_s)$; forward model in the likelihood | model | prior | uncertainty-first, degenerate data | [@kasim2019; @bowman2024; @oliver2024] |
+| **Bayesian / OE** | posterior over $(T,n_e,C_s)$; forward model in the likelihood | model | prior | uncertainty-first, degenerate data | [@kasim2019; @oliver2024] |
 
 The runtime routing table that selects among these per spectrum — and the solver code — lives in
 [impl-literature-methods](impl-literature-methods.md); this chapter is method-level theory only.
@@ -210,7 +210,7 @@ $E_k^{\text{eff}} = E_k^{\text{ion}} + \chi_s$ on the abscissa, and its ordinate
 correction term $\ln\!\big(\tfrac{n_e}{2}(h^2/2\pi m_e k_B T)^{3/2}\big)$. After the shift, ions
 and neutrals of all elements lie on **one straight line** with the common slope $-1/(k_BT)$
 [@aguilera2007]. This is the multi-element Saha-Boltzmann plot; the formal statement is
-`lean:CflibsFormal/Saha.lean#sahaBoltzmann_plot`, with
+`lean:CflibsFormal/SahaInverse.lean#sahaBoltzmann_plot`, with
 `sahaBoltzmann_shift_eq_log_saha` proving the shift equals the log-Saha factor.
 
 The common-slope multi-element fit is the workhorse of a robust CF inversion: pooling lines
@@ -384,7 +384,7 @@ cosmetic — it is the difference between a stable corrector and a divergent fee
 > - **Date:** 2026-07-02
 
 The single-thick-line-with-unknown-$\tau$ case is **not identifiable** at all
-(`lean:CflibsFormal/SelfAbsorption.lean#selfAbsorption_breaks_identifiability`: two $(N,\tau)$
+(`lean:CflibsFormal/SelfAbsorptionInverse.lean#selfAbsorption_breaks_identifiability`: two $(N,\tau)$
 pairs give one intensity), which is the licensing theorem for the M7 refuse-to-report path — the
 solver must refuse rather than invent a number. Either $\tau$ is supplied independently, or it is
 recovered from a multi-line curve-of-growth ratio (§5.4), or the pipeline flags the line.
@@ -478,18 +478,18 @@ $J(x)=\tfrac12(y-F(x))^\top S_e^{-1}(y-F(x))+\tfrac12(x-x_a)^\top S_a^{-1}(x-x_a
 the linearized posterior covariance is $\hat S=(K^\top S_e^{-1}K+S_a^{-1})^{-1}$ and the averaging
 kernel $A=\hat S K^\top S_e^{-1}K$ gives degrees of freedom for signal $d_s=\mathrm{tr}(A)$. OE is
 a fast first-pass and yields a linearized uncertainty, but is inadequate when $T$ enters
-exponentially (the CF-LIBS posterior is non-Gaussian and ridge-shaped). *(Rodgers 2000, Inverse
-Methods for Atmospheric Sounding — book, no DOI; cited in prose only per this wiki's DOI rule.)*
+exponentially (the CF-LIBS posterior is non-Gaussian and ridge-shaped). *(Optimal estimation
+per Rodgers [@rodgers2000], Inverse Methods for Atmospheric Sounding.)*
 
 **Full posterior (NUTS/HMC).** For the exponential $T$-sensitivity and the $T$–$n_e$ degeneracy,
-sample the posterior [@kasim2019; @bowman2024; @oliver2024]. The degeneracy — lowering $T$ can be
+sample the posterior [@kasim2019; @oliver2024]. The degeneracy — lowering $T$ can be
 compensated by raising total density — is broken only by including at least one ionic line per
 element (the Saha leverage). Composition priors must respect the simplex: use ALR/ILR
 reparameterization or a Dirichlet, **never** independent Uniform[0,1] priors on each $C_s$ (which
 give incorrect geometry and truncation artefacts). The physics-only Bayesian estimators
-[@oliver2024; @bowman2024] give calibrated posteriors on $(T,n_e)$ without the banned ML
+[@oliver2024] give calibrated posteriors on $(T,n_e)$ without the banned ML
 surrogates. The JAX forward model for MCMC is
-`cflibs/inversion/solve/bayesian.py::BayesianForwardModel`; full derivations in
+`cflibs/inversion/solve/bayesian/forward.py::BayesianForwardModel`; full derivations in
 [bayesian-oe details](frontier-methods.md) and `docs/v4/overhaul/literature/bayesian-oe.md`.
 
 The adoption question — *when to trust a converged forward-model fit over the iterative solver* —

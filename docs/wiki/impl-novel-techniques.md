@@ -25,7 +25,6 @@ sources:
   - "@sun2009"
   - "@elsherbini2005"
   - "@volker2023"
-  - "@pace2025"
   - "@cavalcanti2013"
   - "@zhao2018"
   - "@aitchison1982"
@@ -213,7 +212,7 @@ $\tau_C$ over `card` species at recovered total density $\hat S$.
 > [!NOTE] FORMAL — the whole chain (`olsSlope_stable_l2` → `temp_rel_error_eq` →
 > `composition_target_sufficient`) is proven end-to-end and oracle-conformance-tested. This is
 > the concrete meaning of "our thresholds are derived, not tuned." See
-> [Formal Spec](formal-spec.md#error-budget) for the proofs.
+> [Formal Spec](formal-spec.md#part-3-error-budget) for the proofs.
 
 ### 2.3 What correct code MUST do {#derived-checklist}
 
@@ -269,15 +268,17 @@ condition for collisional (LTE) processes to dominate radiative ones [@cristofor
 $$n_e \;\ge\; 1.6\times10^{12}\,\sqrt{T}\,(\Delta E)^3\ \mathrm{cm^{-3}}
 \qquad(\text{`lean:CflibsFormal/StarkBroadening.lean#mcWhirterBound`}),$$
 
-with $\Delta E$ the largest relevant upper-level energy gap in eV, $T$ in K. The constant lives
+with $\Delta E$ the relevant transition energy interval in eV, $T$ in K. The constant lives
 once in `cflibs/core/constants.py::MCWHIRTER_CONST`. The bound is proven monotone increasing in
 both $T$ (`#mcWhirterBound_mono_T`) and $\Delta E$ (`#mcWhirterBound_mono_dE`): a hotter plasma or
-wider gap demands a higher $n_e$ for LTE.
+larger energy interval demands a higher $n_e$ for LTE.
 
 > [!IMPORTANT] The McWhirter criterion is *necessary, not sufficient* for LTE in a transient,
-> inhomogeneous laser plasma [@cristoforetti2010]. See
-> [`reference_mcwhirter_delta_e_physics`] in the notes: $\Delta E$ is the resonance-line energy,
-> not `max(E_k)` — a subtlety the shipped constant respects.
+> inhomogeneous laser plasma [@cristoforetti2010]. The physically correct $\Delta E$ is the
+> **resonance-line energy**, not `max(E_k)` (see [`reference_mcwhirter_delta_e_physics`]). That
+> resonance-$\Delta E$ convention is **opt-in**, gated behind `CFLIBS_MCWHIRTER_RESONANCE_DE`; the
+> **default** solver path still passes $\Delta E = \max(E_k)$ (see
+> [impl-literature-methods §8](impl-literature-methods.md#iterative)). Prefer the flag.
 
 ### 3.4 The Stark↔Saha LTE cross-check M7 consumes {#stark-saha-gate}
 
@@ -332,7 +333,7 @@ Saha–Boltzmann fit (the old per-iteration placement was itself part of the fee
 
 | Rung | Method | Observable | Validity |
 |------|--------|-----------|----------|
-| (a) | Doublet/multiplet intensity ratio | a measured line pair sharing the same upper level; deviation from the optically-thin ratio $(g_kA_{ki}/\lambda)_1/(g_kA_{ki}/\lambda)_2$ gives $\tau$ with **no plasma state at all** [@pace2025] | $\tau \in [0.1, 5]$ (`DOUBLET_TAU_VALIDITY_MAX`) |
+| (a) | Doublet/multiplet intensity ratio | a measured line pair sharing the same upper level; deviation from the optically-thin ratio $(g_kA_{ki}/\lambda)_1/(g_kA_{ki}/\lambda)_2$ gives $\tau$ with **no plasma state at all** [citation-needed] | $\tau \in [0.1, 5]$ (`DOUBLET_TAU_VALIDITY_MAX`) |
 | (b) | Planck-ceiling closed form | measured peak spectral radiance + a $T$ estimate → $\tau$ from the homogeneous-slab solution $I_\lambda = B_\lambda(1-e^{-\tau_\lambda})$ [@volker2023] | $\tau \le 3$ (`PLANCK_TAU_VALIDITY_MAX`, their 10% RSD budget) |
 | (c) | No correction + SA-suspect flag | lines matching the published SA-risk signature (low lower-level energy $E_i < 0.74$ eV and high intensity) are **down-weighted** via inflated uncertainty, never silently boosted | — |
 
@@ -340,7 +341,7 @@ The Planck rung is `correct_intensity_planck` (`self_absorption_observable.py:21
 `planck_ceiling_optical_depth` (`:115`) and the Doppler curve-of-growth escape factor
 `doppler_cog_escape_factor` (`:175`); the ladder orchestrator is
 `ObservableSelfAbsorptionCorrector` (`:287`). The El Sherbini measured/Stark width-ratio route
-[@elsherbini2005] and the doublet route [@pace2025] are the two width- and ratio-based observables
+[@elsherbini2005] and the doublet route [citation-needed] are the two width- and ratio-based observables
 the module prefers before falling back to down-weighting. **Nothing in this module reads a
 recovered composition** — that invariant is the whole point.
 
@@ -418,7 +419,7 @@ atomic data — the falsifiable "scale-spread table."
 > [!NOTE] Status: the relative-g·A refinement and the anchoring diagnostics are shipped; the
 > absolute lifetime anchoring depends on an independent second line source (Kurucz/VALD ingest via
 > `scripts/ingest_kurucz_atomic.py`) and a staged overlay build, and is **partial**. Theory and
-> motivation live in [Frontier Methods](frontier-methods.md#g-a-self-calibration).
+> motivation live in [Frontier Methods](frontier-methods.md#ga-self-cal).
 
 ---
 
