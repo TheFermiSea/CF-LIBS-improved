@@ -20,6 +20,7 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
 from cflibs.inversion.physics.boltzmann import LineObservation
 from cflibs.inversion.physics.closure import ClosureEquation
+from cflibs.inversion.physics.closure import log_ratios as _log_ratios
 from cflibs.inversion.physics.self_absorption_observable import (
     ObservableSAResult,
     ObservableSelfAbsorptionCorrector,
@@ -188,6 +189,67 @@ class CFLIBSResult:
     failed: bool = False
     failure_reason: Optional[str] = None
     diagnostics: Optional[Dict[str, Any]] = field(default=None, repr=False)
+    #: Completeness provenance of the reported ``concentrations`` (Issue 6,
+    #: light-touch annotation — never alters composition). The default closure
+    #: normalizes ``sum C_s = 1`` over the *detected* element set only, so with
+    #: undetected mass fraction ``m`` (un-modeled C/N/O/H interstitials, surface
+    #: oxide, entrained air) every reported metal fraction is an UPPER BOUND
+    #: inflated by ``1/(1-m)`` (``MatrixEffects.lean`` ``inflationFactor_eq`` /
+    #: ``composition_le_recoveredComposition``, Ciucci 1999, Tognoni 2010).
+    #: ``"detected_set_only"`` (default) flags this inflation; the pairwise
+    #: ratios in :meth:`log_ratios` are unaffected because the ``1/(1-m)`` factor
+    #: cancels in every ratio.
+    closure_completeness: str = "detected_set_only"
+    #: DED/tracking diagnostic: Aitchison log-ratios ``ln(C_s / C_ref)`` against
+    #: the dominant (matrix) element, auto-populated in ``__post_init__`` from
+    #: :attr:`concentrations` (number/mole fractions). Matrix- and detected-set
+    #: invariant (Issue 2; ``MatrixEffects.lean``
+    #: ``recoveredComposition_ratio_matrix_invariant``), so this is the robust
+    #: composition-tracking deliverable that sidesteps closure mass-slosh.
+    #: The reference element is recorded in :attr:`log_ratio_reference`.
+    log_ratio_reference: Optional[str] = None
+    log_ratios_vs_dominant: Dict[str, float] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Auto-populate the DED/tracking log-ratio diagnostic against the
+        # dominant (most abundant) element when a caller has not already set it.
+        # Pure annotation: reads ``concentrations``, never writes T/n_e/comp.
+        if not self.log_ratios_vs_dominant and self.concentrations:
+            finite = {
+                el: v
+                for el, v in self.concentrations.items()
+                if np.isfinite(v) and v > 0.0
+            }
+            if len(finite) >= 2:
+                ref = max(finite, key=finite.__getitem__)
+                self.log_ratio_reference = ref
+                self.log_ratios_vs_dominant = _log_ratios(self.concentrations, ref)
+
+    def log_ratios(self, reference: str) -> Dict[str, float]:
+        """Aitchison log-ratios ``ln(C_s / C_ref)`` of the recovered composition.
+
+        The matrix-invariant, closure-denominator-free deliverable for
+        constrained composition tracking (Issue 2). Computed from
+        :attr:`concentrations` (number/mole fractions), so the returned value is
+        ``ln(N_s / N_ref)`` for each element ``s != reference`` — e.g.
+        ``result.log_ratios("Ti")["V"]`` is ``ln(N_V / N_Ti)`` for Ti-6Al-4V.
+
+        See :func:`cflibs.inversion.physics.closure.log_ratios` for the full
+        physics rationale and edge-case semantics (missing/zero numerator ->
+        NaN; missing/non-positive reference -> raises).
+
+        Parameters
+        ----------
+        reference : str
+            Denominator element (the dominant matrix element for DED).
+
+        Returns
+        -------
+        dict of str -> float
+            ``element -> ln(N_element / N_reference)`` for every non-reference
+            element.
+        """
+        return _log_ratios(self.concentrations, reference)
 
 
 @dataclass
