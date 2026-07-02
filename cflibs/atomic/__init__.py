@@ -23,10 +23,10 @@ from cflibs.atomic.wavelength_conversion import (
 
 # Lazy import to avoid circular dependency
 def __getattr__(name):
-    if name == "AtomicDatabase":
-        from cflibs.atomic.database import AtomicDatabase
+    if name in ("AtomicDatabase", "ImmutableDatabaseError", "is_standard_db"):
+        from cflibs.atomic import database
 
-        return AtomicDatabase
+        return getattr(database, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -36,6 +36,8 @@ __all__ = [
     "SpeciesPhysics",
     "PartitionFunction",
     "AtomicDatabase",
+    "ImmutableDatabaseError",
+    "is_standard_db",
     "STANDARD_ATOMIC_MASSES",
     "DEFAULT_ATOMIC_MASS_AMU",
     "resolve_element_mass",

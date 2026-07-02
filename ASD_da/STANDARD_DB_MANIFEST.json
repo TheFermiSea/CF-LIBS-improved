@@ -1,0 +1,12 @@
+{
+  "_comment": "Checksum manifest for IMMUTABLE standard atomic databases. Verified by scripts/verify_standard_dbs.py. Overlays (ASD_da/overlays/) are derived and intentionally excluded. Regenerate with --update only after a legitimate, reviewed refresh of a standard DB.",
+  "generated_utc": "2026-07-02T12:39:51+00:00",
+  "databases": {
+    "ASD_da/libs_production.db": {
+      "sha256": "a4e91f45d981dd540244d4997f7a04b11157f35480ed4e2d9d2737699b7593ff",
+      "size_bytes": 56082432,
+      "date": "2026-07-02",
+      "description": "Primary CF-LIBS atomic database (SQLite): lines, energy_levels, species_physics, partition_functions. Compiled from the gold-standard NIST ASD dump. IMMUTABLE -- enrichments belong in ASD_da/overlays/."
+    }
+  }
+}

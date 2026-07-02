@@ -30,6 +30,7 @@ from cflibs.atomic.aki_anchor import (
     compare_aki_sources,
     species_scale_diagnostic,
 )
+from cflibs.atomic.database import AtomicDatabase
 
 
 def main(argv=None) -> int:
@@ -41,6 +42,13 @@ def main(argv=None) -> int:
 
     print(f"cflibs={Path(cflibs.__file__).resolve()}")  # worktree-provenance guard
     print(f"db={Path(args.db).resolve()}\n")
+
+    # Immutability pre-flight: assert the source (and comparison) DB open
+    # read-only before the diagnostic runs. This is a pure-read audit; the DB is
+    # never mutated (sqlite mode=ro; no schema migration).
+    AtomicDatabase(args.db, read_only=True).close()
+    if args.compare_db:
+        AtomicDatabase(args.compare_db, read_only=True).close()
 
     reports = species_scale_diagnostic(args.db, DEFAULT_TARGET_SPECIES)
 

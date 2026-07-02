@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from cflibs.atomic.aki_anchor import a_from_log_gf
+from cflibs.atomic.database import AtomicDatabase
 
 # hc conversion: 1 cm^-1 = 1.239841984e-4 eV (matches the production DB's own scale).
 CM_TO_EV = 1.239841984e-4
@@ -616,7 +617,10 @@ class SpeciesStat:
 
 def build(db_path: str, overlay_path: str) -> dict:
     levels, lines = parse_all()
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    # Source DB is IMMUTABLE: open through AtomicDatabase's read-only mode
+    # (sqlite mode=ro). No write can reach it and no schema migration runs.
+    source_db = AtomicDatabase(db_path, read_only=True)
+    conn = source_db.conn
     conn.row_factory = sqlite3.Row
     ov = _create_overlay(overlay_path)
 
@@ -761,7 +765,7 @@ def build(db_path: str, overlay_path: str) -> dict:
     ov.execute("INSERT INTO provenance VALUES (?,?)", ("build_summary", repr(report)))
     ov.commit()
     ov.close()
-    conn.close()
+    source_db.close()
     return report
 
 
