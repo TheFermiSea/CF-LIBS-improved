@@ -252,6 +252,21 @@ def test_solver_electron_density_pressure_balance(mock_db):
 
     Generate synthetic observations at the equilibrium n_e implied by
     P = n_tot * kT * (1 + Z_avg), then check the solver recovers that n_e.
+
+    This test targets the *pressure-balance* n_e path by name, so the solver is
+    constructed with ``prefer_sb_offset_ne=False``: on this branch the default
+    precedence (Issue 4) measures n_e from the Saha-Boltzmann inter-stage
+    intercept offset whenever an element exposes both a neutral and an ion
+    stage — which these synthetic observations do — and that measured n_e would
+    intercept before pressure balance ever runs. Disabling it forces the path
+    under test.
+
+    The reference iteration mirrors the solver's *three-stage* charge balance
+    (Issue 5): free electrons per atom eps = (S1 + 2·S1·S2)/(1 + S1 + S1·S2),
+    matching ``_pressure_balance_ne``. S2 is fetched exactly as
+    ``_second_saha_ratio`` computes it from the mock DB — which returns a finite
+    IP_II (7.0 eV) and U_III (=25) for every stage, so S2 is NON-zero here and
+    the legacy two-stage form (avg_Z = S/(1+S)) no longer matches.
     """
     from cflibs.core.constants import KB, STP_PRESSURE
 
@@ -259,14 +274,23 @@ def test_solver_electron_density_pressure_balance(mock_db):
     T_K = T_eV * EV_TO_K
     ip = 7.0
 
-    # Compute self-consistent n_e at STP for single element
-    # Iterate: avg_Z = S/(1+S), n_tot = P/(kT*(1+avg_Z)), n_e = avg_Z * n_tot
+    # Compute self-consistent n_e at STP for a single element, mirroring the
+    # solver's three-stage ionization ladder exactly.
+    #   S1 = n_II/n_I, S2 = n_III/n_II  (both from the Saha equation)
+    #   avg_Z = (S1 + 2·S1·S2) / (1 + S1 + S1·S2)
+    #   n_tot = P/(kT·(1 + avg_Z)),  n_e = avg_Z · n_tot
+    # The mock DB returns log(25) for U(I)=U(II)=U(III) and IP=7.0 eV for every
+    # stage, so U_III/U_II = 1 and IP_II = 7.0 (see _second_saha_ratio).
     U_I = 25.0  # matches mock_db partition function
     U_II = 25.0
+    U_III = 25.0  # mock_db returns log(25) for every stage
+    ip_II = 7.0  # mock_db.get_ionization_potential returns 7.0 for every stage
     n_e_eq = 1e17  # initial guess
     for _ in range(100):
-        S = (SAHA_CONST_CM3 / n_e_eq) * (T_eV**1.5) * (U_II / U_I) * np.exp(-ip / T_eV)
-        avg_Z = S / (1.0 + S)
+        S1 = (SAHA_CONST_CM3 / n_e_eq) * (T_eV**1.5) * (U_II / U_I) * np.exp(-ip / T_eV)
+        S2 = (SAHA_CONST_CM3 / n_e_eq) * (T_eV**1.5) * (U_III / U_II) * np.exp(-ip_II / T_eV)
+        ladder = 1.0 + S1 + S1 * S2
+        avg_Z = (S1 + 2.0 * S1 * S2) / ladder
         n_tot = STP_PRESSURE / (KB * T_K * (1.0 + avg_Z)) * 1e-6  # cm^-3
         n_e_new = avg_Z * n_tot
         if abs(n_e_new - n_e_eq) / n_e_eq < 1e-6:
@@ -311,8 +335,11 @@ def test_solver_electron_density_pressure_balance(mock_db):
             )
         )
 
-    solver = IterativeCFLIBSSolver(mock_db, max_iterations=20, pressure_pa=STP_PRESSURE)
+    solver = IterativeCFLIBSSolver(
+        mock_db, max_iterations=20, pressure_pa=STP_PRESSURE, prefer_sb_offset_ne=False
+    )
     res = solver.solve(observations)
 
     assert res.converged
+    assert res.quality_metrics.get("ne_source") == "pressure_balance_imputed"
     assert res.electron_density_cm3 == pytest.approx(n_e_eq, rel=0.25)

@@ -231,11 +231,18 @@ def test_full_pipeline_recovers_multistage_sample(tmp_path: Path):
     recovered = solver.solve(detected.observations)
 
     assert recovered.converged
-    # Expected T shifted from 12000→13200 K after the combined physics corrections:
-    # IPD lowers effective ionization potential → higher ionization fraction →
-    # self-absorption reduces strong-line intensities → Boltzmann slope steepens
-    # slightly → higher recovered T. The 10% tolerance accommodates noise.
-    assert recovered.temperature_K == pytest.approx(13200.0, rel=0.10)
+    # The forward sample is generated at T_e = 12000 K, n_e = 1e17 (see
+    # _simulate_fe_cu_spectrum). On this branch the solver measures n_e from the
+    # Saha-Boltzmann inter-stage intercept offset (Issue 4, Aguilera & Aragon
+    # 2007) instead of the isobaric 1-atm pressure-balance imputation, because
+    # Fe is observed in both a neutral and an ion stage. The MEASURED n_e
+    # (~6.7e16) is far closer to the true forward n_e (1e17) than the old
+    # pressure-balance value (~2.7e17), so the Saha correction of the ion lines
+    # is unbiased and the recovered T sits at ~11.6 kK — within ~4% of the true
+    # 12000 K — rather than the ~13200 K the pressure-balance n_e used to force.
+    # We therefore assert recovery of the TRUE forward temperature (not the old
+    # biased value); the 6% band covers the small residual bias plus noise.
+    assert recovered.temperature_K == pytest.approx(12000.0, rel=0.06)
     assert recovered.concentrations["Fe"] == pytest.approx(
         EXPECTED_NUMBER_FRACTIONS["Fe"], abs=0.05
     )
@@ -246,7 +253,8 @@ def test_full_pipeline_recovers_multistage_sample(tmp_path: Path):
     recovered_from_alias = solver.solve(to_line_observations(alias_result))
 
     assert recovered_from_alias.converged
-    assert recovered_from_alias.temperature_K == pytest.approx(13200.0, rel=0.10)
+    # Same measured-n_e physics as above: recover the true forward T (~12000 K).
+    assert recovered_from_alias.temperature_K == pytest.approx(12000.0, rel=0.06)
     assert recovered_from_alias.concentrations["Fe"] == pytest.approx(
         EXPECTED_NUMBER_FRACTIONS["Fe"], abs=0.05
     )
