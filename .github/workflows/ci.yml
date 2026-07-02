@@ -8,15 +8,24 @@ on:
 
 jobs:
   build-test-lint:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, cflibs]
+    # Belt-and-braces: never run fork-PR code on the self-hosted runner
+    # (repo also enforces fork-PR approval for all external contributors).
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     env:
       JAX_PLATFORMS: cpu
+      # Persistent XLA compile cache on the runner's local disk — survives
+      # between runs, so repeat jit compiles (the dominant CI cost) are warm.
+      JAX_COMPILATION_CACHE_DIR: /home/runner/.cache/cflibs-xla
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Ensure XLA cache dir exists
+      run: mkdir -p "$JAX_COMPILATION_CACHE_DIR"
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
