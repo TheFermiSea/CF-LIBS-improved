@@ -312,20 +312,66 @@ def find_shared_upper_groups(
 # ---------------------------------------------------------------------------
 # Residual measurement
 # ---------------------------------------------------------------------------
+def _weighted_location(
+    y: np.ndarray, w: np.ndarray, *, robust: bool, n_iter: int = 8, huber_c: float = 1.345
+) -> float:
+    """Group reference level in the Boltzmann ordinate.
+
+    ``robust=False`` returns the inverse-variance weighted MEAN — the exact
+    least-squares reference (and the literal audit prescription).
+
+    ``robust=True`` (default) returns a Huber IRLS weighted location, so a
+    *minority* of biased lines in a group is pulled toward the good-anchor
+    consensus rather than the anchors being dragged toward a contaminated mean.
+    This matters because a plain mean is *mean-preserving*: correcting every line
+    to the group mean leaves a mean-based composition estimate unchanged, and a
+    contaminated mean would bias the good lines. For a clean group the Huber
+    weights are all 1, so the robust location reduces exactly to the mean (no
+    change on healthy data). Groups of size <= 2 cannot identify which line is
+    biased, so they fall back to the mean.
+    """
+    sum_w = float(np.sum(w))
+    loc = float(np.sum(w * y) / sum_w)
+    if not robust or y.size <= 2:
+        return loc
+    for _ in range(n_iter):
+        resid = y - loc
+        med = float(np.median(resid))
+        mad = float(np.median(np.abs(resid - med)))
+        scale = 1.4826 * mad
+        if scale <= 0:
+            break
+        u = resid / scale
+        hw = np.ones_like(u)
+        big = np.abs(u) > huber_c
+        hw[big] = huber_c / np.abs(u[big])
+        ww = w * hw
+        s = float(np.sum(ww))
+        if s <= 0:
+            break
+        new_loc = float(np.sum(ww * y) / s)
+        if abs(new_loc - loc) < 1e-12:
+            loc = new_loc
+            break
+        loc = new_loc
+    return loc
+
+
 def measure_relative_ga_residuals(
     observations: Sequence[LineObservation],
     groups: Sequence[SharedUpperGroup],
     *,
     exclude_mask: Optional[Sequence[bool]] = None,
+    center: str = "robust",
     sigma_floor: float = 1e-3,
 ) -> list[RelativeGAResidual]:
     """Measure the relative-g·A residual of every line in each group.
 
-    For each group the anchor is the inverse-variance weighted mean of the
-    Boltzmann ordinate ``y = ln(I lambda / (g A))``. The residual
-    ``r_i = y_i - <y>`` is a direct estimate of the line's relative A_ki error
-    (up to the group's unmeasurable absolute scale). Its noise is propagated
-    analytically from the intensity uncertainties.
+    For each group a reference level of the Boltzmann ordinate
+    ``y = ln(I lambda / (g A))`` is computed (:func:`_weighted_location`), and
+    the residual ``r_i = y_i - <y>`` is a direct estimate of the line's relative
+    A_ki error (up to the group's unmeasurable absolute scale). Its noise is
+    propagated analytically from the intensity uncertainties.
 
     Parameters
     ----------
@@ -337,6 +383,10 @@ def measure_relative_ga_residuals(
         Optional boolean per-observation mask; ``True`` marks a line as
         optically thick / differential-SA suspect. Such lines are excluded from
         the anchor and flagged ``excluded`` (no correction applied).
+    center
+        ``"robust"`` (default) Huber IRLS group reference (resists a minority of
+        biased lines); ``"mean"`` for the plain inverse-variance weighted mean
+        (the literal LS prescription).
     sigma_floor
         Minimum per-line log-domain sigma, to keep weights finite when the
         intensity uncertainty is zero/unknown.
@@ -347,6 +397,7 @@ def measure_relative_ga_residuals(
     """
     residuals: list[RelativeGAResidual] = []
     excl = None if exclude_mask is None else np.asarray(exclude_mask, dtype=bool)
+    robust = center == "robust"
 
     for grp in groups:
         idxs = grp.indices
@@ -366,7 +417,7 @@ def measure_relative_ga_residuals(
         sum_w = float(np.sum(w))
         if sum_w <= 0:
             continue
-        mu = float(np.sum(w * y) / sum_w)
+        mu = _weighted_location(y[anchor], w[anchor], robust=robust)
 
         for local, i in enumerate(idxs):
             if not finite[local]:
@@ -499,6 +550,7 @@ def self_calibrate_relative_ga(
     exclude_mask: Optional[Sequence[bool]] = None,
     min_group_size: int = 2,
     shrinkage: "str | float | None" = "empirical_bayes",
+    center: str = "robust",
     ek_tol_ev: float = 1e-3,
 ) -> tuple[list[LineObservation], RelativeGACalibration]:
     """End-to-end relative-g·A self-calibration of a line list.
@@ -515,7 +567,9 @@ def self_calibrate_relative_ga(
     )
     if not groups:
         return list(observations), RelativeGACalibration()
-    residuals = measure_relative_ga_residuals(observations, groups, exclude_mask=exclude_mask)
+    residuals = measure_relative_ga_residuals(
+        observations, groups, exclude_mask=exclude_mask, center=center
+    )
     corrected, calib = apply_relative_ga_correction(
         observations, residuals, min_group_size=min_group_size, shrinkage=shrinkage
     )
