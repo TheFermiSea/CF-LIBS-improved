@@ -1,0 +1,14 @@
+ 1|1984 Dec  9| 3|Ar-Ne| 600| 7764-49105|0.057|12|UV    |              |Mid Range Si Diode                     
+ 2|1984 Dec  9| 4|Ar-Ne| 300| 7764-49105|0.057| 8|UV    |              |Mid Range Si Diode                     
+ 3|1984 Dec  9| 5|Ar-Ne| 150| 7764-49105|0.057| 8|UV    |              |Mid Range Si Diode                     
+ 4|1986 Jul 30| 9|Ar   | 500|14924-37018|0.048| 4|UV    |CuSO_4_       |Large UV Si Diode                      
+ 5|1986 Jul 30|10|Ar   | 500|14924-37018|0.048| 4|UV    |CuSO_4_       |Large UV Si Diode                      
+ 6|1981 Jun 16| 7|Ar   | 332| 6924-37564|0.043| 8|UV    |WG295         |UV Mid Range Si Diode                  
+ 7|1981 Jun 15| 3|Ar   | 250|14878-36533|0.043| 8|UV    |CuSO_4_ WG295 |UV Mid Range Si Diode                  
+ 8|1979 Dec 12| 9|Ar   | 300|12422-31054|0.042|10|UV    |TC+ 4-97 WG345|Mid Range Si Diode                     
+ 9|1979 Dec 12| 8|Ar   | 300| 7716-22421|0.030| 8|UV    |GG945         |Super Blue Si Diode                    
+10|1980 Sep  4| 1|Ar   | 110|    0-17837|0.023| 5|UV    |RG610         |InSb                                   
+11|1983 Nov 30| 3|Ar   | 460| 2799- 9518|0.011|17|CaF_2_|Si            |InSb                                   
+12|1983 Apr 17| 4|Ne-Ar| 370| 1534- 5769|0.011|80|CaF_2_|Ge            |InSb                                   
+13|1984 Jul 25| 5|Ne   |1000|12948-45407|0.054| 8|UV    |CuSO_4_       |R166 photomultiplier Mid Range Si Diode
+14|1983 Nov 30| 4|Ne   | 510| 2799- 9517|0.011|16|CaF_2_|Si            |InSb                                   

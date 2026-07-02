@@ -69,6 +69,10 @@ class Transition:
         Fractional uncertainty in A_ki (0-1), derived from NIST accuracy grade
     accuracy_grade : Optional[str]
         NIST accuracy grade (AAA/AA/A/B/C/D/E) for transition probability
+    aki_source : Optional[str]
+        Provenance of ``A_ki``. ``None`` for the DB's own (NIST) value; set to the
+        anchoring source string (e.g. ``"lawler_overlay:Lawler2013_ApJS_205_11"``)
+        when the value was resolved from a lifetime-anchored A_ki overlay.
     """
 
     element: str
@@ -86,6 +90,7 @@ class Transition:
     is_resonance: Optional[bool] = False
     aki_uncertainty: Optional[float] = None
     accuracy_grade: Optional[str] = None
+    aki_source: Optional[str] = None
 
     @property
     def energy_diff_ev(self) -> float:

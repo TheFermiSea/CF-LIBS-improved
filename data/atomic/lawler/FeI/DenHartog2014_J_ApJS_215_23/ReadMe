@@ -1,0 +1,129 @@
+J/ApJS/215/23 FeI radiative lifetime and branching fractions (Den Hartog+, 2014)
+================================================================================
+Fe I oscillator strengths for transitions from high-lying even-parity levels.
+    Den Hartog E.A., Ruffoni M.P., Lawler J.E., Pickering J.C., Lind K.,
+    Brewer N.R.
+   <Astrophys. J. Suppl. Ser., 215, 23 (2014)>
+   =2014ApJS..215...23D
+================================================================================
+ADC_Keywords: Atomic physics ; Line Profiles ; Spectroscopy
+Keywords: atomic data; stars: abundances; Sun: abundances
+
+Abstract:
+    New radiative lifetimes, measured to +/-5% accuracy, are reported for
+    31 even-parity levels of Fe I ranging from 45061cm^-1^ to 56842cm^-1^.
+    These lifetimes have been measured using single-step and two-step
+    time-resolved laser-induced fluorescence on a slow atomic beam of iron
+    atoms. Branching fractions have been attempted for all of these
+    levels, and completed for 20 levels. This set of levels represents an
+    extension of the collaborative work reported in Ruffoni et al.
+    (2013ApJ...779...17R; 2014, J/MNRAS/441/3127). The radiative lifetimes
+    combined with the branching fractions yields new oscillator strengths
+    for 203 lines of Fe I. Utilizing a 1D-LTE model of the solar
+    photosphere, spectral syntheses for a subset of these lines which are
+    unblended in the solar spectrum yields a mean iron abundance of
+    <log[{epsilon}(Fe)]>=7.45+/-0.06.
+
+Description:
+    From our recent work for the APOGEE and Gaia-ESO surveys (Ruffoni et
+    al. 2013ApJ...779...17R; 2014, J/MNRAS/441/3127), we have assembled a
+    catalog of high-resolution, intensity calibrated FeI line spectra,
+    measured in emission by Fourier transform (FT) spectroscopy in
+    overlapping regions from 1800/cm to 35500/cm. From this catalog, we
+    have used the two spectra shown in Table 2 to measure branching
+    fractions (BFs) for lines linked to many of the levels listed in Table 1.
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName  Lrecl Records  Explanations
+--------------------------------------------------------------------------------
+ReadMe        80       .  This file
+table1.dat    88      33  Radiative lifetimes for even parity FeI levels
+table4.dat    82     227  Experimental branching fractions, transition
+                           probabilities, and log(gf)s for 227 lines of Fe I
+                           organized by increasing wavelength
+--------------------------------------------------------------------------------
+
+See also:
+ J/MNRAS/441/3127 : FeI oscillator strengths for Gaia-ESO (Ruffoni+, 2014)
+ J/A+A/554/A132   : Iron line list (FeI and FeII) (Genovali+, 2013)
+ J/A+A/377/361    : Fe II transition probabilities and loggf (Pickering+, 2001)
+ J/A+A/293/967    : IRON Project VII. FeII radiative transitions (Nahar, 1995)
+ J/ApJS/94/221    : New multiplet table for FeI (Nave+, 1994)
+ J/A+A/274/555    : FeI lines asymmetry in solar spectrum (Stathopoulou+ 1993)
+
+Byte-by-byte Description of file: table1.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label     Explanations
+--------------------------------------------------------------------------------
+       1  I1    ---     S         [1/2] Step excitation number (1)
+   3- 24  A22   ---     Config    Configuration (2)
+  26- 30  A5    ---     Term      Term (2)
+      32  I1    ---     J         [0/7] J value
+  34- 42  F9.3  cm-1    E1        [45061.3/56842.8] Upper energy level (2)
+  44- 52  F9.3  cm-1    E0        ? Intermediate energy level (2)
+  54- 60  F7.3  nm      lam1      [268.1/501.3] Step 1 laser wavelength
+  62- 68  F7.3  nm      lam2      [364.7/528.4]? Step 2 laser wavelength
+  70- 72  I3    nm      lambda    [353/560]? Observation wavelength (3)
+  74- 77  F4.1  ns      tau       [5.6/18.5]? Our lifetime (+/-5% uncertainty)
+  79- 82  F4.1  ns      tauP      ? Published lifetime
+  84- 86  F3.1  ns    e_tauP      ? LifeTP uncertainty
+      88  A1    ---   r_tauP      Reference for LifeTP (4)
+--------------------------------------------------------------------------------
+Note (1): Code as follows:
+   1 = Radiative lifetimes measured with two-step excitation
+   2 = Radiative lifetimes measured with single-step excitation
+Note (2): Configurations, terms, level energies, and wavelengths are from the
+          Nave et al. (1994, J/ApJS/94/221).
+Note (3): Fluorescence is observed through ~10nm bandpass multi-layer
+          dielectric filters. The filter angle is adjusted to center the
+          bandpass at the indicated wavelength.
+Note (4): Reference as follows:
+   d = Marek et al. (1979PhyS...19..325M).
+   e = O'Brian et al. (1991JOSAB...8.1185O) TR-LIF with uncertainty of +/-5%.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table4.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label    Explanations
+--------------------------------------------------------------------------------
+   1- 10 F10.4  0.1nm    lamAir   [3211/22381] Wavelength in air; Angstroms (1)
+  12- 20 F9.3   cm-1     E1       [45061.3/53169.2] Upper energy level (1)
+      22 I1     ---      J1       [0/7] Upper level J value (1)
+  24- 32 F9.3   cm-1     E0       [19350.8/43499.6] Lower energy level (1)
+      34 I1     ---      J0       [0/6] Lower level J value (1)
+  36- 40 F5.3   ---      BF       [0.001/1]? Branching Fraction
+  42- 45 F4.1   %      e_BF       [0/40]? Uncertainty in BF in %
+  47- 53 F7.3   10+6/s   A        [0.04/156.3]? Transition probability
+  55- 59 F5.2   [-]      log(gf)  [-3.4/0.7]? Log of degeneracy times
+                                   oscillator strength
+  61- 64 F4.2   [-]    e_log(gf)  ? Uncertainty in log(gf)
+  66- 70 F5.2   [-]      log(gf)P ? Previously published log(gf) (2)
+  72- 75 F4.2   [-]    e_log(gf)P ? Uncertainty in log(gf)P (2)
+  77- 80 A4     ---    r_log(gf)P Reference for log(gf)P (3)
+      82 A1     ---      Cal      [ALP] Calibration method for log(gf)P (4)
+--------------------------------------------------------------------------------
+Note (1): Most wavelengths are from Nave et al. (1994, J/ApJS/94/221).
+Note (2): Published log(gf)'s are taken from the critical compilation of
+          Fuhr and Weise (2006JPCRD..35.1669F).
+Note (3): Acronyms have the following meaning:
+   OB91 = O'Brian et al. (1991JOSAB...8.1185O);
+   Ma74 = May et al. (1974A&AS...18..405M);
+   Ba91 = Bard et al. (1991A&A...248..315B);
+   Ba94 = Bard & Kock (1994A&A...282.1014B);
+   Br74 = Bridges & Kornblith (1974ApJ...192..793B).
+Note (4): Calibration method indicates the method by which the published
+          data was put on an absolute scale as described in the text
+          (see section 3 for further explanations):
+   L = the radiative lifetime was measured and used to convert the BF's into
+       transition probabilities.
+   A = the previous data arises from an emission measurement from a
+       wall-stabilized arc.
+   P = from O'Brian et al. (1991JOSAB...8.1185O).
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                 Greg Schwarz [AAS], Emmanuelle Perret [CDS]    09-Feb-2015

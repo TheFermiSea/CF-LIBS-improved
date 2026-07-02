@@ -20,8 +20,10 @@ remedy plus the diagnostics that quantify it:
    practice). Relative branching fractions and laser-measured lifetimes are
    accurate to a few percent, so the per-species intercept then carries a
    ~few-% scale error instead of a D/E-grade (50-100%) one. Corrected values
-   are written to NEW columns (``aki_anchored``, ``aki_anchor_source``); the
-   original ``aki`` is never overwritten.
+   are written to a SEPARATE overlay DB (``anchored_lines`` table, keyed by
+   ``lines.id``); the source/production DB is opened read-only and never
+   mutated (immutability mandate). See ``scripts/build_lawler_overlay.py`` for
+   the full staged-table -> overlay build.
 
 3. :func:`compare_aki_sources` -- cross-DB per-species scale comparison
    (``ln(A_a / A_b)`` over shared transitions). This is the "why did Kurucz
@@ -37,6 +39,7 @@ Physics-only: numpy + sqlite3 only (no ML libraries).
 from __future__ import annotations
 
 import math
+import os
 import sqlite3
 from dataclasses import dataclass, field
 
@@ -279,12 +282,20 @@ class AnchorResult:
         )
 
 
-def _ensure_anchor_columns(conn: sqlite3.Connection) -> None:
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(lines)")}
-    if "aki_anchored" not in cols:
-        conn.execute("ALTER TABLE lines ADD COLUMN aki_anchored REAL")
-    if "aki_anchor_source" not in cols:
-        conn.execute("ALTER TABLE lines ADD COLUMN aki_anchor_source TEXT")
+def _ensure_overlay_schema(conn: sqlite3.Connection) -> None:
+    """Create the anchored_lines overlay table in a NEW/overlay DB (never the source)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS anchored_lines (
+            line_id INTEGER PRIMARY KEY,
+            element TEXT NOT NULL,
+            sp_num INTEGER NOT NULL,
+            aki_anchored REAL NOT NULL,
+            aki_unc REAL,
+            method TEXT NOT NULL,
+            source TEXT NOT NULL,
+            match_quality TEXT
+        )
+        """)
 
 
 def anchor_aki_to_lifetimes(
@@ -295,7 +306,7 @@ def anchor_aki_to_lifetimes(
     *,
     observed_branch_fraction: dict[str, float] | None = None,
     anchor_source: str = "lifetime",
-    write: bool = False,
+    overlay_path: str | None = None,
 ) -> AnchorResult:
     """Renormalize a species' A_ki to measured radiative lifetimes: ``A_ki = BR_ki/tau_k``.
 
@@ -319,22 +330,29 @@ def anchor_aki_to_lifetimes(
         ``{upp_level_id: tau_seconds}``. Only levels present here are anchored.
     observed_branch_fraction:
         Optional ``{upp_level_id: f_obs in (0, 1]}``.
-    write:
-        If True, persist to new columns ``aki_anchored`` / ``aki_anchor_source``
-        (the original ``aki`` is never modified). If False (default), a dry run.
+    overlay_path:
+        If given, persist anchored A_ki to a SEPARATE overlay DB at this path
+        (``anchored_lines`` table). **The source ``db_path`` is ALWAYS opened
+        read-only** — anchoring never mutates the standard/production DB, per the
+        immutability mandate. If ``None`` (default), a dry run: nothing is written.
 
     Returns
     -------
     AnchorResult
     """
-    mode = "rwc" if write else "ro"
-    conn = sqlite3.connect(f"file:{db_path}?mode={mode}", uri=True)
+    # Source DB is immutable: read-only, always.
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
+    write = overlay_path is not None
+    ov: sqlite3.Connection | None = None
+    if overlay_path is not None:
+        parent = os.path.dirname(os.path.abspath(overlay_path))
+        os.makedirs(parent, exist_ok=True)
+        ov = sqlite3.connect(overlay_path)
+        _ensure_overlay_schema(ov)
     per_line: list[dict] = []
     n_levels = 0
     try:
-        if write:
-            _ensure_anchor_columns(conn)
         for uid, tau in level_lifetimes.items():
             if tau <= 0:
                 continue
@@ -365,15 +383,28 @@ def anchor_aki_to_lifetimes(
                         "scale_ratio": float(a_new / a_orig) if a_orig > 0 else float("nan"),
                     }
                 )
-                if write:
-                    conn.execute(
-                        "UPDATE lines SET aki_anchored = ?, aki_anchor_source = ? WHERE id = ?",
-                        (float(a_new), anchor_source, int(r["id"])),
+                if ov is not None:
+                    ov.execute(
+                        "INSERT OR REPLACE INTO anchored_lines "
+                        "(line_id, element, sp_num, aki_anchored, aki_unc, method, "
+                        "source, match_quality) VALUES (?,?,?,?,?,?,?,?)",
+                        (
+                            int(r["id"]),
+                            element,
+                            sp_num,
+                            float(a_new),
+                            0.05 * float(a_new),
+                            "tau_renorm",
+                            anchor_source,
+                            f"f_obs={f_obs:.3f}",
+                        ),
                     )
-        if write:
-            conn.commit()
+        if ov is not None:
+            ov.commit()
     finally:
         conn.close()
+        if ov is not None:
+            ov.close()
     return AnchorResult(
         element=element,
         sp_num=sp_num,

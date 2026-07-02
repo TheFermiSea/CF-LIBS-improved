@@ -1,0 +1,180 @@
+J/ApJS/211/20       NiI transition probability measurements       (Wood+, 2014)
+================================================================================
+Improved NiI log(gf) values and abundance determinations in the photospheres of
+the Sun and metal-poor star HD 84937.
+    Wood M.P., Lawler J.E., Sneden C., Cowan J.J.
+   <Astrophys. J. Suppl. Ser., 211, 20 (2014)>
+   =2014ApJS..211...20W
+================================================================================
+ADC_Keywords: Atomic physics ; Stars, nearby ; Sun ; Abundances
+Keywords: atomic data; methods: laboratory: atomic; stars: abundances;
+          stars: individual: HD 84937; Sun: abundances
+
+Abstract:
+    Atomic transition probability measurements for 371 NiI lines in the
+    UV through near-IR are reported. Branching fractions from data
+    recorded using a Fourier transform spectrometer and a new echelle
+    spectrograph are combined with published radiative lifetimes to
+    determine these transition probabilities. Generally good agreement is
+    found in comparisons to previously reported NiI transition
+    probability measurements. Use of the new echelle spectrograph,
+    independent radiometric calibration methods, and independent data
+    analysis routines enable a reduction of systematic errors and overall
+    improvement in transition probability uncertainty over previous
+    measurements. The new NiI data are applied to high-resolution visible
+    and UV spectra of the Sun and metal-poor star HD 84937 to derive new,
+    more accurate Ni abundances. Lines covering a wide range of wavelength
+    and excitation potential are used to search for non-LTE effects.
+
+Description:
+    As in much of our previous branching fraction work, this NiI branching
+    fraction study makes use of archived FTS data from both the 1.0m
+    Fourier Transform Spectrometer (FTS) previously at the National Solar
+    Observatory (NSO) on Kitt Peak and the Chelsea Instruments FT500 UV
+    FTS at Lund University in Sweden. Table 1 lists the 37 FTS spectra
+    used in our NiI branching fraction study. All NSO spectra, raw
+    interferograms, and header files are available in the NSO electronic
+    archives.
+
+    The 80 CCD frames of spectra from commercial Ni HCD lamps of the
+    echelle spectrograph are listed in Table 2.
+
+Objects:
+    -----------------------------------------------------
+         RA   (ICRS)   DE        Designation(s)
+    -----------------------------------------------------
+     09 48 56.10   +13 44 39.3   HD 84937 = TYC 834-654-1
+    -----------------------------------------------------
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName   Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe         80        .   This file
+table1.dat    127       37   Fourier Transform Spectra of Ni Hollow Cathode
+                              Discharge (HCD) lamps
+table2.dat     64       16   Echelle Spectra of commercial Ni HCD lamps
+table3.dat     62      371   Atomic transition probabilities for 371 lines of
+                              NiI organized by increasing wavelength in air
+table4.dat     29       76   Solar photospheric nickel abundances from
+                              individual NiI lines
+table5.dat     25       77   Nickel abundances from individual NiI lines
+                              in HD 84937
+table7.dat     59      303   Shifted isotopic wavelengths for 303 lines of
+                              NiI organized by increasing center of gravity
+                              wavelength in air
+--------------------------------------------------------------------------------
+
+See also:
+  VI/72 : Atomic Transition Probabilities, Sc-Ni (NIST 1993)
+  J/ApJ/738/5    : Effective collision strengths in NiII (Cassidy+, 2011)
+  J/ApJ/736/87   : Abundances in G-type stars with exoplanets (Kang+, 2011)
+  J/A+A/513/A55  : Effective collision strengths of NiII (Cassidy+, 2010)
+  J/ApJS/156/105 : Transitions in L-shell ions of Fe and Ni (Gu+, 2005)
+  J/A+AS/119/99  : [NiI] + [NiII] transition probabilities (Quinet+, 1996)
+
+Byte-by-byte Description of file: table1.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units       Label     Explanations
+--------------------------------------------------------------------------------
+   1-  2  I2    ---         Seq       [1/37] Running sequence number (1)
+   4- 14  A11 "YYYY/MMM/DD" Date      Observation date
+  16- 18  I3    ---         Num       [1/677] Serial number
+  20- 33  A14   ---         Lamp      Lamp type (2)
+  35- 39  A5    ---         Gas       Buffer gas
+  41- 46  F6.1  mA          CLamp     [0.8/2000] Lamp current
+  48- 52  I5    cm-1        Wave1     [0/28436] Lower range of wavenumber
+      53  A1    ---         ---       [-]
+  54- 58  I5    cm-1        Wave2     [7811/56873] Upper range of wavenumber
+  60- 64  F5.3  cm-1        Lim       [0.01/0.07] Limit of resolution
+  66- 67  I2    ---         coadd     [4/40] Coadds
+  69- 73  A5    ---         Beam      Beam splitter
+  75- 92  A18   ---         Filt      Filter
+  94-127  A34   ---         Det       Detector (3)
+--------------------------------------------------------------------------------
+Note (1): Spectra with indices 1 through 15 were recorded using the UV
+     Chelsea Instruments FT500 at Lund University, Sweden. Spectra with
+     indices 16 through 37 were recorded using the 1.0m FTS on the McMath
+     telescope at the National Solar Observatory, Kitt Peak, AZ.
+Note (2): Lamp types include Commercial sealed HCD lamps typically used in
+     Atomic Absorption Spectrophotometers for analytical chemistry and
+     custom water cooled HCD lamps for high current operation.
+Note (3): Detector types include 1P28 Photomultiplier Tubes (PMTs), R166
+     Solar Blind PMTs, R1516 PMTs, Super Blue silicon (Si) Photodiodes
+     (PDs), Mid Range Si PDs, and indium antimonide (InSb) detectors for
+     the near-infrared.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table2.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units       Label    Explanations
+--------------------------------------------------------------------------------
+   1-  7  A7    ---         Seq      Running sequence number (38-117)
+   9- 19  A11 "YYYY/MMM/DD" Date     Observation date
+  21- 34  A14   ---         Num      Serial numbers (1)
+  36- 37  A2    ---         Gas      Buffer gas
+      39  I1    mA          CLamp    [1/5] Lamp current
+  41- 44  I4    0.1nm       lam1     [2000/2200] Lower wavelength range in {AA}
+      45  A1    ---         ---      [-]
+  46- 49  I4    0.1nm       lam2     [2800/3900] Upper wavelength range in {AA}
+  51- 56  I6    ---         Res      [125000/250000] Resolving power (2)
+  58- 59  I2    ---         coadd    [6/80] Coadds
+  61- 64  I4    s           Exp      [60/1200] Exposure time
+--------------------------------------------------------------------------------
+Note (1): At least three CCD frames are needed to capture a complete echelle
+          grating order in the UV. Five CCD frames are used to provide
+          redundancy and a check for lamp drift.
+Note (2): Resolving power is adjusted by changing the diameter of the
+          precision-machined entrance pinholes from 50um (which gives R~250000)
+          to 100um (R~125000).
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table3.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label    Explanations
+--------------------------------------------------------------------------------
+   1-  9  F9.4  0.1nm    lambda   [2121/7789] Wavelength in air in {AA}
+  11- 19  F9.3  cm-1     E1       Upper level energy
+  21- 22  A2    ---      P1       [ev/od] Upper level parity (ev:even, od:odd)
+      24  I1    ---      J1       Upper level J value
+  26- 34  F9.3  cm-1     E0       Lower level energy
+  36- 37  A2    ---      P0       [ev/od] Lower level parity (ev:even, od:odd)
+      39  I1    ---      J0       Lower level J value
+  41- 48  F8.4  10+6/s   A        Transition probability
+  50- 56  F7.4  10+6/s e_A        Total uncertainty in TranP
+  58- 62  F5.2  [-]      log(gf)  Log of degeneracy times oscillator strength
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table[45].dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label     Explanations
+--------------------------------------------------------------------------------
+   1-  8  F8.3  0.1nm   lambda    [2318/7789] Wavelength in air in {AA}
+  10- 14  F5.3  eV      E0        Lower level energy
+  16- 20  F5.2  [-]     log(gf)   Log of degeneracy times oscillator strength
+  22- 25  F4.2  [-]     log(eps)  Log of abundance (log(N/H)+12)
+  27- 29  A3    ---     Isot      [yes/no ] Isotopic structure used in synthetic
+                                    spectra (only for table 4)
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table7.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label    Explanations
+--------------------------------------------------------------------------------
+   1-  9  F9.4  0.1nm   lam.c    [2121.39/7788.94] Center of gravity air
+                                  wavelength in Angstroms
+  11- 19  F9.3  cm-1    E1       Upper level energy
+  21- 22  A2    ---     P1       [ev/od] Upper level parity (ev:even, od:odd)
+      24  I1    ---     J1       Upper level J value
+  26- 34  F9.3  cm-1    E0       Lower level energy
+  36- 37  A2    ---     P0       [ev/od] Lower level parity (ev:even, od:odd)
+      39  I1    ---     J0       Lower level J value
+  41- 49  F9.4  0.1nm   lam.58   Air wavelength of ^58^Ni isotope in Angstroms
+  51- 59  F9.4  0.1nm   lam.60   Air wavelength of ^60^Ni isotope in Angstroms
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                 Greg Schwarz [AAS], Emmanuelle Perret [CDS]    30-Apr-2014

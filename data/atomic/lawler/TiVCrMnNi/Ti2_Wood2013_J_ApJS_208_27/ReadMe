@@ -1,0 +1,135 @@
+J/ApJS/208/27    Sun and HD 84937 TiII log(gf) and abundances    (Wood+, 2013)
+================================================================================
+Improved Ti II log(gf) values and abundance determinations in the
+photospheres of the Sun and metal-poor star HD 84937.
+    Wood M.P., Lawler J.E., Sneden C., Cowan J.J.
+   <Astrophys. J. Suppl. Ser., 208, 27 (2013)>
+   =2013ApJS..208...27W
+================================================================================
+ADC_Keywords: Atomic physics ; Abundances ; Stars, metal-deficient ; Sun
+Keywords: atomic data - methods: laboratory: atomic - Sun: abundances -
+          stars: abundances - stars: individual: HD 84937
+
+Abstract:
+    Atomic transition probability measurements for 364 lines of Ti II in
+    the UV through near-IR are reported. Branching fractions from data
+    recorded using a Fourier transform spectrometer (FTS) and a new
+    echelle spectrometer are combined with published radiative lifetimes
+    to determine these transition probabilities. The new results are in
+    generally good agreement with previously reported FTS measurements.
+    Use of the new echelle spectrometer, independent radiometric
+    calibration methods, and independent data analysis routines enables a
+    reduction of systematic errors and overall improvement in transition
+    probability accuracy over previous measurements. The new Ti II data
+    are applied to high-resolution visible and UV spectra of the Sun and
+    metal-poor star HD 84937 to derive new, more accurate Ti abundances.
+    Lines covering a range of wavelength and excitation potential are used
+    to search for non-LTE effects. The Ti abundances derived using Ti II
+    for these two stars match those derived using Ti I and support the
+    relative Ti/Fe abundance ratio versus metallicity seen in previous
+    studies.
+
+Description:
+    The 14 1.0m FTS (Fourier transform spectrometer) spectra (1989 Feb 28
+    to 1992 Jul 29) used in this TiII branching fraction analysis are
+    available in the NSO electronic archives.
+
+    In addition to the 14 FTS spectra, 48 charge-coupled device (CCD)
+    frames of Ti HCD spectra (from 2011 Jul 27 to 2012 Feb 23), recorded
+    with the echelle spectrometer, are part of this TiII branching
+    fraction study. See section 3 for further details.
+
+Objects:
+    ----------------------------------------------------
+       RA   (2000)    DE        Designation(s)
+    ----------------------------------------------------
+    09 48 56.10   +13 44 39.3   HD 84937 = TYC 834-654-1
+    ----------------------------------------------------
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName  Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe           80        .   This file
+table3.dat    71      364   Comparison of experimental branching fractions from
+                             FTS data for 364 lines of TiII from upper
+                             odd-parity levels organized by upper level
+table4.dat    60      364   Experimental Atomic Transition Probabilities for
+                             364 lines of TiII from upper odd-parity levels
+                             organized by increasing wavelength in air
+table5.dat    25       43   Solar Photospheric Titanium Abundances from
+                             Individual TiII Lines
+table6.dat    25      147   Titanium Abundances from Individual TiII Lines
+                             in HD 84937
+--------------------------------------------------------------------------------
+
+See also:
+  III/193 : Chemical Abundances in Late-Type Stars (Thevenin, 1998)
+  J/A+A/554/A96  : Metal-poor star spectra of the LiI 670.8nm line (Lind+, 2013)
+  J/ApJS/199/8   : Interstellar column densities compilation (Gudennavar+, 2012)
+  J/MNRAS/404/1321 : TiII in Milky way and Magellanic clouds (Welty+, 2010)
+  J/MNRAS/396/1895 : MgI and sTiO index definitions (Cenarro+, 2009)
+  J/MNRAS/367/1478 : Interstellar NaI, TiII + CaIIK obs. (Hunter+, 2006)
+  J/A+A/404/187  : Equivalent widths for metal-poor stars (Gratton+, 2003)
+  J/ApJ/562/528  : Teff and log(g) of low-metallicity stars (Snider+, 2001)
+  J/A+AS/133/221 : Library of ELODIE spectra (F5-K7 stars) (Soubiran+ 1998)
+  J/A+AS/109/193 : IRON project VIII. Ti-like ions (Berrington, 1995)
+  J/AJ/90/2089   : Stars of very low metal abundance. I (Beers+, 1985)
+  http://nsokp.nso.edu/ : Kitt Peak NSO home page
+
+Byte-by-byte Description of file: table3.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label   Explanations
+--------------------------------------------------------------------------------
+   1-  9  F9.4  0.1nm   lamAir  [2325/9748] Wavelength in air; Angstroms (G1)
+  11- 19  F9.3  cm-1    E1      [29544/47626] Upper level (G2)
+  21- 23  F3.1  ---     J1      [0.5/5.5] Upper level J value (G2)
+  25- 33  F9.3  cm-1    E0      [0/32333] Lower level (G2)
+  35- 37  F3.1  ---     J0      [0.5/5.5] Lower level J value (G2)
+  39- 45  F7.5  ---     BF-P01  [0.0003/0.95]? Branching fraction;
+                                 Pickering et al. 2001ApJS..132..403P
+  47- 48  I2    %     e_BF-P01  [1/43]? Uncertainty in BF-P01
+  50- 57  F8.6  ---     BF-B93  [4.8e-05/0.8]? Branching fraction;
+                                 Bizzarri et al. 1993A&A...273..707B
+  59- 60  I2    %     e_BF-B93  [1/57]? Uncertainty in BF-B93
+  62- 68  F7.5  ---     BF      [6e-05/1] Branching fraction; this experiment
+  70- 71  I2    %     e_BF      [0/20] Uncertainty in BF
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table4.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label     Explanations
+--------------------------------------------------------------------------------
+   1-  9  F9.4  0.1nm    lamAir    [2325/9748] Wavelength in air; Angstroms (G1)
+  11- 19  F9.3  cm-1     E1        [29544/47626] Upper level (G2)
+  21- 23  F3.1  ---      J1        [0.5/5.5] Upper level J value (G2)
+  25- 33  F9.3  cm-1     E0        [0/32333] Lower level (G2)
+  35- 37  F3.1  ---      J0        [0.5/5.5] Lower level J value (G2)
+  39- 46  F8.4  10+6/s   A         [0.015/198] Transition probability
+  48- 54  F7.4  10+6/s e_A         [0.002/10] Total uncertainty in A
+  56- 60  F5.2  ---      log(gf)   [-3.4/0.6] Log of degeneracy times
+                                    oscillator strength
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table[56].dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label     Explanations
+--------------------------------------------------------------------------------
+   1-  8  F8.3  0.1nm   lamAir    [2474/9433] Wavelength in air
+  10- 14  F5.3  eV      E0        [0/3.2] Lower level energy
+  16- 20  F5.2  ---     log(gf)   [-3.4/0.5] Log of degeneracy times
+                                   oscillator strength
+  22- 25  F4.2 [---]    log(eps)  [2.8/5.1] Log of abundance (log{epsilon})
+--------------------------------------------------------------------------------
+
+Global notes:
+Note (G1): Computed from energy levels using the standard index of air
+           from Peck & Reeder (1972JOSA...62..958P).
+Note (G2): From Saloman (2012JPCRD..41a3101S).
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                 Greg Schwarz [AAS], Emmanuelle Perret [CDS]    31-Oct-2013

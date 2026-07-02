@@ -1,0 +1,37 @@
+ 1|1994/Nov/04|658|Commercial HCD|Ar   |  25. |28436-56873|0.070|22|SiO_2|                  |R166 Solar Blind PMTs
+ 2|1994/Nov/04|659|Commercial HCD|Ar   |  20. |28436-56873|0.070|22|SiO_2|                  |R166 Solar Blind PMTs
+ 3|1994/Nov/04|660|Commercial HCD|Ar   |  15. |28436-56873|0.070|22|SiO_2|                  |R166 Solar Blind PMTs
+ 4|1994/Nov/04|661|Commercial HCD|Ar   |  10. |28436-56873|0.070|22|SiO_2|                  |R166 Solar Blind PMTs
+ 5|1994/Nov/04|662|Commercial HCD|Ar   |   5. |28436-56873|0.070|22|SiO_2|                  |R166 Solar Blind PMTs
+ 6|1994/Nov/04|664|Commercial HCD|Ar   |  25. |22117-44234|0.050|22|SiO_2|BG24              |1P28 & R1516 PMTs
+ 7|1994/Nov/04|665|Commercial HCD|Ar   |  20. |22117-44234|0.050|22|SiO_2|BG24              |1P28 & R1516 PMTs
+ 8|1994/Nov/04|667|Commercial HCD|Ar   |  15. |22117-44234|0.040|22|SiO_2|BG24              |1P28 & R1516 PMTs
+ 9|1994/Nov/04|669|Commercial HCD|Ar   |  10. |22117-44234|0.050|22|SiO_2|BG24              |1P28 & R1516 PMTs
+10|1994/Nov/04|670|Commercial HCD|Ar   |   5. |22117-44234|0.050|22|SiO_2|BG24              |1P28 & R1516 PMTs
+11|1994/Nov/04|671|Commercial HCD|Ar   |   3. |22117-44234|0.050|22|SiO_2|BG23              |1P28 & R1516 PMTs
+12|1994/Nov/05|674|Commercial HCD|Ar   |  10. |15798-31596|0.050|22|SiO_2|BG23              |1P28 & R1516 PMTs
+13|1994/Nov/05|677|Commercial HCD|Ar   |   5. |15798-31596|0.035|22|SiO_2|BG23              |1P28 & R1516 PMTs
+14|1994/Nov/04|673|Commercial HCD|Ar   |   5. |15798-31596|0.050|22|SiO_2|BG23              |1P28 & R1516 PMTs
+15|1994/Nov/04|672|Commercial HCD|Ar   |   3. |15798-31596|0.050|22|SiO_2|BG23              |1P28 & R1516 PMTs
+16|1985/Jul/31|  7|Custom HCD    |Ne-Ar| 820. | 7181-46955|0.064| 7|UV   |                  |Mid Range Si PDs
+17|1985/Jul/31|  9|Custom HCD    |Ne-Ar|  80. | 7181-46955|0.064| 7|UV   |                  |Mid Range Si PDs
+18|1979/Dec/29|  1|Custom HCD    |Ar   | 800. | 4789-39199|0.054|12|UV   |CS 9-54           |Super Blue Si PDs
+19|1979/Dec/28|  5|Custom HCD    |Ar   | 625. |13607-37456|0.045| 5|UV   |CuSO_4 + CS 9-54  |Super Blue Si PDs
+20|1979/Dec/27|  1|Custom HCD    |Ar   | 400. |13607-37456|0.045| 7|UV   |CuSO_4 + CS 9-54  |Mid Range Si PDs
+21|1981/Jun/15|  2|Custom HCD    |Ar   | 144. | 6924-36533|0.043| 8|UV   |WG 295            |Mid Range Si PDs
+22|1981/Jun/20|  1|Custom HCD    |Ar   | 580. | 8986-30601|0.037|20|UV   |CS 4-97 + GG 375  |Mid Range Si PDs
+23|1981/Jun/17|  1|Custom HCD    |Ar   | 550. |14878-36386|0.043| 8|UV   |CuSO_4            |Mid Range Si PDs
+24|1981/Sep/22|  1|Custom HCD    |Ar   | 670. |18529-36203|0.035|25|UV   |CuSO_4            |Super Blue Si PDs
+25|1983/Feb/24|  2|Custom HCD    |Ar   |2000. |16020-36658|0.047| 7|UV   |CuSO_4            |Mid Range Si PDs
+26|1983/Feb/24|  1|Custom HCD    |Ar   |1000. |16020-36658|0.047|16|UV   |CuSO_4            |Mid Range Si PDs
+27|1983/Feb/12|  8|Custom HCD    |Ar   |  80. |15587-36081|0.044| 8|UV   |CuSO_4            |Mid Range Si PDs
+28|1996/Sep/04|  8|Commercial HCD|Ar   |   9. |    0-34998|0.053| 4|UV   |                  |Super Blue Si PDs
+29|1996/Sep/04|  9|Commercial HCD|Ar   |   6. |    0-34998|0.053| 4|UV   |                  |Super Blue Si PDs
+30|1996/Sep/04| 10|Commercial HCD|Ar   |   3. |    0-34998|0.053| 4|UV   |                  |Super Blue Si PDs
+31|1996/Sep/07| 20|Commercial HCD|Ar   |   0.8|    0-34998|0.053|10|UV   |                  |Mid Range Si PDs
+32|1980/Mar/20|  2|Custom HCD    |Ar   | 640. | 3571- 9937|0.012|16|Vis  |                  |InSb
+33|1983/Feb/25|  3|Custom HCD    |Ar   |2000. | 1985- 7811|0.011| 4|UV   |C 4300 + Wedged Ge|Mid Range Si PD + InSb
+34|1983/Feb/25|  2|Custom HCD    |Ar   |1000. | 1985- 7811|0.011| 4|UV   |C 4300 + Wedged Ge|Mid Range Si PD + InSb
+35|1984/Jul/26| 18|Custom HCD    |Ar   |1500. | 7982-45407|0.054| 8|UV   |WG 295            |Mid Range Si PD + R166 Solar Blind
+36|1981/Jun/21|  5|Custom HCD    |Ne   | 800. |24449-34522|0.040|40|UV   |CuSO_4 + CS 7-51  |Mid Range Si PDs
+37|1981/Jun/20|  2|Custom HCD    |Ne   | 780. |13479-30601|0.037|18|UV   |CS 4-96           |Mid Range Si PDs

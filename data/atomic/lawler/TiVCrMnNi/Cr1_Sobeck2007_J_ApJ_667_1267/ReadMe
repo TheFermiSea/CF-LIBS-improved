@@ -1,0 +1,56 @@
+J/ApJ/667/1267      CrI transition probabilities             (Sobeck+, 2007)
+================================================================================
+Improved laboratory transition probabilities for neutral chromium and
+redetermination of the chromium abundance for the Sun and three stars.
+    Sobeck J.S., Lawler J.E., Sneden C.
+   <Astrophys. J., 667, 1267-1282 (2007)>
+   =2007ApJ...667.1267S
+================================================================================
+ADC_Keywords: Atomic physics
+Keywords: atomic data - stars: abundances - stars: Population II -
+          Sun: abundances - Sun: general
+
+Abstract:
+    Branching fraction measurements from Fourier transform spectra in
+    conjunction with published radiative lifetimes are used to determine
+    transition probabilities for 263 lines of neutral chromium.
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName  Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe        80        .   This file
+table3.dat    78      263   Atomic transition probabilities for CrI organized
+                            by increasing wavelength in {lambda}_air_
+--------------------------------------------------------------------------------
+
+See also:
+    J/MNRAS/390/733 : FTS reference UV wavelengths of CrIII (Smillie+, 2008)
+    J/ApJ/700/720   : The 236.6-5400.0nm spectrum of CrI (Wallace+, 2009)
+    J/A+A/524/A35   : Effective collision strengths of CrII (Wasson+, 2010)
+    J/A+A/511/A68   : Transitions of CrII (Gurell+, 2010)
+    J/ApJS/196/24   : Electron-impact excitation of CrII (Wasson+, 2011)
+
+Byte-by-byte Description of file: table3.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label    Explanations
+--------------------------------------------------------------------------------
+   1-  7  F7.2  0.1nm    lambda   Wavelength in air in Angstroms
+   9- 16  F8.2  cm-1     EU       Upper level energy
+  18- 25  A8    ---      TermU    Upper level term
+      27  I1    ---      JU       [0/6] Upper level J value
+  29- 36  F8.2  cm-1     EL       Lower level energy
+  38- 45  A8    ---      TermL    Lower level term
+      47  I1    ---      JL       [0/6] Lower level J value
+      49  A1    ---      N        [N] Normalization line for LS calculation
+  51- 57  F7.3  10+6/s   Acalc    ? Transition probability from LS calculation
+  59- 65  F7.3  10+6/s   Aexp     Transition probability from Experiment
+  67- 72  F6.3  10+6/s e_Aexp     Total uncertainty in TranP-Ex
+  74- 78  F5.2  [-]      log(gf)  Log of degeneracy * oscillator strength
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                  Greg Schwarz [AAS], Patricia Vannier [CDS]    27-Apr-2012

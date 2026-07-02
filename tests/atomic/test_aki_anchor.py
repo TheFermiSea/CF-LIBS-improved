@@ -175,8 +175,16 @@ def test_anchor_preserves_branching_and_matches_lifetime(tmp_path):
         },
     ]
     db = _make_db(tmp_path, rows)
+    # Immutability: hash the source DB before anchoring.
+    import hashlib
+
+    def _sha(p):
+        return hashlib.sha256(open(p, "rb").read()).hexdigest()
+
+    src_hash_before = _sha(db)
+    overlay = str(tmp_path / "overlay.db")
     tau = 5e-9  # 5 ns  => 1/tau = 2e8
-    res = anchor_aki_to_lifetimes(db, "Fe", 1, {"U": tau}, write=True)
+    res = anchor_aki_to_lifetimes(db, "Fe", 1, {"U": tau}, overlay_path=overlay)
     assert res.n_levels_anchored == 1
     assert res.n_lines_anchored == 2
 
@@ -187,15 +195,23 @@ def test_anchor_preserves_branching_and_matches_lifetime(tmp_path):
     lo = min(res.per_line, key=lambda p: p["aki_anchored"])
     assert hi["aki_anchored"] / lo["aki_anchored"] == pytest.approx(3.0)
 
-    # DB: aki untouched, new columns populated
+    # Source DB is byte-identical (never opened writable); overlay carries anchors.
+    assert _sha(db) == src_hash_before
     conn = sqlite3.connect(db)
     orig = [r[0] for r in conn.execute("SELECT aki FROM lines ORDER BY id")]
-    new = [r[0] for r in conn.execute("SELECT aki_anchored FROM lines ORDER BY id")]
-    src = {r[0] for r in conn.execute("SELECT aki_anchor_source FROM lines")}
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(lines)")}
     conn.close()
     assert orig == [3e7, 1e7]
+    assert "aki_anchored" not in cols  # no new columns in the source DB
+
+    oc = sqlite3.connect(overlay)
+    new = [r[0] for r in oc.execute("SELECT aki_anchored FROM anchored_lines ORDER BY line_id")]
+    src = {r[0] for r in oc.execute("SELECT source FROM anchored_lines")}
+    methods = {r[0] for r in oc.execute("SELECT method FROM anchored_lines")}
+    oc.close()
     assert all(v is not None for v in new)
     assert src == {"lifetime"}
+    assert methods == {"tau_renorm"}
 
 
 def test_anchor_observed_branch_fraction_scales_down(tmp_path):
@@ -236,7 +252,7 @@ def test_anchor_dry_run_does_not_write(tmp_path):
         },
     ]
     db = _make_db(tmp_path, rows)
-    res = anchor_aki_to_lifetimes(db, "Fe", 1, {"U": 1e-8}, write=False)
+    res = anchor_aki_to_lifetimes(db, "Fe", 1, {"U": 1e-8})  # overlay_path=None => dry run
     assert res.n_lines_anchored == 1
     assert not res.wrote_to_db
     conn = sqlite3.connect(db)

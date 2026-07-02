@@ -56,7 +56,7 @@ class AtomicDatabase:
 
     db_path: str | Path
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, aki_overlay_path: str | None = None):
         """
         Initialize database connection and verify schema.
 
@@ -64,12 +64,23 @@ class AtomicDatabase:
         ----------
         db_path : str
             Path to SQLite database file
+        aki_overlay_path : str, optional
+            Path to a lifetime-anchored A_ki overlay DB (see
+            ``scripts/build_lawler_overlay.py``). **Opt-in and read-only**: when
+            provided, :meth:`get_transitions` resolves ``A_ki`` (and its
+            uncertainty) from the overlay's ``anchored_lines`` table for any line
+            whose ``id`` is present there, tagging the result via
+            ``Transition.aki_source``. Default ``None`` leaves every returned
+            value byte-identical to the source DB. The overlay is never written
+            here and the source DB is untouched.
         """
         path = Path(db_path)
         if not path.exists():
             raise FileNotFoundError(f"Atomic database not found: {path}")
 
         self.db_path = path
+        self._aki_overlay_path = aki_overlay_path
+        self._aki_overlay: dict[int, tuple[float, float | None, str]] | None = None
         # Partition cache token = DB file mtime. derive_partition_spec keys its
         # process-global spec cache on this, so when the DB's energy_levels
         # change (e.g. a NIST ingest rewrites the file -> new mtime) a fresh
@@ -93,6 +104,35 @@ class AtomicDatabase:
         # Verify and migrate schema if needed
         self._check_and_migrate_schema()
         logger.info(f"Connected to atomic database: {path}")
+
+    def _load_aki_overlay(self) -> dict[int, tuple[float, float | None, str]]:
+        """Lazily load the opt-in A_ki overlay (read-only), keyed by ``lines.id``.
+
+        Returns an empty mapping if no overlay path was configured or the file is
+        missing/unreadable, so the read path degrades to the source DB's own
+        values. The overlay is opened ``mode=ro``; it is never mutated.
+        """
+        if self._aki_overlay is not None:
+            return self._aki_overlay
+        overlay: dict[int, tuple[float, float | None, str]] = {}
+        if self._aki_overlay_path and Path(self._aki_overlay_path).exists():
+            try:
+                oc = sqlite3.connect(f"file:{self._aki_overlay_path}?mode=ro", uri=True)
+                try:
+                    for r in oc.execute(
+                        "SELECT line_id, aki_anchored, aki_unc, source FROM anchored_lines"
+                    ):
+                        overlay[int(r[0])] = (
+                            float(r[1]),
+                            None if r[2] is None else float(r[2]),
+                            str(r[3]),
+                        )
+                finally:
+                    oc.close()
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f"Failed to load A_ki overlay {self._aki_overlay_path}: {e}")
+        self._aki_overlay = overlay
+        return overlay
 
     @contextmanager
     def _get_connection(self):
@@ -150,7 +190,9 @@ class AtomicDatabase:
                 AtomicDatabase._add_line_column(cursor, col, query, _ADD_COLUMN_QUERIES)
 
     @staticmethod
-    def _add_line_column(cursor: sqlite3.Cursor, col: str, query: str, allowed_queries: dict[str, str]):
+    def _add_line_column(
+        cursor: sqlite3.Cursor, col: str, query: str, allowed_queries: dict[str, str]
+    ):
         """Validate and add a single column to the lines table, backfilling as needed."""
         if col not in allowed_queries or query != allowed_queries[col]:
             raise ValueError(f"Invalid column name or query for migration: {col}")
@@ -437,7 +479,22 @@ class AtomicDatabase:
         # ~100x faster than pd.Series scalar access. The RANSAC wavelength calibration calls this
         # thousands of times per inversion, so the old pandas path was the single largest CPU cost
         # of the whole inversion (115k pd.Series.__getitem__ in profiling). Same data, same results.
-        transitions = [self._row_to_transition(dict(zip(columns, r))) for r in rows]
+        overlay = self._load_aki_overlay()
+        if overlay:
+            transitions = []
+            for r in rows:
+                d = dict(zip(columns, r))
+                t = self._row_to_transition(d)
+                anchored = overlay.get(d.get("id"))
+                if anchored is not None:
+                    a_new, a_unc, src = anchored
+                    t.A_ki = a_new
+                    if a_unc is not None and a_new > 0:
+                        t.aki_uncertainty = a_unc / a_new  # store fractional, per DB convention
+                    t.aki_source = f"lawler_overlay:{src}"
+                transitions.append(t)
+        else:
+            transitions = [self._row_to_transition(dict(zip(columns, r))) for r in rows]
 
         logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
         return transitions
@@ -457,7 +514,7 @@ class AtomicDatabase:
         # Select all relevant columns.
         query = f"""
             SELECT
-                element, sp_num, wavelength_nm, aki, ek_ev, ei_ev,
+                id, element, sp_num, wavelength_nm, aki, ek_ev, ei_ev,
                 gk, gi, rel_int,
                 stark_w, stark_alpha, stark_shift, is_resonance,
                 aki_uncertainty, accuracy_grade
