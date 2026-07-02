@@ -981,6 +981,8 @@ class IterativeCFLIBSSolver:
         degeneracy_min_elements: int = 4,
         assess_quality: bool = True,
         fixed_temperature_K: Optional[float] = None,
+        include_stage_iii: bool = True,
+        prefer_sb_offset_ne: bool = True,
         strict: Optional[bool] = None,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
@@ -1149,6 +1151,37 @@ class IterativeCFLIBSSolver:
         # consumers never KeyError. Default-False on the ded/batch/streaming
         # presets where the annotation layer is not consumed.
         self.assess_quality = bool(assess_quality)
+        # Saha ladder stage-III completion (Issue 5, physics-first-principles
+        # audit). The FORWARD populates three ionization stages
+        # (``saha_boltzmann.py``: denom = 1 + S1 + S1*S2), but the historical
+        # inverse abundance multiplier truncated at 1 + S1 (n_I + n_II only) and
+        # the charge balance assumed Z <= 1. That forward/inverse asymmetry
+        # under-counts the total elemental abundance by the neglected stage-III
+        # fraction and *explains the perverse Cr result* (correcting Cr III
+        # partitions fed the forward while the inverse dropped stage-III mass).
+        # When True (default, the correctness fix) the inverse abundance
+        # multiplier becomes ``1 + S1 + S1*S2`` and the charge balance becomes
+        # ``avgZ = (S1 + 2*S1*S2)/(1 + S1 + S1*S2)``, fetching IP_II / U_III
+        # exactly as the forward does (stage-III terms are silently zero when the
+        # DB lacks IP_II / U_III, recovering the two-stage ladder). Set False to
+        # reproduce the legacy two-stage inverse (used by the round-trip gate to
+        # measure the neglected S1*S2 fraction).
+        self.include_stage_iii = bool(include_stage_iii)
+        # Measured-n_e via the Saha-Boltzmann inter-stage offset (Issue 4,
+        # Aguilera & Aragon 2007 / Yalcin 1999). When True (default) and any
+        # element is observed in BOTH a neutral and an ion stage, n_e is measured
+        # from the vertical offset between the two stages' intercepts on the
+        # shared-slope Boltzmann plane (partition functions cancel in the offset;
+        # see cflibs-formal SahaInverse.lean::sahaBoltzmann_shift_eq_log_saha).
+        # This is the PREFERRED n_e path, above the Stark-width diagnostic and
+        # far above the physically-invalid Earth-STP pressure balance (which is
+        # retained only as a last resort). ``ne_source`` in the quality metrics
+        # records which path drove the final n_e; an imputed
+        # (pressure-balance) n_e can never set ``overall_reliable``.
+        self.prefer_sb_offset_ne = bool(prefer_sb_offset_ne)
+        # SB-offset n_e diagnostic stats from the most recent update
+        # (element count + MAD scatter), surfaced in quality_metrics.
+        self._last_sb_offset_stats: Dict[str, float] = {"n_elements": 0, "scatter_cm3": 0.0}
         # Optimal-temperature / OPC lever (real-steel L1; Zhao 2018, Plasma Sci.
         # Technol. 20 035502). When set, the iterative solve HOLDS the plasma
         # temperature at this fixed value instead of recovering it from the
@@ -1234,6 +1267,46 @@ class IterativeCFLIBSSolver:
         T_eV = max(T_K / EV_TO_K, 0.1)
         return (SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5) * (U_II / U_I) * np.exp(-ip_ev / T_eV)
 
+    def _second_saha_ratio(
+        self,
+        element: str,
+        T_K: float,
+        T_saha: float,
+        n_e_cm3: float,
+        U_II: float,
+    ) -> float:
+        """Second Saha ratio ``S2 = n_III / n_II`` for the stage-III ladder term.
+
+        Issue 5 (physics-first-principles audit): the FORWARD populates three
+        ionization stages (``SahaBoltzmannSolver.calculate_all_species_densities``
+        uses ``denom = 1 + S1 + S1*S2``), so the inverse density completion and
+        charge balance must include the same stage-III term to keep the
+        forward/inverse ladder symmetric. Mirrors the forward exactly: fetch
+        ``IP_II`` and ``U_III``, apply the same IPD lowering when enabled, and
+        return ``0.0`` (recovering the two-stage ladder) whenever stage III is
+        disabled or the DB lacks a usable ``IP_II`` / ``U_III`` — the identical
+        fallback the forward takes when ``ip_II is None``.
+        """
+        if not self.include_stage_iii:
+            return 0.0
+        if U_II is None or not np.isfinite(U_II) or U_II <= 0.0:
+            return 0.0
+        ip_ii = self.atomic_db.get_ionization_potential(element, 2)
+        if ip_ii is None or not np.isfinite(ip_ii) or ip_ii <= 0.0:
+            return 0.0
+        if self.apply_ipd:
+            from cflibs.plasma.saha_boltzmann import ionization_potential_lowering
+
+            delta_chi = ionization_potential_lowering(n_e_cm3, T_K)
+            ip_ii = max(float(ip_ii) - delta_chi, 0.0)
+        U_III = self._evaluate_partition_function(element, 3, T_K)
+        if U_III is None or not np.isfinite(U_III) or U_III <= 0.0:
+            return 0.0
+        # S2 = (SAHA/n_e) * T^1.5 * (U_III/U_II) * exp(-IP_II/kT); reuse the
+        # single Saha-ratio kernel by passing (U_II -> "U_I", U_III -> "U_II").
+        s2 = self._compute_saha_ratio(element, T_saha, n_e_cm3, U_II, U_III, float(ip_ii))
+        return max(float(s2), 0.0)
+
     def _compute_abundance_multipliers(
         self,
         elements: List[str],
@@ -1248,8 +1321,13 @@ class IterativeCFLIBSSolver:
         Map the neutral-plane intercept back to total elemental abundance.
 
         The pooled Saha-Boltzmann fit returns q_s proportional to N_I / U_I.
-        Closure must scale by (1 + n_II / n_I) to recover total elemental
-        abundance before normalization.
+        Closure must scale by the full ionization ladder
+        ``(1 + n_II/n_I + n_III/n_I) = 1 + S1 + S1*S2`` to recover total
+        elemental abundance before normalization. This mirrors the FORWARD
+        three-stage balance (``denom = 1 + S1 + S1*S2``) exactly (Issue 5); the
+        stage-III term ``S1*S2`` is zero whenever the DB lacks ``IP_II``/``U_III``
+        or ``include_stage_iii`` is False, recovering the legacy ``1 + S1``
+        two-stage multiplier.
         """
         multipliers: Dict[str, float] = {}
         # Empirically, the refractory high-Z majors (Si, Fe, Ca, Al, Mg) are the
@@ -1267,8 +1345,9 @@ class IterativeCFLIBSSolver:
                 # Weighted temperature for Saha-Boltzmann scaling
                 T_saha = 0.3 * T_K + 0.7 * T_corona
 
-            S = self._compute_saha_ratio(el, T_saha, n_e_cm3, U_I, U_II, ips[el])
-            multipliers[el] = 1.0 + max(S, 0.0)
+            S1 = max(self._compute_saha_ratio(el, T_saha, n_e_cm3, U_I, U_II, ips[el]), 0.0)
+            S2 = self._second_saha_ratio(el, T_K, T_saha, n_e_cm3, U_II)
+            multipliers[el] = 1.0 + S1 + S1 * S2
         return multipliers
 
     def _compute_abundance_multipliers_uncertain(
@@ -1324,7 +1403,13 @@ class IterativeCFLIBSSolver:
                     U_II,
                     SAHA_CONST_CM3,
                 )
-            multipliers[el] = 1.0 + S
+            # Stage-III completion (Issue 5): add the S1*S2 ladder term so the
+            # uncertain multiplier's CENTRAL value matches
+            # :meth:`_compute_abundance_multipliers`. S2 is added as a plain
+            # float (its n_e-variance is second order relative to S1's); the
+            # first-order n_e uncertainty is still carried by the ufloat S.
+            S2 = self._second_saha_ratio(el, T_K, T_saha, safe_ne, U_II)
+            multipliers[el] = 1.0 + S * (1.0 + S2)
         return multipliers
 
     def _compute_effective_ips(
@@ -1888,14 +1973,20 @@ class IterativeCFLIBSSolver:
         Physically non-standard for LIBS — used only when no usable Stark
         diagnostic is available. Numerics identical to the inline fallback.
         """
-        # Calculate avg_Z based on Saha ratios.
-        # eps_s = n_II / (n_I + n_II) = S / (1+S) (electrons per atom).
+        # Calculate avg_Z based on the full Saha ionization ladder (Issue 5).
+        # Free electrons per atom of species s:
+        #   eps_s = (n_II + 2 n_III) / (n_I + n_II + n_III)
+        #         = (S1 + 2 S1 S2) / (1 + S1 + S1 S2)
+        # mirroring the forward's three-stage balance; S2 = 0 recovers the
+        # legacy two-stage eps_s = S1 / (1 + S1).
         total_eps = 0.0
         for el, C_s in concentrations.items():
             U_I = lookup_partition_function(partition_funcs, el, 1, self.atomic_db)
             U_II = lookup_partition_function(partition_funcs_II, el, 2, self.atomic_db)
-            S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
-            eps_s = S / (1.0 + S)
+            S1 = max(self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el]), 0.0)
+            S2 = self._second_saha_ratio(el, T_K, T_K, n_e, U_II)
+            ladder = 1.0 + S1 + S1 * S2
+            eps_s = (S1 + 2.0 * S1 * S2) / ladder if ladder > 0.0 else 0.0
             total_eps += C_s * eps_s
 
         avg_Z = total_eps
