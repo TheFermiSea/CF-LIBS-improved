@@ -184,6 +184,29 @@ class Standard:
     recover: Callable[[float], StandardRecovery]
 
 
+def _recover_or_degenerate(standard: "Standard", T_K: float) -> StandardRecovery:
+    """Recover a standard at fixed ``T_K``, representing strict failures as data.
+
+    ``calibrate_opc``'s conditioning sweep deliberately probes off-optimal
+    temperatures where closure collapse is *expected*; ``StandardRecovery``
+    carries an explicit ``degenerate`` flag for exactly that outcome, and the
+    conditioning gate then excludes the standard. Under strict / no-fallback
+    mode (``CFLIBS_NO_FALLBACK``) the solver raises a typed
+    :class:`~cflibs.inversion.common.strict.SolverFailure` instead of flagging —
+    which, uncaught, lets one bad standard abort the whole calibration. This
+    wrapper converts that typed failure into the caller's explicit degenerate
+    contract: the failure is *represented and acted on* (standard excluded),
+    not silently substituted — the strict-mode semantics for a caller that
+    handles the outcome.
+    """
+    from cflibs.inversion.common.strict import SolverFailure
+
+    try:
+        return standard.recover(float(T_K))
+    except SolverFailure:
+        return StandardRecovery(composition={}, converged=False, degenerate=True)
+
+
 @dataclass(frozen=True)
 class ConditioningAssessment:
     """Per-standard conditioning-gate diagnostics (in-sample only)."""
@@ -335,7 +358,7 @@ def _derive_F(standard: Standard, T_K: float) -> dict[str, float]:
     clamped to ``[F_MIN, F_MAX]``.
     """
     certified_norm = _renorm100(standard.certified)
-    rec_norm = _renorm100(standard.recover(float(T_K)).composition)
+    rec_norm = _renorm100(_recover_or_degenerate(standard, T_K).composition)
     F: dict[str, float] = {}
     for e, tv in certified_norm.items():
         cn = rec_norm.get(e, 0.0)
@@ -376,7 +399,7 @@ def choose_optimal_temperature(
     best_T = float(grid[0])
     best_err = float("inf")
     for T_K in grid:
-        rec = standard.recover(float(T_K)).composition
+        rec = _recover_or_degenerate(standard, T_K).composition
         err = _composition_rmsep(certified_norm, rec)
         if np.isfinite(err) and err < best_err:
             best_err = err
@@ -407,7 +430,7 @@ def assess_conditioning(
     This is the un-peekable selection criterion: it uses no other sample's data.
     """
     certified_norm = _renorm100(standard.certified)
-    rec = standard.recover(float(cond_T_K))
+    rec = _recover_or_degenerate(standard, cond_T_K)
     converged = bool(rec.converged)
     degenerate = bool(rec.degenerate)
     in_rmsep = _composition_rmsep(certified_norm, rec.composition)
