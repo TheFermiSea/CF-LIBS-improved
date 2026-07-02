@@ -2743,9 +2743,7 @@ class IterativeCFLIBSSolver:
             ),
             ne_source=ne_source,
             sb_offset_n_elements=int(sb_stats.get("n_elements", 0)) if used_sb else 0,
-            sb_offset_ne_scatter_cm3=(
-                float(sb_stats.get("scatter_cm3", 0.0)) if used_sb else 0.0
-            ),
+            sb_offset_ne_scatter_cm3=(float(sb_stats.get("scatter_cm3", 0.0)) if used_sb else 0.0),
         )
 
     def _solve_python(
@@ -3418,9 +3416,7 @@ class IterativeCFLIBSSolver:
                 # (SB-offset or Stark) passes -- read the richer ``ne_measured``
                 # key with an ``ne_from_stark`` back-compat fallback.
                 ne_ok = bool(
-                    quality_metrics.get(
-                        "ne_measured", quality_metrics.get("ne_from_stark", 0.0)
-                    )
+                    quality_metrics.get("ne_measured", quality_metrics.get("ne_from_stark", 0.0))
                 )
                 quality_metrics["overall_reliable"] = bool(
                     ne_ok and mcw and new_qf in ("excellent", "good", "acceptable")
