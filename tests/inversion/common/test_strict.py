@@ -1,7 +1,5 @@
 """Tests for the strict / no-fallback exploratory-mode foundation."""
 
-import os
-
 import numpy as np
 import pytest
 
