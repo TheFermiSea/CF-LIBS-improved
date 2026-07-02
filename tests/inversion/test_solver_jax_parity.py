@@ -194,7 +194,21 @@ def _solve_pair(mock_db, observations):
     # so the numpy reference must disable it too for an apples-to-apples
     # iteration-backend parity comparison. (SA is exercised separately in
     # tests/inversion/solve/test_self_absorption_wiring.py.)
-    solver_np = IterativeCFLIBSSolver(mock_db, max_iterations=20, apply_self_absorption=False)
+    #
+    # The traced lax kernel implements the two-stage Saha ladder + isobaric
+    # pressure-balance n_e. The 3-stage ladder (Issue 5) and the SB inter-stage
+    # offset n_e (Issue 4) are REFERENCE-PATH (Python) enhancements the traced
+    # kernel does not carry, so the numpy reference must opt into the matching
+    # 2-stage / pressure-balance approximation for a like-for-like backend parity
+    # check. Those enhancements are validated by test_saha_ladder_symmetry.py and
+    # test_sb_offset_ne.py.
+    solver_np = IterativeCFLIBSSolver(
+        mock_db,
+        max_iterations=20,
+        apply_self_absorption=False,
+        include_stage_iii=False,
+        prefer_sb_offset_ne=False,
+    )
     solver_jax = IterativeCFLIBSSolverJax(mock_db, max_iterations=20)
     res_np = solver_np.solve(observations)
     res_jax = solver_jax.solve(observations)
@@ -260,7 +274,11 @@ def test_parity_aalto_multi_element(mock_db):
 def test_parity_matrix_closure(mock_db):
     """Matrix-mode closure must produce parity composition output."""
     obs = _make_two_element_observations(T_eV=1.0)
-    solver_np = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    # Match the lax kernel's 2-stage / pressure-balance approximation (see
+    # _solve_pair for the rationale).
+    solver_np = IterativeCFLIBSSolver(
+        mock_db, max_iterations=20, include_stage_iii=False, prefer_sb_offset_ne=False
+    )
     solver_jax = IterativeCFLIBSSolverJax(mock_db, max_iterations=20)
     res_np = solver_np.solve(obs, closure_mode="matrix", matrix_element="A", matrix_fraction=0.5)
     res_jax = solver_jax.solve(obs, closure_mode="matrix", matrix_element="A", matrix_fraction=0.5)
