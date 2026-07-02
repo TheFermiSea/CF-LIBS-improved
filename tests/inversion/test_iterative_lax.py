@@ -183,14 +183,22 @@ def test_lax_while_loop_parity_vs_python(
     """Lax path matches the Python path to rtol=1e-5 across all six closure modes."""
     obs = obs_factory()
 
+    # The traced lax kernel implements the two-stage Saha ladder + isobaric
+    # pressure-balance n_e; the 3-stage ladder (Issue 5) and SB-offset n_e
+    # (Issue 4) are reference-path (Python) enhancements the kernel does not
+    # carry. Construct both solvers at the matching 2-stage / pressure-balance
+    # approximation for a like-for-like backend parity check (the enhancements
+    # are validated by test_saha_ladder_symmetry.py / test_sb_offset_ne.py).
+    kernel_flags = dict(include_stage_iii=False, prefer_sb_offset_ne=False)
+
     # Python path
     monkeypatch.delenv("CFLIBS_USE_LAX_WHILE_LOOP", raising=False)
-    solver_py = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    solver_py = IterativeCFLIBSSolver(mock_db, max_iterations=20, **kernel_flags)
     res_py = solver_py.solve(obs, closure_mode=closure_mode, **closure_kwargs)
 
     # Lax path
     monkeypatch.setenv("CFLIBS_USE_LAX_WHILE_LOOP", "1")
-    solver_lax = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    solver_lax = IterativeCFLIBSSolver(mock_db, max_iterations=20, **kernel_flags)
     res_lax = solver_lax.solve(obs, closure_mode=closure_mode, **closure_kwargs)
 
     np.testing.assert_allclose(res_lax.temperature_K, res_py.temperature_K, rtol=1e-5, atol=1e-3)
@@ -372,11 +380,14 @@ def test_grad_smoke(mock_db, lax_enabled):
 def test_convergence_iteration_count(mock_db, monkeypatch):
     """``|iters_lax - iters_python| <= 1`` on the multi-element fixture."""
     obs = _make_multi_element_obs()
+    # Match the lax kernel's 2-stage / pressure-balance approximation (see
+    # test_lax_while_loop_parity_vs_python for the rationale).
+    kernel_flags = dict(include_stage_iii=False, prefer_sb_offset_ne=False)
     monkeypatch.delenv("CFLIBS_USE_LAX_WHILE_LOOP", raising=False)
-    solver_py = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    solver_py = IterativeCFLIBSSolver(mock_db, max_iterations=20, **kernel_flags)
     res_py = solver_py.solve(obs)
     monkeypatch.setenv("CFLIBS_USE_LAX_WHILE_LOOP", "1")
-    solver_lax = IterativeCFLIBSSolver(mock_db, max_iterations=20)
+    solver_lax = IterativeCFLIBSSolver(mock_db, max_iterations=20, **kernel_flags)
     res_lax = solver_lax.solve(obs)
     assert abs(res_lax.iterations - res_py.iterations) <= 1
 
