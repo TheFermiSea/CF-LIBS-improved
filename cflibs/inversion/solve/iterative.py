@@ -40,6 +40,7 @@ from cflibs.inversion.common.strict import (
     SolverFailure,
     require_atomic_data,
     require_ion_stage_observed,
+    require_simplex,
     resolve_strict,
 )
 
@@ -2972,10 +2973,14 @@ class IterativeCFLIBSSolver:
 
         # STRICT host-boundary enforcement (sites 3/4/5/8). Both per-iteration
         # flags converge here; this is the natural place to refuse rather than
-        # return a held-seed T / degenerate composition dressed as a result. The
-        # diagnostics already carry the rejected slope/R^2/T_candidate and the
-        # would-be pressure-balance n_e. Default (strict off) path skips this
-        # block entirely and is byte-identical.
+        # return a held-seed T dressed as a result. Only THEOREM violations raise
+        # (no fit ran -> non-identifiable; T outside the physical window;
+        # degenerate Boltzmann slope; off-simplex composition). A HEURISTIC
+        # reliability flag (keystone-collapse dominance) is recorded to
+        # diagnostics only so production numerics stay byte-identical to
+        # strict-off. The diagnostics already carry the rejected
+        # slope/R^2/T_candidate and the would-be pressure-balance n_e. Default
+        # (strict off) path skips this block entirely and is byte-identical.
         diag = self._strict_diag
         if self.strict and diag is not None:
             diag.converged = converged
@@ -3020,12 +3025,37 @@ class IterativeCFLIBSSolver:
                     diag,
                 )
             if closure_degenerate:
-                # Keystone-collapse: one element soaked the closure mass; the
-                # composition is off the meaningful simplex interior.
-                raise NonPhysicalResult(
-                    "[closure_degenerate] composition collapsed onto a single element "
-                    "(keystone collapse); refusing the degenerate concentration vector",
-                    diag,
+                # Keystone-collapse is a HEURISTIC (one element exceeds
+                # ``degeneracy_dominance_threshold`` of the closure mass), NOT a
+                # proven invariant. For a high-matrix material a single dominant
+                # element is PHYSICALLY CORRECT (e.g. Fe > 80 wt% in steel), and
+                # the recovered vector still lies on the probability simplex —
+                # ``require_simplex`` (composition_sum_one / composition_mem_std-
+                # Simplex) passes. Hard-raising here therefore over-refused
+                # legitimate high-matrix solves and SILENTLY changed the reported
+                # result set relative to strict-off (which returns the same
+                # vector with ``converged=False``). So the dominance heuristic is
+                # RECORDED to diagnostics only — production numerics are left
+                # untouched (``converged=False`` was already set above) — and only
+                # a GENUINE off-simplex vector (the theorem, below) raises.
+                comp_vals = [float(v) for v in concentrations.values()]
+                require_simplex(comp_vals, strict=self.strict, diagnostics=diag)
+                dominant = (
+                    max(concentrations, key=lambda k: concentrations[k]) if concentrations else None
+                )
+                dom_frac = float(concentrations.get(dominant, 0.0)) if dominant else 0.0
+                diag.record(
+                    GateResult(
+                        name="closure_degenerate",
+                        passed=False,
+                        theorem="composition_mem_stdSimplex",
+                        detail=(
+                            "keystone-collapse heuristic: one element dominates the "
+                            "closure mass; composition is ON-simplex, reporting "
+                            "converged=False (production numerics untouched)"
+                        ),
+                        values={"dominant_element": dominant, "dominant_fraction": dom_frac},
+                    )
                 )
 
         if self.two_region and T_corona is None:
