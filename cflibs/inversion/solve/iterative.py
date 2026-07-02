@@ -1043,6 +1043,7 @@ class IterativeCFLIBSSolver:
         fixed_temperature_K: Optional[float] = None,
         include_stage_iii: bool = True,
         prefer_sb_offset_ne: bool = True,
+        ga_selfcal: bool = False,
         strict: Optional[bool] = None,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
@@ -1078,6 +1079,14 @@ class IterativeCFLIBSSolver:
         self.pressure_pa = pressure_pa
         self.apply_ipd = apply_ipd
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
+        # In-plasma relative-gA self-calibration (physics-first-principles audit
+        # Issue 1a). Default OFF -> byte-identical to the historical solve. When
+        # ON, shared-upper-level line groups are used to measure and correct the
+        # RELATIVE A_ki error of each line before the Boltzmann/SB-graph fit, and
+        # the fabricated rel_int->grade A_ki uncertainty of every corrected line
+        # is replaced by the measured per-line residual. Exploratory.
+        self.ga_selfcal = bool(ga_selfcal)
+        self._last_ga_selfcal = None
         self.two_region = two_region
         # Boltzmann-plot quality gate for the slope -> temperature update.
         #
@@ -1961,6 +1970,23 @@ class IterativeCFLIBSSolver:
             self._last_sa_result = sa_result
             observations = sa_result.observations
 
+        # In-plasma relative-gA self-calibration (audit Issue 1a). Opt-in
+        # (``ga_selfcal``); default OFF is byte-identical. Also applied ONCE,
+        # BEFORE the fit, as a pure observation transform (reads no composition).
+        # Runs AFTER the SA pass so we can EXCLUDE optically-thick / SA-suspect
+        # lines from each shared-upper-level group: differential self-absorption
+        # contaminates the exact ratio identity and would masquerade as an A_ki
+        # error.
+        self._last_ga_selfcal = None
+        if self.ga_selfcal:
+            from cflibs.inversion.physics.ga_selfcal import self_calibrate_relative_ga
+
+            exclude_mask = self._ga_selfcal_exclude_mask(observations)
+            observations, ga_calib = self_calibrate_relative_ga(
+                observations, self.atomic_db, exclude_mask=exclude_mask
+            )
+            self._last_ga_selfcal = ga_calib
+
         # The Saha-Boltzmann graph intercept extraction is only implemented
         # on the Python path (its global lstsq is not traced into the lax
         # common-slope kernel), so it forces the Python loop.
@@ -1994,6 +2020,31 @@ class IterativeCFLIBSSolver:
         return self._solve_python(
             observations, closure_mode, stark_diagnostics=diags, **closure_kwargs
         )
+
+    def _ga_selfcal_exclude_mask(self, observations: List[LineObservation]) -> Optional[List[bool]]:
+        """Boolean mask of lines to exclude from relative-gA group anchors.
+
+        Reuses the observable self-absorption diagnostics (when the SA pass ran)
+        to flag optically-thick / SA-suspect lines. Differential self-absorption
+        breaks the exact same-upper-level ratio identity, so such lines must not
+        anchor a group nor receive a gA correction. Returns ``None`` when no SA
+        diagnostics are available (the empirical-Bayes shrinkage still guards
+        against pure noise).
+        """
+        sa = self._last_sa_result
+        if sa is None or not getattr(sa, "corrections", None):
+            return None
+        corr_by_wl = sa.corrections
+        mask: List[bool] = []
+        for obs in observations:
+            c = corr_by_wl.get(float(obs.wavelength_nm))
+            # Exclude when flagged suspect or when a measured optical depth is
+            # non-negligible (a doublet/Planck-derived tau above ~0.1).
+            excl = bool(
+                c is not None and (getattr(c, "suspect", False) or getattr(c, "tau", 0.0) > 0.1)
+            )
+            mask.append(excl)
+        return mask if any(mask) else None
 
     def _prefetch_ips_python(self, elements: List[str]) -> Dict[str, float]:
         """Pre-fetch first ionization potentials for ``elements`` (``_solve_python`` helper)."""

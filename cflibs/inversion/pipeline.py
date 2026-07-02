@@ -275,6 +275,12 @@ class AnalysisPipelineConfig:
     two_region: bool = False
     #: Weight Boltzmann ordinates by A_ki transition-probability uncertainty.
     aki_uncertainty_weighting: bool = True
+    #: In-plasma relative-g·A self-calibration (physics-first-principles audit
+    #: Issue 1a). Default OFF (byte-identical). When ON, shared-upper-level line
+    #: groups measure and correct the RELATIVE A_ki error of each line before the
+    #: Boltzmann fit, replacing the fabricated rel_int->grade A_ki uncertainty of
+    #: corrected lines with the measured per-line residual. Exploratory.
+    ga_selfcal: bool = False
     #: Fraction of closure mass a single element may soak before the solve is
     #: flagged as a degenerate composition.
     degeneracy_dominance_threshold: float = 0.8
@@ -582,6 +588,7 @@ def build_pipeline_config(
         apply_ipd=bool(knob("apply_ipd", None, False)),
         two_region=bool(knob("two_region", None, False)),
         aki_uncertainty_weighting=bool(knob("aki_uncertainty_weighting", None, True)),
+        ga_selfcal=bool(knob("ga_selfcal", None, False)),
         degeneracy_dominance_threshold=float(knob("degeneracy_dominance_threshold", None, 0.8)),
         degeneracy_min_elements=int(knob("degeneracy_min_elements", None, 4)),
         assess_quality=bool(knob("assess_quality", None, True)),
@@ -1376,6 +1383,7 @@ def _run_peak_based_solver(
             apply_ipd=pipeline.apply_ipd,
             two_region=pipeline.two_region,
             aki_uncertainty_weighting=pipeline.aki_uncertainty_weighting,
+            ga_selfcal=pipeline.ga_selfcal,
             degeneracy_dominance_threshold=pipeline.degeneracy_dominance_threshold,
             degeneracy_min_elements=pipeline.degeneracy_min_elements,
             assess_quality=pipeline.assess_quality,
@@ -1483,8 +1491,7 @@ def _run_full_spectrum_solver(
             if isinstance(exc, (OptimizerFailure, NotConverged)):
                 raise
             raise OptimizerFailure(
-                f"full-spectrum solver ({pipeline.solver}) raised "
-                f"{type(exc).__name__}: {exc}"
+                f"full-spectrum solver ({pipeline.solver}) raised " f"{type(exc).__name__}: {exc}"
             ) from exc
         logger.warning(
             "Full-spectrum solver (%s) raised %r; keeping the iterative warm start.",
