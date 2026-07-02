@@ -42,6 +42,63 @@ EMITTING_LINE_PREDICATE = (
     "{p}aki IS NOT NULL AND {p}aki > 0 AND {p}ek_ev IS NOT NULL AND {p}gk IS NOT NULL"
 )
 
+#: DDL for the optional Stark/uncertainty columns the on-connect migration adds to
+#: the ``lines`` table when they are missing. Hoisted to module scope so the
+#: immutability guard (:meth:`AtomicDatabase._detect_pending_migrations`) and the
+#: applier (:meth:`AtomicDatabase._migrate_lines_columns`) share one source of truth.
+ADD_LINE_COLUMN_QUERIES: dict[str, str] = {
+    "stark_w": "ALTER TABLE lines ADD COLUMN stark_w REAL",
+    "stark_alpha": "ALTER TABLE lines ADD COLUMN stark_alpha REAL",
+    "stark_shift": "ALTER TABLE lines ADD COLUMN stark_shift REAL",
+    "is_resonance": "ALTER TABLE lines ADD COLUMN is_resonance INTEGER",
+    "aki_uncertainty": "ALTER TABLE lines ADD COLUMN aki_uncertainty REAL",
+    "accuracy_grade": "ALTER TABLE lines ADD COLUMN accuracy_grade TEXT",
+    # Provenance of stark_w (e.g. 'stark_b' literature-grade vs
+    # 'konjevic_lambda_sq_scaled' heuristic). NULL = unknown, which the
+    # Stark n_e diagnostic treats as not literature-grade.
+    "stark_w_source": "ALTER TABLE lines ADD COLUMN stark_w_source TEXT",
+}
+
+
+class ImmutableDatabaseError(RuntimeError):
+    """Raised when opening a standard/pre-compiled DB would mutate it.
+
+    NIST ASD, Kurucz, Stark-B and every shipped ``libs_production.db`` are
+    treated as **immutable** (a past ASD corruption cost months of rework).
+    The on-connect schema migration (``ALTER TABLE`` / ``CREATE TABLE`` /
+    populate / backfill) is a live write path, so it now refuses to run against a
+    recognized standard DB unless the caller explicitly opts in via
+    ``allow_schema_migration=True``. Enrichments belong in a *new* derived
+    overlay DB, never in the source file.
+    """
+
+
+#: Basenames that unambiguously identify a shipped standard atomic DB.
+STANDARD_DB_BASENAMES: frozenset[str] = frozenset({"libs_production.db"})
+
+#: Path-component markers for directories that hold *standard* (immutable) DBs.
+#: ``overlays`` explicitly overrides these (derived, rebuildable -> mutable).
+STANDARD_DB_DIR_MARKERS: frozenset[str] = frozenset({"ASD_da"})
+
+
+def is_standard_db(path: str | Path) -> bool:
+    """Return True if ``path`` is a recognized standard/immutable atomic DB.
+
+    Standard DBs (NIST ASD / Kurucz / Stark-B / the shipped
+    ``libs_production.db``) live at fixed repo locations and must never be
+    mutated by the on-connect schema migration. Anything under an ``overlays/``
+    directory is derived/rebuildable and therefore *not* standard, even inside
+    ``ASD_da``. Fresh scratch / test DBs at arbitrary (e.g. ``tmp``) paths are
+    not standard, so they migrate freely.
+    """
+    rp = Path(path).resolve()
+    parts = set(rp.parts)
+    if "overlays" in parts:
+        return False
+    if rp.name in STANDARD_DB_BASENAMES:
+        return True
+    return bool(parts & STANDARD_DB_DIR_MARKERS)
+
 
 class AtomicDatabase:
     """
@@ -56,7 +113,14 @@ class AtomicDatabase:
 
     db_path: str | Path
 
-    def __init__(self, db_path: str):
+    def __init__(
+        self,
+        db_path: str,
+        aki_overlay_path: str | None = None,
+        *,
+        read_only: bool = False,
+        allow_schema_migration: bool = False,
+    ):
         """
         Initialize database connection and verify schema.
 
@@ -64,12 +128,39 @@ class AtomicDatabase:
         ----------
         db_path : str
             Path to SQLite database file
+        aki_overlay_path : str, optional
+            Path to a lifetime-anchored A_ki overlay DB (see
+            ``scripts/build_lawler_overlay.py``). **Opt-in and read-only**: when
+            provided, :meth:`get_transitions` resolves ``A_ki`` (and its
+            uncertainty) from the overlay's ``anchored_lines`` table for any line
+            whose ``id`` is present there, tagging the result via
+            ``Transition.aki_source``. Default ``None`` leaves every returned
+            value byte-identical to the source DB. The overlay is never written
+            here and the source DB is untouched.
+        read_only : bool, optional
+            Open the DB via a SQLite ``mode=ro`` URI so no write can ever reach
+            it (the connection is not pooled and never runs ``PRAGMA
+            journal_mode=WAL``). Schema migration is skipped entirely. Use this
+            for diagnostics / overlay builders that treat the standard DB as an
+            immutable source. Default ``False``.
+        allow_schema_migration : bool, optional
+            Permit the on-connect schema migration (``ALTER TABLE`` / ``CREATE
+            TABLE`` / populate / backfill) to *write* to a **recognized standard
+            DB** (:func:`is_standard_db`) whose schema is incomplete. Default
+            ``False`` -> for a standard DB a pending migration raises
+            :class:`ImmutableDatabaseError` (standard DBs are immutable; build a
+            derived DB instead). Non-standard scratch/test DBs migrate regardless
+            of this flag. Ignored (no-op) when ``read_only=True``.
         """
         path = Path(db_path)
         if not path.exists():
             raise FileNotFoundError(f"Atomic database not found: {path}")
 
         self.db_path = path
+        self._read_only = bool(read_only)
+        self._allow_schema_migration = bool(allow_schema_migration)
+        self._aki_overlay_path = aki_overlay_path
+        self._aki_overlay: dict[int, tuple[float, float | None, str]] | None = None
         # Partition cache token = DB file mtime. derive_partition_spec keys its
         # process-global spec cache on this, so when the DB's energy_levels
         # change (e.g. a NIST ingest rewrites the file -> new mtime) a fresh
@@ -80,6 +171,16 @@ class AtomicDatabase:
             self._partition_cache_token = int(path.stat().st_mtime_ns)
         except OSError:
             self._partition_cache_token = 0
+        if self._read_only:
+            # Immutable-source mode: a mode=ro URI makes any write fail at the
+            # SQLite layer. Bypass the pool (it runs write-mode PRAGMAs) and never
+            # migrate -- a read-only handle cannot fix schema anyway.
+            self.conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, check_same_thread=False)
+            self.conn.row_factory = sqlite3.Row
+            self._use_pool = False
+            logger.info(f"Connected to atomic database (read-only): {path}")
+            return
+
         # Use connection pool for better performance
         try:
             self._pool = get_pool(str(path), max_connections=5)
@@ -90,9 +191,39 @@ class AtomicDatabase:
             self.conn = sqlite3.connect(str(path))
             self._use_pool = False
 
-        # Verify and migrate schema if needed
+        # Verify and migrate schema if needed (guarded: refuses to mutate an
+        # immutable standard DB unless allow_schema_migration=True).
         self._check_and_migrate_schema()
         logger.info(f"Connected to atomic database: {path}")
+
+    def _load_aki_overlay(self) -> dict[int, tuple[float, float | None, str]]:
+        """Lazily load the opt-in A_ki overlay (read-only), keyed by ``lines.id``.
+
+        Returns an empty mapping if no overlay path was configured or the file is
+        missing/unreadable, so the read path degrades to the source DB's own
+        values. The overlay is opened ``mode=ro``; it is never mutated.
+        """
+        if self._aki_overlay is not None:
+            return self._aki_overlay
+        overlay: dict[int, tuple[float, float | None, str]] = {}
+        if self._aki_overlay_path and Path(self._aki_overlay_path).exists():
+            try:
+                oc = sqlite3.connect(f"file:{self._aki_overlay_path}?mode=ro", uri=True)
+                try:
+                    for r in oc.execute(
+                        "SELECT line_id, aki_anchored, aki_unc, source FROM anchored_lines"
+                    ):
+                        overlay[int(r[0])] = (
+                            float(r[1]),
+                            None if r[2] is None else float(r[2]),
+                            str(r[3]),
+                        )
+                finally:
+                    oc.close()
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f"Failed to load A_ki overlay {self._aki_overlay_path}: {e}")
+        self._aki_overlay = overlay
+        return overlay
 
     @contextmanager
     def _get_connection(self):
@@ -104,13 +235,105 @@ class AtomicDatabase:
             yield self.conn
 
     def _check_and_migrate_schema(self):
-        """Check database schema and migrate if necessary."""
+        """Check database schema and migrate if necessary.
+
+        The migration is a live write path into ``db_path``. Standard DBs (NIST
+        ASD, Kurucz, Stark-B, the shipped ``libs_production.db``) are IMMUTABLE:
+        if the target is a recognized standard DB (:func:`is_standard_db`) and
+        any migration step is pending, refuse with :class:`ImmutableDatabaseError`
+        instead of mutating the source file, unless ``allow_schema_migration``
+        was explicitly set. The shipped prod DB already has every column/table,
+        so the default path detects nothing pending and performs no write.
+
+        Fresh, non-standard scratch/test DBs (arbitrary paths) are not immutable
+        and migrate as before -- no flag needed.
+        """
         try:
             with self._get_connection() as conn:
+                if not self._allow_schema_migration and is_standard_db(self.db_path):
+                    pending = self._detect_pending_migrations(conn.cursor())
+                    if pending:
+                        raise ImmutableDatabaseError(
+                            f"Refusing to migrate immutable standard atomic DB "
+                            f"'{self.db_path}': schema changes are pending "
+                            f"({', '.join(pending)}). Standard databases (NIST ASD, "
+                            "Kurucz, Stark-B) must not be mutated -- build a "
+                            "derived/overlay DB instead. To deliberately (re)build this "
+                            "standard DB, pass allow_schema_migration=True."
+                        )
                 self._perform_migration(conn)
         except Exception as e:
             logger.error(f"Schema migration failed: {e}")
             raise
+
+    @staticmethod
+    def _detect_pending_migrations(cursor: sqlite3.Cursor) -> list[str]:
+        """Read-only probe: list migration steps that would *write* to the DB.
+
+        Mirrors the checks in :meth:`_perform_migration` without performing any
+        write, so the immutability guard can decide whether to refuse. Returns an
+        empty list when the schema is already complete (e.g. the shipped prod DB).
+        """
+        pending: list[str] = []
+
+        def _table_exists(name: str) -> bool:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,))
+            return cursor.fetchone() is not None
+
+        # Step 1: missing lines columns.
+        if _table_exists("lines"):
+            cursor.execute("PRAGMA table_info(lines)")
+            line_columns = {row[1] for row in cursor.fetchall()}
+            for col in ADD_LINE_COLUMN_QUERIES:
+                if col not in line_columns:
+                    pending.append(f"add lines.{col}")
+
+        # Step 2: partition_functions table.
+        has_partition_table = _table_exists("partition_functions")
+        if not has_partition_table:
+            pending.append("create partition_functions table")
+
+        # Step 3: species_physics.atomic_mass column.
+        if _table_exists("species_physics"):
+            cursor.execute("PRAGMA table_info(species_physics)")
+            physics_columns = {row[1] for row in cursor.fetchall()}
+            if "atomic_mass" not in physics_columns:
+                pending.append("add species_physics.atomic_mass")
+
+        # Step 4: populate energy_levels from lines when empty.
+        if _table_exists("energy_levels") and _table_exists("lines"):
+            cursor.execute("SELECT COUNT(*) FROM energy_levels")
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("SELECT COUNT(*) FROM lines")
+                if cursor.fetchone()[0] > 0:
+                    pending.append("populate energy_levels")
+
+        # Step 5: populate species_physics when empty.
+        if _table_exists("species_physics"):
+            cursor.execute("SELECT COUNT(*) FROM species_physics")
+            if cursor.fetchone()[0] == 0:
+                pending.append("populate species_physics")
+
+        # Step 6: populate partition_functions when empty.
+        if has_partition_table:
+            cursor.execute("SELECT COUNT(*) FROM partition_functions")
+            if cursor.fetchone()[0] == 0:
+                pending.append("populate partition_functions")
+
+        # Step 7: backfill missing aki_uncertainty (only detectable once the
+        # column exists; otherwise it is covered by the "add lines.*" entry).
+        if _table_exists("lines"):
+            cursor.execute("PRAGMA table_info(lines)")
+            line_columns = {row[1] for row in cursor.fetchall()}
+            if "aki_uncertainty" in line_columns:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM lines "
+                    "WHERE aki IS NOT NULL AND aki_uncertainty IS NULL"
+                )
+                if cursor.fetchone()[0] > 0:
+                    pending.append("backfill lines.aki_uncertainty")
+
+        return pending
 
     def _perform_migration(self, conn: sqlite3.Connection):
         """Perform the actual migration steps."""
@@ -132,25 +355,14 @@ class AtomicDatabase:
         cursor.execute("PRAGMA table_info(lines)")
         columns = {row[1] for row in cursor.fetchall()}
 
-        _ADD_COLUMN_QUERIES = {
-            "stark_w": "ALTER TABLE lines ADD COLUMN stark_w REAL",
-            "stark_alpha": "ALTER TABLE lines ADD COLUMN stark_alpha REAL",
-            "stark_shift": "ALTER TABLE lines ADD COLUMN stark_shift REAL",
-            "is_resonance": "ALTER TABLE lines ADD COLUMN is_resonance INTEGER",
-            "aki_uncertainty": "ALTER TABLE lines ADD COLUMN aki_uncertainty REAL",
-            "accuracy_grade": "ALTER TABLE lines ADD COLUMN accuracy_grade TEXT",
-            # Provenance of stark_w (e.g. 'stark_b' literature-grade vs
-            # 'konjevic_lambda_sq_scaled' heuristic). NULL = unknown, which the
-            # Stark n_e diagnostic treats as not literature-grade.
-            "stark_w_source": "ALTER TABLE lines ADD COLUMN stark_w_source TEXT",
-        }
-
-        for col, query in _ADD_COLUMN_QUERIES.items():
+        for col, query in ADD_LINE_COLUMN_QUERIES.items():
             if col not in columns:
-                AtomicDatabase._add_line_column(cursor, col, query, _ADD_COLUMN_QUERIES)
+                AtomicDatabase._add_line_column(cursor, col, query, ADD_LINE_COLUMN_QUERIES)
 
     @staticmethod
-    def _add_line_column(cursor: sqlite3.Cursor, col: str, query: str, allowed_queries: dict[str, str]):
+    def _add_line_column(
+        cursor: sqlite3.Cursor, col: str, query: str, allowed_queries: dict[str, str]
+    ):
         """Validate and add a single column to the lines table, backfilling as needed."""
         if col not in allowed_queries or query != allowed_queries[col]:
             raise ValueError(f"Invalid column name or query for migration: {col}")
@@ -437,7 +649,22 @@ class AtomicDatabase:
         # ~100x faster than pd.Series scalar access. The RANSAC wavelength calibration calls this
         # thousands of times per inversion, so the old pandas path was the single largest CPU cost
         # of the whole inversion (115k pd.Series.__getitem__ in profiling). Same data, same results.
-        transitions = [self._row_to_transition(dict(zip(columns, r))) for r in rows]
+        overlay = self._load_aki_overlay()
+        if overlay:
+            transitions = []
+            for r in rows:
+                d = dict(zip(columns, r))
+                t = self._row_to_transition(d)
+                anchored = overlay.get(d.get("id"))
+                if anchored is not None:
+                    a_new, a_unc, src = anchored
+                    t.A_ki = a_new
+                    if a_unc is not None and a_new > 0:
+                        t.aki_uncertainty = a_unc / a_new  # store fractional, per DB convention
+                    t.aki_source = f"lawler_overlay:{src}"
+                transitions.append(t)
+        else:
+            transitions = [self._row_to_transition(dict(zip(columns, r))) for r in rows]
 
         logger.debug(f"Retrieved {len(transitions)} transitions for {element}")
         return transitions
@@ -457,7 +684,7 @@ class AtomicDatabase:
         # Select all relevant columns.
         query = f"""
             SELECT
-                element, sp_num, wavelength_nm, aki, ek_ev, ei_ev,
+                id, element, sp_num, wavelength_nm, aki, ek_ev, ei_ev,
                 gk, gi, rel_int,
                 stark_w, stark_alpha, stark_shift, is_resonance,
                 aki_uncertainty, accuracy_grade
@@ -1396,6 +1623,15 @@ class AtomicDatabase:
     def __setstate__(self, state):
         """Unpickle support: restore connection/pool."""
         self.__dict__.update(state)
+        # Preserve read-only mode across pickling: never re-open an immutable
+        # source through the write-mode pool.
+        if getattr(self, "_read_only", False):
+            self.conn = sqlite3.connect(
+                f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False
+            )
+            self.conn.row_factory = sqlite3.Row
+            self._use_pool = False
+            return
         # Re-initialize connection/pool
         try:
             self._pool = get_pool(str(self.db_path), max_connections=5)

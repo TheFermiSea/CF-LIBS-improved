@@ -1,0 +1,14 @@
+id: physics-only-no-ml-imports
+valid:
+  - import numpy as np
+  - from jax import jit, vmap
+  - import cflibs.plasma
+  - from foo import torch_helper
+  - import torchvision_is_not_torch  # noqa
+invalid:
+  - import sklearn
+  - import torch as t
+  - from tensorflow import keras
+  - from sklearn.linear_model import LinearRegression
+  - import flax.linen as nn
+  - from transformers import AutoModel

@@ -1,0 +1,25 @@
+id: no-stray-schema-mutation
+language: python
+severity: warning
+message: >-
+  `ALTER TABLE` / `DROP TABLE` outside the sanctioned migration path. Schema
+  mutations against the standard atomic DB must live in the one blessed
+  migration site or a derived-DB builder, never scattered through the code.
+note: >-
+  WHY: same standard-DB-immutability mandate as standard-db-read-only. The only
+  sanctioned schema migration lives in cflibs/atomic/database.py; derived-DB
+  builders live in scripts/build_*.py. A stray ALTER/DROP anywhere else can
+  silently corrupt or reshape the gold-standard schema.
+  ANNOTATE: legitimate derived-DB / ingest builders (scripts/ingest_*,
+  scripts/rebuild_*) should either move under the sanctioned naming or be added
+  to this rule's `ignores`; record the decision in rules/README.md.
+rule:
+  kind: string
+  regex: (ALTER|DROP)\s+TABLE
+files:
+  - "cflibs/**"
+  - "scripts/**"
+ignores:
+  - "cflibs/atomic/database.py"
+  - "scripts/build_*.py"
+  - "scripts/archive/**"

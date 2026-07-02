@@ -1,0 +1,12 @@
+# ast-grep project configuration for the CF-LIBS invariant rule pack.
+#
+# Run the rules:      ast-grep scan
+# Run the rule tests: ast-grep test
+# CI gate (fast):     python scripts/ast_grep_gate.py
+#
+# See rules/README.md for what each rule enforces and how to annotate a
+# legitimate exception.
+ruleDirs:
+  - rules
+testConfigs:
+  - testDir: rule-tests

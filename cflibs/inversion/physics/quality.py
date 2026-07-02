@@ -11,6 +11,7 @@ from collections import defaultdict
 
 from cflibs.core.constants import KB_EV, EV_TO_K, SAHA_CONST_CM3
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import require_atomic_data, resolve_strict
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 
 logger = get_logger("inversion.quality")
@@ -344,8 +345,14 @@ class QualityAssessor:
         x_all: List[float] = []
         y_all: List[float] = []
 
+        strict = resolve_strict(None)
         for obs in observations:
-            ip = ionization_potentials.get(obs.element, 15.0)
+            ip = ionization_potentials.get(obs.element)
+            if ip is None:
+                # Strict mode: a missing IP is a data-completeness failure
+                # (density_identifiability) — refuse the default substitution.
+                require_atomic_data("IP", None, obs.element, strict=strict)
+                ip = 15.0  # legacy generic default (non-strict only)
             stage_pair = stage_pairs.get(obs.element)
             ion_stage = stage_pair[1] if stage_pair is not None else None
             point = self._saha_corrected_point(obs, ip, ion_stage, saha_offset)

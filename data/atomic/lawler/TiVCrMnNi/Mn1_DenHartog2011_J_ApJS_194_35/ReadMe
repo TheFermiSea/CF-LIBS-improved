@@ -1,0 +1,90 @@
+J/ApJS/194/35    Atomic transition probabilities of Mn    (Den Hartog+, 2011)
+================================================================================
+Improved log(gf) values of selected lines in Mn I and Mn II for abundance
+determinations in FGK dwarfs and giants.
+    Den Hartog E.A., Lawler J.E., Sobeck J.S., Sneden C., Cowan J.J.
+   <Astrophys. J. Suppl. Ser., 194, 35 (2011)>
+   =2011ApJS..194...35D
+================================================================================
+ADC_Keywords: Atomic physics
+Keywords: atomic data - methods: laboratory - stars: abundances
+
+Abstract:
+    The goal of the present work is to produce transition probabilities
+    with very low uncertainties for a selected set of multiplets of MnI
+    and MnII. Multiplets are chosen based upon their suitability for
+    stellar abundance analysis. We report on new radiative lifetime
+    measurements for 22 levels of MnI from the e^8^D, z^6^P, z^6^D, z^4^F,
+    e^8^S, and e^6^S terms and six levels of MnII from the z^5^P and z^7^P
+    terms using time-resolved laser-induced fluorescence on a slow
+    atom/ion beam. New branching fractions for transitions from these
+    levels, measured using a Fourier-transform spectrometer, are reported.
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName   Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe         80        .   This file
+table3.dat     82       57   Recommended Atomic transition probabilities for
+                             Mn I (half integral J) & Mn II (integral J)
+                             organized by increasing wavelength in air
+table4.dat     52      753  *Hyperfine structure line component patterns
+                             for ^55^MnI (integral F) & ^55^MnII
+                             (half integral F)
+--------------------------------------------------------------------------------
+Note on table4.dat : organized by increasing wavelength in air, lamAir;
+  computed using published Hyperfine structure (hfs) constants, energy levels
+  from Sugar & Corliss (1985, J. Phys. Chem. Ref. Data, 14, 338), and the
+  standard index of air (Peck & Reeder 1972JOSA...62..958P).
+--------------------------------------------------------------------------------
+
+See also:
+   VI/34 : A Multiplet Table for MnI (Adelman+, 1989)
+   J/A+AS/125/539 : Mn III transition probabilities (Uylings+ 1997)
+
+Byte-by-byte Description of file: table3.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label      Explanations
+--------------------------------------------------------------------------------
+   1-  7  F7.2  0.1nm    lamAir     Wavelength in air in Angstroms
+   9- 16  F8.2  cm-1     E1         Upper level energy
+  18- 19  A2    ---      P1         Upper level parity
+  21- 23  F3.1  ---      J1         Upper level J value
+  25- 32  F8.2  cm-1     E0         Lower level energy
+  34- 35  A2    ---      P0         Lower level parity
+  37- 39  F3.1  ---      J0         Lower level J value
+  41- 46  F6.2  10+6/s   TranP      Transition probability; recommended
+  48- 51  F4.2  10+6/s e_TranP      Total uncertainty in TranP
+  53- 58  F6.3  [-]      log(gf)    Recommended log of the degeneracy times the
+                                    oscillator strength
+  60- 64  F5.2  [-]      BWlog(gf)  ? Log of the degeneracy times the oscillator
+                                    strength; Blackwell-Whitehead et al.
+                                    2005ApJS..157..402B
+  66- 69  F4.2  [-]    e_BWlog(gf)  ? Total uncertainty in BWlog(gf)
+  71- 76  F6.3  [-]      TElog(gf)  Log of the degeneracy times the oscillator
+                                    strength; this experiment
+  78- 82  F5.3  [-]    e_TElog(gf)  Total uncertainty in TElog(gf)
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table4.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units  Label   Explanations
+--------------------------------------------------------------------------------
+   1-  8  F8.2  cm-1   sigma   Center-of-Gravity Wavenumber {sigma}
+  10- 17  F8.3  0.1nm  lamAir  Center-of-Gravity  Air Wavelength in Angstroms
+  19- 21  F3.1  ---    F1      Component upper level F or total angular momentum
+  23- 25  F3.1  ---    F0      Component lower level F or total angular momentum
+  27- 34  F8.5  cm-1   dsigma  Component offset Wavenumber with respect to
+                               Center-of-gravity Wavenumber
+  36- 44  F9.6  0.1nm  dlam    Component offset Wavelength with respect to
+                               Center-of-gravity Wavelength
+  46- 52  F7.5  ---    Str     Component strength (1)
+--------------------------------------------------------------------------------
+Note (1): Normalized to sum to one.
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                 Greg Schwarz [AAS], Emmanuelle Perret [CDS]    01-Aug-2011

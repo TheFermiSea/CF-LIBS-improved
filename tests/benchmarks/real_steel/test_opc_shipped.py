@@ -43,6 +43,7 @@ os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 import numpy as np  # noqa: E402
 
+from cflibs.inversion.common.strict import SolverFailure  # noqa: E402
 from tests.benchmarks.real_steel.harness import PARQUET, load_real_steel, score  # noqa: E402
 
 # Guard just above the achieved v2 held-out rmsep_overall (~10.12 wt%); the
@@ -238,6 +239,7 @@ def run_shipped_opc_gate(
     # that contributed to cal_full); non-selected samples use cal_full (held-out).
     loo_cache: Dict[str, object] = {}
     results: List = []
+    refused: List = []
     for i, (std, (sid, wl, inten, truth)) in enumerate(zip(standards, samples)):
         name = std.name  # unique per row; matches calibrate_opc's selected_standards
         if name in selected:
@@ -246,7 +248,14 @@ def run_shipped_opc_gate(
             cal = loo_cache[name]
         else:
             cal = cal_full
-        pred = _solve_heldout(db, wl, inten, list(truth), cal, thin_filter=thin_filter)
+        try:
+            pred = _solve_heldout(db, wl, inten, list(truth), cal, thin_filter=thin_filter)
+        except SolverFailure as exc:
+            # Strict / no-fallback mode: a refused held-out solve is DATA, not a
+            # crash — count it and score RMSEP over the honestly-reported samples.
+            refused.append((str(sid), f"{type(exc).__name__}: {exc}"))
+            print(f"  [{i + 1}] sample {sid} REFUSED ({type(exc).__name__})", flush=True)
+            continue
         results.append((truth, pred or {}))
         print(f"  [{i + 1}] sample {sid} done", flush=True)
 
@@ -259,6 +268,8 @@ def run_shipped_opc_gate(
         "F": dict(cal_full.F),
         "thin_filter": thin_filter,
         "held_out": held,
+        "n_refused": len(refused),
+        "refused_samples": refused,
     }
 
 
@@ -354,6 +365,7 @@ def run_shipped_cdsb_gate(db_path: str = "ASD_da/libs_production.db") -> Dict[st
     # 4. Apply robust (T, S, F) + CD-SB held-out and score (honest LOO per sample).
     rule = cal0.conditioning_rule
     results: List = []
+    refused: List = []
     for i, (std, (sid, wl, inten, truth)) in enumerate(zip(std_unc, samples)):
         F = loo_F[std.name] if std.name in selected_set else robust_F
         cal = OPCCalibration(
@@ -363,7 +375,13 @@ def run_shipped_cdsb_gate(db_path: str = "ASD_da/libs_production.db") -> Dict[st
             conditioning_rule=rule,
             cdsb_scale=cdsb_scale,
         )
-        pred = _solve_heldout(db, wl, inten, list(truth), cal, cdsb=True)
+        try:
+            pred = _solve_heldout(db, wl, inten, list(truth), cal, cdsb=True)
+        except SolverFailure as exc:
+            # Strict mode: refusal is data — count it, score the reported set.
+            refused.append((str(sid), f"{type(exc).__name__}: {exc}"))
+            print(f"  [{i + 1}] sample {sid} REFUSED ({type(exc).__name__})", flush=True)
+            continue
         results.append((truth, pred or {}))
         print(f"  [{i + 1}] sample {sid} done", flush=True)
 
@@ -376,6 +394,8 @@ def run_shipped_cdsb_gate(db_path: str = "ASD_da/libs_production.db") -> Dict[st
         "cdsb_scale": float(cdsb_scale),
         "robust_F": {str(k): float(v) for k, v in robust_F.items()},
         "held_out": held,
+        "n_refused": len(refused),
+        "refused_samples": refused,
     }
 
 

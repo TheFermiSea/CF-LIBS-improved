@@ -118,6 +118,41 @@ def run_composition_series(
     return pd.DataFrame([r for r in rows if "element" in r])
 
 
+def summarize_log_ratios(df: pd.DataFrame, reference: str = "Ti") -> pd.DataFrame:
+    """Per-numerator Aitchison log-ratio accuracy ``ln(el/reference)`` (Issue 2).
+
+    Pivots the long-form run into per-(composition, realization) compositions and
+    reports RMSEP/bias/std of ``ln(pred_el/pred_ref) - ln(truth_el/truth_ref)``
+    for every element other than ``reference``. This is the matrix-invariant DED
+    tracking deliverable that is reported alongside the absolute wt% RMSEP from
+    :func:`summarize_series`: the ratio cancels the shared closure denominator,
+    so it is stable under per-element mass-slosh (``MatrixEffects.lean``
+    ``recoveredComposition_ratio_matrix_invariant``).
+
+    The log-ratio error is computed from the recorded wt% columns; the
+    atomic-weight offset cancels in the predicted-minus-truth difference, so the
+    result is identical to a number-fraction log-ratio (see
+    :func:`tests.benchmarks.ded_precision.metrics.log_ratio_metrics`).
+    """
+    from .metrics import log_ratio_metrics
+
+    predicted: List[Dict[str, float]] = []
+    truth: List[Dict[str, float]] = []
+    for _, g in df.groupby(["comp_index", "mc"]):
+        predicted.append({row.element: float(row.pred_wt) for row in g.itertuples()})
+        truth.append({row.element: float(row.truth_wt) for row in g.itertuples()})
+    if not predicted:
+        return pd.DataFrame()
+    m = log_ratio_metrics(predicted, truth, reference)
+    rows = [
+        {"numerator": num, "reference": reference, **stats}
+        for num, stats in m["per_numerator"].items()  # type: ignore[union-attr]
+    ]
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).set_index("numerator")
+
+
 def summarize_series(df: pd.DataFrame) -> pd.DataFrame:
     """Per-element accuracy (RMSEP/bias/MAE/MaxAE) + precision (std) across a run."""
     out = []

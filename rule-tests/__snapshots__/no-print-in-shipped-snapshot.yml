@@ -1,0 +1,20 @@
+id: no-print-in-shipped
+snapshots:
+  print("Generating atomic database"):
+    labels:
+    - source: print("Generating atomic database")
+      style: primary
+      start: 0
+      end: 35
+  print():
+    labels:
+    - source: print()
+      style: primary
+      start: 0
+      end: 7
+  print(f"processed {idx}/{total}"):
+    labels:
+    - source: print(f"processed {idx}/{total}")
+      style: primary
+      start: 0
+      end: 33

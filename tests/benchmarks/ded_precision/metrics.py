@@ -8,9 +8,11 @@ before scoring (basis-consistency rule).
 
 from __future__ import annotations
 
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
+
+from cflibs.inversion.physics.closure import log_ratios as _log_ratios
 
 
 def renorm_to_set(comp_wt: Dict[str, float], elements: Sequence[str]) -> Dict[str, float]:
@@ -62,6 +64,69 @@ def ratio_rmsep(
         dtype=float,
     )
     return float(np.sqrt(np.mean((pr - tr) ** 2)))
+
+
+def log_ratio_metrics(
+    predicted: Sequence[Dict[str, float]],
+    truth: Sequence[Dict[str, float]],
+    reference: str,
+    numerators: Optional[Sequence[str]] = None,
+) -> Dict[str, object]:
+    """Aitchison log-ratio accuracy: error of ``ln(C_num / C_ref)`` (Issue 2).
+
+    For each numerator element the per-realization error is
+    ``ln(pred_num/pred_ref) - ln(truth_num/truth_ref)``. This is the matrix- and
+    detected-set-invariant DED deliverable: the closure denominator cancels, so
+    unlike absolute wt% this quantity does not slosh when one element's line set
+    is perturbed (``MatrixEffects.lean`` ``recoveredComposition_ratio_matrix_invariant``).
+
+    The predicted-minus-truth error is identical whether the input dicts are wt%
+    or number/mole fractions -- the atomic-weight offset ``ln(AW_num/AW_ref)``
+    cancels in the difference -- so this scores the same quantity as
+    :meth:`CFLIBSResult.log_ratios` regardless of basis.
+
+    Non-finite log-ratios (a zero/missing numerator, or a composition with a
+    zero/absent reference) drop out of the aggregate as NaN.
+
+    Returns
+    -------
+    dict
+        ``{"reference": str, "n": int, "per_numerator": {el: {rmsep, bias,
+        std, n}}}`` (log-ratio units, natural log).
+    """
+    assert len(predicted) == len(truth) and predicted, "paired, non-empty required"
+
+    def _safe(comp: Dict[str, float]) -> Dict[str, float]:
+        try:
+            return _log_ratios(comp, reference)
+        except (KeyError, ValueError):
+            return {}
+
+    pred_lr = [_safe(p) for p in predicted]
+    truth_lr = [_safe(t) for t in truth]
+    if numerators is None:
+        keys: set = set()
+        for d in truth_lr:
+            keys.update(d)
+        numerators = sorted(keys)
+
+    per: Dict[str, Dict[str, float]] = {}
+    for num in numerators:
+        d = np.array(
+            [
+                pred_lr[i].get(num, float("nan")) - truth_lr[i].get(num, float("nan"))
+                for i in range(len(truth))
+            ],
+            dtype=float,
+        )
+        d = d[np.isfinite(d)]
+        per[num] = {
+            "rmsep": float(np.sqrt(np.mean(d**2))) if d.size else float("nan"),
+            "bias": float(np.mean(d)) if d.size else float("nan"),
+            "std": float(np.std(d)) if d.size else float("nan"),
+            "n": int(d.size),
+        }
+    return {"reference": reference, "per_numerator": per, "n": len(truth)}
 
 
 def precision_std(

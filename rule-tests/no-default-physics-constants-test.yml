@@ -1,0 +1,23 @@
+id: no-default-physics-constants
+valid:
+  # threshold config default -- not a physics constant
+  - value = thresholds.get("excellent", 0.95)
+  # counter default
+  - n = counts.get(reason, 0)
+  # calibration-factor config
+  - cf = cf_data.get("multiplicative", 1.0)
+  # physics dict but no default -> missing key raises KeyError (correct)
+  - ip = ionization_potentials.get(obs.element)
+  # non-numeric default
+  - name = potential_labels.get(el, "unknown")
+  # concentration/abundance defaults are intentionally EXCLUDED (0.0 = absent
+  # element, 1.0 = identity multiplier are physically correct defaults)
+  - conc = concentrations.get(el, 0.0)
+  - m = abundance_multipliers.get(el, 1.0)
+invalid:
+  # the IP = 15.0 class
+  - ip = ionization_potentials.get(obs.element, 15.0)
+  # partition value default
+  - u = partition_functions.get(species, 2.0)
+  # negative / other numeric IP default
+  - phi = ionization_potential_map.get(el, 7.9)

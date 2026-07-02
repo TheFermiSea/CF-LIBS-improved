@@ -17,6 +17,13 @@ import numpy as np
 from scipy.optimize import minimize
 
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import (
+    NonIdentifiable,
+    NonPhysicalResult,
+    NotConverged,
+    SolverFailure,
+    resolve_strict,
+)
 from cflibs.manifold.basis_library import BasisLibrary
 
 logger = get_logger("inversion.spectral_refiner")
@@ -104,9 +111,16 @@ class SpectralRefiner:
         self,
         basis_library: BasisLibrary,
         max_iterations: int = 20,
+        strict: Optional[bool] = None,
     ):
         self.basis_library = basis_library
         self.max_iterations = max_iterations
+        # Strict / no-fallback mode (default off -> byte-identical production
+        # path). When on, the converged=True no-ops, the silent element drops,
+        # the MAD noise fallback, the zero-sum->uniform substitution, and
+        # non-convergence all raise typed failures instead of returning a
+        # fabricated "successful" refinement.
+        self.strict = resolve_strict(strict)
 
     def _prepare_observed_spectrum(
         self, wavelength: np.ndarray, observed: np.ndarray
@@ -128,6 +142,12 @@ class SpectralRefiner:
             else:
                 sigma = np.asarray(noise, dtype=np.float64)
         else:
+            if self.strict:
+                raise SolverFailure(
+                    "SpectralRefiner: noise=None; refusing the MAD 5%-of-median "
+                    "noise fallback in strict mode (chi^2 / chi^2_reduced would be "
+                    "computed against a fabricated floor and reported as meaningful)"
+                )
             # MAD-based estimate of baseline noise
             sigma = np.full(n_pixels, max(np.median(np.abs(obs)) * 0.05, 1e-30))
 
@@ -234,6 +254,12 @@ class SpectralRefiner:
             norm_conc = raw_conc / conc_sum
             amplitude = amp_raw * conc_sum
         else:
+            if self.strict:
+                raise NonPhysicalResult(
+                    "SpectralRefiner: optimizer drove all concentrations to ~0 "
+                    "(degenerate zero-total optimum); refusing to substitute a "
+                    "uniform composition for a failed fit"
+                )
             norm_conc = np.full(len(elements_used), 1.0 / len(elements_used))
             amplitude = amp_raw
         conc_opt = {el: float(norm_conc[i]) for i, el in enumerate(elements_used)}
@@ -312,6 +338,11 @@ class SpectralRefiner:
         RefinementResult
         """
         if not detected_elements:
+            if self.strict:
+                raise NonIdentifiable(
+                    "SpectralRefiner: no detected elements -> nothing to refine; "
+                    "refusing to report converged=True for a no-op"
+                )
             return RefinementResult(
                 T_K=T_init_K,
                 ne_cm3=ne_init_cm3,
@@ -330,6 +361,17 @@ class SpectralRefiner:
         sigma = self._estimate_noise(wavelength, noise, obs, n_pixels)
 
         element_indices, elements_used = self._filter_elements(detected_elements)
+        if self.strict:
+            missing = [el for el in detected_elements if el not in self.basis_library.elements]
+            if missing:
+                # Covers both the total mismatch (all absent) and the partial
+                # silent drop: refuse rather than quietly shrink the fit and
+                # report converged=True on the un-refined initial composition.
+                raise NonIdentifiable(
+                    f"SpectralRefiner: detected elements {missing} absent from the basis "
+                    f"library {list(self.basis_library.elements)}; refusing to silently "
+                    f"drop them"
+                )
         if not elements_used:
             return RefinementResult(
                 T_K=T_init_K,
@@ -394,5 +436,13 @@ class SpectralRefiner:
             bounds=bounds,
             options={"maxiter": self.max_iterations, "ftol": 1e-12, "gtol": 1e-8},
         )
+
+        if self.strict and not bool(result.success):
+            raise NotConverged(
+                f"SpectralRefiner: L-BFGS-B did not converge "
+                f"(success={result.success}, status={getattr(result, 'status', None)}, "
+                f"nit={getattr(result, 'nit', None)}, message={getattr(result, 'message', '')!r}); "
+                f"default maxiter={self.max_iterations} truncation is common"
+            )
 
         return self._unpack_result(result, obs, elements_used, element_indices, n_pixels, n_params)

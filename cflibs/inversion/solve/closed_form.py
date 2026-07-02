@@ -33,6 +33,16 @@ from cflibs.inversion.physics.closure import (
     ilr_inverse,
 )
 from cflibs.inversion.solve.iterative import CFLIBSResult
+from cflibs.inversion.common.strict import (
+    MissingAtomicData,
+    NonIdentifiable,
+    NonPhysicalResult,
+    SolveDiagnostics,
+    SolverFailure,
+    UnobservedStage,
+    require_atomic_data,
+    resolve_strict,
+)
 from cflibs.core.logging_config import get_logger
 
 logger = get_logger("inversion.closed_form_solver")
@@ -99,11 +109,19 @@ class ClosedFormILRSolver:
         self,
         atomic_db: AtomicDatabase,
         config: Optional[ClosedFormConfig] = None,
+        strict: Optional[bool] = None,
     ):
         self.atomic_db = atomic_db
         self.config = config or ClosedFormConfig()
         if self.config.saha_passes not in (1, 2):
             raise ValueError("saha_passes must be 1 or 2")
+        # Strict / no-fallback mode. Default (resolve_strict(None) -> reads
+        # CFLIBS_NO_FALLBACK, else False) keeps the production path byte-identical;
+        # when on, the silent atomic-data / degenerate-fit / pressure-balance
+        # fallbacks raise typed failures instead of substituting defaults.
+        self.strict = resolve_strict(strict)
+        self._diag = SolveDiagnostics(solver="ClosedFormILRSolver", strict=self.strict)
+        self.last_diagnostics = self._diag
 
     # ------------------------------------------------------------------
     # Private helpers (partition functions, Saha)
@@ -123,6 +141,17 @@ class ClosedFormILRSolver:
         provider = self.atomic_db.partition_function_for(element, ionization_stage)
         if provider is not None:
             return float(provider.at(T_K))
+        # No provider: a data-completeness gap. The crude canonical_partition
+        # fallback biases ln(U_s) (the Boltzmann pre-adjust) and the Saha
+        # multipliers with no flag, so in strict mode refuse rather than
+        # substitute (density_identifiability: U(T) must be present & positive).
+        require_atomic_data(
+            "partition_function_U",
+            None,
+            f"{element} stage {ionization_stage}",
+            strict=self.strict,
+            diagnostics=self._diag,
+        )
         return canonical_partition_fallback(element, ionization_stage, self.atomic_db)
 
     def _compute_saha_ratio(
@@ -172,6 +201,12 @@ class ClosedFormILRSolver:
         corrected: Dict[str, List[LineObservation]] = defaultdict(list)
 
         for el, obs_list in obs_by_element.items():
+            if self.strict and el not in ips:
+                raise MissingAtomicData(
+                    f"ionization_potential missing for {el} during Saha correction "
+                    f"(ips should be complete by construction)",
+                    self._diag,
+                )
             ip = ips.get(el, 15.0)
             for obs in obs_list:
                 if obs.ionization_stage == 2:
@@ -201,6 +236,13 @@ class ClosedFormILRSolver:
                         )
                     )
                 else:
+                    if self.strict:
+                        raise SolverFailure(
+                            f"unsupported ionization stage {obs.ionization_stage} for {el} "
+                            f"at {obs.wavelength_nm} nm; the solver models only stages 1/2 "
+                            f"and would silently drop this line",
+                            self._diag,
+                        )
                     logger.warning(
                         "Ionization stage %d for %s not supported; skipping",
                         obs.ionization_stage,
@@ -222,6 +264,8 @@ class ClosedFormILRSolver:
         D: int,
         n_cols: int,
         V: Optional[np.ndarray],
+        strict: bool = False,
+        diagnostics: Optional[SolveDiagnostics] = None,
     ) -> Optional[Tuple[np.ndarray, float, float]]:
         """Build one WLS row (X-row, y_adj, weight) for a single observation.
 
@@ -230,9 +274,22 @@ class ClosedFormILRSolver:
         """
         y_val = obs.y_value
         if not np.isfinite(y_val):
+            if strict:
+                raise NonPhysicalResult(
+                    f"non-finite y_value (ln(I*lambda/gA)) for {obs.element} at "
+                    f"{obs.wavelength_nm} nm (zero/negative intensity or bad gA); "
+                    f"refusing to silently drop the row",
+                    diagnostics,
+                )
             return None
         y_unc = obs.y_uncertainty
         if y_unc <= 0:
+            if strict:
+                raise NonPhysicalResult(
+                    f"non-positive y_uncertainty for {obs.element} at {obs.wavelength_nm} nm; "
+                    f"refusing the arbitrary 0.1 fallback (mis-weights the WLS)",
+                    diagnostics,
+                )
             logger.debug(
                 "Non-positive uncertainty for %s at %.1f nm; using fallback 0.1",
                 obs.element,
@@ -288,7 +345,17 @@ class ClosedFormILRSolver:
             s_idx = el_to_idx[el]
 
             for obs in obs_list:
-                built = self._design_row(obs, U_s, M_s, s_idx, D, n_cols, V)
+                built = self._design_row(
+                    obs,
+                    U_s,
+                    M_s,
+                    s_idx,
+                    D,
+                    n_cols,
+                    V,
+                    strict=self.strict,
+                    diagnostics=self._diag,
+                )
                 if built is None:
                     continue
                 row, y_adj, w = built
@@ -297,6 +364,12 @@ class ClosedFormILRSolver:
                 rows_w.append(w)
 
         if len(rows_X) < n_cols:
+            if self.strict:
+                raise NonIdentifiable(
+                    f"under-determined design matrix: {len(rows_X)} usable rows < "
+                    f"{n_cols} regression columns; T/composition not identifiable",
+                    self._diag,
+                )
             return None
 
         return np.array(rows_X), np.array(rows_y), np.array(rows_w)
@@ -411,6 +484,12 @@ class ClosedFormILRSolver:
         if mode == "matrix":
             matrix_el = self.config.matrix_element
             if matrix_el not in compositions:
+                if self.strict:
+                    raise SolverFailure(
+                        f"closure_mode='matrix' but matrix_element {matrix_el!r} was not "
+                        f"detected in the solution; cannot apply the requested closure",
+                        self._diag,
+                    )
                 logger.warning(
                     "matrix_element %s absent from solution; falling back to standard closure",
                     matrix_el,
@@ -419,6 +498,12 @@ class ClosedFormILRSolver:
             # rel_C_s ∝ compositions[el]; F = rel_C_matrix / matrix_fraction.
             F = compositions[matrix_el] / self.config.matrix_fraction
             if F <= 0.0:
+                if self.strict:
+                    raise SolverFailure(
+                        f"closure_mode='matrix' degenerate scaling factor F={F:.4g} <= 0; "
+                        f"cannot apply matrix closure",
+                        self._diag,
+                    )
                 return compositions
             return {el: rel / F for el, rel in compositions.items()}
 
@@ -428,6 +513,12 @@ class ClosedFormILRSolver:
             factors = default_oxide_stoichiometry(list(compositions.keys()))
         total_oxide = sum(rel * factors.get(el, 1.0) for el, rel in compositions.items())
         if total_oxide <= 0.0:
+            if self.strict:
+                raise SolverFailure(
+                    f"closure_mode='oxide' total oxide mass {total_oxide:.4g} <= 0; "
+                    f"cannot apply oxide closure",
+                    self._diag,
+                )
             return compositions
         return {el: rel / total_oxide for el, rel in compositions.items()}
 
@@ -440,7 +531,17 @@ class ClosedFormILRSolver:
         ips: Dict[str, float] = {}
         for el in elements:
             ip = self.atomic_db.get_ionization_potential(el, 1)
-            ips[el] = ip if ip is not None else 15.0
+            if ip is None:
+                # Missing ionization potential. The 15.0 eV default is grossly
+                # wrong for alkali/alkaline-earth (Na 5.14, K 4.34, Ca 6.11) and
+                # silently corrupts the Saha ratio / abundance multiplier and the
+                # n_e pressure balance, so strict mode refuses the substitution.
+                require_atomic_data(
+                    "ionization_potential", None, el, strict=self.strict, diagnostics=self._diag
+                )
+                ips[el] = 15.0
+            else:
+                ips[el] = ip
         return ips
 
     def _estimate_neutral_temperature(
@@ -503,7 +604,10 @@ class ClosedFormILRSolver:
             "Estimating n_e via the 1-atm (STP) pressure balance — physically "
             "non-standard for LIBS; prefer a Stark-width diagnostic where available."
         )
+        converged_fp = False
+        n_iters = 0
         for _ in range(20):
+            n_iters += 1
             ne_prev = n_e
             total_eps = 0.0
             for el, C_s in compositions.items():
@@ -515,7 +619,14 @@ class ClosedFormILRSolver:
             n_tot = self.config.pressure_pa / (KB * T_K * (1.0 + avg_Z))
             n_e = avg_Z * n_tot * 1e-6  # cm^-3
             if ne_prev > 0 and abs(n_e - ne_prev) / ne_prev < 1e-4:
+                converged_fp = True
                 break
+        # Visibility (non-strict): record whether the fixed point actually
+        # converged. This is a side-channel only and does not alter n_e.
+        self._diag.extra["ne_pressure_balance"] = {
+            "converged": converged_fp,
+            "iterations": n_iters,
+        }
         return n_e
 
     @staticmethod
@@ -630,11 +741,24 @@ class ClosedFormILRSolver:
 
         theta, cov_theta = self._solve_wls(X, y_adj, W)
         if theta is None:
+            if self.strict:
+                raise NonIdentifiable(
+                    "rank-deficient WLS design (collinear energies/elements); "
+                    "the regression has no unique solution",
+                    self._diag,
+                )
             return None
 
         T_K, compositions, physical = self._extract_parameters(theta, D, elements, prior_T_K=T_K)
         if not physical:
             converged = False
+            if self.strict:
+                raise NonPhysicalResult(
+                    f"non-physical Boltzmann slope m={float(theta[0]):.4g} (>= 0 -> "
+                    f"negative/infinite temperature); refusing to report a composition "
+                    f"derived from a failed fit",
+                    self._diag,
+                )
 
         return (
             theta,
@@ -675,6 +799,10 @@ class ClosedFormILRSolver:
         -------
         CFLIBSResult
         """
+        # Fresh per-solve diagnostics (visibility in both modes).
+        self._diag = SolveDiagnostics(solver="ClosedFormILRSolver", strict=self.strict)
+        self.last_diagnostics = self._diag
+
         obs_by_element: Dict[str, List[LineObservation]] = defaultdict(list)
         for obs in observations:
             obs_by_element[obs.element].append(obs)
@@ -682,6 +810,11 @@ class ClosedFormILRSolver:
         elements = sorted(obs_by_element.keys())
         D = len(elements)
         if D == 0:
+            if self.strict:
+                raise NonIdentifiable(
+                    "no input elements (zero observations); composition not identifiable",
+                    self._diag,
+                )
             return self._empty_result()
 
         ips = self._collect_ionization_potentials(elements)
@@ -696,6 +829,12 @@ class ClosedFormILRSolver:
         # ── Pass 2 / single-pass: full solve with Saha correction ──────
         full = self._solve_full_pass(obs_by_element, elements, D, T_K, n_e, ips, initial_T_K)
         if full is None:
+            if self.strict:
+                raise NonIdentifiable(
+                    "full-pass solve failed (insufficient/degenerate design matrix); "
+                    "no unique T/composition",
+                    self._diag,
+                )
             return self._empty_result()
         (
             theta,
@@ -719,6 +858,18 @@ class ClosedFormILRSolver:
         # (Tognoni 2010; Aragón & Aguilera 2010), used by the iterative solver
         # when a Stark line is available.
         if self.config.ne_mode == "pressure":
+            if self.strict:
+                # The 1-atm pressure/charge balance is not a Stark/Saha n_e
+                # measurement (no observed inter-stage ratio), and the fixed
+                # point may silently not converge yet report n_e with zero
+                # uncertainty. saha_joint_identifiability requires a genuinely
+                # observed ion stage, so refuse in strict mode.
+                raise UnobservedStage(
+                    "n_e from the 1-atm pressure/charge balance is non-identifiable "
+                    "(no Stark line / observed inter-stage ratio); refusing the "
+                    "pressure-balance fallback in strict mode",
+                    self._diag,
+                )
             n_e = self._refine_ne_pressure_balance(
                 n_e, T_K, compositions, pf_I_all, pf_II_all, effective_ips
             )

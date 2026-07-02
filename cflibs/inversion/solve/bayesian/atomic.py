@@ -41,6 +41,7 @@ from cflibs.core.constants import (
 from cflibs.atomic.masses import STANDARD_ATOMIC_MASSES, resolve_element_mass
 from cflibs.core.jax_runtime import jax_default_real_dtype
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import MissingAtomicData, resolve_strict
 
 from .priors import HAS_JAX
 
@@ -284,6 +285,8 @@ def _apply_partition_factory_overrides(
     t_min: np.ndarray,
     t_max: np.ndarray,
     g0: np.ndarray,
+    *,
+    strict: bool = False,
 ) -> None:
     """Override coeffs/bounds/g0 in place from the ONE partition-function factory.
 
@@ -295,6 +298,12 @@ def _apply_partition_factory_overrides(
     snapshot bakes; the guarded JAX evaluator in the forward model clamps/floors
     with the bounds, so jit / vmap are unaffected (the fit is a build-time
     concern).
+
+    ``strict`` (default ``False``) is the no-fallback switch: when ``True`` a DB /
+    factory failure raises :class:`MissingAtomicData` instead of silently leaving
+    the crude constant ``U(T)`` placeholders (U0=25/U1=15/U2=10) baked by
+    :func:`_init_partition_arrays` — a first-order Saha-Boltzmann corruption that
+    was previously visible only at DEBUG level.
     """
     from cflibs.atomic.database import AtomicDatabase
 
@@ -313,7 +322,13 @@ def _apply_partition_factory_overrides(
                 t_min[el_idx, stage_idx] = spec.t_min
                 t_max[el_idx, stage_idx] = spec.t_max
                 g0[el_idx, stage_idx] = spec.g0
-    except Exception as exc:  # pragma: no cover - DB shape fallback
+    except Exception as exc:
+        if strict:
+            raise MissingAtomicData(
+                "partition-function factory unavailable in strict mode "
+                f"({exc!r}); refusing to substitute crude constant U(T) "
+                "(U0=25/U1=15/U2=10) for the Saha-Boltzmann balance"
+            ) from exc
         logger.debug(f"Partition factory override skipped: {exc}")
 
 
@@ -329,20 +344,51 @@ def _load_physics_arrays(
     t_min: np.ndarray,
     t_max: np.ndarray,
     g0: np.ndarray,
+    *,
+    strict: bool = False,
 ) -> None:
-    """Load IPs + factory partition overrides in place, guarded as a unit."""
+    """Load IPs + factory partition overrides in place, guarded as a unit.
+
+    ``strict`` (default ``False``) is the no-fallback switch. When ``True`` any
+    physics-load failure raises :class:`MissingAtomicData` rather than warning
+    and leaving the default zero ionization potentials in place: zero IPs make
+    the Saha factor ``exp(-IP/T) = 1`` (completely wrong ion-stage balance) while
+    the model still produces a spectrum and the MCMC still "converges". In strict
+    mode a successful load that nonetheless left *all* IPs at zero is also
+    refused (total IP-load failure masquerading as success).
+    """
     try:
         cursor = conn.cursor()
         _load_ionization_potentials(cursor, elements, placeholders, el_map, ips, max_stages)
-        _apply_partition_factory_overrides(db_path, el_map, max_stages, coeffs, t_min, t_max, g0)
+        _apply_partition_factory_overrides(
+            db_path, el_map, max_stages, coeffs, t_min, t_max, g0, strict=strict
+        )
+    except MissingAtomicData:
+        # Already a typed no-fallback refusal (from the partition factory) — let
+        # it propagate unchanged rather than re-wrapping/swallowing it.
+        raise
     except Exception as e:
+        if strict:
+            raise MissingAtomicData(
+                f"failed to load Bayesian physics arrays in strict mode ({e!r}); "
+                "refusing to run on zero ionization potentials / crude constant "
+                "partition functions (Saha-Boltzmann balance would be invalid)"
+            ) from e
         logger.warning(f"Failed to load physics data: {e}")
+        return
+    if strict and not np.any(ips > 0.0):
+        raise MissingAtomicData(
+            "all ionization potentials are zero after load in strict mode; the "
+            "Saha factor exp(-IP/T) would be identically 1 (no ion-stage balance)"
+        )
 
 
 def _query_atomic_data(
     db_path: str,
     elements: List[str],
     wavelength_range: Tuple[float, float],
+    *,
+    strict: bool = False,
 ) -> Tuple[Any, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Query the database to retrieve atomic lines and species physics.
 
@@ -381,6 +427,7 @@ def _query_atomic_data(
             t_min,
             t_max,
             g0,
+            strict=strict,
         )
 
     return df, coeffs, ips, t_min, t_max, g0
@@ -468,12 +515,23 @@ def load_atomic_data(
     db_path: str,
     elements: List[str],
     wavelength_range: Tuple[float, float],
+    strict: Optional[bool] = None,
 ) -> "AtomicDataArrays":
-    """Load atomic data from the SQLite database into JAX arrays."""
+    """Load atomic data from the SQLite database into JAX arrays.
+
+    ``strict`` (resolved via ``CFLIBS_NO_FALLBACK`` when ``None``) is the
+    no-fallback switch: when ``True`` missing/broken partition or ionization
+    data raises :class:`MissingAtomicData` instead of silently substituting the
+    crude constant ``U(T)`` / zero-IP defaults. Default (``False``/unset) is
+    byte-identical to current production behaviour.
+    """
     if not HAS_JAX:
         raise ImportError("JAX required. Install with: pip install jax jaxlib")
 
-    df, coeffs, ips, t_min, t_max, g0 = _query_atomic_data(db_path, elements, wavelength_range)
+    strict = resolve_strict(strict)
+    df, coeffs, ips, t_min, t_max, g0 = _query_atomic_data(
+        db_path, elements, wavelength_range, strict=strict
+    )
     return _format_atomic_data_arrays(df, coeffs, ips, elements, t_min, t_max, g0)
 
 

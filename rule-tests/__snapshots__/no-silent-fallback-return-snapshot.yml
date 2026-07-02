@@ -1,0 +1,36 @@
+id: no-silent-fallback-return
+snapshots:
+  ? |
+    try:
+        risky()
+    except Exception:
+        return None
+  : labels:
+    - source: |-
+        except Exception:
+            return None
+      style: primary
+      start: 17
+      end: 50
+    - source: return None
+      style: secondary
+      start: 39
+      end: 50
+  ? |
+    try:
+        risky()
+    except ValueError:
+        logger.warning("bad")
+        return 0.0
+  : labels:
+    - source: |-
+        except ValueError:
+            logger.warning("bad")
+            return 0.0
+      style: primary
+      start: 17
+      end: 76
+    - source: return 0.0
+      style: secondary
+      start: 66
+      end: 76

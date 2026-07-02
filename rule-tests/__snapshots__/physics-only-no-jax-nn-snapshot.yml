@@ -1,0 +1,32 @@
+id: physics-only-no-jax-nn
+snapshots:
+  from jax import nn:
+    labels:
+    - source: from jax import nn
+      style: primary
+      start: 0
+      end: 18
+  from jax.experimental import stax:
+    labels:
+    - source: from jax.experimental import stax
+      style: primary
+      start: 0
+      end: 33
+  h = jax.nn.sigmoid(x):
+    labels:
+    - source: jax.nn.sigmoid
+      style: primary
+      start: 4
+      end: 18
+  import jax.nn:
+    labels:
+    - source: import jax.nn
+      style: primary
+      start: 0
+      end: 13
+  w = jax.nn.softmax(logits):
+    labels:
+    - source: jax.nn.softmax
+      style: primary
+      start: 4
+      end: 18

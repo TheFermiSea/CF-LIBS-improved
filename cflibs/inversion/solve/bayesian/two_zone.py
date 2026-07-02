@@ -9,15 +9,24 @@ See :mod:`forward` for :class:`TwoZoneBayesianForwardModel` and
 
 from __future__ import annotations
 
+from typing import Optional
+
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import resolve_strict
 
 from .atomic import _as_jax_real
 from .forward import TwoZoneBayesianForwardModel, two_zone_bayesian_model
 from .priors import HAS_NUMPYRO, NoiseParameters, TwoZonePriorConfig
 from .results import TwoZoneMCMCResult
-from .samplers import _assess_convergence, _diagnostics_from_mcmc, _to_arviz
+from .samplers import (
+    _assess_convergence,
+    _count_divergences,
+    _diagnostics_from_mcmc,
+    _strict_convergence_gate,
+    _to_arviz,
+)
 
 logger = get_logger("inversion.bayesian.two_zone")
 
@@ -38,6 +47,7 @@ class TwoZoneMCMCSampler:
         forward_model: TwoZoneBayesianForwardModel,
         prior_config: TwoZonePriorConfig = TwoZonePriorConfig(),
         noise_params: NoiseParameters = NoiseParameters(),
+        strict: Optional[bool] = None,
     ):
         if not HAS_NUMPYRO:
             raise ImportError("NumPyro required. Install with: pip install numpyro")
@@ -46,6 +56,8 @@ class TwoZoneMCMCSampler:
         self.prior_config = prior_config
         self.noise_params = noise_params
         self.elements = forward_model.elements
+        # No-fallback mode (resolved via CFLIBS_NO_FALLBACK when None).
+        self.strict = resolve_strict(strict)
 
     def run(
         self,
@@ -64,7 +76,13 @@ class TwoZoneMCMCSampler:
         observed_jax = _as_jax_real(observed)
 
         def model(obs):
-            two_zone_bayesian_model(self.forward_model, obs, self.prior_config, self.noise_params)
+            two_zone_bayesian_model(
+                self.forward_model,
+                obs,
+                self.prior_config,
+                self.noise_params,
+                strict=self.strict,
+            )
 
         kernel = NUTS(
             model,
@@ -86,7 +104,9 @@ class TwoZoneMCMCSampler:
             f"Starting two-zone MCMC: {num_chains} chains, "
             f"{num_warmup} warmup, {num_samples} samples"
         )
-        mcmc.run(rng_key, observed_jax)
+        # Collect divergent-transition diagnostics (does not alter the posterior).
+        mcmc.run(rng_key, observed_jax, extra_fields=("diverging",))
+        n_divergences = _count_divergences(mcmc)
 
         samples = mcmc.get_samples(group_by_chain=(num_chains > 1))
         n_el = len(self.elements)
@@ -141,6 +161,7 @@ class TwoZoneMCMCSampler:
             n_chains=num_chains,
             n_warmup=num_warmup,
             inference_data=_to_arviz(mcmc),
+            n_divergences=n_divergences,
         )
 
         logger.info(
@@ -148,6 +169,17 @@ class TwoZoneMCMCSampler:
             f"T_shell={result.T_shell_eV_mean:.3f} eV, "
             f"n_e={result.n_e_mean:.2e} cm^-3"
         )
+        # Strict / no-fallback gate (off by default -> result returned as-is).
+        if self.strict:
+            _strict_convergence_gate(
+                status=status,
+                r_hat=r_hat,
+                ess=ess,
+                n_divergences=n_divergences,
+                num_samples=num_samples,
+                solver="bayesian.two_zone_mcmc",
+                strict=True,
+            )
         return result
 
 

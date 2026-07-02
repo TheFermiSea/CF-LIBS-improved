@@ -52,6 +52,8 @@ htmlcov/
 # Data files
 *.db
 !ASD_da/libs_production.db
+# Lifetime-anchored A_ki overlay (small, regenerable via scripts/build_lawler_overlay.py)
+!ASD_da/overlays/lawler_anchors_v1.db
 *.sqlite
 *.h5
 *.hdf5

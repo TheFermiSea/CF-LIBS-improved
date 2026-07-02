@@ -275,6 +275,12 @@ class AnalysisPipelineConfig:
     two_region: bool = False
     #: Weight Boltzmann ordinates by A_ki transition-probability uncertainty.
     aki_uncertainty_weighting: bool = True
+    #: In-plasma relative-g·A self-calibration (physics-first-principles audit
+    #: Issue 1a). Default OFF (byte-identical). When ON, shared-upper-level line
+    #: groups measure and correct the RELATIVE A_ki error of each line before the
+    #: Boltzmann fit, replacing the fabricated rel_int->grade A_ki uncertainty of
+    #: corrected lines with the measured per-line residual. Exploratory.
+    ga_selfcal: bool = False
     #: Fraction of closure mass a single element may soak before the solve is
     #: flagged as a degenerate composition.
     degeneracy_dominance_threshold: float = 0.8
@@ -582,6 +588,7 @@ def build_pipeline_config(
         apply_ipd=bool(knob("apply_ipd", None, False)),
         two_region=bool(knob("two_region", None, False)),
         aki_uncertainty_weighting=bool(knob("aki_uncertainty_weighting", None, True)),
+        ga_selfcal=bool(knob("ga_selfcal", None, False)),
         degeneracy_dominance_threshold=float(knob("degeneracy_dominance_threshold", None, 0.8)),
         degeneracy_min_elements=int(knob("degeneracy_min_elements", None, 4)),
         assess_quality=bool(knob("assess_quality", None, True)),
@@ -1376,6 +1383,7 @@ def _run_peak_based_solver(
             apply_ipd=pipeline.apply_ipd,
             two_region=pipeline.two_region,
             aki_uncertainty_weighting=pipeline.aki_uncertainty_weighting,
+            ga_selfcal=pipeline.ga_selfcal,
             degeneracy_dominance_threshold=pipeline.degeneracy_dominance_threshold,
             degeneracy_min_elements=pipeline.degeneracy_min_elements,
             assess_quality=pipeline.assess_quality,
@@ -1446,7 +1454,17 @@ def _run_full_spectrum_solver(
     produce a real converged optimum, the warm start is returned UNCHANGED (the
     honest "fell back" outcome).
     """
+    from cflibs.inversion.common.strict import (
+        NotConverged,
+        OptimizerFailure,
+        resolve_strict,
+    )
     from cflibs.inversion.solve.full_spectrum import solve_full_spectrum
+
+    # Strict / no-fallback (CFLIBS_NO_FALLBACK or pipeline.strict): surface the
+    # solver's real outcome instead of the pipeline's double-masking (bare-except
+    # -> warm and not-adopted -> warm). Default off = byte-identical production.
+    strict = resolve_strict(getattr(pipeline, "strict", None))
 
     warm_concentrations = {
         el: float(c) for el, c in warm_start.concentrations.items() if float(c) > 0.0
@@ -1464,8 +1482,18 @@ def _run_full_spectrum_solver(
             warm_start_concentrations=warm_concentrations,
             resolving_power=pipeline.resolving_power,
             method=pipeline.solver,
+            apply_self_absorption=pipeline.apply_self_absorption,
+            strict=strict,
         )
     except Exception as exc:  # noqa: BLE001 — never crash the pipeline on the fit
+        if strict:
+            # Surface the failure honestly (re-raises inner SolverFailure or wraps
+            # a genuine crash) instead of laundering it into "kept warm start".
+            if isinstance(exc, (OptimizerFailure, NotConverged)):
+                raise
+            raise OptimizerFailure(
+                f"full-spectrum solver ({pipeline.solver}) raised " f"{type(exc).__name__}: {exc}"
+            ) from exc
         logger.warning(
             "Full-spectrum solver (%s) raised %r; keeping the iterative warm start.",
             pipeline.solver,
@@ -1510,6 +1538,18 @@ def _run_full_spectrum_solver(
     )
 
     if not fs.adopted_fit:
+        if strict:
+            # In exploratory strict mode the non-adoption IS the diagnostic (the
+            # T<->composition degeneracy firing, or the optimiser not beating the
+            # warm start). Surface it with the real fit values instead of silently
+            # returning the warm start under a converged banner.
+            raise NotConverged(
+                f"full-spectrum fit ({pipeline.solver}) not adopted "
+                f"(converged={fs.converged}): warm T={fs.warm_start_temperature_K:.0f}K "
+                f"ne={fs.warm_start_electron_density_cm3:.2e} -> fit "
+                f"T={fs.fit_temperature_K:.0f}K ne={fs.fit_electron_density_cm3:.2e}; "
+                f"obj {fs.initial_objective:.4g}->{fs.final_objective:.4g}"
+            )
         # Honest fall-back: the optimiser did not beat the warm start. Return
         # the iterative result unchanged so the reported composition is the
         # one that was actually solved for.

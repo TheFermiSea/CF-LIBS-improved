@@ -98,6 +98,99 @@ def default_oxide_stoichiometry(elements: Optional[list] = None) -> Dict[str, fl
     return {el: OXIDE_OXYGEN_PER_CATION[el] for el in elements if el in OXIDE_OXYGEN_PER_CATION}
 
 
+def log_ratios(
+    concentrations: Dict[str, float],
+    reference: str,
+    *,
+    include_reference: bool = False,
+) -> Dict[str, float]:
+    """Aitchison additive log-ratios ``ln(C_s / C_ref)`` against a reference part.
+
+    The CF-LIBS deliverable for constrained composition *tracking* (e.g. DED
+    Ti-6Al-4V drift) is the pairwise ratio, **not** the closure-normalized
+    weight percent. The standard closure normalizes ``sum_s C_s = 1`` over the
+    *detected* set (:meth:`ClosureEquation.apply_standard`), so every ``C_s``
+    shares the denominator ``F = sum_t rel_t`` and any per-element intensity /
+    atomic-data / self-absorption error in one element sloshes into *every*
+    other element's fraction (the observed V<->Ti mass-slosh). The ratio cancels
+    that shared denominator exactly::
+
+        C_s / C_ref = (rel_s / F) / (rel_ref / F) = rel_s / rel_ref
+
+    so ``ln(C_s / C_ref)`` is provably matrix- and detected-set invariant
+    (Aitchison 1986 subcompositional coherence; formalized in
+    ``cflibs-formal`` ``MatrixEffects.lean`` theorem
+    ``recoveredComposition_ratio_matrix_invariant`` — the recovered ratio of two
+    detected species is identical under any two detected sets, while the absolute
+    fractions carry the completeness-channel matrix effect
+    ``recoveredComposition_absolute_matrix_dependent``).
+
+    Because the denominator cancels, this value is identical whether computed
+    from the pre-closure relatives ``rel_s = mult_s * U_s * exp(q_s)`` or from
+    the post-closure normalized fractions ``C_s`` — only the *ratio* is needed
+    and the closure output already carries it, so this helper operates directly
+    on the normalized ``concentrations``. It is also identical, up to an additive
+    constant ``ln(AW_s / AW_ref)`` that cancels in any predicted-minus-truth
+    difference, whether the inputs are number/mole fractions or mass fractions.
+
+    Parameters
+    ----------
+    concentrations : dict of str -> float
+        Element -> concentration (number/mole fraction, mass fraction, or raw
+        relative abundance — the log-ratio geometry is scale-invariant).
+    reference : str
+        The denominator element. For DED this is the dominant matrix element
+        (e.g. ``"Ti"`` for Ti-6Al-4V).
+    include_reference : bool, default False
+        If True, include ``reference -> 0.0`` (``ln(C_ref / C_ref)``) in the
+        output. Default omits the reference (standard additive-log-ratio
+        convention).
+
+    Returns
+    -------
+    dict of str -> float
+        ``element -> ln(C_element / C_reference)`` for every element except the
+        reference. A numerator that is missing, zero, negative, or non-finite
+        maps to ``float('nan')`` — physics-honest "not measured / below
+        detection". No clipping is applied, so a genuine zero is never reported
+        as a finite ratio.
+
+    Raises
+    ------
+    KeyError
+        If ``reference`` is not a key of ``concentrations``: with no reference
+        density no ratio is defined, so the function refuses rather than
+        silently returning all-NaN.
+    ValueError
+        If the reference concentration is zero, negative, or non-finite: the
+        denominator is invalid and every ratio would be undefined.
+    """
+    if reference not in concentrations:
+        raise KeyError(
+            f"reference element {reference!r} absent from concentrations "
+            f"{sorted(concentrations)}; cannot form log-ratios"
+        )
+    ref_val = float(concentrations[reference])
+    if not np.isfinite(ref_val) or ref_val <= 0.0:
+        raise ValueError(
+            f"reference concentration for {reference!r} is {ref_val!r}; "
+            "must be finite and > 0 to form log-ratios"
+        )
+    log_ref = float(np.log(ref_val))
+    out: Dict[str, float] = {}
+    if include_reference:
+        out[reference] = 0.0
+    for element, value in concentrations.items():
+        if element == reference:
+            continue
+        v = float(value)
+        if not np.isfinite(v) or v <= 0.0:
+            out[element] = float("nan")
+        else:
+            out[element] = float(np.log(v) - log_ref)
+    return out
+
+
 class ClosureMode(Enum):
     """Closure equation modes for CF-LIBS normalization."""
 

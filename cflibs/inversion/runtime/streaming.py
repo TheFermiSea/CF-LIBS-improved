@@ -73,6 +73,7 @@ import time
 import numpy as np
 
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import require_atomic_data, resolve_strict
 from cflibs.inversion.physics.boltzmann import LineObservation, BoltzmannPlotFitter
 from cflibs.inversion.solve.iterative import (
     CFLIBSResult,
@@ -1301,8 +1302,17 @@ class EdgeOptimizedModel:
         return 10.0**log_U
 
     def get_ionization_potential(self, element: str) -> float:
-        """Get ionization potential in eV."""
-        return self._ionization_potentials.get(element, 10.0)
+        """Get ionization potential in eV.
+
+        Strict mode refuses the generic 10 eV default (a missing IP makes the
+        Saha balance non-identifiable — ``density_identifiability``); the
+        legacy default is kept for the non-strict production path.
+        """
+        ip = self._ionization_potentials.get(element)
+        if ip is None:
+            require_atomic_data("IP", None, element, strict=resolve_strict(None))
+            ip = 10.0  # legacy generic default (non-strict only)
+        return float(ip)
 
     def get_transitions(self, element: str) -> List[Tuple[float, float, float, float]]:
         """Get pruned transitions for element.

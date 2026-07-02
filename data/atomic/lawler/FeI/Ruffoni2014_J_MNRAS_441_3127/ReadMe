@@ -1,0 +1,175 @@
+J/MNRAS/441/3127    FeI oscillator strengths for Gaia-ESO       (Ruffoni+, 2014)
+================================================================================
+Fe I oscillator strengths for the Gaia-ESO survey.
+    Ruffoni M.P., Den Hartog E.A., Lawler J.E., Brewer N.R., Lind K., Nave G.,
+    Pickering J.C.
+   <Mon. Not. R. Astron. Soc., 441, 3127-3136 (2014)>
+   =2014MNRAS.441.3127R
+================================================================================
+ADC_Keywords: Atomic physics ; Line Profiles ; Spectroscopy
+Keywords: atomic data - line: profiles - methods: laboratory -
+          techniques: spectroscopic
+
+Abstract:
+    The Gaia-ESO Public Spectroscopic Survey (GES) is conducting a
+    large-scale study of multi-element chemical abundances of some 100000
+    stars in the Milky Way with the ultimate aim of quantifying the
+    formation history and evolution of young, mature and ancient Galactic
+    populations. However, in preparing for the analysis of GES spectra, it
+    has been noted that atomic oscillator strengths of important FeI
+    lines required to correctly model stellar line intensities are missing
+    from the atomic data base. Here, we present new experimental
+    oscillator strengths derived from branching fractions and level
+    lifetimes, for 142 transitions of FeI between 3526 and 10864{AA},
+    of which at least 38 are urgently needed by GES. We also assess the
+    impact of these new data on solar spectral synthesis and demonstrate
+    that for 36 lines that appear unblended in the Sun, Fe abundance
+    measurements yield a small line-by-line scatter (0.08dex) with a mean
+    abundance of 7.44dex in good agreement with recent publications.
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName   Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe         80        .   This file
+table3.dat    102      167   Experimental branching fractions, transition
+                             probabilities, and log(gf)s for the FeI levels
+                             listed in table 2 of the paper
+table4.dat    116       32   Lines measured in previous studies, or predicted
+                             to have a BF greater than 1%, that were omitted
+                             from the BF measurements shown in table 3
+table5.dat     62       36   Lines from table 3 selected for solar analysis
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file (# headlines): table3.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label   Explanations
+--------------------------------------------------------------------------------
+       1  A1    ---     State   [A-L] State (G1)
+   3- 10  A8    ---     Level   Lower Level
+      12  A1    ---     Note    [*] Wavenumber from our spectra (G2)
+  14- 23  F10.4 0.1nm   lam.Air [2722/13261] Transition air wavelength ({AA})
+  25- 33  F9.3  cm-1    sigma   [7539/36727] Transition wavenumber {sigma}
+  35- 40  F6.4  ---     BF      [0/1]? Branching fraction (1)
+  42- 45  F4.1  %     e_BF      ? Precentage uncertainty in branching fraction
+  47- 52  F6.3  10-6s-1 Aul     ? Transition probability
+  54- 58  F5.2  [-]     loggf   ? Oscillator strength measured in this work
+  60- 63  F4.2  [-]   e_loggf   ? Uncertainty in oscillator strength
+  65- 69  F5.2  [-]     loggf0  ? Best previously published oscillator strength
+  71- 74  F4.2  [-]   e_loggf0  ? Uncertainty in loggf0 (G3)
+  75- 76  A2    ---   q_loggf0  [DE+ ] Uncertainty flag on loggf0 (G3)
+  78- 80  A3    ---   r_loggf0  Reference to source of loggf0 (G4)
+  82- 84  A3    ---     GES     'Yes' if the line is a GES target
+                                (Gaia-ESO public Spectroscopic survey)
+--------------------------------------------------------------------------------
+Note (1): blank if no data is available for a given line or contain a floating
+    point value of the format given in the Explanations column. Process these
+    columns as character strings first when reading them in code, then convert
+    to a numeric value only if one is present.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file(#): table4.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units  Label   Explanations
+--------------------------------------------------------------------------------
+       1  A1    ---    State   [A-L] State (G1)
+   3- 10  A8    ---    Level   Lower Level
+      12  A1    ---    Note    [*] Wavenumber from our spectra (G2)
+  14- 23  F10.4 0.1nm  lam.Air [2722/13261] Transition air wavelength ({AA})
+  25- 33  F9.3  cm-1   sigma   [7539/36727] Transition wavenumber {sigma}
+  35- 39  F5.2  [-]    loggf0  Best previously published oscillator strength
+  41- 44  F4.2  [-]  e_loggf0  ? Uncertainty in loggf0 (G3)
+      45  A1    ---  q_loggf0  [DE] Uncertainty flag on loggf0 (G3)
+  47- 49  A3    ---  r_loggf0  Reference to source of loggf0 (G4)
+      51  A1    ---  l_BFp     [<] Contains '<' if BFp is less than 0.001
+  52- 57  F6.4  ---    BFp     [0/1] Predicted branching fraction
+  59- 73  A15   ---    Reason  Reason for omission of the line
+  75-116  A42   ---    Blend   List of blended lines when Reason='Blended' (1)
+--------------------------------------------------------------------------------
+Note (1): The line at 31704.637cm^-1^ was observed to be significantly
+    stronger than expected. Its inclusion in the BF measurements resulted in
+    serious disagreement with published values for all lines belonging to the
+    51461.667cm^-1^ upper level.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table5.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units  Label   Explanations
+--------------------------------------------------------------------------------
+   1- 10  F10.4 0.1nm  lam.Air [4423/10864] Transition air wavelength ({AA})
+  12- 16  F5.3  eV     chi     Lower level transition energy {chi}
+  18- 25  F8.3  ---    VdW     Van der Waals damping parameter (1)
+  27- 31  F5.2  [-]    loggf   Oscillator strength measured in this work
+  33- 36  F4.2  [-]  e_loggf   Uncertainty in oscillator strength
+  38- 42  F5.2  [-]    loggf0  Best previously published oscillator strength
+  44- 47  F4.2  [-]  e_loggf0  ? Uncertainty in loggf0 (G3)
+      48  A1    ---  q_loggf0  [DE] Uncertainty flag on loggf0 (G3)
+  50- 52  A3    ---  r_loggf0  Reference to source of loggf0 (G4)
+  54- 57  F4.2  [-]    eps     Solar iron abundance, log{epsilon}(Fe),
+                               obtained for this line using loggf
+  59- 62  F4.2  [-]    eps0    Solar iron abundance, log{epsilon}(Fe),
+                               obtained for this line using loggf0
+--------------------------------------------------------------------------------
+Note (1): Van der Waals broadening parameter. Values greater than zero were
+    obtained from Anstee, Barklem & O'Mara (ABO) theory (1991MNRAS.253..549A,
+    1995MNRAS.276..859A) and are expressed in the standard packed notation where
+    the integer component is the broadening cross section, {sigma}, in atomic
+    units, and the decimal component is the dimensionless velocity parameter,
+    alpha. Values less than zero are the log of the VdW broadening parameter,
+    gamma_6_ (rad/s), per unit perturber number density, N (cm^-3^), at
+    10000K (i.e. log[gamma_6_/N] in units of (rad/s)*cm^3^). These were
+    used only when ABO data were unavailable. See Gray D. F., 2005, "The
+    Observation and Analysis of Stellar Photospheres" 3rd Ed., Chapter 11 for
+    more details.
+--------------------------------------------------------------------------------
+
+Global notes:
+Note (G1): State as follows:
+  A = Level 43163.323 cm^-1^ 3d^6^4s(^6^D)5s          e^7^D_4_
+       8.5ns +/-5%; 100% complete; Residual 0.0012
+  B = Level 43633.530 cm^-1^ 3d^6^4s(^6^D)5s          e^7^D_2_
+       8.4ns +/-5%; 100% complete; Residual 0.0012
+  C = Level 44677.003 cm^-1^ 3d^6^(^5^D)4s(^6^D)5s    e^5^D_4_
+      15.4ns +/-5%;  97% complete; Residual 0.0269; Sum(BFp) 0.0126
+  D = Level 47377.952 cm^-1^ 3d^7^(^4^F)5s            e^5^F_4_
+      19.9ns +/-5%;  97% complete; Residual 0.027;
+  E = Level 47960.937 cm^-1^ 3d^7^(^4^F)5s            e^3^F_4_
+      22.1ns +/-5%;  98% complete; Residual 0.0205; Sum(BFp) 0.0097
+  F = Level 48702.532 cm^-1^ 3d^6^(^3^H)4s4p(^3^P^o^) y^1^G^o^_4_
+      21.0ns +/-5%;  96% complete; Residual 0.0406; Sum(BFp) 0.0214
+  G = Level 51294.217 cm^-1^ 3d^6^(^5^D)4s(^4^D)5s    e^3^D_3_
+       9.9ns +/-5%;  97% complete; Residual 0.0319; Sum(BFp) 0.0045
+  H = Level 51461.667 cm^-1^ 3d^6^4s(^6^D)4d          f^5^F_4_
+      12.7ns +/-5%;  88% complete; Residual 0.1256; Sum(BFp) 0.1108
+  I = Level 51770.554 cm^-1^ 3d^6^(^5^D)4s(^4^D)5s    g^5^D_3_
+      12.1ns +/-5%;  92% complete; Residual 0.0798; Sum(BFp) 0.0350
+  J = Level 52039.889 cm^-1^ 3d^6^(^5^D)4s(^4^D)5s    e^3^D_1_
+      10.4ns +/-5%;  87% complete; Residual 0.1345; Sum(BFp) 0.1056
+  K = Level 52067.446 cm^-1^ 3d^6^(^5^D)4s(^6^D)4d    e^5^P_2_
+      14.3ns +/-5%;  77% complete; Residual 0.2284; Sum(BFp) 0.1864
+  L = Level 54683.318 cm^-1^ 3d^7^(^4^F)4d            f^3^F_4_
+      23.5ns +/-5%;  92% complete; Residual 0.0810; Sum(BFp) 0.0849
+Note (G2): Note as follows:
+  * = if the line is absent from Nave et al. (1994ApJS...94..221N). In these
+      cases, the quoted transition wavenumber and wavelength were obtained from
+      out FT spectra by calibrating the measured wavenumber scale to match the
+      calibrated scale used by Nave et al.  (1994ApJS...94..221N).
+Note (G3): Data from May et al. (1974A&AS...18..405M) are given the
+    uncertainty codes 'D' and 'E' to follow the notation used by Fuhr & Wiese,
+    (2006JPCRD..35.1669F). A letter 'D' indicates that the uncertainty is
+    likely to be up to 50%. A letter 'E' indicates a probable uncertainty
+    greater than 50% but within a factor of two in most cases. All numeric
+    uncertainties are quoted as they appear in the source publication.
+Note (G4): References as follows:
+    B91 = Bard et al., 1991A&A...248..315B
+    B82 = Blackwell et al., 1982MNRAS.199...43B
+    M74 = May et al., 1974A&AS...18..405M
+    O91 = O'Brian et al., 1991, J. Opt. Soc. Am. B, 8, 1185
+    K07 = Kurucz, 2007, http://kurucz.harvard.edu/atoms/2700/
+--------------------------------------------------------------------------------
+
+Acknowledgements:
+    Matthew P. Ruffoni, m.ruffoni(at)imperial.ac.uk
+
+================================================================================
+(End) M. Ruffoni [Imperial College London], P. Vannier [CDS]         01-Oct-2014

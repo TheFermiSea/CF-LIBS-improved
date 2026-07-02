@@ -1,0 +1,201 @@
+J/ApJS/215/20   Vanadium log(gf) and transition probabilities (Lawler+, 2014)
+================================================================================
+Improved V I log(gf) values and abundance determinations in the photospheres of
+the Sun and metal-poor star HD 84937.
+    Lawler J.E., Wood M.P., Den Hartog E.A., Feigenson T., Sneden C.,
+    Cowan J.J.
+   <Astrophys. J. Suppl. Ser., 215, 20 (2014)>
+   =2014ApJS..215...20L    (SIMBAD/NED BibCode)
+================================================================================
+ADC_Keywords: Atomic physics ; Sun ; Line Profiles
+Keywords: atomic data; methods: laboratory: atomic; stars: abundances;
+          stars: individual: HD 84937; Sun: abundances
+
+Abstract:
+    New emission branching fraction measurements for 836 lines of the
+    first spectrum of vanadium (VI) are determined from hollow cathode
+    lamp spectra recorded with the National Solar Observatory 1m Fourier
+    transform spectrometer (FTS) and a high-resolution echelle
+    spectrometer. The branching fractions are combined with recently
+    published radiative lifetimes from laser-induced fluorescence
+    measurements to determine accurate absolute atomic transition
+    probabilities for the 836 lines. The FTS data are also used to extract
+    new hyperfine structure A coefficients for 26 levels of neutral
+    vanadium. These new laboratory data are applied to determine the V
+    abundance in the Sun and metal-poor star HD 84937, yielding
+    log{epsilon}(V)=3.956+/-0.004 ({sigma}=0.037) based on 93 VI lines and
+    log{epsilon}(V)=1.89+/-0.03 ({sigma}=0.07) based on nine VI lines,
+    respectively, using the Holweger-Muller 1D model. These new VI
+    abundance values for the Sun and HD 84937 agree well with our earlier
+    determinations based upon VII.
+
+Description:
+    Data from two complementary spectrometers are used in this work on VI
+    and in recent work on VII (Wood et al. 2014, J/ApJS/214/18). One of
+    these is the venerable National Solar Observatory (NSO) 1m Fourier
+    transform spectrometer (FTS) developed for the McMath Solar telescope
+    on Kitt Peak, AZ. The second instrument is the 3m focal length echelle
+    spectrometer at the Univ. of Wisconsin.
+    Table 1 lists the 14 spectra from the NSO 1m FTS taken from 1979 Dec
+    12 to 1986 Jul 30. Table 2 lists the spectra from the 3m echelle
+    spectrometer used in this VI study; taken from 2013 May 15 to 2014
+    May 14.
+
+Objects:
+    ------------------------------------------------------
+         RA   (ICRS)   DE        Designation(s)
+    ------------------------------------------------------
+     09 48 56.10   +13 44 39.3   HD 84937 = TYC 834-654-1
+    ------------------------------------------------------
+
+File Summary:
+--------------------------------------------------------------------------------
+ FileName  Lrecl  Records   Explanations
+--------------------------------------------------------------------------------
+ReadMe        80        .   This file
+table1.dat   111       14   Fourier Transform Spectra of a custom water-cooled
+                             V Hollow Cathode Discharge (HCD) lamp
+table2.dat    64       19   Echelle spectra of commercial V HCD lamps and a
+                             custom water-cooled V HCD lamp
+table3.dat    66      836   Experimental Atomic Transition Probabilities for
+                             836 lines of VI organized by increasing
+                             wavelength in air
+table4.dat    54       26   Hyperfine Structure (HFS) A coefficients for 25 odd
+                             parity levels and one even parity level of neutral
+                             vanadium from least-square fits to line profiles
+                             in Fourier Transfrom Spectrometer (FTS) data
+table5.dat    52     1480  *Hyperfine structure line component patterns for
+                             94 transitions of ^51^VI
+--------------------------------------------------------------------------------
+Note on table5.dat: Hyperfine structure (HFS) computed from the best published
+  HFS coefficients (see text) and new HFS A coefficients of Table 4, energy
+  levels of Thorne et al. (2011ApJS..192...11T), and the standard index of air
+  (Peck and Reeder 1972JOSA...62..958P).
+--------------------------------------------------------------------------------
+
+See also:
+ J/ApJS/214/26   : Line lists for CN isotopes transitions (Sneden+, 2014)
+ J/ApJS/214/18   : VII log(gf) values, and V abundance in HD 84937 (Wood+ 2014)
+ J/AJ/147/136    : Stars of very low metal abundance. VI. (Roederer+, 2014)
+ J/ApJS/211/31   : Atomic data of vanadium (VI) (Wang+, 2014)
+ J/ApJS/211/20   : NiI transition probability measurements (Wood+, 2014)
+ J/ApJS/208/27   : Sun and HD 84937 TiII log(gf) and abundances (Wood+, 2013)
+ J/ApJS/207/13   : The spectrum and term analysis of VII (Thorne+, 2013)
+ J/ApJ/762/26    : Most metal-poor stars. II. Galactic halo stars (Yong+, 2013)
+ J/ApJS/194/35   : Atomic transition probabilities of Mn (Den Hartog+, 2011)
+ J/MNRAS/412/843 : SAGA extremely metal-poor stars (Suda+, 2011)
+ J/A+A/501/519   : Extremely metal-poor stars abundances (Bonifacio+, 2009)
+ J/ApJS/182/80   : Rare earth abundances (Sneden+, 2009)
+ J/ApJS/182/51   : Rare earth elements transition probabilities (Lawler+, 2009)
+ J/ApJ/681/1524  : Detailed abundances for 28 metal-poor stars (Lai+, 2008)
+ J/A+A/439/129   : HERES II. Spectroscopic analysis (Barklem+, 2005)
+ J/A+A/404/187   : Equivalent widths for metal-poor stars (Gratton+, 2003)
+ J/AJ/120/1841   : Abundances & Kinematics of Halo & Disk Stars (Fulbright 2000)
+ http://diglib.nso.edu/ : National Solar Observatory digital library
+ http://bass2000.obspm.fr/solar_spect.php : BASS2000: solar spectrum
+ http://www.nist.gov/pml/data/asd.cfm     : NIST atomic spectra database
+
+Byte-by-byte Description of file: table1.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units       Label     Explanations
+--------------------------------------------------------------------------------
+   1-  2  I2    ---         Seq       [1/14] Running sequence number
+   4- 14  A11 "YYYY/MMM/DD" Date      Observation date
+  16- 17  I2    ---         Num       [1/10] Serial number
+  19- 23  A5    ---         Gas       Buffer gas (Ne-Ar)
+  25- 28  I4    mA          iLamp     [110/1000] Lamp current
+  30- 34  I5    cm-1        Wave1     [0/14924] Lower range of wavenumber
+      35  A1    ---         ---       [-]
+  36- 40  I5    cm-1        Wave2     [5769/49105] Upper range of wavenumber
+  42- 46  F5.3  cm-1        Lim       [0.01/0.06] Limit of resolution
+  48- 49  I2    ---         coadd     [4/80] Coadds
+  51- 56  A6    ---         Beam      Beam splitter (CaF_2_ pr UV)
+  58- 71  A14   ---         Filt      Filter
+  73-111  A39   ---         Det       Detector
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table2.dat
+--------------------------------------------------------------------------------
+  Bytes Format Units        Label  Explanations
+--------------------------------------------------------------------------------
+  1-  3  I3    ---          imin   [47/137] Minimal experimental index
+      4  A1    ---          ---    [-]
+  5-  7  I3    ---          imax   [51/141] Maximal experimental index
+  9- 19  A11  "YYYY/MMM/DD" Date   Observation date
+ 21- 33  A13   ---          Num    Serial numbers (1, 3, 5, 7, 9)
+ 35- 36  A2    ---          Gas    Buffer gas (Ar or Ne)
+ 38- 39  I2    mA           iLamp  [3/50] Lamp current
+ 41- 44  I4    0.1nm        Wave1  [2000/2200] Lower range of wavenumber ({AA})
+     45  A1    ---          ---    [-]
+ 46- 49  I4    0.1nm        Wave2  [2800/250000] Upper range of wavenumber
+                                     (in Angstroms)
+ 51- 56  I6    ---          Res    [250000] Resolving power
+ 58- 60  I3    ---          coadd  [6/120] Coadds
+ 62- 64  I3    s            Exp    [45/900] Exposure time
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table3.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units    Label     Explanations
+--------------------------------------------------------------------------------
+   1-  9  F9.4  0.1nm    lamAir    [2384/9157] Wavelength in air; Angstroms (1)
+  11- 19  F9.3  cm-1     E1        [18085/47702] Upper level (2)
+      21  A1    ---      P1        [oe] Upper level parity, odd or even (2)
+      22  A1    ---      ---       [vd]
+  24- 26  F3.1  ---      J1        [0.5/7.5] Upper level J value (2)
+  28- 36  F9.3  cm-1     E0        [0/24779] Lower level (2)
+      38  A1    ---      P0        [oe] Lower level parity, odd or even (2)
+      39  A1    ---      ---       [vd]
+  41- 43  F3.1  ---      J0        [0.5/6.5] Lower level J value (2)
+  45- 52  F8.4  10+6/s   A         [0.003/293] Transition probability
+  54- 60  F7.4  10+6/s e_A         Total uncertainty in TranP
+  62- 66  F5.2  ---      log(gf)   [-4/0.8] Log of degeneracy times oscillator
+                                    strength
+--------------------------------------------------------------------------------
+Note (1): Computed from energy levels using the standard index of air
+          from Peck & Reeder (1972JOSA...62..958P).
+Note (2): From Thorne et al (2011ApJS..192...11T).
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table4.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units   Label     Explanations
+--------------------------------------------------------------------------------
+   1- 21  A21   ---     Config    Electronic configuration
+  23- 33  A11   ---     Term      Term
+  35- 36  I2    ---     2J        [1/15] 2 times the J value
+  37- 38  A2    ---     ---       [/2]
+  40- 48  F9.3  cm-1    E         [24770/39392] Energy level from Thorne et al.
+                                    2011ApJS..192...11T
+  50- 54  F5.1  mK      A         [-26.6/21.1] HFS A coefficient (1)
+--------------------------------------------------------------------------------
+Note (1): Uncertainties are +/-1mK (+/-0.001/cm) except for levels at 29202.790
+          and 29296.430 that are each determined using one infrared line. The
+          HFS A coefficients for these two levels have uncertainties of +/-2mK.
+--------------------------------------------------------------------------------
+
+Byte-by-byte Description of file: table5.dat
+--------------------------------------------------------------------------------
+   Bytes Format Units Label   Explanations
+--------------------------------------------------------------------------------
+   1-  9 F9.3   cm-1  Wave    [11050.7/32709.5] Center-of-Gravity Wavenumber
+  11- 19 F9.4   0.1nm lamAir  [3056/9047] Center-of-Gravity Air Wavelength
+                                in Angstroms
+  21- 22 I2     ---   F1      [0/11] Component upper level F or total
+                                angular momentum
+  24- 25 I2     ---   F0      [0/10] Component lower level F or total
+                                angular momentum
+  27- 34 F8.5   cm-1  dWave   [-0.4/0.4] Component offset Wavenumber with
+                                respect to Center-of-gravity Wavenumber
+  36- 44 F9.6   0.1nm dLam    [-0.2/0.3] Component offset Wavelength with
+                                respect to Center-of-gravity Wavelength
+  46- 52 F7.5   ---   Str     [0/0.4] Component strength (1)
+--------------------------------------------------------------------------------
+Note (1): Normalized to sum to one.
+--------------------------------------------------------------------------------
+
+History:
+    From electronic version of the journal
+
+================================================================================
+(End)                Greg Schwarz [AAS], Emmanuelle Perret [CDS]    06-Feb-2015

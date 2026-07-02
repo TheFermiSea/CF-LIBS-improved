@@ -20,6 +20,7 @@ from cflibs.atomic.database import AtomicDatabase
 from cflibs.radiation.stark import estimate_ne_from_stark
 from cflibs.inversion.physics.boltzmann import LineObservation
 from cflibs.inversion.physics.closure import ClosureEquation
+from cflibs.inversion.physics.closure import log_ratios as _log_ratios
 from cflibs.inversion.physics.self_absorption_observable import (
     ObservableSAResult,
     ObservableSelfAbsorptionCorrector,
@@ -30,6 +31,18 @@ from cflibs.inversion.physics.self_absorption_inputs import (
 )
 from cflibs.plasma.partition import canonical_partition_fallback, lookup_partition_function
 from cflibs.core.logging_config import get_logger
+from cflibs.inversion.common.strict import (
+    GateResult,
+    IllConditioned,
+    NonIdentifiable,
+    NonPhysicalResult,
+    SolveDiagnostics,
+    SolverFailure,
+    require_atomic_data,
+    require_ion_stage_observed,
+    require_simplex,
+    resolve_strict,
+)
 
 # Physical temperature window for the Boltzmann slope→T inversion. T = -1/(slope*k)
 # blows up as the slope → 0⁻, so a shallow-but-negative slope that passes the R^2
@@ -136,10 +149,11 @@ class CFLIBSResult:
         ``quality_metrics["boltzmann_covariance_element"]``.
     overall_reliable : bool
         M7 refuse-to-report verdict (Lever 6, Cristoforetti 2010). True only
-        when n_e was measured from a literature Stark-width line
-        (``ne_from_stark``) AND the McWhirter LTE criterion is satisfied AND
+        when n_e was MEASURED — from the Saha-Boltzmann inter-stage offset
+        (``ne_source == 'sb_offset'``, preferred) or a literature Stark-width
+        line (``'stark'``) — AND the McWhirter LTE criterion is satisfied AND
         the Cristoforetti multi-check ``quality_flag`` is acceptable-or-better.
-        The Stark-provenance term is decisive: a pressure-balance fallback n_e
+        The n_e-provenance term is decisive: a pressure-balance-imputed n_e
         is physically invalid, and the McWhirter check runs on that same n_e so
         it cannot catch the error. Defaults False (conservative): a
         fallback/degenerate solve that never reached the quality assessment is
@@ -166,6 +180,74 @@ class CFLIBSResult:
     #: mass-fraction view so consumers compare wt% like-for-like (DED Gap 4).
     #: Populated by ``run_pipeline``; empty if not yet computed.
     mass_fractions: Dict[str, float] = field(default_factory=dict)
+    #: STRICT / no-fallback annotations (default ``False``/``None`` => production
+    #: byte-identical). ``failed`` is set on the FAILED-result path when strict
+    #: mode refuses to substitute (degenerate fit / unobserved n_e stage);
+    #: ``failure_reason`` is the human-readable cause; ``diagnostics`` carries the
+    #: :class:`~cflibs.inversion.common.strict.SolveDiagnostics` provenance (which
+    #: gate fired, the rejected slope/T/R^2, n_e provenance, would-be
+    #: substitutions). Populated for visibility in BOTH modes; never alters
+    #: T/n_e/composition.
+    failed: bool = False
+    failure_reason: Optional[str] = None
+    diagnostics: Optional[Dict[str, Any]] = field(default=None, repr=False)
+    #: Completeness provenance of the reported ``concentrations`` (Issue 6,
+    #: light-touch annotation — never alters composition). The default closure
+    #: normalizes ``sum C_s = 1`` over the *detected* element set only, so with
+    #: undetected mass fraction ``m`` (un-modeled C/N/O/H interstitials, surface
+    #: oxide, entrained air) every reported metal fraction is an UPPER BOUND
+    #: inflated by ``1/(1-m)`` (``MatrixEffects.lean`` ``inflationFactor_eq`` /
+    #: ``composition_le_recoveredComposition``, Ciucci 1999, Tognoni 2010).
+    #: ``"detected_set_only"`` (default) flags this inflation; the pairwise
+    #: ratios in :meth:`log_ratios` are unaffected because the ``1/(1-m)`` factor
+    #: cancels in every ratio.
+    closure_completeness: str = "detected_set_only"
+    #: DED/tracking diagnostic: Aitchison log-ratios ``ln(C_s / C_ref)`` against
+    #: the dominant (matrix) element, auto-populated in ``__post_init__`` from
+    #: :attr:`concentrations` (number/mole fractions). Matrix- and detected-set
+    #: invariant (Issue 2; ``MatrixEffects.lean``
+    #: ``recoveredComposition_ratio_matrix_invariant``), so this is the robust
+    #: composition-tracking deliverable that sidesteps closure mass-slosh.
+    #: The reference element is recorded in :attr:`log_ratio_reference`.
+    log_ratio_reference: Optional[str] = None
+    log_ratios_vs_dominant: Dict[str, float] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Auto-populate the DED/tracking log-ratio diagnostic against the
+        # dominant (most abundant) element when a caller has not already set it.
+        # Pure annotation: reads ``concentrations``, never writes T/n_e/comp.
+        if not self.log_ratios_vs_dominant and self.concentrations:
+            finite = {el: v for el, v in self.concentrations.items() if np.isfinite(v) and v > 0.0}
+            if len(finite) >= 2:
+                ref = max(finite, key=finite.__getitem__)
+                self.log_ratio_reference = ref
+                self.log_ratios_vs_dominant = _log_ratios(self.concentrations, ref)
+
+    def log_ratios(self, reference: str) -> Dict[str, float]:
+        """Aitchison log-ratios ``ln(C_s / C_ref)`` of the recovered composition.
+
+        The matrix-invariant, closure-denominator-free deliverable for
+        constrained composition tracking (Issue 2). Computed from
+        :attr:`concentrations` (number/mole fractions), so the returned value is
+        ``ln(N_s / N_ref)`` for each element ``s != reference`` — e.g.
+        ``result.log_ratios("Ti")["V"]`` is ``ln(N_V / N_Ti)`` for Ti-6Al-4V.
+
+        See :func:`cflibs.inversion.physics.closure.log_ratios` for the full
+        physics rationale and edge-case semantics (missing/zero numerator ->
+        NaN; missing/non-positive reference -> raises).
+
+        Parameters
+        ----------
+        reference : str
+            Denominator element (the dominant matrix element for DED).
+
+        Returns
+        -------
+        dict of str -> float
+            ``element -> ln(N_element / N_reference)`` for every non-reference
+            element.
+        """
+        return _log_ratios(self.concentrations, reference)
 
 
 @dataclass
@@ -242,6 +324,7 @@ class _PythonIterationResult(NamedTuple):
     boltzmann_degenerate: bool
     closure_degenerate: bool
     ne_from_stark: bool
+    ne_source: str
     converged: bool
     should_break: bool
 
@@ -959,6 +1042,10 @@ class IterativeCFLIBSSolver:
         degeneracy_min_elements: int = 4,
         assess_quality: bool = True,
         fixed_temperature_K: Optional[float] = None,
+        include_stage_iii: bool = True,
+        prefer_sb_offset_ne: bool = True,
+        ga_selfcal: bool = False,
+        strict: Optional[bool] = None,
     ):
         # JAX numerical-path selectors lifted onto the interface (arch review
         # c5-solver-flags). ``use_lax_while_loop`` chooses between the CPU
@@ -993,6 +1080,14 @@ class IterativeCFLIBSSolver:
         self.pressure_pa = pressure_pa
         self.apply_ipd = apply_ipd
         self.aki_uncertainty_weighting = aki_uncertainty_weighting
+        # In-plasma relative-gA self-calibration (physics-first-principles audit
+        # Issue 1a). Default OFF -> byte-identical to the historical solve. When
+        # ON, shared-upper-level line groups are used to measure and correct the
+        # RELATIVE A_ki error of each line before the Boltzmann/SB-graph fit, and
+        # the fabricated rel_int->grade A_ki uncertainty of every corrected line
+        # is replaced by the measured per-line residual. Exploratory.
+        self.ga_selfcal = bool(ga_selfcal)
+        self._last_ga_selfcal = None
         self.two_region = two_region
         # Boltzmann-plot quality gate for the slope -> temperature update.
         #
@@ -1126,6 +1221,37 @@ class IterativeCFLIBSSolver:
         # consumers never KeyError. Default-False on the ded/batch/streaming
         # presets where the annotation layer is not consumed.
         self.assess_quality = bool(assess_quality)
+        # Saha ladder stage-III completion (Issue 5, physics-first-principles
+        # audit). The FORWARD populates three ionization stages
+        # (``saha_boltzmann.py``: denom = 1 + S1 + S1*S2), but the historical
+        # inverse abundance multiplier truncated at 1 + S1 (n_I + n_II only) and
+        # the charge balance assumed Z <= 1. That forward/inverse asymmetry
+        # under-counts the total elemental abundance by the neglected stage-III
+        # fraction and *explains the perverse Cr result* (correcting Cr III
+        # partitions fed the forward while the inverse dropped stage-III mass).
+        # When True (default, the correctness fix) the inverse abundance
+        # multiplier becomes ``1 + S1 + S1*S2`` and the charge balance becomes
+        # ``avgZ = (S1 + 2*S1*S2)/(1 + S1 + S1*S2)``, fetching IP_II / U_III
+        # exactly as the forward does (stage-III terms are silently zero when the
+        # DB lacks IP_II / U_III, recovering the two-stage ladder). Set False to
+        # reproduce the legacy two-stage inverse (used by the round-trip gate to
+        # measure the neglected S1*S2 fraction).
+        self.include_stage_iii = bool(include_stage_iii)
+        # Measured-n_e via the Saha-Boltzmann inter-stage offset (Issue 4,
+        # Aguilera & Aragon 2007 / Yalcin 1999). When True (default) and any
+        # element is observed in BOTH a neutral and an ion stage, n_e is measured
+        # from the vertical offset between the two stages' intercepts on the
+        # shared-slope Boltzmann plane (partition functions cancel in the offset;
+        # see cflibs-formal SahaInverse.lean::sahaBoltzmann_shift_eq_log_saha).
+        # This is the PREFERRED n_e path, above the Stark-width diagnostic and
+        # far above the physically-invalid Earth-STP pressure balance (which is
+        # retained only as a last resort). ``ne_source`` in the quality metrics
+        # records which path drove the final n_e; an imputed
+        # (pressure-balance) n_e can never set ``overall_reliable``.
+        self.prefer_sb_offset_ne = bool(prefer_sb_offset_ne)
+        # SB-offset n_e diagnostic stats from the most recent update
+        # (element count + MAD scatter), surfaced in quality_metrics.
+        self._last_sb_offset_stats: Dict[str, float] = {"n_elements": 0, "scatter_cm3": 0.0}
         # Optimal-temperature / OPC lever (real-steel L1; Zhao 2018, Plasma Sci.
         # Technol. 20 035502). When set, the iterative solve HOLDS the plasma
         # temperature at this fixed value instead of recovering it from the
@@ -1141,6 +1267,22 @@ class IterativeCFLIBSSolver:
         self.fixed_temperature_K = (
             float(fixed_temperature_K) if fixed_temperature_K is not None else None
         )
+        # STRICT / no-fallback exploratory mode (bead: no-fallback-exploratory).
+        #
+        # Default ``None`` SEEDS the flag from ``CFLIBS_NO_FALLBACK`` (via
+        # :func:`resolve_strict`); when unset/false the solver is byte-identical
+        # to production — every silent fallback (IP=15.0 eV default, isobaric
+        # pressure-balance n_e, degenerate-fit R^2=1.0, held-seed T) is preserved
+        # exactly. When ``True`` the same fallback sites instead refuse: they
+        # raise a typed :class:`SolverFailure` (hard atomic-data gaps, unobserved
+        # n_e stage) or return a ``failed=True`` :class:`CFLIBSResult` carrying
+        # the real (not substituted) diagnostics, so exploration sees WHICH
+        # combination is failing and WHY instead of an opaque substituted answer.
+        # Passing explicit ``True``/``False`` is authoritative over the env var.
+        self.strict = resolve_strict(strict)
+        # Per-solve diagnostics record (populated in both modes for visibility;
+        # in strict mode a failed gate also raises). ``None`` between solves.
+        self._strict_diag: Optional[SolveDiagnostics] = None
 
     def _line_y_uncertainty(self, obs: LineObservation) -> float:
         """Return fit-space uncertainty with optional A_ki contribution."""
@@ -1195,6 +1337,46 @@ class IterativeCFLIBSSolver:
         T_eV = max(T_K / EV_TO_K, 0.1)
         return (SAHA_CONST_CM3 / safe_ne) * (T_eV**1.5) * (U_II / U_I) * np.exp(-ip_ev / T_eV)
 
+    def _second_saha_ratio(
+        self,
+        element: str,
+        T_K: float,
+        T_saha: float,
+        n_e_cm3: float,
+        U_II: float,
+    ) -> float:
+        """Second Saha ratio ``S2 = n_III / n_II`` for the stage-III ladder term.
+
+        Issue 5 (physics-first-principles audit): the FORWARD populates three
+        ionization stages (``SahaBoltzmannSolver.calculate_all_species_densities``
+        uses ``denom = 1 + S1 + S1*S2``), so the inverse density completion and
+        charge balance must include the same stage-III term to keep the
+        forward/inverse ladder symmetric. Mirrors the forward exactly: fetch
+        ``IP_II`` and ``U_III``, apply the same IPD lowering when enabled, and
+        return ``0.0`` (recovering the two-stage ladder) whenever stage III is
+        disabled or the DB lacks a usable ``IP_II`` / ``U_III`` — the identical
+        fallback the forward takes when ``ip_II is None``.
+        """
+        if not self.include_stage_iii:
+            return 0.0
+        if U_II is None or not np.isfinite(U_II) or U_II <= 0.0:
+            return 0.0
+        ip_ii = self.atomic_db.get_ionization_potential(element, 2)
+        if ip_ii is None or not np.isfinite(ip_ii) or ip_ii <= 0.0:
+            return 0.0
+        if self.apply_ipd:
+            from cflibs.plasma.saha_boltzmann import ionization_potential_lowering
+
+            delta_chi = ionization_potential_lowering(n_e_cm3, T_K)
+            ip_ii = max(float(ip_ii) - delta_chi, 0.0)
+        U_III = self._evaluate_partition_function(element, 3, T_K)
+        if U_III is None or not np.isfinite(U_III) or U_III <= 0.0:
+            return 0.0
+        # S2 = (SAHA/n_e) * T^1.5 * (U_III/U_II) * exp(-IP_II/kT); reuse the
+        # single Saha-ratio kernel by passing (U_II -> "U_I", U_III -> "U_II").
+        s2 = self._compute_saha_ratio(element, T_saha, n_e_cm3, U_II, U_III, float(ip_ii))
+        return max(float(s2), 0.0)
+
     def _compute_abundance_multipliers(
         self,
         elements: List[str],
@@ -1209,8 +1391,13 @@ class IterativeCFLIBSSolver:
         Map the neutral-plane intercept back to total elemental abundance.
 
         The pooled Saha-Boltzmann fit returns q_s proportional to N_I / U_I.
-        Closure must scale by (1 + n_II / n_I) to recover total elemental
-        abundance before normalization.
+        Closure must scale by the full ionization ladder
+        ``(1 + n_II/n_I + n_III/n_I) = 1 + S1 + S1*S2`` to recover total
+        elemental abundance before normalization. This mirrors the FORWARD
+        three-stage balance (``denom = 1 + S1 + S1*S2``) exactly (Issue 5); the
+        stage-III term ``S1*S2`` is zero whenever the DB lacks ``IP_II``/``U_III``
+        or ``include_stage_iii`` is False, recovering the legacy ``1 + S1``
+        two-stage multiplier.
         """
         multipliers: Dict[str, float] = {}
         # Empirically, the refractory high-Z majors (Si, Fe, Ca, Al, Mg) are the
@@ -1228,8 +1415,9 @@ class IterativeCFLIBSSolver:
                 # Weighted temperature for Saha-Boltzmann scaling
                 T_saha = 0.3 * T_K + 0.7 * T_corona
 
-            S = self._compute_saha_ratio(el, T_saha, n_e_cm3, U_I, U_II, ips[el])
-            multipliers[el] = 1.0 + max(S, 0.0)
+            S1 = max(self._compute_saha_ratio(el, T_saha, n_e_cm3, U_I, U_II, ips[el]), 0.0)
+            S2 = self._second_saha_ratio(el, T_K, T_saha, n_e_cm3, U_II)
+            multipliers[el] = 1.0 + S1 + S1 * S2
         return multipliers
 
     def _compute_abundance_multipliers_uncertain(
@@ -1285,7 +1473,13 @@ class IterativeCFLIBSSolver:
                     U_II,
                     SAHA_CONST_CM3,
                 )
-            multipliers[el] = 1.0 + S
+            # Stage-III completion (Issue 5): add the S1*S2 ladder term so the
+            # uncertain multiplier's CENTRAL value matches
+            # :meth:`_compute_abundance_multipliers`. S2 is added as a plain
+            # float (its n_e-variance is second order relative to S1's); the
+            # first-order n_e uncertainty is still carried by the ufloat S.
+            S2 = self._second_saha_ratio(el, T_K, T_saha, safe_ne, U_II)
+            multipliers[el] = 1.0 + S * (1.0 + S2)
         return multipliers
 
     def _compute_effective_ips(
@@ -1355,6 +1549,102 @@ class IterativeCFLIBSSolver:
         else:
             scatter = 0.0
         return ne_median, len(values), scatter
+
+    def _fixed_slope_intercept(
+        self, obs_list: List[LineObservation], slope: float
+    ) -> Optional[float]:
+        """Inverse-variance-weighted Boltzmann intercept at a FIXED slope.
+
+        Returns ``<y - slope * E_k>_w`` (the ordinate intercept b in
+        ``y = b + slope * E_k``) for one ionization stage of one element, or
+        ``None`` when no usable line remains. Used by the SB-offset n_e
+        inversion, which fixes the slope from the shared temperature and reads
+        each stage's intercept off the common plane.
+        """
+        xs = np.array([o.E_k_ev for o in obs_list], dtype=float)
+        ys = np.array([o.y_value for o in obs_list], dtype=float)
+        sig = np.array([self._line_y_uncertainty(o) for o in obs_list], dtype=float)
+        ws = np.where(sig > 0.0, 1.0 / np.square(sig), 1.0)
+        resid = ys - slope * xs
+        good = np.isfinite(resid) & np.isfinite(ws) & (ws > 0.0)
+        if not np.any(good):
+            return None
+        return float(np.average(resid[good], weights=ws[good]))
+
+    def _estimate_ne_from_sb_offset(
+        self,
+        obs_by_element: Dict[str, List[LineObservation]],
+        T_K: float,
+        effective_ips: Dict[str, float],
+    ) -> Tuple[Optional[float], int, float]:
+        """Measure ``n_e`` from the Saha-Boltzmann inter-stage intercept offset.
+
+        Issue 4 (physics-first-principles audit); Aguilera & Aragon 2007, Yalcin
+        et al. 1999. For an element observed in BOTH a neutral (z=1) and an ion
+        (z=2) stage, the two stages lie on one Boltzmann line of shared slope
+        ``-1/(k_B T)``; the vertical offset between their intercepts fixes n_e
+        once T is fixed by the slope:
+
+            db = b_ion - b_neutral = ln(SAHA_CONST * T_eV**1.5 / n_e) - IP/T_eV
+            => n_e = SAHA_CONST * T_eV**1.5 * exp(-(db + IP/T_eV))
+
+        The partition functions CANCEL in the offset (they sit inside both
+        intercepts), so this estimate needs only T, the first ionization
+        potential IP, and the two observed intercepts — it is independent of the
+        tabulated U(T) values and therefore well-posed even with imperfect
+        partition data (see cflibs-formal SahaInverse.lean,
+        ``sahaBoltzmann_shift_eq_log_saha``). Per-element estimates are combined
+        by the median with a robust (1.4826*MAD) scatter.
+
+        Returns ``(ne_median, n_elements_used, scatter_cm3)``; ``ne_median`` is
+        ``None`` when no element exposes both stages with usable lines.
+        """
+        # Slope fixed by the temperature actually in use (== the fitted slope at
+        # convergence, and the physically-correct slope when T is pinned). This
+        # keeps the whole offset equation self-consistent in one T.
+        T_eV = max(T_K / EV_TO_K, 0.1)
+        slope = -1.0 / T_eV
+        ln_prefactor = float(np.log(SAHA_CONST_CM3 * (T_eV**1.5)))
+
+        per_el_ne: List[float] = []
+        for el, obs_list in obs_by_element.items():
+            neutrals = [
+                o
+                for o in obs_list
+                if o.ionization_stage == 1 and o.A_ki > 0 and o.g_k > 0 and o.intensity > 0
+            ]
+            ions = [
+                o
+                for o in obs_list
+                if o.ionization_stage == 2 and o.A_ki > 0 and o.g_k > 0 and o.intensity > 0
+            ]
+            if not neutrals or not ions:
+                continue
+            ip = effective_ips.get(el)
+            if ip is None or not np.isfinite(ip) or ip <= 0.0:
+                continue
+            b_neutral = self._fixed_slope_intercept(neutrals, slope)
+            b_ion = self._fixed_slope_intercept(ions, slope)
+            if b_neutral is None or b_ion is None:
+                continue
+            db = b_ion - b_neutral
+            ln_ne = ln_prefactor - db - float(ip) / T_eV
+            ne = float(np.exp(ln_ne))
+            # Loose physical sanity window for a LIBS plasma; rejects a single
+            # pathological element rather than clamping (the median is robust).
+            if np.isfinite(ne) and 1e12 <= ne <= 1e20:
+                per_el_ne.append(ne)
+
+        if not per_el_ne:
+            return None, 0, 0.0
+        arr = np.asarray(per_el_ne, dtype=float)
+        ne_median = float(np.median(arr))
+        if arr.size >= 2:
+            mad = float(np.median(np.abs(arr - ne_median)))
+            scatter = 1.4826 * mad if mad > 0 else float(np.std(arr))
+        else:
+            scatter = 0.0
+        return ne_median, len(per_el_ne), scatter
 
     def _apply_saha_correction(
         self,
@@ -1506,7 +1796,22 @@ class IterativeCFLIBSSolver:
         residuals = pooled_y - slope * pooled_x
         ss_res = float(np.sum(pooled_w * residuals**2))
         ss_tot = float(np.sum(pooled_w * pooled_y**2))
-        r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0.0 else 1.0
+        if ss_tot > 0.0:
+            r_squared = 1.0 - (ss_res / ss_tot)
+        elif self.strict:
+            # STRICT (site 3): ss_tot == 0 is a ZERO-VARIANCE (degenerate) fit —
+            # all centered y collapse to a point. The production substitution
+            # r_squared=1.0 reports a PERFECT score and thereby DEFEATS the very
+            # R^2 >= min_boltzmann_r2 degeneracy gate meant to catch it. Emit NaN
+            # so the gate fires (NaN < threshold is False -> boltzmann_degenerate
+            # via the slope-sign branch / host-boundary enforcement). Record the
+            # zero-variance cause for visibility.
+            r_squared = float("nan")
+            if self._strict_diag is not None:
+                self._strict_diag.extra["boltzmann_ss_tot"] = 0.0
+                self._strict_diag.extra["boltzmann_zero_variance"] = True
+        else:
+            r_squared = 1.0
 
         # The centered pooled fit is equivalent to y = a_element + m x, so the
         # residual variance must account for one common slope plus one intercept
@@ -1666,6 +1971,23 @@ class IterativeCFLIBSSolver:
             self._last_sa_result = sa_result
             observations = sa_result.observations
 
+        # In-plasma relative-gA self-calibration (audit Issue 1a). Opt-in
+        # (``ga_selfcal``); default OFF is byte-identical. Also applied ONCE,
+        # BEFORE the fit, as a pure observation transform (reads no composition).
+        # Runs AFTER the SA pass so we can EXCLUDE optically-thick / SA-suspect
+        # lines from each shared-upper-level group: differential self-absorption
+        # contaminates the exact ratio identity and would masquerade as an A_ki
+        # error.
+        self._last_ga_selfcal = None
+        if self.ga_selfcal:
+            from cflibs.inversion.physics.ga_selfcal import self_calibrate_relative_ga
+
+            exclude_mask = self._ga_selfcal_exclude_mask(observations)
+            observations, ga_calib = self_calibrate_relative_ga(
+                observations, self.atomic_db, exclude_mask=exclude_mask
+            )
+            self._last_ga_selfcal = ga_calib
+
         # The Saha-Boltzmann graph intercept extraction is only implemented
         # on the Python path (its global lstsq is not traced into the lax
         # common-slope kernel), so it forces the Python loop.
@@ -1677,7 +1999,18 @@ class IterativeCFLIBSSolver:
             diags.append(stark_diagnostic)
         if stark_diagnostics:
             diags.extend(stark_diagnostics)
-        if HAS_JAX and self.use_lax_while_loop and not self.saha_boltzmann_graph and not diags:
+        # STRICT mode forces the Python reference path: the lax body has no Stark
+        # wiring and UNCONDITIONALLY applies the physically-invalid pressure-
+        # balance n_e (audit site 2), so the n_e-provenance refusal (site 1) is
+        # unreachable there. Routing to Python keeps that gate live. Default
+        # (strict off) leaves the lax fast-path selection byte-identical.
+        if (
+            HAS_JAX
+            and self.use_lax_while_loop
+            and not self.saha_boltzmann_graph
+            and not diags
+            and not self.strict
+        ):
             try:
                 return self._solve_lax(observations, closure_mode, **closure_kwargs)
             except _LaxFallback as exc:
@@ -1689,6 +2022,31 @@ class IterativeCFLIBSSolver:
             observations, closure_mode, stark_diagnostics=diags, **closure_kwargs
         )
 
+    def _ga_selfcal_exclude_mask(self, observations: List[LineObservation]) -> Optional[List[bool]]:
+        """Boolean mask of lines to exclude from relative-gA group anchors.
+
+        Reuses the observable self-absorption diagnostics (when the SA pass ran)
+        to flag optically-thick / SA-suspect lines. Differential self-absorption
+        breaks the exact same-upper-level ratio identity, so such lines must not
+        anchor a group nor receive a gA correction. Returns ``None`` when no SA
+        diagnostics are available (the empirical-Bayes shrinkage still guards
+        against pure noise).
+        """
+        sa = self._last_sa_result
+        if sa is None or not getattr(sa, "corrections", None):
+            return None
+        corr_by_wl = sa.corrections
+        mask: List[bool] = []
+        for obs in observations:
+            c = corr_by_wl.get(float(obs.wavelength_nm))
+            # Exclude when flagged suspect or when a measured optical depth is
+            # non-negligible (a doublet/Planck-derived tau above ~0.1).
+            excl = bool(
+                c is not None and (getattr(c, "suspect", False) or getattr(c, "tau", 0.0) > 0.1)
+            )
+            mask.append(excl)
+        return mask if any(mask) else None
+
     def _prefetch_ips_python(self, elements: List[str]) -> Dict[str, float]:
         """Pre-fetch first ionization potentials for ``elements`` (``_solve_python`` helper)."""
         ips = {}
@@ -1696,8 +2054,22 @@ class IterativeCFLIBSSolver:
             # Need IP of neutral (I -> II)
             ip = self.atomic_db.get_ionization_potential(el, 1)
             if ip is None:
+                # STRICT (site 6): the IP=15.0 eV default papers over an
+                # incomplete atomic DB and directly biases the Saha shift
+                # x += IP*(z-1) and ratio exp(-IP/kT). Refuse rather than guess;
+                # the gate raises MissingAtomicData (density_identifiability) and
+                # records ip_provenance. Default path preserved exactly.
+                require_atomic_data(
+                    "ionization_potential",
+                    None,
+                    el,
+                    strict=self.strict,
+                    diagnostics=self._strict_diag,
+                )
                 logger.warning(f"No IP for {el} I, assuming high")
                 ip = 15.0  # Fallback
+                if self._strict_diag is not None:
+                    self._strict_diag.extra.setdefault("ip_defaulted", []).append(el)
             ips[el] = ip
         return ips
 
@@ -1779,6 +2151,16 @@ class IterativeCFLIBSSolver:
                 **closure_kwargs,
             )
         else:
+            # STRICT (site 12): an unknown / misspelled closure_mode silently
+            # falls through to standard closure and returns a DIFFERENT
+            # composition with no error. Refuse the silent substitution; the
+            # 'standard'/'' modes remain documented defaults handled below.
+            if self.strict and closure_mode not in ("", "standard"):
+                raise SolverFailure(
+                    f"[closure_mode] unknown closure_mode {closure_mode!r}; refusing "
+                    "silent fall-through to standard closure",
+                    self._strict_diag,
+                )
             return ClosureEquation.apply_standard(
                 intercepts,
                 partition_funcs,
@@ -1799,14 +2181,20 @@ class IterativeCFLIBSSolver:
         Physically non-standard for LIBS — used only when no usable Stark
         diagnostic is available. Numerics identical to the inline fallback.
         """
-        # Calculate avg_Z based on Saha ratios.
-        # eps_s = n_II / (n_I + n_II) = S / (1+S) (electrons per atom).
+        # Calculate avg_Z based on the full Saha ionization ladder (Issue 5).
+        # Free electrons per atom of species s:
+        #   eps_s = (n_II + 2 n_III) / (n_I + n_II + n_III)
+        #         = (S1 + 2 S1 S2) / (1 + S1 + S1 S2)
+        # mirroring the forward's three-stage balance; S2 = 0 recovers the
+        # legacy two-stage eps_s = S1 / (1 + S1).
         total_eps = 0.0
         for el, C_s in concentrations.items():
             U_I = lookup_partition_function(partition_funcs, el, 1, self.atomic_db)
             U_II = lookup_partition_function(partition_funcs_II, el, 2, self.atomic_db)
-            S = self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el])
-            eps_s = S / (1.0 + S)
+            S1 = max(self._compute_saha_ratio(el, T_K, n_e, U_I, U_II, effective_ips[el]), 0.0)
+            S2 = self._second_saha_ratio(el, T_K, T_K, n_e, U_II)
+            ladder = 1.0 + S1 + S1 * S2
+            eps_s = (S1 + 2.0 * S1 * S2) / ladder if ladder > 0.0 else 0.0
             total_eps += C_s * eps_s
 
         avg_Z = total_eps
@@ -1818,28 +2206,68 @@ class IterativeCFLIBSSolver:
     def _update_ne_python(
         self,
         stark_diagnostics: Sequence["StarkDiagnosticLine"],
+        obs_by_element: Dict[str, List[LineObservation]],
         T_K: float,
         n_e: float,
         concentrations: Dict[str, float],
         partition_funcs: Dict[str, float],
         partition_funcs_II: Dict[str, float],
         effective_ips: Dict[str, float],
-    ) -> Tuple[float, bool]:
-        """Compute the next ``n_e`` and its provenance flag (``_solve_python`` helper).
+    ) -> Tuple[float, str]:
+        """Compute the next ``n_e`` and its provenance (``_solve_python`` helper).
 
-        PRIMARY: Stark-width diagnostic (canonical LIBS n_e; multiple lines
-        are combined by the median with MAD scatter — Ciucci 1999 / Tognoni
-        2010 treat the Stark n_e as an INPUT to the Saha terms, not a closure
-        iterate). FALLBACK: the physically-invalid isobaric 1-atm pressure
-        balance, which logs a warning. Returns ``(ne_new, ne_from_stark)``;
-        the per-call line count and scatter are stashed on
-        ``self._last_stark_stats`` for the quality metrics.
+        Precedence (Issue 4, physics-first-principles audit):
+
+        1. ``sb_offset`` — MEASURED from the Saha-Boltzmann inter-stage
+           intercept offset whenever any element is observed in both a neutral
+           and an ion stage (Aguilera & Aragon 2007). This is the preferred
+           path: it is a genuine measurement from the observed lines, needs no
+           tabulated Stark-B width (~0.85% coverage on real spectra), and is
+           independent of the partition-function values (they cancel).
+        2. ``stark`` — Stark-width diagnostic of a supplied isolated line
+           (Tognoni 2010); combined across lines by the median with MAD scatter.
+        3. ``pressure_balance_imputed`` — the physically-invalid isobaric 1-atm
+           pressure balance, retained ONLY as a last resort and logged as such.
+
+        Returns ``(ne_new, ne_source)`` with ``ne_source`` one of
+        ``'sb_offset' | 'stark' | 'pressure_balance_imputed'``. Per-call line /
+        element counts and scatter are stashed on ``self._last_stark_stats`` and
+        ``self._last_sb_offset_stats`` for the quality metrics.
         """
+        # 1. Preferred: SB inter-stage offset (a genuine n_e measurement).
+        if self.prefer_sb_offset_ne:
+            ne_sb, n_el, sb_scatter = self._estimate_ne_from_sb_offset(
+                obs_by_element, T_K, effective_ips
+            )
+            if ne_sb is not None:
+                self._last_sb_offset_stats = {"n_elements": n_el, "scatter_cm3": sb_scatter}
+                self._last_stark_stats = {"n_lines": 0, "scatter_cm3": 0.0}
+                return ne_sb, "sb_offset"
+        self._last_sb_offset_stats = {"n_elements": 0, "scatter_cm3": 0.0}
+
+        # 2. Stark-width diagnostic.
         ne_stark, n_lines, scatter = self._estimate_ne_from_stark_multi(stark_diagnostics, T_K)
         if ne_stark is not None:
             self._last_stark_stats = {"n_lines": n_lines, "scatter_cm3": scatter}
-            return ne_stark, True
+            return ne_stark, "stark"
         self._last_stark_stats = {"n_lines": 0, "scatter_cm3": 0.0}
+
+        # 3. STRICT (sites 1/2): neither a measured SB-offset nor a Stark n_e is
+        # available, so there is NO physical electron-density measurement. The
+        # isobaric 1-atm pressure-balance value below is "physically invalid for
+        # LIBS" yet is reported as electron_density_cm3 and feeds every Saha
+        # factor. Refuse the imputed n_e: the gate raises UnobservedStage
+        # (saha_joint_identifiability) recording the would-be pressure-balance
+        # value. Default (strict off) path is preserved exactly below.
+        if self.strict:
+            would_be = self._pressure_balance_ne(
+                concentrations, T_K, n_e, partition_funcs, partition_funcs_II, effective_ips
+            )
+            if self._strict_diag is not None:
+                self._strict_diag.extra["would_use_pressure_balance_ne"] = float(would_be)
+                self._strict_diag.extra["stark_n_lines"] = 0
+                self._strict_diag.extra["sb_offset_elements"] = 0
+            require_ion_stage_observed("plasma", 0, strict=True, diagnostics=self._strict_diag)
         if stark_diagnostics:
             logger.warning(
                 "Stark diagnostic line(s) supplied but yielded no usable n_e "
@@ -1847,15 +2275,16 @@ class IterativeCFLIBSSolver:
                 "reference Stark width); falling back to 1-atm pressure balance."
             )
         logger.warning(
-            "No usable Stark n_e diagnostic; using the isobaric 1-atm "
-            "(STP) pressure-balance fallback for n_e. This is physically "
-            "non-standard for LIBS (hypersonic shock, never static 1 atm) "
-            "and should be treated as a coarse last-resort estimate."
+            "No measured n_e (no element with both a neutral and an ion line for "
+            "the Saha-Boltzmann offset, and no usable Stark diagnostic); using "
+            "the isobaric 1-atm (STP) pressure-balance fallback for n_e. This is "
+            "physically non-standard for LIBS (hypersonic shock, never static "
+            "1 atm) and should be treated as a coarse last-resort estimate."
         )
         ne_new = self._pressure_balance_ne(
             concentrations, T_K, n_e, partition_funcs, partition_funcs_II, effective_ips
         )
-        return ne_new, False
+        return ne_new, "pressure_balance_imputed"
 
     def _run_python_iteration(
         self,
@@ -1913,6 +2342,14 @@ class IterativeCFLIBSSolver:
         common_fit = self._select_common_fit(sa_obs_by_element, T_K, n_e, effective_ips)
         if common_fit is None:
             logger.warning("Insufficient points for fit")
+            if self._strict_diag is not None:
+                # Site 5: the fit never ran (under-determined / too few lines).
+                # Record so a held-seed result is distinguishable from a real one.
+                self._strict_diag.extra["no_fit"] = True
+                self._strict_diag.extra["n_elements"] = len(elements)
+                self._strict_diag.failure_reason = (
+                    "insufficient lines: common Boltzmann fit returned None"
+                )
             return _PythonIterationResult(
                 T_K=T_K,
                 n_e=n_e,
@@ -1922,6 +2359,7 @@ class IterativeCFLIBSSolver:
                 boltzmann_degenerate=True,
                 closure_degenerate=False,
                 ne_from_stark=False,
+                ne_source="pressure_balance_imputed",
                 converged=False,
                 should_break=True,
             )
@@ -1963,6 +2401,24 @@ class IterativeCFLIBSSolver:
 
             # Damping
             T_K = 0.5 * T_prev + 0.5 * T_new
+
+        # Record the REAL fit verdict each iteration (cheap, both modes) so the
+        # rejected slope / R^2 / candidate-T behind a held-seed temperature is
+        # visible (sites 3/4/8/11). Overwritten each iteration => reflects the
+        # final iteration's fit.
+        if self._strict_diag is not None:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                t_candidate = float(-1.0 / (slope * KB_EV)) if slope < 0 else float("nan")
+            self._strict_diag.objective_final = fit_r2
+            self._strict_diag.extra.update(
+                {
+                    "boltzmann_slope": float(slope),
+                    "boltzmann_r_squared": float(fit_r2),
+                    "T_candidate_K": t_candidate,
+                    "boltzmann_degenerate": bool(boltzmann_degenerate),
+                    "fixed_temperature_K": self.fixed_temperature_K,
+                }
+            )
 
         if self.two_region:
             # Empirical two-region DOF reduction: take the cooler outer/corona
@@ -2008,8 +2464,9 @@ class IterativeCFLIBSSolver:
         # is a hypersonic shock at ~1e11 Pa initially and is NEVER at static
         # 1 atm in the analysis window — so it is demoted to a last resort
         # and emits a warning whenever it drives the n_e update.
-        ne_new, ne_from_stark = self._update_ne_python(
+        ne_new, ne_source = self._update_ne_python(
             stark_diagnostics,
+            sa_obs_by_element,
             T_K,
             n_e,
             concentrations,
@@ -2017,6 +2474,7 @@ class IterativeCFLIBSSolver:
             partition_funcs_II,
             effective_ips,
         )
+        ne_from_stark = ne_source == "stark"
 
         # Damping
         n_e = 0.5 * ne_prev + 0.5 * ne_new
@@ -2052,6 +2510,7 @@ class IterativeCFLIBSSolver:
             boltzmann_degenerate=boltzmann_degenerate,
             closure_degenerate=closure_degenerate,
             ne_from_stark=ne_from_stark,
+            ne_source=ne_source,
             converged=converged,
             should_break=False,
         )
@@ -2218,6 +2677,9 @@ class IterativeCFLIBSSolver:
         ne_from_stark: bool,
         stark_n_lines: int = 0,
         stark_ne_scatter_cm3: float = 0.0,
+        ne_source: str = "pressure_balance_imputed",
+        sb_offset_n_elements: int = 0,
+        sb_offset_ne_scatter_cm3: float = 0.0,
     ) -> Dict[str, float]:
         """Assemble the post-loop ``quality_metrics`` dict.
 
@@ -2227,6 +2689,12 @@ class IterativeCFLIBSSolver:
         previously emitted only ``r_squared_last`` + LTE keys, letting
         ``converged=True`` coexist with ``boltzmann_r_squared=None``).
         """
+        # n_e provenance (Issue 4): a MEASURED n_e is one from the Saha-Boltzmann
+        # inter-stage offset ('sb_offset', preferred) or a Stark width ('stark').
+        # ``or ne_from_stark`` preserves back-compat for legacy callers that pass
+        # only the ne_from_stark flag (without the newer ne_source arg).
+        ne_measured = ne_source in ("sb_offset", "stark") or bool(ne_from_stark)
+
         # LTE validity check
         from cflibs.plasma.lte_validator import LTEValidator
 
@@ -2276,9 +2744,21 @@ class IterativeCFLIBSSolver:
             "closure_degenerate": float(closure_degenerate),
             "boltzmann_degenerate": float(boltzmann_degenerate),
             # n_e provenance: 1.0 when the canonical Stark-width diagnostic drove
-            # the final n_e, 0.0 when the physically-invalid 1-atm pressure
-            # balance fallback was used.
+            # the final n_e, 0.0 otherwise. Retained for back-compat; prefer the
+            # richer ``ne_source`` / ``ne_measured`` keys below.
             "ne_from_stark": float(ne_from_stark),
+            # n_e provenance (Issue 4): which path measured/imputed the final n_e.
+            # 'sb_offset' (Saha-Boltzmann inter-stage offset, preferred) and
+            # 'stark' are genuine measurements; 'pressure_balance_imputed' is the
+            # Earth-STP last-resort fallback and is NEVER trustworthy.
+            "ne_source": ne_source,
+            # 1.0 when the final n_e was MEASURED (sb_offset or stark), 0.0 when
+            # imputed by pressure balance. Decisive for ``overall_reliable``.
+            "ne_measured": float(ne_measured),
+            # SB-offset diagnostics: element count combined for the n_e estimate
+            # and their robust (1.4826*MAD) scatter.
+            "sb_offset_n_elements": float(sb_offset_n_elements),
+            "sb_offset_ne_scatter_cm3": float(sb_offset_ne_scatter_cm3),
             # Number of literature-grade Stark lines combined for the final n_e
             # and their robust (1.4826*MAD) scatter — the n_e trust surface.
             "stark_n_lines": float(stark_n_lines),
@@ -2316,17 +2796,19 @@ class IterativeCFLIBSSolver:
                 "saha_boltzmann_consistency"
             ]
             quality_metrics["inter_element_t_std_frac"] = reliability["inter_element_t_std_frac"]
-            # overall_reliable = {n_e from a Stark line} AND {McWhirter satisfied}
-            # AND {quality_flag >= acceptable} (roadmap M7c).
+            # overall_reliable = {n_e MEASURED} AND {McWhirter satisfied}
+            # AND {quality_flag >= acceptable} (roadmap M7c; Issue 4).
             # 'unknown'/'poor'/'reject' flags are NOT reliable. The n_e-provenance
-            # term is decisive: when the canonical Stark-width diagnostic was
-            # unavailable the solver falls back to a physically-invalid 1-atm
-            # pressure balance, and the McWhirter LTE check is itself evaluated
-            # ON that fallback n_e, so it cannot catch a bad n_e. A result whose
-            # n_e is a pressure-balance guess is therefore never trustworthy.
+            # term is decisive: an n_e MEASURED from the Saha-Boltzmann inter-stage
+            # offset ('sb_offset') or a Stark width ('stark') is trustworthy; a
+            # 'pressure_balance_imputed' n_e is a physically-invalid Earth-STP
+            # guess, and the McWhirter LTE check is itself evaluated ON that n_e,
+            # so it cannot catch a bad n_e. A result whose n_e is imputed is
+            # therefore NEVER trustworthy. ``ne_measured`` was resolved above
+            # (SB-offset / Stark, with an ne_from_stark back-compat fallback).
             mcwhirter_ok = bool(lte_report.mcwhirter.satisfied)
             quality_metrics["overall_reliable"] = bool(
-                ne_from_stark
+                ne_measured
                 and mcwhirter_ok
                 and reliability["quality_flag"] in ("excellent", "good", "acceptable")
             )
@@ -2349,10 +2831,13 @@ class IterativeCFLIBSSolver:
         boltzmann_degenerate: bool,
         closure_degenerate: bool,
         ne_from_stark: bool,
+        ne_source: str = "pressure_balance_imputed",
     ) -> Dict[str, float]:
         """Assemble the post-loop ``quality_metrics`` dict (``_solve_python`` helper)."""
         fit_r2_final = last_common_fit.r_squared if last_common_fit is not None else 0.0
         stark_stats = getattr(self, "_last_stark_stats", None) or {}
+        sb_stats = getattr(self, "_last_sb_offset_stats", None) or {}
+        used_sb = ne_source == "sb_offset"
         return self._assemble_quality_metrics(
             observations,
             T_K,
@@ -2366,6 +2851,9 @@ class IterativeCFLIBSSolver:
             stark_ne_scatter_cm3=(
                 float(stark_stats.get("scatter_cm3", 0.0)) if ne_from_stark else 0.0
             ),
+            ne_source=ne_source,
+            sb_offset_n_elements=int(sb_stats.get("n_elements", 0)) if used_sb else 0,
+            sb_offset_ne_scatter_cm3=(float(sb_stats.get("scatter_cm3", 0.0)) if used_sb else 0.0),
         )
 
     def _solve_python(
@@ -2383,6 +2871,10 @@ class IterativeCFLIBSSolver:
         unset (default) or when JAX is unavailable.
         """
         # 1. Initialization
+        # Fresh per-solve diagnostics record. Populated in BOTH modes (visibility);
+        # in strict mode failed gates additionally raise. Created here so the
+        # atomic-data / Stark / fit gates downstream can record onto it.
+        self._strict_diag = SolveDiagnostics(solver="iterative", strict=self.strict)
         # L1 fixed-T lever: seed the loop at the held temperature so the first
         # Saha correction / closure already use it (default None => 10000 K seed).
         T_K = 10000.0 if self.fixed_temperature_K is None else self.fixed_temperature_K
@@ -2417,6 +2909,7 @@ class IterativeCFLIBSSolver:
         boltzmann_degenerate = True  # until a clean fit proves otherwise
         closure_degenerate = False
         ne_from_stark = False
+        ne_source = "pressure_balance_imputed"
 
         for _ in range(1, self.max_iterations + 1):
             step = self._run_python_iteration(
@@ -2443,6 +2936,7 @@ class IterativeCFLIBSSolver:
             boltzmann_degenerate = step.boltzmann_degenerate
             closure_degenerate = step.closure_degenerate
             ne_from_stark = step.ne_from_stark
+            ne_source = step.ne_source
 
             history.append((T_K, n_e))
 
@@ -2460,6 +2954,7 @@ class IterativeCFLIBSSolver:
             boltzmann_degenerate,
             closure_degenerate,
             ne_from_stark,
+            ne_source,
         )
 
         # Defensive: a degenerate Boltzmann slope (non-physical T) or a
@@ -2470,10 +2965,98 @@ class IterativeCFLIBSSolver:
         # Final-state T window guard: even if the loop's per-iteration flags were
         # clean, a reported T outside the physical window is degenerate and must
         # never be reported converged (mirrors the closure-degeneracy guard).
-        if not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K):
+        t_out_of_window = not (T_PHYSICAL_MIN_K <= T_K <= T_PHYSICAL_MAX_K)
+        if t_out_of_window:
             boltzmann_degenerate = True
         if boltzmann_degenerate or closure_degenerate:
             converged = False
+
+        # STRICT host-boundary enforcement (sites 3/4/5/8). Both per-iteration
+        # flags converge here; this is the natural place to refuse rather than
+        # return a held-seed T dressed as a result. Only THEOREM violations raise
+        # (no fit ran -> non-identifiable; T outside the physical window;
+        # degenerate Boltzmann slope; off-simplex composition). A HEURISTIC
+        # reliability flag (keystone-collapse dominance) is recorded to
+        # diagnostics only so production numerics stay byte-identical to
+        # strict-off. The diagnostics already carry the rejected
+        # slope/R^2/T_candidate and the would-be pressure-balance n_e. Default
+        # (strict off) path skips this block entirely and is byte-identical.
+        diag = self._strict_diag
+        if self.strict and diag is not None:
+            diag.converged = converged
+            if last_common_fit is None:
+                # Site 5: no Boltzmann fit ever ran -> seed state would be
+                # returned. T is not identifiable from data that never fit.
+                raise NonIdentifiable(
+                    "[insufficient_lines] common Boltzmann fit never ran; "
+                    f"refusing seed-state result (n_elements={len(elements)})",
+                    diag,
+                )
+            if t_out_of_window:
+                # Site 8: a runaway/clamped T outside the physical window is
+                # returned with only a flag in production.
+                diag.record(
+                    GateResult(
+                        name="temperature_window",
+                        passed=False,
+                        theorem="boltzmann_plot_intensity",
+                        detail=f"T={T_K:.4g} K outside [{T_PHYSICAL_MIN_K},{T_PHYSICAL_MAX_K}] K",
+                        values={
+                            "T_K": float(T_K),
+                            "min": T_PHYSICAL_MIN_K,
+                            "max": T_PHYSICAL_MAX_K,
+                        },
+                    )
+                )
+                raise NonPhysicalResult(
+                    f"[temperature_window] reported T={T_K:.4g} K outside physical window "
+                    f"[{T_PHYSICAL_MIN_K},{T_PHYSICAL_MAX_K}] K",
+                    diag,
+                )
+            if boltzmann_degenerate:
+                # Sites 3/4: degenerate Boltzmann slope (positive slope, low/NaN
+                # R^2, or T runaway) -> production holds T at the prior/seed.
+                raise IllConditioned(
+                    "[boltzmann_degenerate] slope/R^2 gate rejected the temperature fit; "
+                    "production would return a held-seed T. "
+                    f"slope={diag.extra.get('boltzmann_slope')}, "
+                    f"r_squared={diag.extra.get('boltzmann_r_squared')}, "
+                    f"T_candidate_K={diag.extra.get('T_candidate_K')}",
+                    diag,
+                )
+            if closure_degenerate:
+                # Keystone-collapse is a HEURISTIC (one element exceeds
+                # ``degeneracy_dominance_threshold`` of the closure mass), NOT a
+                # proven invariant. For a high-matrix material a single dominant
+                # element is PHYSICALLY CORRECT (e.g. Fe > 80 wt% in steel), and
+                # the recovered vector still lies on the probability simplex —
+                # ``require_simplex`` (composition_sum_one / composition_mem_std-
+                # Simplex) passes. Hard-raising here therefore over-refused
+                # legitimate high-matrix solves and SILENTLY changed the reported
+                # result set relative to strict-off (which returns the same
+                # vector with ``converged=False``). So the dominance heuristic is
+                # RECORDED to diagnostics only — production numerics are left
+                # untouched (``converged=False`` was already set above) — and only
+                # a GENUINE off-simplex vector (the theorem, below) raises.
+                comp_vals = [float(v) for v in concentrations.values()]
+                require_simplex(comp_vals, strict=self.strict, diagnostics=diag)
+                dominant = (
+                    max(concentrations, key=lambda k: concentrations[k]) if concentrations else None
+                )
+                dom_frac = float(concentrations.get(dominant, 0.0)) if dominant else 0.0
+                diag.record(
+                    GateResult(
+                        name="closure_degenerate",
+                        passed=False,
+                        theorem="composition_mem_stdSimplex",
+                        detail=(
+                            "keystone-collapse heuristic: one element dominates the "
+                            "closure mass; composition is ON-simplex, reporting "
+                            "converged=False (production numerics untouched)"
+                        ),
+                        values={"dominant_element": dominant, "dominant_fraction": dom_frac},
+                    )
+                )
 
         if self.two_region and T_corona is None:
             # Empirical two-region DOF-reduction: the cooler outer/corona zone is
@@ -2486,6 +3069,9 @@ class IterativeCFLIBSSolver:
         # measurement uncertainty — surface it (0.0 for a single line or the
         # pressure-balance fallback, whose uncertainty is unquantifiable).
         ne_uncertainty = float(quality_metrics.get("stark_ne_scatter_cm3", 0.0))
+
+        if diag is not None:
+            diag.converged = converged
 
         return CFLIBSResult(
             temperature_K=T_K,
@@ -2500,6 +3086,7 @@ class IterativeCFLIBSSolver:
             electron_density_uncertainty_cm3=ne_uncertainty,
             boltzmann_covariance=None,
             overall_reliable=bool(quality_metrics.get("overall_reliable", False)),
+            diagnostics=diag.to_dict() if diag is not None else None,
         )
 
     def _solve_lax(
@@ -2963,9 +3550,13 @@ class IterativeCFLIBSSolver:
                 quality_metrics["quality_flag"] = new_qf
                 mcw = bool(quality_metrics.get("lte_mcwhirter_satisfied", False))
                 # Preserve the n_e-provenance gate from _assemble_quality_metrics:
-                # a pressure-balance fallback n_e is never trustworthy (the
-                # McWhirter check runs on that same fallback n_e).
-                ne_ok = bool(quality_metrics.get("ne_from_stark", 0.0))
+                # a pressure-balance-imputed n_e is never trustworthy (the
+                # McWhirter check runs on that same imputed n_e). A MEASURED n_e
+                # (SB-offset or Stark) passes -- read the richer ``ne_measured``
+                # key with an ``ne_from_stark`` back-compat fallback.
+                ne_ok = bool(
+                    quality_metrics.get("ne_measured", quality_metrics.get("ne_from_stark", 0.0))
+                )
                 quality_metrics["overall_reliable"] = bool(
                     ne_ok and mcw and new_qf in ("excellent", "good", "acceptable")
                 )

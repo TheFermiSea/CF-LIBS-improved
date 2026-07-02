@@ -1,0 +1,8 @@
+id: no-jax-clear-caches-in-tests
+snapshots:
+  jax.clear_caches():
+    labels:
+    - source: jax.clear_caches()
+      style: primary
+      start: 0
+      end: 18

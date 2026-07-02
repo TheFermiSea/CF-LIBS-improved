@@ -1,0 +1,22 @@
+id: no-except-pass
+language: python
+severity: warning
+message: >-
+  Swallowed failure: `except ...: pass` discards the exception with no log, no
+  re-raise, and no recorded failure state.
+note: >-
+  WHY: docs/research/physics-first-principles-audit.md + strict-mode work. A
+  bare `pass` handler is the purest form of silent failure -- the pipeline
+  keeps running on corrupt/partial state and reports a number as if nothing
+  went wrong. At minimum log-and-continue; on the physics path, raise or record
+  a failure.
+  ANNOTATE: for a legitimately-ignorable exception (e.g. best-effort cleanup),
+  add `# fallback-ok: <reason>` on the `except` line or inside the handler.
+rule:
+  kind: except_clause
+  all:
+    - has: {kind: pass_statement, stopBy: end}
+    - not: {has: {kind: expression_statement, stopBy: end}}
+    - not: {has: {kind: comment, regex: 'fallback-ok', stopBy: end}}
+files:
+  - "cflibs/**"

@@ -35,6 +35,15 @@ from cflibs.core.constants import EV_TO_K
 from cflibs.core.logging_config import get_logger
 from cflibs.inversion.physics.closure_strategy import ClosureStrategy
 from cflibs.inversion.common.result_base import ResultTableMixin, StatisticsMixin
+from cflibs.inversion.common.strict import (
+    IllConditioned,
+    MissingAtomicData,
+    NotConverged,
+    OptimizerFailure,
+    SolveDiagnostics,
+    SolverFailure,
+    resolve_strict,
+)
 
 logger = get_logger("inversion.joint_optimizer")
 
@@ -444,11 +453,18 @@ class JointOptimizer:
         tolerance: float = 1e-8,
         gradient_tolerance: float = 1e-6,
         closure: Optional[ClosureStrategy] = None,
+        strict: Optional[bool] = None,
     ):
         if not HAS_JAX:
             raise ImportError(
                 "JAX is required for joint optimization. Install with: pip install jax jaxlib"
             )
+
+        # Strict / no-fallback mode (default off -> byte-identical production path).
+        # When on, the broad x0-fallback in _run_minimization, the non-converged
+        # return path, and the ill-conditioned-Hessian skip raise typed failures
+        # instead of masking the failure as a fabricated result.
+        self.strict = resolve_strict(strict)
 
         self.forward_model = forward_model
         self.elements = list(elements)
@@ -502,6 +518,7 @@ class JointOptimizer:
         bounds: Optional[Dict[str, Tuple[float, float]]] = None,
         method: str = "BFGS",
         prior_covariance: Optional[np.ndarray] = None,
+        strict: Optional[bool] = None,
     ) -> JointOptimizationResult:
         """
         Perform joint optimization of all plasma parameters.
@@ -537,6 +554,11 @@ class JointOptimizer:
             Optimization results with uncertainties and optimal-estimation
             (Rodgers) closure diagnostics in ``result.oe_diagnostics``.
         """
+        # Per-call strict override (None -> the instance default). Lets the
+        # MultiStart wrapper collect every start non-strict and apply its own
+        # is_converged selection without each start raising.
+        eff_strict = self.strict if strict is None else bool(strict)
+
         # Validate inputs and resolve defaults
         measured, uncertainties, bounds, initial_concentrations = self._prepare_optimize_inputs(
             measured_spectrum, uncertainties, bounds, initial_concentrations
@@ -555,8 +577,31 @@ class JointOptimizer:
         )
 
         final_x, final_loss, iterations, gradient_norm, status = self._run_minimization(
-            loss_fn, x0, method
+            loss_fn, x0, method, eff_strict
         )
+
+        # Strict mode: a non-converged solve must not be returned as a result.
+        if eff_strict and status != ConvergenceStatus.CONVERGED:
+            diag = SolveDiagnostics(
+                solver="JointOptimizer",
+                strict=True,
+                converged=False,
+                failure_reason=f"status={status.value}",
+                objective_final=float(final_loss),
+            )
+            diag.extra.update(
+                {
+                    "method": method,
+                    "iterations": int(iterations),
+                    "gradient_norm": float(gradient_norm),
+                }
+            )
+            raise NotConverged(
+                f"joint optimization did not converge (status={status.value}, "
+                f"final_loss={final_loss:.4e}, gradient_norm={gradient_norm:.3e}, "
+                f"method={method})",
+                diag,
+            )
 
         # Unpack final parameters
         final_T, final_ne, final_conc_arr = self._unpack_params(final_x)
@@ -573,12 +618,14 @@ class JointOptimizer:
 
         # Estimate parameter uncertainties from Hessian
         param_uncertainties, correlation_matrix, hessian_condition = self._estimate_uncertainties(
-            loss_fn, final_x, final_T, reduced_chi_squared
+            loss_fn, final_x, final_T, reduced_chi_squared, eff_strict
         )
 
         # Additive Rodgers optimal-estimation closure diagnostics (does not
         # affect the point estimate above).
-        oe_diagnostics = self._compute_oe_diagnostics(final_x, uncertainties, prior_covariance)
+        oe_diagnostics = self._compute_oe_diagnostics(
+            final_x, uncertainties, prior_covariance, eff_strict
+        )
 
         logger.info(
             f"Optimization complete: T={final_T:.3f} eV, n_e={final_ne:.2e} cm^-3, "
@@ -664,12 +711,15 @@ class JointOptimizer:
         loss_fn: Callable[[jnp.ndarray], float],
         x0: jnp.ndarray,
         method: str,
+        strict: bool = False,
     ) -> Tuple[jnp.ndarray, float, int, float, ConvergenceStatus]:
         """Run the JAX minimizer and classify the convergence status.
 
-        Returns (final_x, final_loss, iterations, gradient_norm, status). Pure
-        extraction of optimize()'s minimization block — the try/except, the
-        gradient evaluation, and the status branching are byte-identical.
+        Returns (final_x, final_loss, iterations, gradient_norm, status). With
+        ``strict=False`` (default) the try/except, gradient evaluation, and
+        status branching are byte-identical to production; with ``strict=True``
+        the broad ``except`` re-raises as :class:`OptimizerFailure` instead of
+        substituting the initial guess ``x0`` as the result.
         """
         try:
             method_norm = method.lower().replace("-", "")
@@ -734,6 +784,27 @@ class JointOptimizer:
                 status = ConvergenceStatus.FAILED
 
         except Exception as e:
+            if strict:
+                # Do NOT dress the initial guess x0 up as a solve. Surface which
+                # optimizer/method failed and the loss it actually started from.
+                try:
+                    x0_loss = float(loss_fn(x0))
+                except Exception:
+                    x0_loss = float("inf")
+                diag = SolveDiagnostics(
+                    solver="JointOptimizer",
+                    strict=True,
+                    converged=False,
+                    failure_reason=f"optimizer raised: {type(e).__name__}: {e}",
+                    objective_initial=x0_loss,
+                )
+                diag.extra.update({"method": method, "returned_initial_guess": False})
+                raise OptimizerFailure(
+                    f"joint optimization ({method}) raised {type(e).__name__}: {e}; "
+                    f"refusing to return the initial guess x0 (x0_loss={x0_loss:.4e}) "
+                    f"as a solve",
+                    diag,
+                ) from e
             logger.warning(f"Optimization failed: {e}")
             final_x = x0
             final_loss = float(loss_fn(x0))
@@ -750,12 +821,16 @@ class JointOptimizer:
         final_x: jnp.ndarray,
         final_T: jnp.ndarray,
         reduced_chi_squared: float,
+        strict: bool = False,
     ) -> Tuple[Dict[str, float], Optional[np.ndarray], float]:
         """Estimate parameter uncertainties from the loss Hessian at the solution.
 
         Returns (param_uncertainties, correlation_matrix, hessian_condition).
-        Pure extraction of optimize()'s Hessian/covariance block — every numpy
-        operation and its evaluation order is preserved exactly.
+        With ``strict=False`` (default) every numpy operation and its evaluation
+        order is preserved exactly; with ``strict=True`` a near-singular Hessian
+        (cond >= 1e12, i.e. non-identifiable parameters) raises
+        :class:`IllConditioned` and an autodiff/linalg failure re-raises instead
+        of silently emptying the covariance block.
         """
         param_uncertainties: Dict[str, float] = {}
         correlation_matrix = None
@@ -767,6 +842,18 @@ class JointOptimizer:
 
             # Condition number
             hessian_condition = float(np.linalg.cond(hessian))
+
+            if hessian_condition >= 1e12 and strict:
+                raise IllConditioned(
+                    f"Hessian condition number {hessian_condition:.3e} >= 1e12 "
+                    f"(near-singular -> non-identifiable / degenerate parameters); "
+                    f"refusing to silently drop uncertainties",
+                    SolveDiagnostics(
+                        solver="JointOptimizer",
+                        strict=True,
+                        failure_reason=f"hessian_cond={hessian_condition:.3e}>=1e12",
+                    ),
+                )
 
             if hessian_condition < 1e12:  # Reasonably conditioned
                 # Covariance matrix from inverse Hessian
@@ -806,7 +893,20 @@ class JointOptimizer:
                 std_diag = np.diag(1.0 / (std_errors + 1e-10))
                 correlation_matrix = std_diag @ cov @ std_diag
 
+        except SolverFailure:
+            # Strict-mode gate failure raised above (e.g. IllConditioned) —
+            # propagate rather than swallow it as an empty covariance block.
+            raise
         except Exception as e:
+            if strict:
+                raise OptimizerFailure(
+                    f"Hessian/covariance computation failed: {type(e).__name__}: {e}",
+                    SolveDiagnostics(
+                        solver="JointOptimizer",
+                        strict=True,
+                        failure_reason=f"hessian_error: {e!r}",
+                    ),
+                ) from e
             logger.debug(f"Hessian computation failed: {e}")
 
         return param_uncertainties, correlation_matrix, hessian_condition
@@ -816,6 +916,7 @@ class JointOptimizer:
         final_x: jnp.ndarray,
         uncertainties: jnp.ndarray,
         prior_covariance: Optional[np.ndarray],
+        strict: bool = False,
     ) -> Optional[OEDiagnostics]:
         """Compute Rodgers optimal-estimation diagnostics at the solution.
 
@@ -854,6 +955,17 @@ class JointOptimizer:
             s_e = np.asarray(uncertainties, dtype=float) ** 2
             return compute_oe_diagnostics(jacobian, s_e, prior_covariance)
         except Exception as e:  # pragma: no cover - best-effort diagnostic
+            if strict:
+                # Singular S_e / rank-deficient Jacobian -> the measurement does
+                # not constrain the parameters; surface the diagnostic failure.
+                raise OptimizerFailure(
+                    f"OE diagnostics computation failed: {type(e).__name__}: {e}",
+                    SolveDiagnostics(
+                        solver="JointOptimizer",
+                        strict=True,
+                        failure_reason=f"oe_diagnostics_error: {e!r}",
+                    ),
+                ) from e
             logger.debug(f"OE diagnostics computation failed: {e}")
             return None
 
@@ -1176,6 +1288,13 @@ class MultiStartJointOptimizer:
         best_loss = float("inf")
         all_results = []
 
+        # In strict mode, a start whose status is FAILED (its x0-fallback loss
+        # can be coincidentally low) must NOT be allowed to win, and the wrapper
+        # raises if no start converged. Each start is run NON-strict so it
+        # returns a status-bearing result instead of raising; the convergence
+        # filtering is applied here on the candidate pool.
+        strict = getattr(self.optimizer, "strict", False)
+
         for i in range(self.n_starts):
             # Generate random starting point
             T_init = self.rng.uniform(T_eV_range[0], T_eV_range[1])
@@ -1198,12 +1317,16 @@ class MultiStartJointOptimizer:
                     initial_T_eV=T_init,
                     initial_n_e=n_e_init,
                     initial_concentrations=conc_dict,
+                    strict=False,
                     **kwargs,
                 )
 
                 all_results.append(result)
 
-                if result.final_loss < best_loss:
+                # Default: lowest-loss wins (unchanged). Strict: only converged
+                # starts are eligible, so a low-loss FAILED start cannot win.
+                eligible = (not strict) or result.is_converged
+                if eligible and result.final_loss < best_loss:
                     best_loss = result.final_loss
                     best_result = result
 
@@ -1211,6 +1334,18 @@ class MultiStartJointOptimizer:
                 logger.warning(f"Start {i + 1} failed: {e}")
 
         if best_result is None:
+            if strict:
+                n_conv = sum(1 for r in all_results if r.is_converged)
+                raise NotConverged(
+                    f"no joint-optimization start converged "
+                    f"({n_conv}/{len(all_results)} converged of {self.n_starts} starts); "
+                    f"refusing to return a non-converged best-of",
+                    SolveDiagnostics(
+                        solver="MultiStartJointOptimizer",
+                        strict=True,
+                        failure_reason="no converged start",
+                    ),
+                )
             raise RuntimeError("All optimization starts failed")
 
         # Store all results in metadata
@@ -1230,6 +1365,7 @@ def create_simple_forward_model(
     elements: List[str],
     line_centers: Dict[str, List[float]],
     line_strengths: Dict[str, List[float]],
+    strict: Optional[bool] = None,
 ) -> Callable:
     """
     Create a simple Gaussian emission forward model for testing.
@@ -1245,6 +1381,12 @@ def create_simple_forward_model(
         Emission line centers [nm] by element
     line_strengths : Dict[str, List[float]]
         Relative line strengths by element
+    strict : bool, optional
+        Strict / no-fallback mode. Default (off) keeps the production behaviour
+        byte-identical, including the toy ``[500.0]`` / ``[1.0]`` line defaults
+        for elements absent from ``line_centers`` / ``line_strengths``. When on,
+        a missing element raises :class:`MissingAtomicData` instead of
+        fabricating a 500 nm line.
 
     Returns
     -------
@@ -1254,12 +1396,19 @@ def create_simple_forward_model(
     if not HAS_JAX:
         raise ImportError("JAX required for forward model")
 
+    eff_strict = resolve_strict(strict)
+
     # Convert to JAX arrays
     all_centers = []
     all_strengths = []
     all_element_idx = []
 
     for i, el in enumerate(elements):
+        if eff_strict and (el not in line_centers or el not in line_strengths):
+            raise MissingAtomicData(
+                f"create_simple_forward_model: no line data for {el!r} "
+                f"(refusing to fabricate a 500 nm / strength-1.0 line in strict mode)"
+            )
         centers = line_centers.get(el, [500.0])
         strengths = line_strengths.get(el, [1.0])
         for c, s in zip(centers, strengths):

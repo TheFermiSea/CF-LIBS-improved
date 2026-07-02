@@ -4,6 +4,7 @@ import pytest
 
 from tests.benchmarks.ded_precision.metrics import (
     absolute_metrics,
+    log_ratio_metrics,
     min_detectable_change,
     precision_std,
     ratio_rmsep,
@@ -35,6 +36,35 @@ def test_absolute_metrics_perfect_and_biased():
 def test_ratio_rmsep_zero_when_exact():
     truth = [{"Ti": 90, "Al": 6, "V": 4}]
     assert ratio_rmsep(truth, truth, "Al", "Ti") == pytest.approx(0.0)
+
+
+def test_log_ratio_metrics_zero_when_exact():
+    truth = [{"Ti": 90, "Al": 6, "V": 4}, {"Ti": 88, "Al": 8, "V": 4}]
+    m = log_ratio_metrics(truth, truth, "Ti")
+    assert m["reference"] == "Ti"
+    assert m["per_numerator"]["V"]["rmsep"] == pytest.approx(0.0)
+    assert m["per_numerator"]["Al"]["rmsep"] == pytest.approx(0.0)
+
+
+def test_log_ratio_invariant_to_third_element_slosh():
+    # Absolute wt% sloshes when a spurious element enters the closure, but the
+    # V/Ti and Al/Ti log-ratios are invariant (the shared denominator cancels).
+    import math
+
+    truth = [{"Ti": 90, "Al": 6, "V": 4}]
+    # Same physics, but closure now also carries 50 wt% of a contaminant O:
+    # renormalize the metals to 50 wt% -> every absolute fraction halves.
+    contaminated = [{"Ti": 45, "Al": 3, "V": 2, "O": 50}]
+    # Absolute V RMSEP is large (4 -> 2 = 2 wt% slosh):
+    from tests.benchmarks.ded_precision.metrics import absolute_metrics
+
+    abs_m = absolute_metrics(contaminated, truth, ["Ti", "Al", "V"])
+    assert abs_m["per_element"]["V"]["rmsep"] == pytest.approx(2.0)
+    # Log-ratio error is ~0 (denominator cancels):
+    lr_m = log_ratio_metrics(contaminated, truth, "Ti")
+    assert lr_m["per_numerator"]["V"]["rmsep"] == pytest.approx(0.0, abs=1e-12)
+    assert lr_m["per_numerator"]["Al"]["rmsep"] == pytest.approx(0.0, abs=1e-12)
+    assert not math.isnan(lr_m["per_numerator"]["V"]["rmsep"])
 
 
 def test_precision_std():
