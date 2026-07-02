@@ -1,0 +1,26 @@
+id: no-default-physics-constants
+snapshots:
+  conc = concentrations.get(el, 1.0):
+    labels:
+    - source: concentrations.get(el, 1.0)
+      style: primary
+      start: 7
+      end: 34
+  ip = ionization_potentials.get(obs.element, 15.0):
+    labels:
+    - source: ionization_potentials.get(obs.element, 15.0)
+      style: primary
+      start: 5
+      end: 49
+  phi = ionization_potential_map.get(el, 7.9):
+    labels:
+    - source: ionization_potential_map.get(el, 7.9)
+      style: primary
+      start: 6
+      end: 43
+  u = partition_functions.get(species, 2.0):
+    labels:
+    - source: partition_functions.get(species, 2.0)
+      style: primary
+      start: 4
+      end: 41

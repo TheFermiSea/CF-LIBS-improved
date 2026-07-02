@@ -1,0 +1,14 @@
+id: no-module-level-setenv-in-tests
+snapshots:
+  os.environ.setdefault("CFLIBS_USE_LAX_WHILE_LOOP", "1"):
+    labels:
+    - source: os.environ.setdefault("CFLIBS_USE_LAX_WHILE_LOOP", "1")
+      style: primary
+      start: 0
+      end: 55
+  os.environ.setdefault("JAX_PLATFORMS", "cpu"):
+    labels:
+    - source: os.environ.setdefault("JAX_PLATFORMS", "cpu")
+      style: primary
+      start: 0
+      end: 45

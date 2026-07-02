@@ -1,0 +1,33 @@
+id: strict-mode-symmetric-assign
+valid:
+  # strict branch raises (correct fail-loud behaviour)
+  - |
+    if strict:
+        raise ValueError("no atomic data")
+    else:
+        T = fallback_value()
+  # different variables in each branch
+  - |
+    if flag:
+        x = 1
+    else:
+        y = 2
+  # not a strict-gated conditional
+  - |
+    if verbose:
+        level = 10
+    else:
+        level = 20
+invalid:
+  # same variable computed differently in strict vs fallback
+  - |
+    if strict:
+        T = compute_strict()
+    else:
+        T = compute_loose()
+  # strict_mode naming
+  - |
+    if strict_mode:
+        result = None
+    else:
+        result = best_guess()

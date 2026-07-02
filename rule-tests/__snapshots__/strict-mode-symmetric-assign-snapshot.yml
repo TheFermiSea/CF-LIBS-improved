@@ -1,0 +1,30 @@
+id: strict-mode-symmetric-assign
+snapshots:
+  ? |
+    if strict:
+        T = compute_strict()
+    else:
+        T = compute_loose()
+  : labels:
+    - source: |-
+        if strict:
+            T = compute_strict()
+        else:
+            T = compute_loose()
+      style: primary
+      start: 0
+      end: 65
+  ? |
+    if strict_mode:
+        result = None
+    else:
+        result = best_guess()
+  : labels:
+    - source: |-
+        if strict_mode:
+            result = None
+        else:
+            result = best_guess()
+      style: primary
+      start: 0
+      end: 65

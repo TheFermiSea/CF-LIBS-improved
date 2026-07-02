@@ -1,0 +1,16 @@
+id: no-jax-clear-caches-in-tests
+language: python
+severity: error
+message: >-
+  `jax.clear_caches()` in a test: this is a process-global wipe that evicts
+  every OTHER test's compiled graphs, causing flaky, order-dependent failures.
+note: >-
+  WHY: project memory (CLAUDE.md JAX test-pollution rule; fixed in
+  test_params_pytree.py). `jax.clear_caches()` is global, not per-function.
+  `fn._cache_size()` is already per-jitted-function and a freshly-defined
+  `@jax.jit` starts at 0, so cache-size assertions never need a global clear.
+  This rule is a CI GATE: it is clean today and must stay clean.
+rule:
+  pattern: jax.clear_caches()
+files:
+  - "tests/**"

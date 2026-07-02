@@ -1,0 +1,30 @@
+id: strict-mode-symmetric-assign
+language: python
+severity: hint
+message: >-
+  Strict-mode branch computes a DIFFERENT numeric than its fallback: the same
+  variable is assigned in both the `if strict:` and the `else:` branch. Strict
+  mode must raise-or-record, never silently compute an alternative value.
+note: >-
+  WHY: the strict-mode invariant from the no-fallback-exploratory work -- when a
+  user asks for strict physics, the strict path must FAIL LOUD (raise or record
+  a failure), not quietly substitute a different numeric result. If both
+  branches assign the same variable, strict is just another fallback.
+  RESIDUAL GAP (documented in rules/README.md): ast-grep cannot track variable
+  identity across arbitrary control flow. This rule ONLY catches the trivial
+  adjacent case -- `if strict: VAR = A` / `else: VAR = B` with single-statement
+  branches. It does NOT catch multi-statement branches, augmented assignments,
+  assignment after the `if` on the fallthrough path, tuple unpacking, or a
+  strict branch that calls a helper which itself computes a value. Treat a clean
+  scan as necessary-but-not-sufficient. Advisory only.
+rule:
+  pattern: |
+    if $STRICT:
+        $VAR = $A
+    else:
+        $VAR = $B
+constraints:
+  STRICT:
+    regex: (?i)strict
+files:
+  - "cflibs/inversion/**"

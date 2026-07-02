@@ -1,0 +1,24 @@
+id: no-silent-fallback-return
+language: python
+severity: warning
+message: >-
+  Silent-fallback launder: this `except` handler RETURNS a value instead of
+  raising. On the inversion path a swallowed exception that returns a
+  warm-start / default silently reports a fabricated physics result.
+note: >-
+  WHY: docs/research/physics-first-principles-audit.md + the strict-mode /
+  no-fallback-exploratory work catalogued ~102 sites where a caught exception
+  laundered a default value into the reported composition, hiding a real
+  numerical failure. An except handler on the inversion path must raise,
+  re-raise, or record-and-fail -- never return a substituted value.
+  ANNOTATE: if a return-on-except is genuinely correct (e.g. an optional
+  capability probe), add a trailing `# fallback-ok: <reason>` comment inside
+  the handler and this rule will skip it.
+rule:
+  kind: except_clause
+  all:
+    - has: {kind: return_statement, stopBy: end}
+    - not: {has: {kind: raise_statement, stopBy: end}}
+    - not: {has: {kind: comment, regex: 'fallback-ok', stopBy: end}}
+files:
+  - "cflibs/inversion/**"

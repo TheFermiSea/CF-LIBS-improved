@@ -64,3 +64,16 @@ jobs:
       continue-on-error: true
       run: |
         pytest tests/jitpipe -m "not requires_db and not requires_bayesian and not requires_rust and not slow"
+
+    # ast-grep structural-invariant rule pack (advisory). Fast backstop to the
+    # physics-only constraint, the silent-fallback audit, and the test-pollution
+    # rules. The gate (error-severity rules) is clean today, so this step passes;
+    # it surfaces the advisory debt counts. See rules/README.md. Runs only once
+    # (3.12) to keep the matrix fast. continue-on-error keeps it non-blocking.
+    - name: ast-grep invariant rules (advisory)
+      if: matrix.python-version == '3.12'
+      continue-on-error: true
+      run: |
+        npm install -g @ast-grep/cli
+        ast-grep test          # rule-pack self-test (valid/invalid snapshots)
+        python scripts/ast_grep_gate.py

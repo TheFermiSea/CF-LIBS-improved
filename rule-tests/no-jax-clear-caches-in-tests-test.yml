@@ -1,0 +1,9 @@
+id: no-jax-clear-caches-in-tests
+valid:
+  # per-function cache size check needs no global clear
+  - assert my_jitted_fn._cache_size() == 0
+  - fn = jax.jit(f)
+  # clearing a local object is fine
+  - local_cache.clear()
+invalid:
+  - jax.clear_caches()

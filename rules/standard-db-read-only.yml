@@ -1,0 +1,23 @@
+id: standard-db-read-only
+language: python
+severity: hint
+message: >-
+  `sqlite3.connect(...)` opened read-write. Standard/gold-standard atomic DBs
+  must be opened read-only (`file:...?mode=ro` URI, `uri=True`); overlay and
+  derived DBs are exempt.
+note: >-
+  WHY: a past ASD atomic-database corruption cost months of re-validation (user
+  mandate; project memory reference_atomic_db_incomplete_nist_ingest /
+  project_atomic_db_complete_reset). The shipped `ASD_da/*.db` is the immutable
+  gold standard. Opening it read-write from a script or ingest path risks an
+  accidental in-place mutation. Read-write is legitimate for building overlay /
+  derived DBs, so this is advisory, not blocking.
+  ANNOTATE: if this connection genuinely builds a derived/overlay DB, leave it;
+  otherwise switch to `sqlite3.connect(f"file:{path}?mode=ro", uri=True)`.
+rule:
+  pattern: sqlite3.connect($$$ARGS)
+  not:
+    has: {kind: string, regex: 'mode=ro', stopBy: end}
+files:
+  - "scripts/**"
+  - "cflibs/atomic/**"

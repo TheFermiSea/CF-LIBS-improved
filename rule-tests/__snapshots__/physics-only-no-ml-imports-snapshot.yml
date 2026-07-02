@@ -1,0 +1,62 @@
+id: physics-only-no-ml-imports
+snapshots:
+  from sklearn.linear_model import LinearRegression:
+    labels:
+    - source: from sklearn.linear_model import LinearRegression
+      style: primary
+      start: 0
+      end: 49
+    - source: sklearn.linear_model
+      style: secondary
+      start: 5
+      end: 25
+  from tensorflow import keras:
+    labels:
+    - source: from tensorflow import keras
+      style: primary
+      start: 0
+      end: 28
+    - source: tensorflow
+      style: secondary
+      start: 5
+      end: 15
+  from transformers import AutoModel:
+    labels:
+    - source: from transformers import AutoModel
+      style: primary
+      start: 0
+      end: 34
+    - source: transformers
+      style: secondary
+      start: 5
+      end: 17
+  import flax.linen as nn:
+    labels:
+    - source: import flax.linen as nn
+      style: primary
+      start: 0
+      end: 23
+    - source: flax.linen
+      style: secondary
+      start: 7
+      end: 17
+  import sklearn:
+    labels:
+    - source: import sklearn
+      style: primary
+      start: 0
+      end: 14
+    - source: sklearn
+      style: secondary
+      start: 7
+      end: 14
+  import torch as t:
+    labels:
+    - source: import torch as t
+      style: primary
+      start: 0
+      end: 17
+    - source: torch
+      style: secondary
+      start: 7
+      end: 12

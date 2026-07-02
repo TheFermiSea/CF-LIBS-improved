@@ -1,0 +1,11 @@
+id: no-print-in-shipped
+valid:
+  - logger.info("processed %d spectra", n)
+  - logger.debug(f"T = {T:.0f} K")
+  - sys.stdout.write(line)
+  # attribute call named print is not the builtin
+  - self.printer.print_report()
+invalid:
+  - print("Generating atomic database")
+  - print(f"processed {idx}/{total}")
+  - print()

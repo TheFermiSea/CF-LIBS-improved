@@ -1,0 +1,22 @@
+id: no-module-level-setenv-in-tests
+language: python
+severity: warning
+message: >-
+  Module-level `os.environ.setdefault(...)` in a test: collection-time
+  side-effect that leaks session-wide and pollutes every other test.
+note: >-
+  WHY: project memory (reference_test_pollution_collection_time). A module-level
+  `os.environ.setdefault("CFLIBS_USE_LAX_WHILE_LOOP", "1")` leaked into the whole
+  session and caused 3 full-suite-only failures. Env mutation that changes
+  solver behaviour must live INSIDE a fixture (conftest has an
+  `_isolate_global_state` autouse fixture for exactly this). NOTE: the common
+  `os.environ.setdefault("JAX_PLATFORMS", "cpu")` idiom also matches -- it is
+  benign (identical to conftest) but is still a collection-time side-effect;
+  prefer moving it into a fixture or conftest. Advisory, not blocking.
+  ANNOTATE: move the call into a fixture, or set it in conftest.py.
+rule:
+  pattern: os.environ.setdefault($K, $V)
+  not:
+    inside: {kind: function_definition, stopBy: end}
+files:
+  - "tests/**"
