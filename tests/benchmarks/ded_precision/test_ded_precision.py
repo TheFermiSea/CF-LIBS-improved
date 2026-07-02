@@ -76,6 +76,79 @@ def test_ti64_all_elements_recovery_clean(al_scan_clean):
         assert summ.loc[el, "rmsep"] < 2.0, summ.loc[el].to_dict()
 
 
+def test_ti_perturbation_slosh_vs_logratio():
+    """Headline (Issue 2): perturbing the dominant Ti line set sloshes ABSOLUTE
+    V wt% substantially, while the pairwise log-ratio that excludes Ti
+    (ln N_V/N_Al) is invariant, and ln(N_V/N_Ti) shifts by only the direct Ti
+    intensity change (no closure amplification).
+
+    Confirms MatrixEffects.lean recoveredComposition_ratio_matrix_invariant:
+    a per-element intensity error biases closure-normalized fractions but not
+    the subcomposition ratios.
+    """
+    import dataclasses
+    import math
+
+    db_path = _db_path()
+    if db_path is None:
+        pytest.skip("libs_production.db not available")
+
+    from cflibs.atomic.database import AtomicDatabase
+    from cflibs.inversion.physics.closure import log_ratios
+    from tests.benchmarks.ded_precision.alloy_definitions import (
+        ALLOY_COMPOSITIONS,
+        ALLOY_WINDOWS_NM,
+        elements_of,
+    )
+    from tests.benchmarks.ded_precision.line_extractor import extract_line_intensities
+    from tests.benchmarks.ded_precision.line_lists import build_alloy_line_list
+    from tests.benchmarks.ded_precision.solver_runner import (
+        recovered_wt,
+        run_constrained_solver,
+    )
+    from tests.benchmarks.ded_precision.spectrum_generator import (
+        clean_spectrum,
+        default_grid,
+        make_forward,
+    )
+
+    alloy, T_K, ne, fwhm = "Ti-6Al-4V", 11000.0, 1e17, 0.1
+    db = AtomicDatabase(db_path)
+    els = elements_of(alloy)
+    comp = ALLOY_COMPOSITIONS[alloy]
+    wl = default_grid(ALLOY_WINDOWS_NM[alloy], 0.02)
+    fwd = make_forward(db_path, els, wl, fwhm)
+    specs = [s for v in build_alloy_line_list(db, alloy, T_K=T_K).values() for s in v]
+    spectrum = clean_spectrum(fwd, comp, els, T_K, ne)
+    obs = extract_line_intensities(wl, spectrum, specs, instrument_fwhm_nm=fwhm)
+
+    def _solve(observations):
+        res = run_constrained_solver(db, observations, ne, closure_mode="standard")
+        return recovered_wt(res), res.concentrations
+
+    base_wt, base_c = _solve(obs)
+    factor = 1.20
+    pert = [
+        dataclasses.replace(o, intensity=o.intensity * factor) if o.element == "Ti" else o
+        for o in obs
+    ]
+    wt, c = _solve(pert)
+
+    # (a) absolute V wt% sloshes substantially even though V's own lines are
+    #     untouched (>5% relative shift).
+    v_rel_shift = abs(wt["V"] - base_wt["V"]) / base_wt["V"]
+    assert v_rel_shift > 0.05, f"expected V slosh, got {v_rel_shift:.3%}"
+
+    # (b) ln(N_V/N_Al) — a ratio that excludes the perturbed Ti — is invariant.
+    dlr_val = log_ratios(c, "Al")["V"] - log_ratios(base_c, "Al")["V"]
+    assert abs(dlr_val) < 1e-6, f"ln(V/Al) moved {dlr_val:.2e} (should be ~0)"
+
+    # ln(N_V/N_Ti) shifts by only the direct Ti intensity change (-ln factor),
+    # NOT amplified by the closure denominator.
+    dlr_vti = log_ratios(c, "Ti")["V"] - log_ratios(base_c, "Ti")["V"]
+    assert abs(dlr_vti - (-math.log(factor))) < 0.02, dlr_vti
+
+
 @pytest.mark.xfail(
     reason="V nominal bias ~0.73 wt% > 0.5 target (Al/Ti pass); tightening pending",
     strict=False,
